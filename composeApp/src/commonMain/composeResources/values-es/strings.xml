@@ -1,0 +1,439 @@
+<resources>
+    <string name="service_string">Servicio</string>
+    <string name="food_quality_string">Calidad de la comida</string>
+    <string name="place_string">Lugar</string>
+    <string name="premium_user">Usuario premium</string>
+    <string name="non_premium_member">Miembro no premium</string>
+    <string name="order_id">ID de pedido</string>
+
+    <string name="edit">Editar</string>
+    <string name="delete">Eliminar</string>
+    <string name="payment_and_shipping">Pago y Envío</string>
+    <string name="payment_mode">Método de pago</string>
+    <string name="pick_up_desc">Recoger en tu local</string>
+    <string name="delivery">Entrega</string>
+    <string name="see_on_map">Ver en el mapa</string>
+    <string name="see">Ver</string>
+    <string name="customer">Cliente</string>
+    <string name="email">Correo electrónico</string>
+    <string name="call_customer">Llamar al cliente</string>
+    <string name="name">Nombre</string>
+    <string name="phone">Teléfono</string>
+    <string name="order_summary">Resumen del pedido</string>
+    <string name="order_time">Hora del pedido</string>
+    <string name="reason">Motivo</string>
+    <string name="items">Artículos</string>
+    <string name="ready">Listo</string>
+    <string name="accept">Aceptar</string>
+    <string name="filter_all">Todos</string>
+    <string name="filter_new">Nuevos</string>
+    <string name="filter_failed">Fallidos</string>
+    <string name="filter_processing">En proceso</string>
+    <string name="cancelled">Cancelado</string>
+    <string name="rejected">Rechazado</string>
+    <string name="payment_failed">Pago fallido</string>
+    <string name="completed">Completado</string>
+    <string name="accepted">Aceptado</string>
+    <string name="in_delivery">En entrega</string>
+    <string name="ready_pickup">Listo para recoger</string>
+    <string name="cancel">Cancelar</string>
+    <string name="search">Buscar</string>
+
+    <!-- Order Statuses Strings   -->
+    <string name="order_status_new">Pedido creado</string>
+    <string name="order_status_processing">En proceso</string>
+    <string name="order_status_completed">Pedido completado</string>
+    <string name="order_status_accepted">Pedido aceptado</string>
+    <string name="order_status_payment_failed">Pago fallido</string>
+    <string name="order_status_in_delivery">Pedido en entrega</string>
+    <string name="order_status_ready_pickup">Pedido listo para recoger</string>
+    <string name="order_status_ready">Pedido listo</string>
+    <string name="order_status_rejected">Pedido rechazado</string>
+    <string name="order_status_cancelled">Pedido cancelado</string>
+
+    <string name="name_not_valid">El nombre ingresado no es válido</string>
+    <string name="description_optional">Descripción (opcional)</string>
+    <string name="description">Descripción</string>
+    <string name="description_optional_desc">Esta descripción es opcional. Puede ser utilizada por algunos estilos web para mostrarse. No todos los estilos usan este campo.</string>
+    <string name="price">Precio</string>
+    <string name="must_select_price">Debes ingresar un precio</string>
+    <string name="select_photo_from_camera">Capturar foto desde la cámara</string>
+    <string name="select_photo_from_gallery">Seleccionar foto desde la galería</string>
+    <string name="understood">Entendido</string>
+
+    <!-- Orders String -->
+    <string name="orders">Pedidos</string>
+    <string name="orders_empty">Aún no tienes pedidos</string>
+    <string name="orders_empty_desc">Cuando recibas pedidos de tus clientes, se mostrarán aquí</string>
+    <string name="order_details">Detalles</string>
+    <string name="order_status_history">Historial del pedido</string>
+    <string name="accept_terms_and_conditions">Aceptar términos y condiciones</string>
+    <string name="order_phone_number_desc">Número de teléfono donde tus clientes pueden contactar tu negocio</string>
+    <string name="order_email_desc">Este es tu correo registrado, a este correo se enviarán notificaciones sobre nuevos pedidos:</string>
+    <string name="order_first_screen_support_text">Aumenta tus ingresos recibiendo pedidos directamente en tu menú digital. Para poder usar esta sección debes configurar algunos aspectos de tu negocio.</string>
+    <string name="setup_orders">Configurar pedidos</string>
+    <string name="order_not_available">Esta función solo está disponible para usuarios premium. Obtén tu suscripción premium y accede a esta y muchas otras funciones. Los usuarios gratuitos pueden habilitar pedidos por WhatsApp sin costo</string>
+    <string name="order_not_available_banned">Lo sentimos, en este momento esta función no está disponible. Inténtalo de nuevo más tarde o contacta al soporte si el problema persiste. Gracias.</string>
+    <string name="orders_disabled">Tienes los pedidos deshabilitados. Tus clientes no podrán realizar pedidos en tu menú digital.</string>
+    <string name="order_address_not_available">La dirección seleccionada no se puede usar.</string>
+
+    <string name="order_address_cancel_selection">Cancelaste la selección</string>
+    <string name="order_address_desc">Selecciona la ubicación exacta de tu negocio. Esto es importante para que tus clientes sepan dónde recoger sus pedidos.</string>
+    <string name="your_busines">Tu negocio</string>
+    <string name="your_busines_location">Ubicación de tu negocio</string>
+    <string name="registering_business">Registrando negocio</string>
+    <string name="order_payment_methods_desc">En este momento solo estamos aceptando pagos en efectivo en nuestro sistema de pedidos. Pero estamos trabajando para agregar otros métodos de pago.</string>
+    <string name="order_payment_methods">Métodos de pago</string>
+    <string name="cash_on_delivery">Pago contra entrega</string>
+    <string name="manual_transference">Transferencia</string>
+    <string name="cash_on_delivery_desc">Tus clientes pagarán en efectivo cuando recojan sus pedidos</string>
+    <string name="order_delivery_methods_desc">Selecciona los métodos de entrega disponibles para tu negocio. Esto puede ser cambiado más adelante.</string>
+    <string name="pick_up">Retiro en local</string>
+    <string name="free">Gratis</string>
+    <string name="order_delivery_desc1">Entrega a tus clientes. Precio fijo</string>
+    <string name="order_delivery_desc2">Entrega a tus clientes. Precio por kms</string>
+    <string name="order_delivary_dialog_desc">Ingresa el costo de entrega. Si ingresas 0 significa envío gratuito</string>
+    <string name="order_onboarding_success_desc">¡Listo! \nAhora tus clientes pueden crear pedidos en tu menú digital.</string>
+    <string name="see_more">Ver más</string>
+    <string name="reject">Rechazar</string>
+    <string name="share">Compartir</string>
+    <string name="reject_order">Rechazar pedido</string>
+    <string name="reject_reason">Motivo del rechazo</string>
+    <string name="cancellation_reason">Motivo de la cancelación</string>
+    <string name="created">Creado</string>
+    <string name="total">Total</string>
+    <string name="status">Estado</string>
+    <string name="shipping">Envío</string>
+    <string name="start_processing">Iniciar procesamiento</string>
+    <string name="order_ready">Pedido listo</string>
+    <string name="start_delivery">Iniciar entrega</string>
+    <string name="complete">Completar</string>
+    <string name="shipping_methods">Métodos de envío</string>
+    <string name="disable_orders">Desactivar pedidos</string>
+    <string name="enable_order">Activar pedidos</string>
+    <string name="updating">Actualizando…</string>
+    <string name="terms_and_conditions">Términos y condiciones</string>
+    <string name="order_settings">Configuración de pedidos</string>
+    <string name="location">Ubicación</string>
+    <string name="details">Detalles</string>
+    <string name="orders_loading_error">No se pudieron cargar los pedidos. Verifica tu conexión a internet o inténtalo más tarde.</string>
+    <string name="orders_generic_error">Ocurrió un error. Verifica tu conexión a internet o inténtalo más tarde.</string>
+    <string name="generate_invoice">Generar factura</string>
+
+    <!-- Invoice String -->
+    <string name="invoice_saved">Factura guardada</string>
+    <string name="invoice_title">Factura</string>
+    <string name="save">Guardar</string>
+    <string name="invoice_i_order">Pedido:</string>
+    <string name="invoice_i_date">Fecha:</string>
+    <string name="invoice_i_client">Cliente</string>
+    <string name="invoice_i_name">Nombre:</string>
+    <string name="invoice_i_email">Correo electrónico:</string>
+    <string name="invoice_i_phone">Teléfono:</string>
+    <string name="invoice_i_items">Artículos</string>
+    <string name="invoice_i_subtotal">Subtotal:</string>
+    <string name="invoice_i_shipping">Envío:</string>
+    <string name="invoice_i_total">Monto total:</string>
+    <string name="invoice_i_thanks">Gracias por tu compra</string>
+    <string name="invoice_i_visit_us">visítanos en</string>
+
+    <!-- String Taxes related-->
+    <string name="empty_taxes_msg">No tienes ningún impuesto configurado. Los impuestos que configures se añadirán automáticamente a cada pedido realizado en tu menú si están activos.</string>
+    <string name="taxes_title">Impuestos</string>
+    <string name="add_taxes_title">Agregar impuesto</string>
+    <string name="edit_taxes_title">Editar impuesto</string>
+    <string name="remove_tax_title">Eliminar impuesto</string>
+    <string name="removing_tax">Eliminando impuesto…</string>
+    <string name="remove_tax_msg">¿Estás seguro de que deseas eliminar este impuesto?</string>
+    <string name="tax_removed">Impuesto eliminado</string>
+    <string name="tax_added">Impuesto agregado</string>
+    <string name="tax_edited">Impuesto editado</string>
+    <string name="tax_code">Código del impuesto</string>
+    <string name="tax_code_supportive">Este es el texto que se mostrará en los pedidos. Ej: ITBM, cargo por servicio</string>
+    <string name="tax_value">Valor del impuesto</string>
+    <string name="tax_value_supportive">El valor siempre está en porcentaje.</string>
+    <string name="adding_tax">Agregando impuesto…</string>
+    <string name="editing_tax">Editando impuesto…</string>
+    <string name="editing_tax_same_value_error">No se han cambiado valores</string>
+
+
+    <!--    Payments Strings-->
+    <string name="payments">Pagos</string>
+    <string name="enabled">Habilitado</string>
+    <string name="connect_paypal_title">¡Conecta PayPal y recibe pagos!</string>
+    <string name="connect_paypal_subtitle">Comienza a aceptar pagos de tus clientes con PayPal de forma rápida y segura.</string>
+    <string name="connect_paypal_button">Conectar PayPal</string>
+    <string name="payment_status">Estado del pago</string>
+    <string name="paid">Pagado</string>
+    <string name="unpaid">No pagado</string>
+    <string name="payment_link">Enlace de pago</string>
+    <string name="payment_register">Registrar pago</string>
+    <string name="mark_paid">Marcar como pagado</string>
+    <string name="manual_payment_info">Si has recibido un pago manual mediante transferencia bancaria, puedes registrar el pago aquí y marcar el pedido como pagado.</string>
+    <string name="enter_transfer_reference">Ingresa la referencia de la transferencia o el número del pedido.</string>
+    <string name="enter_transfer_description">Ingresa una descripción para la transferencia.</string>
+    <string name="record_transfer">Registrar transferencia</string>
+    <string name="reference">Referencia</string>
+    <string name="qr_not_available">QR no disponible</string>
+    <string name="share_payment_link">Compartir enlace de pago</string>
+    <string name="paypal_charges">Cargos de PayPal</string>
+    <string name="paypal">PayPal</string>
+    <string name="yappy">Yappy</string>
+    <string name="domain">Dominio web</string>
+    <string name="accept_payments_paypal">Acepta pagos de tus clientes directamente con PayPal</string>
+    <string name="fast_secure_professional">Rápido, seguro y profesional</string>
+    <string name="commission_2_percent">2% de comisión por transacción</string>
+    <string name="money_goes_to_paypal">El dinero va directamente a tu cuenta de PayPal</string>
+    <string name="by_continuing_accept">Al continuar, aceptas los </string>
+    <string name="terms_conditions">Términos y Condiciones</string>
+    <string name="and_the"> y el </string>
+    <string name="paypal_user_agreement">Acuerdo de usuario de PayPal</string>
+    <string name="connect_paypal_account">Conectar cuenta de PayPal</string>
+    <string name="paypal_authorize_message">Se abrirá PayPal para autorizar la conexión con MenuCodi.</string>
+    <string name="enable_auto_charges">Habilitar cobros automáticos</string>
+    <string name="authorize_billing_agreement">Para deducir la comisión del 2% por cada pago que recibas, se debe autorizar un acuerdo de facturación.</string>
+    <string name="cancel_anytime">Puedes cancelar el acuerdo de facturación en cualquier momento</string>
+    <string name="no_hidden_fees">Sin costos fijos ni tarifas ocultas</string>
+    <string name="transparent_charges">Todo es 100% transparente</string>
+    <string name="we_only_charge_when_you_do">Solo cobramos cuando tú cobras</string>
+    <string name="accept_and_continue">Aceptar y continuar</string>
+    <string name="paypal_security">Seguridad garantizada por PayPal</string>
+    <string name="paypal_connected">Tu cuenta de PayPal está conectada</string>
+    <string name="pending_charges">Cargos pendientes</string>
+    <string name="total_to_charge">Total a cobrar:</string>
+    <string name="charge_date">Fecha de cobro:</string>
+    <string name="charge_explanation">Este monto corresponde a las comisiones por pagos realizados con PayPal. Se cobrará automáticamente a través de tu cuenta conectada.</string>
+    <string name="contact_support">Contactar al equipo de soporte</string>
+    <string name="paypal_payment_link">Enlace de pago de PayPal</string>
+
+    <string name="payment_methods">Métodos de pago</string>
+    <string name="commissions">Comisiones</string>
+    <string name="paypal_commissions">Nota: Nuestra plataforma cobra una tarifa del 2% por pagos realizados a través de PayPal. Esta tarifa es independiente y adicional a las tarifas de transacción propias de PayPal, que son gestionadas directamente por PayPal.</string>
+    <string name="check_paypal_commissions">Consultar tarifas de PayPal</string>
+    <string name="bank_transfer">Transferencia bancaria</string>
+    <string name="suspension_warning">El no pago de los cargos puede resultar en la suspensión de tu cuenta.</string>
+    <string name="get_paid_easily">Recibe pagos fácilmente con enlaces de pago digitales</string>
+    <string name="accept_online_payments">Comienza a aceptar pagos en línea seguros de tus clientes con solo unos pocos clics.</string>
+    <string name="create_and_share_links">Crea y comparte enlaces de pago para transacciones rápidas y sin complicaciones.</string>
+    <string name="accept_via_qr_or_links">Acepta pagos mediante códigos QR o enviando enlaces por WhatsApp, correo electrónico y más.</string>
+    <string name="multiple_payment_options">Múltiples opciones de pago: PayPal, Yappy (Panamá) y transferencia bancaria manual.</string>
+    <string name="security_priority">🔒 Tu seguridad es nuestra prioridad. Todas las transacciones utilizan cifrado de nivel industrial, garantizando que tu información y la de tus clientes estén siempre protegidas.</string>
+    <string name="confirm_address">Confirma tu dirección</string>
+    <string name="need_address_desc">Para activar los métodos de pago, tu negocio debe tener una dirección registrada. ¿Te gustaría agregar una dirección ahora?</string>
+    <string name="linked_account">Cuenta vinculada</string>
+    <string name="payment_success_fee">Comisión por pago exitoso:</string>
+    <string name="unlink_paypal">Desvincular PayPal</string>
+    <string name="confirm_unlink_paypal">¿Estás seguro de que deseas desvincular tu cuenta de PayPal? No podrás recibir pagos por PayPal hasta que la vincules nuevamente.</string>
+    <string name="commission">Comisión:</string>
+    <string name="payment_instructions">Instrucciones de pago</string>
+    <string name="enter_payment_instructions">Ingresa las instrucciones de pago que se mostrarán al cliente. Aquí debes proporcionar los datos de tu cuenta bancaria. Ten en cuenta que este es un método de pago manual. Debes verificar que el cliente haya realizado la transferencia antes de confirmar el pedido. No se cobran comisiones por este método.</string>
+    <string name="yappy_account_linked">Cuenta de Yappy vinculada</string>
+    <string name="contact_support_yappy">Contacta a nuestro equipo de soporte. Un agente te ayudará a configurar tu cuenta de Yappy.</string>
+    <string name="unlink_yappy">Desvincular Yappy</string>
+    <string name="link_yappy">Vincular Yappy</string>
+    <string name="connect_yappy">Conecta tu cuenta de Yappy</string>
+    <string name="accept_yappy_payments">Acepta pagos de tus clientes usando Yappy</string>
+    <string name="yappy_commission_info">1% de comisión por transacción, además de la comisión propia de Yappy.</string>
+    <string name="funds_go_to_bank">Los fondos se depositan directamente en tu cuenta bancaria vinculada a Yappy.</string>
+    <string name="confirm_unlink_yappy">¿Estás seguro de que deseas desvincular tu cuenta de Yappy? No podrás recibir pagos por Yappy hasta que la vincules nuevamente.</string>
+    <string name="need_help_get_values">¿Necesitas ayuda para obtener estos valores?</string>
+    <string name="see_help_tutorial">Ver tutorial de ayuda</string>
+    <string name="merchant_id">ID de comercio</string>
+    <string name="copy_paste_merchant_id">Copia y pega el valor del ID de comercio desde tu portal de Yappy.</string>
+    <string name="domain_exact_match">Debe coincidir exactamente con el dominio configurado en tu portal de Yappy.</string>
+    <string name="secret_key">Clave secreta</string>
+    <string name="yappy_user_agreement">Acuerdo de usuario de Yappy</string>
+
+    <!--    POS Strings-->
+    <string name="add_products_desc">Agrega productos para comenzar a vender</string>
+    <string name="add_products">Agregar productos</string>
+    <string name="pos">Nueva venta</string>
+    <string name="pos_clients">Clientes</string>
+    <string name="pos_add_client">Agregar cliente</string>
+    <string name="pos_cart">Carrito</string>
+    <string name="pos_payment">Pago</string>
+    <string name="pos_delete_client">Eliminar cliente</string>
+    <string name="pos_unlink_client">Desvincular cliente</string>
+    <string name="pos_invoice">Factura</string>
+    <string name="pos_tip">Propina</string>
+    <string name="pos_tips">Propinas</string>
+    <string name="pos_add_tip">Agregar propina</string>
+    <string name="pos_change">Cambio</string>
+    <string name="pos_see_ticket">Ver o enviar factura</string>
+    <string name="pos_new_sale">Nueva venta</string>
+    <string name="pos_clients_tag">Etiquetas</string>
+    <string name="pos_clients_email">Correo electrónico (opcional)</string>
+    <string name="pos_clients_ruc">Identificación fiscal (opcional)</string>
+    <string name="pos_discount">Descuento</string>
+    <string name="pos_add_discount">Agregar descuento</string>
+    <string name="pos_invoicing">Facturación</string>
+    <string name="pos_discount_percent">Porcentaje</string>
+    <string name="pos_discount_amount">Monto</string>
+    <string name="pos_new_total">Nuevo total</string>
+    <string name="pos_apply_discount">Aplicar descuento</string>
+    <string name="pos_cash">Efectivo</string>
+    <string name="pos_card">Tarjeta</string>
+    <string name="pos_other">Otro</string>
+    <string name="pos_mixed">Mixto</string>
+    <string name="pos_none">Ninguno</string>
+    <string name="pos_received_amount">Monto recibido</string>
+    <string name="pos_charge">Cobrar</string>
+    <string name="pos_missing">Falta</string>
+    <string name="creating_order">Creando pedido</string>
+    <string name="pos_see_orders">Ver pedidos</string>
+    <string name="empty_pos_clients">Tu lista de clientes está vacía. Comienza agregando un nuevo cliente.</string>
+    <string name="empty_non_premium_pos_clients">¡Impulsa tus ventas con Premium! 🚀 Guarda la información de tus clientes y envía promociones exclusivas para aumentar la fidelización. ¡Actívalo ahora!</string>
+    <string name="success_pos_try_it_free">¡Pruébalo gratis!</string>
+    <string name="success_pos_get_premium_title">Seguimiento de pedidos</string>
+    <string name="success_pos_get_premium_msg">Gestiona tus pedidos fácilmente con nuestro sistema premium, accesible desde cualquier dispositivo, en cualquier momento.</string>
+    <string name="pos_sure_delete_account">¿Estás seguro de que deseas eliminar esta cuenta de cliente?</string>
+
+    <string name="are_you_sure">¿Estás seguro?</string>
+    <string name="unsaved_changes">Tienes cambios sin guardar. Si sales, perderás los cambios realizados.</string>
+    <string name="stay">Permanecer</string>
+    <string name="goback">Regresar</string>
+    <string name="update">Actualizar</string>
+
+    <!--String Fragment help center-->
+    <string name="support_chat">Chat de soporte</string>
+    <string name="support_chat_description">Nuestra misión es ayudarte a resolver cualquier problema que ocurra en tu Menú Digital y responder tus preguntas. Por eso ofrecemos soporte exclusivo por chat para nuestros clientes premium.</string>
+    <string name="send_support_email">Enviar correo al soporte</string>
+    <string name="need_help">¿Necesitas ayuda?</string>
+    <string name="chat_with_us">Chatea con nosotros</string>
+    <string name="how_can_we_help">¿Cómo podemos ayudarte?</string>
+    <string name="contact_support_team">Contacta a nuestro equipo de soporte</string>
+    <string name="for_help_contact_support_team">Para ayuda y soporte contáctanos en</string>
+    <string name="support_team_email" translatable="false">support@tecodigi.com</string>
+    <string name="help_center_text1">o elige una categoría para encontrar rápidamente ayuda y respuestas a problemas y preguntas comunes</string>
+    <string name="email_copied_to_clipboard">¡Correo copiado al portapapeles!</string>
+
+<!--    Home Strings-->
+    <string name="home">Inicio</string>
+    <string name="visits_today">Visitas</string>
+    <string name="configure">Configurar</string>
+    <string name="no_data">No hay datos. Registra tu primera venta para ver el gráfico.</string>
+
+<!--    Invoicing Strings -->
+    <string name="invoicing">Facturación</string>
+    <string name="invoicing_landing_title">Facturación Electrónica</string>
+
+<!--    Settings Strings -->
+    <string name="action_settings">Configuración</string>
+    <string name="change_business_name">Cambiar nombre del negocio</string>
+    <string name="change_business_logo">Cambiar logo del negocio</string>
+    <string name="business_address">Dirección del negocio:</string>
+    <string name="business_address_notdot">Dirección del negocio</string>
+    <string name="change_business_address">Configurar nueva dirección</string>
+    <string name="set_address">Establecer dirección</string>
+    <string name="save_address">Guardar dirección</string>
+    <string name="permission_required">Permiso requerido</string>
+    <string name="permission_profile_image">Para establecer tu foto de perfil, por favor concede este permiso. Puedes gestionar los permisos en la configuración de tu dispositivo.</string>
+    <string name="privacy_policy">Política de privacidad</string>
+    <string name="business_info">Información del negocio</string>
+    <string name="settings_configure_payment">Configura los métodos de pagos que quieres ofrecer a tus clientes.</string>
+    <string name="unsaved_changes_title">Cambios sin guardar</string>
+    <string name="discard">Descartar</string>
+    <string name="no_address_selected">No seleccionó ninguna dirección</string>
+    <string name="request_camera_permission">Para acceder a la foto de tu cámara esta aplicación necesita permisos para acceder a la cámara del dispositivo</string>
+
+<!--    Branch Strings-->
+    <string name="branch">Sucursal</string>
+    <string name="branches">Sucursales</string>
+    <string name="billing_point">Punto facturación</string>
+    <string name="billing_points">Puntos facturación</string>
+
+<!--    Category strings-->
+    <string name="inactive">Deshabilitado</string>
+    <string name="active">Activo</string>
+    <string name="delete_category">Eliminar categoría</string>
+    <string name="delete_category_ask">¿Estás seguro de que deseas eliminar la categoría?</string>
+    <string name="add_new_category">Agregar categoría</string>
+    <string name="must_set_category_name">Debes ingresar un nombre para la categoría</string>
+    <string name="edit_name">Editar nombre</string>
+    <string name="category">Categoría</string>
+    <string name="add">Agregar</string>
+    <string name="categories">Categorías</string>
+    <string name="delete_item_ask">¿Estás seguro de que deseas eliminar el elemento? Esta acción no se puede deshacer</string>
+
+    <!--Strings Login/Register-->
+    <string name="create_account">Crear cuenta</string>
+    <string name="welcome">Bienvenido</string>
+    <string name="welcome_register">Vamos a crear tu cuenta</string>
+    <string name="welcome_register_desc">Crea una cuenta en VentaGo para que puedas tener tu POS digital</string>
+    <string name="already_have_account">¿Ya tienes cuenta? </string>
+    <string name="register_terms_1">Al crear tu cuenta, aceptas nuestros </string>
+    <string name="register_terms_2">términos y condiciones, </string>
+    <string name="register_terms_3">y el </string>
+    <string name="register_terms_4">aviso de privacidad.</string>
+    <string name="welcome_user_name">Bienvenido, </string>
+    <string name="welcome_user_name_desc">Registra tu negocio para administrar tu POS digital</string>
+    <string name="country">País</string>
+    <string name="currency">Moneda</string>
+    <string name="sales">Ventas</string>
+    <string name="welcome_back_sub">Inicia sesión en tu cuenta de VentaGo</string>
+    <string name="welcome_back">Bienvenido</string>
+    <string name="or">ó</string>
+    <string name="Forgot_password_ask">Olvidé mi contraseña</string>
+    <string name="reset_password">Restablecer contraseña</string>
+    <string name="login">Iniciar Sesión</string>
+    <string name="dont_have_account_ask">¿No tienes cuenta?</string>
+    <string name="ask_for_account">¿Ya tienes una cuenta?</string>
+    <string name="error_try_later">"Un error ha ocurrido, inténtelo más tarde. "</string>
+    <string name="error_no_internet">Un error ha ocurrido, verifique su conexión a internet</string>
+    <string name="error_no_business_image">Por favor seleccione una imagen de logo para su negocio</string>
+    <string name="error_no_business_name">Por favor introduzca un nombre para el negocio</string>
+    <string name="business_fragment_title">Negocio</string>
+    <string name="creating_business">Creando negocio…</string>
+    <string name="add_image">Añadir Imagen</string>
+    <string name="add_address">Añadir Direccion</string>
+    <string name="register_business">Registrar negocio</string>
+    <string name="register">Registrarse</string>
+    <string name="use_same_currency">Usar su moneda por defecto:</string>
+    <string name="business_name_hint">Nombre del negocio</string>
+    <string name="register_your_business">Registra tu nuevo negocio</string>
+    <string name="hello_coma">Hola,</string>
+    <string name="email_invalid">Correo inválido</string>
+    <string name="password_invalid">Contraseña inválida</string>
+    <string name="password_too_short_login">Debe tener al menos 8 caracteres con letras y números</string>
+    <string name="cancelled_google_login">Cancelaste Inicio de sesión con Google</string>
+    <string name="invalid_sign_in">Nombre de usuario o contraseña incorrecta</string>
+    <string name="email_sent">Un correo con el enlace para restablecer su contraseña ha sido enviado</string>
+    <string name="check_email_inbox">Revisa tu bandeja de entrada</string>
+    <string name="email_sent_desc">Te enviamos un correo con instrucciones para restablecer tu constraseña. Si no lo ves, revisa en spam.</string>
+    <string name="dont_receive_email">¿No recibiste el correo?</string>
+    <string name="resend_email">Reenviar correo</string>
+    <string name="google" translatable="false">Google</string>
+    <string name="prompt_password">Contraseña</string>
+    <string name="go_register">Ir a registrarse</string>
+    <string name="email_not_found">El correo %1$s no existe en la aplicación de MenuCodi. ¿Deseas registrarte en su lugar?</string>
+    <string name="sign_out">Cerrar sesión</string>
+    <string name="delete_account">Eliminar Cuenta</string>
+
+    <!--String Activity forgot password-->
+    <string name="recover_password">Recuperar contraseña</string>
+    <string name="introduce_email">Introduce tu correo electrónico</string>
+    <string name="forgot_password_desc">Te enviaremos un correo con un enlace para restablecer tu contraseña</string>
+    <string name="get_link">Obtener enlace</string>
+    <string name="sending_link">Enviando enlace</string>
+
+
+    <string name="step_one_tittle">Crea tu Menú Digital</string>
+    <string name="step_one_subtittle">Sube tus productos, organiza tus categorías y publica tu menú en minutos.</string>
+
+    <string name="step_two_tittle">Comienza a recibir pedidos — A tu manera</string>
+    <string name="step_two_subtittle">Recibe pedidos por WhatsApp o a través de tu sistema de pedidos en línea. Tú eliges cómo gestionar tu negocio.</string>
+
+    <string name="step_three_tittle">Crece con herramientas poderosas</string>
+    <string name="step_three_subtittle">Accede a estadísticas en tiempo real, comentarios y más para impulsar tu negocio.</string>
+
+    <string name="next">Siguiente</string>
+    <string name="skip">Saltar</string>
+    <string name="create_your_account">Crea tu cuenta</string>
+
+    <string name="customer_note">Nota del cliente</string>
+    <string name="change_order_status">Cambiar estado orden</string>
+
+    <string name="share_by_whatsapp">Enviar por Whatsapp</string>
+    <string name="share_by_message">Enviar por mensajes</string>
+</resources>
+

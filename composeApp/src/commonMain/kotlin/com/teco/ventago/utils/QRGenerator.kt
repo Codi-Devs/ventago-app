@@ -1,0 +1,157 @@
+package com.teco.ventago.utils
+
+import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.Text
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.geometry.CornerRadius
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.RoundRect
+import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.ClipOp
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.ImageBitmap
+import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.drawscope.clipPath
+import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.dp
+import com.teco.ventago.core.camera.SharedImage
+
+
+enum class KmpBarcodeFormat { CODE_128, QR_CODE /*, EAN_13 (Android only unless we add custom) */ }
+
+expect fun generateQR(width: Int, height: Int, url: String): SharedImage
+
+@Composable
+expect fun CameraPreview(modifier: Modifier = Modifier, onBarcode: (String) -> Unit)
+
+
+@kotlin.OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun BarcodeScannerScreen(
+    onResult: (String) -> Unit,
+    onClose: () -> Unit
+) {
+    var hasCam by remember { mutableStateOf(false) }
+
+    // Request permission (Accompanist) or your own handler
+    hasCam = remember { true } // <-- replace with real permission check
+
+    if (!hasCam) {
+        Box(Modifier.fillMaxSize(), contentAlignment = androidx.compose.ui.Alignment.Center) {
+            Text("Camera permission is required.")
+        }
+        return
+    }
+
+    Box(Modifier.fillMaxSize()) {
+        CameraPreview(
+            modifier = Modifier.matchParentSize(),
+            onBarcode = {
+                println("ASDASD: barcode Result = $it")
+                onResult(it) }
+        )
+
+        // Centered scrim + cutout
+        ScannerScrimWithCutout(
+            modifier = Modifier.matchParentSize()
+        )
+
+        // Corner brackets
+        ScannerOverlay(
+            modifier = Modifier.matchParentSize()
+        )
+    }
+}
+
+@Composable
+fun ScannerOverlay(
+    modifier: Modifier = Modifier,
+    cornerLengthDp: Dp = 28.dp,
+    strokeWidthDp: Dp = 4.dp,
+    cornerColor: Color = Color(0xFF34A853),
+    cutoutWidthFraction: Float = 0.8f,
+    cutoutAspectRatio: Float = 2.2f
+) {
+    Canvas(modifier = modifier) {
+        val cw = size.width * cutoutWidthFraction
+        val ch = cw / cutoutAspectRatio
+        val left = (size.width - cw) / 2f
+        val top  = (size.height - ch) / 2f
+        val right = left + cw
+        val bottom = top + ch
+
+        val len = cornerLengthDp.toPx()
+        val stroke = strokeWidthDp.toPx()
+
+        fun line(a: Offset, b: Offset) = drawLine(
+            color = cornerColor, start = a, end = b,
+            strokeWidth = stroke, cap = StrokeCap.Round
+        )
+
+        // TL
+        line(Offset(left, top), Offset(left + len, top))
+        line(Offset(left, top), Offset(left, top + len))
+        // TR
+        line(Offset(right - len, top), Offset(right, top))
+        line(Offset(right, top), Offset(right, top + len))
+        // BL
+        line(Offset(left, bottom - len), Offset(left, bottom))
+        line(Offset(left, bottom), Offset(left + len, bottom))
+        // BR
+        line(Offset(right - len, bottom), Offset(right, bottom))
+        line(Offset(right, bottom - len), Offset(right, bottom))
+    }
+}
+
+@Composable
+fun ScannerScrimWithCutout(
+    modifier: Modifier = Modifier,
+    cutoutWidthFraction: Float = 0.8f, // 80% of screen width
+    cutoutAspectRatio: Float = 2.2f,
+    cornerRadiusDp: Dp = 12.dp,
+    scrimColor: Color = Color(0x99000000) // semi‑transparent black
+) {
+    Canvas(modifier = modifier) {
+        val r = cornerRadiusDp.toPx()
+        val cw = size.width * cutoutWidthFraction
+        val ch = cw / cutoutAspectRatio
+        val left = (size.width - cw) / 2f
+        val top  = (size.height - ch) / 2f
+
+        val rr = RoundRect(
+            left = left, top = top, right = left + cw, bottom = top + ch,
+            cornerRadius = CornerRadius(r, r)
+        )
+        val path = Path().apply { addRoundRect(rr) }
+
+        clipPath(path, clipOp = ClipOp.Difference) {
+            drawRect(color = scrimColor)
+        }
+
+        drawRoundRect(
+            color = Color.White.copy(alpha = 0.85f),
+            topLeft = Offset(rr.left, rr.top),
+            size = Size(rr.width, rr.height),
+            cornerRadius = CornerRadius(r, r),
+            style = Stroke(width = 2f)
+        )
+    }
+}
+
+expect fun generateBarcodeImage(
+    data: String,
+    format: KmpBarcodeFormat = KmpBarcodeFormat.CODE_128,
+    width: Int = 1024,
+    height: Int = 300,
+    margin: Int = 16
+): ImageBitmap

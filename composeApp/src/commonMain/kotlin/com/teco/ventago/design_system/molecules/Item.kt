@@ -1,0 +1,109 @@
+package com.teco.ventago.design_system.molecules
+
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.padding
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.Menu
+import androidx.compose.material.icons.rounded.MoreHoriz
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Text
+import androidx.compose.runtime.Composable
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.dp
+import com.teco.ventago.design_system.theme.bodyMediumBold
+import com.teco.ventago.features.product.domain.model.Item
+
+@Composable
+fun ItemRow(
+    modifier: Modifier = Modifier,
+    item: Item,
+    reordering: Boolean = false,
+    currency: String = "USD",
+    onClick: (Int) -> Unit = {},
+    onOptionsClick: (Int) -> Unit = {},
+) {
+    ListRowCard(
+        modifier = modifier,
+        onClick = { onClick(item.itemId) },
+        startSlot = {
+            Column(
+                modifier = Modifier.padding(end = 16.dp),
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.Center
+            ) {
+                if (reordering) {
+                    Icon(
+                        modifier = Modifier.padding(vertical = 12.dp, horizontal = 6.dp),
+                        imageVector = Icons.Rounded.Menu,
+                        contentDescription = "",
+                        tint = MaterialTheme.colorScheme.primary
+                    )
+                } else {
+                    PriceBadge(item.price.toString(), currency)
+                }
+            }
+
+        },
+        contentSlot = {
+            Text(
+                text = item.name,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                style = bodyMediumBold()
+            )
+            StatusChip(active = item.active)
+        },
+        trailingSlot = {
+            Spacer(modifier = Modifier.weight(1f, fill = true))
+
+            if (!reordering) {
+                IconButton(onClick = { onOptionsClick(item.itemId) }) {
+                    Icon(
+                        imageVector = Icons.Rounded.MoreHoriz,
+                        contentDescription = "",
+                        tint = MaterialTheme.colorScheme.primary
+                    )
+                }
+            }
+        }
+    )
+
+}
+
+@Composable
+fun PosItemRow(
+    modifier: Modifier = Modifier,
+    item: Item,
+    currency: String = "USD",
+    onClick: (Int) -> Unit = {},
+) {
+
+    ListRowCard(
+        modifier = modifier,
+        onClick = { onClick(item.itemId) },
+        startSlot = {
+            Column(
+                modifier = Modifier.padding(end = 16.dp),
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.Center
+            ) {
+                PriceBadge(item.price.toString(), currency)
+            }
+        },
+        contentSlot = {
+            Text(
+                text = item.name,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                style = bodyMediumBold()
+            )
+        },
+        trailingSlot = {}
+    )
+}
