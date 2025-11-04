@@ -145,7 +145,8 @@ fun AddItemScreenActions(backStackEntry: NavBackStackEntry?) {
 @Composable
 fun AddItemScreen(
     backStackEntry: NavBackStackEntry? = null,
-    viewModel: AddItemViewModel = koinViewModel<AddItemViewModel>()
+    viewModel: AddItemViewModel = koinViewModel<AddItemViewModel>(),
+    navigateBack: () -> Unit
 ) {
     val uiState by viewModel.uiState.collectAsState()
     val loadingSheetState = rememberModalBottomSheetState(confirmValueChange = { false })
@@ -168,6 +169,7 @@ fun AddItemScreen(
             when (event) {
                 is ItemStateUiEvent.GoBack -> {
                     // Navigate back will be handled by the system
+                    navigateBack()
                 }
                 is ItemStateUiEvent.ReturnPersonalizedProduct -> {
                     // Store the personalized product in the ProductsManage graph's savedStateHandle

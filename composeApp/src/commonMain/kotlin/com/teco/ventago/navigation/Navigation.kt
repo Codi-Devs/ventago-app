@@ -433,6 +433,7 @@ private fun NavGraphBuilder.addProductsNavigation(
                 .collectAsState()
             
             LaunchedEffect(personalizedProductJson) {
+                println("ASDASD: $personalizedProductJson")
                 personalizedProductJson?.let { json ->
                     // Move to ProductsManage graph's savedStateHandle
                     productsGraphEntry?.let { entry ->
@@ -445,7 +446,9 @@ private fun NavGraphBuilder.addProductsNavigation(
                 }
             }
             
-            AddItemScreen(backStackEntry = backStackEntry)
+            AddItemScreen(backStackEntry = backStackEntry) {
+                navController.navigateUp()
+            }
         }
 
         composable(route = PosScreens.EditItemScreen.name) {
@@ -541,6 +544,7 @@ private fun NavGraphBuilder.addPOSNavigation(
             val posGraphEntry = remember { backStackEntry }
 
             posGraphEntry.let {
+                println("ASDASD: Entered posGraphEntry")
                 val selectedCustomerJson by posGraphEntry
                     .savedStateHandle
                     .getStateFlow<String?>(NavResults.KEY_SELECTED_CUSTOMER, null)
@@ -563,10 +567,13 @@ private fun NavGraphBuilder.addPOSNavigation(
             }
             
             productsGraphEntry?.let { entry ->
+                println("ASDASD: Entered productsGraphEntry")
                 val personalizedProductJson by entry
                     .savedStateHandle
                     .getStateFlow<String?>(NavResults.KEY_PERSONALIZED_PRODUCT, null)
                     .collectAsState()
+
+                println("ASDASD: $personalizedProductJson")
 
                 LaunchedEffect(personalizedProductJson) {
                     personalizedProductJson?.let { json ->
