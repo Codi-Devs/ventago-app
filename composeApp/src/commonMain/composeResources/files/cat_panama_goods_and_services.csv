@@ -1,0 +1,421 @@
+id;segment_code;segment;family_code;family;created_at;updated_at
+422;10;"Material Vivo Vegetal y Animal, Accesorios y Suministros";1010;Animales vivos;2025-10-10 18:06:41;2025-10-10 18:06:41
+423;10;"Material Vivo Vegetal y Animal, Accesorios y Suministros";1011;Productos para animales domésticos;2025-10-10 18:06:41;2025-10-10 18:06:41
+424;10;"Material Vivo Vegetal y Animal, Accesorios y Suministros";1012;Comida de animales;2025-10-10 18:06:41;2025-10-10 18:06:41
+425;10;"Material Vivo Vegetal y Animal, Accesorios y Suministros";1013;Recipientes y hábitat para animales;2025-10-10 18:06:42;2025-10-10 18:06:42
+426;10;"Material Vivo Vegetal y Animal, Accesorios y Suministros";1014;Productos de talabartería y arreo;2025-10-10 18:06:42;2025-10-10 18:06:42
+427;10;"Material Vivo Vegetal y Animal, Accesorios y Suministros";1015;"Semillas, bulbos, plántulas y esquejes";2025-10-10 18:06:42;2025-10-10 18:06:42
+428;10;"Material Vivo Vegetal y Animal, Accesorios y Suministros";1016;Productos de floricultura y silvicultura;2025-10-10 18:06:42;2025-10-10 18:06:42
+429;10;"Material Vivo Vegetal y Animal, Accesorios y Suministros";1017;Fertilizantes y nutrientes para plantas y herbicidas;2025-10-10 18:06:43;2025-10-10 18:06:43
+430;10;"Material Vivo Vegetal y Animal, Accesorios y Suministros";1019;Productos para el control de plagas ;2025-10-10 18:06:43;2025-10-10 18:06:43
+431;10;"Material Vivo Vegetal y Animal, Accesorios y Suministros";1020;Rosales vivos;2025-10-10 18:06:43;2025-10-10 18:06:43
+432;10;"Material Vivo Vegetal y Animal, Accesorios y Suministros";1021;Plantas vivas  de especies o variedades de flores altas;2025-10-10 18:06:43;2025-10-10 18:06:43
+433;10;"Material Vivo Vegetal y Animal, Accesorios y Suministros";1022;Plantas vivas  de especies o variedades de flores bajas;2025-10-10 18:06:43;2025-10-10 18:06:43
+434;10;"Material Vivo Vegetal y Animal, Accesorios y Suministros";1023;Crisantemos vivos;2025-10-10 18:06:44;2025-10-10 18:06:44
+435;10;"Material Vivo Vegetal y Animal, Accesorios y Suministros";1024;Claveles vivos;2025-10-10 18:06:44;2025-10-10 18:06:44
+436;10;"Material Vivo Vegetal y Animal, Accesorios y Suministros";1025;Orquídeas vivas;2025-10-10 18:06:44;2025-10-10 18:06:44
+437;10;"Material Vivo Vegetal y Animal, Accesorios y Suministros";1030;Rosas frescas cortadas;2025-10-10 18:06:44;2025-10-10 18:06:44
+438;10;"Material Vivo Vegetal y Animal, Accesorios y Suministros";1031;Bouquets cortados frescos  de especies o variedades de flores altas;2025-10-10 18:06:44;2025-10-10 18:06:44
+439;10;"Material Vivo Vegetal y Animal, Accesorios y Suministros";1032;Bouquets cortados frescos  de especies o variedades de flores bajas;2025-10-10 18:06:45;2025-10-10 18:06:45
+440;10;"Material Vivo Vegetal y Animal, Accesorios y Suministros";1033;Crisantemos cortados frescos;2025-10-10 18:06:45;2025-10-10 18:06:45
+441;10;"Material Vivo Vegetal y Animal, Accesorios y Suministros";1034;Bouquets florales cortados frescos;2025-10-10 18:06:45;2025-10-10 18:06:45
+442;10;"Material Vivo Vegetal y Animal, Accesorios y Suministros";1035;Claveles cortados frescos;2025-10-10 18:06:45;2025-10-10 18:06:45
+443;10;"Material Vivo Vegetal y Animal, Accesorios y Suministros";1036;Orquídeas cortadas frescas;2025-10-10 18:06:45;2025-10-10 18:06:45
+444;10;"Material Vivo Vegetal y Animal, Accesorios y Suministros";1040;Rosas cortadas secas;2025-10-10 18:06:46;2025-10-10 18:06:46
+445;10;"Material Vivo Vegetal y Animal, Accesorios y Suministros";1041;Bouquets cortados secos  de especies o variedades de flores altas;2025-10-10 18:06:46;2025-10-10 18:06:46
+446;10;"Material Vivo Vegetal y Animal, Accesorios y Suministros";1042;Bouquets cortados secos  de especies o variedades de flores bajas;2025-10-10 18:06:46;2025-10-10 18:06:46
+447;10;"Material Vivo Vegetal y Animal, Accesorios y Suministros";1043;Crisantemos cortados secos;2025-10-10 18:06:46;2025-10-10 18:06:46
+448;10;"Material Vivo Vegetal y Animal, Accesorios y Suministros";1044;Claveles cortados secos;2025-10-10 18:06:46;2025-10-10 18:06:46
+449;10;"Material Vivo Vegetal y Animal, Accesorios y Suministros";1045;Orquídeas cortadas secas;2025-10-10 18:06:47;2025-10-10 18:06:47
+450;10;"Material Vivo Vegetal y Animal, Accesorios y Suministros";1050;Follaje cortado fresco;2025-10-10 18:06:47;2025-10-10 18:06:47
+451;11;"Material Mineral, Textil y  Vegetal y Animal No Comestible";1110;"Minerales, minerales metálicos y metales";2025-10-10 18:06:47;2025-10-10 18:06:47
+452;11;"Material Mineral, Textil y  Vegetal y Animal No Comestible";1111;Tierra y piedra;2025-10-10 18:06:47;2025-10-10 18:06:47
+453;11;"Material Mineral, Textil y  Vegetal y Animal No Comestible";1112;Productos no comestibles de planta y silvicultura;2025-10-10 18:06:47;2025-10-10 18:06:47
+454;11;"Material Mineral, Textil y  Vegetal y Animal No Comestible";1113;Productos animales no comestibles;2025-10-10 18:06:48;2025-10-10 18:06:48
+455;11;"Material Mineral, Textil y  Vegetal y Animal No Comestible";1114;Chatarra y materiales de desecho;2025-10-10 18:06:48;2025-10-10 18:06:48
+456;11;"Material Mineral, Textil y  Vegetal y Animal No Comestible";1115;"Fibra, hilos e hilados";2025-10-10 18:06:48;2025-10-10 18:06:48
+457;11;"Material Mineral, Textil y  Vegetal y Animal No Comestible";1116;Tejidos y materiales de cuero;2025-10-10 18:06:48;2025-10-10 18:06:48
+458;11;"Material Mineral, Textil y  Vegetal y Animal No Comestible";1117;Aleaciones;2025-10-10 18:06:48;2025-10-10 18:06:48
+459;11;"Material Mineral, Textil y  Vegetal y Animal No Comestible";1118;Óxido metálico;2025-10-10 18:06:49;2025-10-10 18:06:49
+460;11;"Material Mineral, Textil y  Vegetal y Animal No Comestible";1119;Desechos metálicos y chatarra;2025-10-10 18:06:49;2025-10-10 18:06:49
+461;12;Material Químico incluyendo Bioquímicos y Materiales de Gas;1213;Materiales explosivos;2025-10-10 18:06:49;2025-10-10 18:06:49
+462;12;Material Químico incluyendo Bioquímicos y Materiales de Gas;1214;Elementos y gases;2025-10-10 18:06:49;2025-10-10 18:06:49
+463;12;Material Químico incluyendo Bioquímicos y Materiales de Gas;1216;Aditivos;2025-10-10 18:06:49;2025-10-10 18:06:49
+464;12;Material Químico incluyendo Bioquímicos y Materiales de Gas;1217;Colorantes;2025-10-10 18:06:50;2025-10-10 18:06:50
+465;12;Material Químico incluyendo Bioquímicos y Materiales de Gas;1218;Ceras y aceites;2025-10-10 18:06:50;2025-10-10 18:06:50
+466;12;Material Químico incluyendo Bioquímicos y Materiales de Gas;1219;Solventes;2025-10-10 18:06:50;2025-10-10 18:06:50
+467;12;Material Químico incluyendo Bioquímicos y Materiales de Gas;1235;Compuestos y mezclas;2025-10-10 18:06:50;2025-10-10 18:06:50
+468;13;"Materiales de Resina, Colofonia, Caucho, Espuma, Película y Elastómericos";1310;Caucho y elastómeros;2025-10-10 18:06:50;2025-10-10 18:06:50
+469;13;"Materiales de Resina, Colofonia, Caucho, Espuma, Película y Elastómericos";1311;Resinas y colofonias y otros materiales derivados de resina;2025-10-10 18:06:51;2025-10-10 18:06:51
+470;14;Materiales y Productos de Papel;1410;Materiales de papel;2025-10-10 18:06:51;2025-10-10 18:06:51
+471;14;Materiales y Productos de Papel;1411;Productos de papel;2025-10-10 18:06:51;2025-10-10 18:06:51
+472;14;Materiales y Productos de Papel;1412;Papel para uso industrial;2025-10-10 18:06:51;2025-10-10 18:06:51
+473;15;"Materiales Combustibles, Aditivos para Combustibles, Lubricantes y Anticorrosivos";1510;Combustibles;2025-10-10 18:06:51;2025-10-10 18:06:51
+474;15;"Materiales Combustibles, Aditivos para Combustibles, Lubricantes y Anticorrosivos";1511;Combustibles gaseosos y aditivos;2025-10-10 18:06:52;2025-10-10 18:06:52
+475;15;"Materiales Combustibles, Aditivos para Combustibles, Lubricantes y Anticorrosivos";1512;"Lubricantes, aceites, grasas y anticorrosivos";2025-10-10 18:06:52;2025-10-10 18:06:52
+476;15;"Materiales Combustibles, Aditivos para Combustibles, Lubricantes y Anticorrosivos";1513;Combustible para reactores nucleares;2025-10-10 18:06:52;2025-10-10 18:06:52
+477;20;Maquinaria y Accesorios de Minería y Perforación de Pozos;2010;Maquinaria y equipo de minería y explotación de canteras;2025-10-10 18:06:52;2025-10-10 18:06:52
+478;20;Maquinaria y Accesorios de Minería y Perforación de Pozos;2011;Equipo de perforación y explotación de pozos;2025-10-10 18:06:52;2025-10-10 18:06:52
+479;20;Maquinaria y Accesorios de Minería y Perforación de Pozos;2012;Equipo para perforación y exploración de petróleo y gas;2025-10-10 18:06:53;2025-10-10 18:06:53
+480;20;Maquinaria y Accesorios de Minería y Perforación de Pozos;2013;Materiales para  perforación y operaciones de petróleo y gas;2025-10-10 18:06:53;2025-10-10 18:06:53
+481;20;Maquinaria y Accesorios de Minería y Perforación de Pozos;2014;Equipo de producción y operación de petróleo y gas;2025-10-10 18:06:53;2025-10-10 18:06:53
+482;21;"Maquinaria y Accesorios para Agricultura, Pesca, Silvicultura y Fauna";2110;"Maquinaria y equipo para agricultura, silvicultura y paisajismo";2025-10-10 18:06:53;2025-10-10 18:06:53
+483;21;"Maquinaria y Accesorios para Agricultura, Pesca, Silvicultura y Fauna";2111;Equipo de pesca y acuicultura;2025-10-10 18:06:53;2025-10-10 18:06:53
+484;22;Maquinaria y Accesorios para Construcción y Edificación;2210;Maquinaria y equipo pesado de construcción;2025-10-10 18:06:54;2025-10-10 18:06:54
+485;23;Maquinaria y Accesorios para Manufactura y Procesamiento Industrial;2310;Maquinaria para el procesamiento de materias primas;2025-10-10 18:06:54;2025-10-10 18:06:54
+486;23;Maquinaria y Accesorios para Manufactura y Procesamiento Industrial;2311;Maquinaria para el procesamiento de petróleo;2025-10-10 18:06:54;2025-10-10 18:06:54
+487;23;Maquinaria y Accesorios para Manufactura y Procesamiento Industrial;2312;Maquinaria y accesorios de textiles y tejidos;2025-10-10 18:06:54;2025-10-10 18:06:54
+488;23;Maquinaria y Accesorios para Manufactura y Procesamiento Industrial;2313;Maquinaria y equipos lapidarios;2025-10-10 18:06:54;2025-10-10 18:06:54
+489;23;Maquinaria y Accesorios para Manufactura y Procesamiento Industrial;2314;Maquinaria de reparación y accesorios para marroquinería;2025-10-10 18:06:55;2025-10-10 18:06:55
+490;23;Maquinaria y Accesorios para Manufactura y Procesamiento Industrial;2315;"Maquinaria, equipo y suministros de procesos industriales";2025-10-10 18:06:55;2025-10-10 18:06:55
+491;23;Maquinaria y Accesorios para Manufactura y Procesamiento Industrial;2316;"Máquinas, equipo y suministros para fundición";2025-10-10 18:06:55;2025-10-10 18:06:55
+492;23;Maquinaria y Accesorios para Manufactura y Procesamiento Industrial;2318;Equipo industrial para alimentos y bebidas;2025-10-10 18:06:55;2025-10-10 18:06:55
+493;23;Maquinaria y Accesorios para Manufactura y Procesamiento Industrial;2319;Mezcladores y sus partes y accesorios;2025-10-10 18:06:55;2025-10-10 18:06:55
+494;23;Maquinaria y Accesorios para Manufactura y Procesamiento Industrial;2320;Equipamiento para transferencia de masa;2025-10-10 18:06:56;2025-10-10 18:06:56
+495;23;Maquinaria y Accesorios para Manufactura y Procesamiento Industrial;2321;"Maquinaria de fabricación electrónica, equipo y accesorios";2025-10-10 18:06:56;2025-10-10 18:06:56
+496;23;Maquinaria y Accesorios para Manufactura y Procesamiento Industrial;2322;Equipo y maquinaria de procesamiento de pollos;2025-10-10 18:06:56;2025-10-10 18:06:56
+497;23;Maquinaria y Accesorios para Manufactura y Procesamiento Industrial;2323;Equipo y maquinaria de procesamiento de madera y aserrado;2025-10-10 18:06:56;2025-10-10 18:06:56
+498;23;Maquinaria y Accesorios para Manufactura y Procesamiento Industrial;2324;Maquinaria y accesorios para cortar metales;2025-10-10 18:06:56;2025-10-10 18:06:56
+499;23;Maquinaria y Accesorios para Manufactura y Procesamiento Industrial;2325;Maquinaria y accesorios para el formado de metales;2025-10-10 18:06:57;2025-10-10 18:06:57
+500;23;Maquinaria y Accesorios para Manufactura y Procesamiento Industrial;2326;Maquinaria y accesorios para hacer prototipos rápidos;2025-10-10 18:06:57;2025-10-10 18:06:57
+501;23;Maquinaria y Accesorios para Manufactura y Procesamiento Industrial;2327;Maquinaria y accesorios y suministros para soldadura de todas las clases;2025-10-10 18:06:57;2025-10-10 18:06:57
+502;23;Maquinaria y Accesorios para Manufactura y Procesamiento Industrial;2328;Maquinaria para el tratamiento de metal;2025-10-10 18:06:57;2025-10-10 18:06:57
+503;23;Maquinaria y Accesorios para Manufactura y Procesamiento Industrial;2329;Herramientas de maquinado industrial;2025-10-10 18:06:57;2025-10-10 18:06:57
+504;23;Maquinaria y Accesorios para Manufactura y Procesamiento Industrial;2330;Maquinaria y equipo para cable;2025-10-10 18:06:58;2025-10-10 18:06:58
+505;24;"Maquinaria, Accesorios y Suministros para Manejo, Acondicionamiento y Almacenamiento de Materiales";2410;Maquinaria y equipo para manejo de materiales;2025-10-10 18:06:58;2025-10-10 18:06:58
+506;24;"Maquinaria, Accesorios y Suministros para Manejo, Acondicionamiento y Almacenamiento de Materiales";2411;Recipientes y almacenamiento;2025-10-10 18:06:58;2025-10-10 18:06:58
+507;24;"Maquinaria, Accesorios y Suministros para Manejo, Acondicionamiento y Almacenamiento de Materiales";2412;Materiales de empaque;2025-10-10 18:06:58;2025-10-10 18:06:58
+508;24;"Maquinaria, Accesorios y Suministros para Manejo, Acondicionamiento y Almacenamiento de Materiales";2413;Refrigeración industrial;2025-10-10 18:06:59;2025-10-10 18:06:59
+509;24;"Maquinaria, Accesorios y Suministros para Manejo, Acondicionamiento y Almacenamiento de Materiales";2414;Suministros de embalaje;2025-10-10 18:06:59;2025-10-10 18:06:59
+510;25;"Vehículos Comerciales, Militares y Particulares, Accesorios y Componentes";2510;Vehículos de motor;2025-10-10 18:06:59;2025-10-10 18:06:59
+511;25;"Vehículos Comerciales, Militares y Particulares, Accesorios y Componentes";2511;Transporte marítimo;2025-10-10 18:06:59;2025-10-10 18:06:59
+512;25;"Vehículos Comerciales, Militares y Particulares, Accesorios y Componentes";2512;Maquinaria y equipo para ferrocarril y tranvías;2025-10-10 18:06:59;2025-10-10 18:06:59
+513;25;"Vehículos Comerciales, Militares y Particulares, Accesorios y Componentes";2513;Aeronaves;2025-10-10 18:07:00;2025-10-10 18:07:00
+514;25;"Vehículos Comerciales, Militares y Particulares, Accesorios y Componentes";2515;Naves espaciales;2025-10-10 18:07:00;2025-10-10 18:07:00
+515;25;"Vehículos Comerciales, Militares y Particulares, Accesorios y Componentes";2516;Bicicletas no motorizadas;2025-10-10 18:07:00;2025-10-10 18:07:00
+516;25;"Vehículos Comerciales, Militares y Particulares, Accesorios y Componentes";2517;Componentes y sistemas de transporte;2025-10-10 18:07:00;2025-10-10 18:07:00
+517;25;"Vehículos Comerciales, Militares y Particulares, Accesorios y Componentes";2518;Carrocerías y remolques;2025-10-10 18:07:00;2025-10-10 18:07:00
+518;25;"Vehículos Comerciales, Militares y Particulares, Accesorios y Componentes";2519;Equipo para servicios de transporte;2025-10-10 18:07:01;2025-10-10 18:07:01
+519;25;"Vehículos Comerciales, Militares y Particulares, Accesorios y Componentes";2520;Sistemas  y componentes y equipos aeroespaciales;2025-10-10 18:07:01;2025-10-10 18:07:01
+520;26;Maquinaria y Accesorios para Generación y Distribución de Energía;2610;Fuentes de energía;2025-10-10 18:07:01;2025-10-10 18:07:01
+521;26;Maquinaria y Accesorios para Generación y Distribución de Energía;2611;Baterías y generadores y transmisión de energía cinética;2025-10-10 18:07:01;2025-10-10 18:07:01
+522;26;Maquinaria y Accesorios para Generación y Distribución de Energía;2612;"Alambres, cables y arneses";2025-10-10 18:07:01;2025-10-10 18:07:01
+523;26;Maquinaria y Accesorios para Generación y Distribución de Energía;2613;Generación de energía;2025-10-10 18:07:02;2025-10-10 18:07:02
+524;26;Maquinaria y Accesorios para Generación y Distribución de Energía;2614;Maquinaria y equipo para energía atómica o nuclear;2025-10-10 18:07:02;2025-10-10 18:07:02
+525;27;Herramientas y Maquinaria General;2711;Herramientas de mano;2025-10-10 18:07:02;2025-10-10 18:07:02
+526;27;Herramientas y Maquinaria General;2712;Maquinaria y equipo hidráulico;2025-10-10 18:07:02;2025-10-10 18:07:02
+527;27;Herramientas y Maquinaria General;2713;Maquinaria y equipo neumático;2025-10-10 18:07:02;2025-10-10 18:07:02
+528;27;Herramientas y Maquinaria General;2714;Herramientas especializadas automotrices;2025-10-10 18:07:03;2025-10-10 18:07:03
+529;30;"Componentes y Suministros para Estructuras, Edificación, Construcción y Obras Civiles";3010;Componentes estructurales y formas básicas;2025-10-10 18:07:03;2025-10-10 18:07:03
+530;30;"Componentes y Suministros para Estructuras, Edificación, Construcción y Obras Civiles";3011;"Hormigón, cemento y yeso";2025-10-10 18:07:03;2025-10-10 18:07:03
+531;30;"Componentes y Suministros para Estructuras, Edificación, Construcción y Obras Civiles";3012;Carreteras y paisaje;2025-10-10 18:07:03;2025-10-10 18:07:03
+532;30;"Componentes y Suministros para Estructuras, Edificación, Construcción y Obras Civiles";3013;Productos de construcción estructurales;2025-10-10 18:07:03;2025-10-10 18:07:03
+533;30;"Componentes y Suministros para Estructuras, Edificación, Construcción y Obras Civiles";3014;Aislamiento;2025-10-10 18:07:04;2025-10-10 18:07:04
+534;30;"Componentes y Suministros para Estructuras, Edificación, Construcción y Obras Civiles";3015;Materiales para acabado de exteriores;2025-10-10 18:07:04;2025-10-10 18:07:04
+535;30;"Componentes y Suministros para Estructuras, Edificación, Construcción y Obras Civiles";3016;Materiales de acabado de interiores;2025-10-10 18:07:04;2025-10-10 18:07:04
+536;30;"Componentes y Suministros para Estructuras, Edificación, Construcción y Obras Civiles";3017;Puertas y ventanas y vidrio;2025-10-10 18:07:04;2025-10-10 18:07:04
+537;30;"Componentes y Suministros para Estructuras, Edificación, Construcción y Obras Civiles";3018;Instalaciones de plomería;2025-10-10 18:07:04;2025-10-10 18:07:04
+538;30;"Componentes y Suministros para Estructuras, Edificación, Construcción y Obras Civiles";3019;Equipo de apoyo para Construcción y Mantenimiento;2025-10-10 18:07:05;2025-10-10 18:07:05
+539;30;"Componentes y Suministros para Estructuras, Edificación, Construcción y Obras Civiles";3024;Componentes de construcción de estructura portátil;2025-10-10 18:07:05;2025-10-10 18:07:05
+540;30;"Componentes y Suministros para Estructuras, Edificación, Construcción y Obras Civiles";3025;Estructuras y materiales de minería subterránea;2025-10-10 18:07:05;2025-10-10 18:07:05
+541;30;"Componentes y Suministros para Estructuras, Edificación, Construcción y Obras Civiles";3026;Materiales estructurales;2025-10-10 18:07:05;2025-10-10 18:07:05
+542;31;Componentes y Suministros de Manufactura;3110;Piezas de fundición y ensambles de piezas de fundición;2025-10-10 18:07:05;2025-10-10 18:07:05
+543;31;Componentes y Suministros de Manufactura;3111;Extrusiones;2025-10-10 18:07:06;2025-10-10 18:07:06
+544;31;Componentes y Suministros de Manufactura;3112;Piezas fundidas maquinadas;2025-10-10 18:07:06;2025-10-10 18:07:06
+545;31;Componentes y Suministros de Manufactura;3113;Forjaduras;2025-10-10 18:07:06;2025-10-10 18:07:06
+546;31;Componentes y Suministros de Manufactura;3114;Molduras;2025-10-10 18:07:06;2025-10-10 18:07:06
+547;31;Componentes y Suministros de Manufactura;3115;"Cuerda, cadena, cable, alambre y correa";2025-10-10 18:07:06;2025-10-10 18:07:06
+548;31;Componentes y Suministros de Manufactura;3116;Ferretería;2025-10-10 18:07:07;2025-10-10 18:07:07
+549;31;Componentes y Suministros de Manufactura;3117;"Rodamientos, cojinetes ruedas y engranajes";2025-10-10 18:07:07;2025-10-10 18:07:07
+550;31;Componentes y Suministros de Manufactura;3118;"Empaques, glándulas, fundas y cubiertas";2025-10-10 18:07:07;2025-10-10 18:07:07
+551;31;Componentes y Suministros de Manufactura;3119;Materiales de afilado pulido y alisado;2025-10-10 18:07:07;2025-10-10 18:07:07
+552;31;Componentes y Suministros de Manufactura;3120;Adhesivos y selladores;2025-10-10 18:07:07;2025-10-10 18:07:07
+553;31;Componentes y Suministros de Manufactura;3121;Pinturas y bases y acabados;2025-10-10 18:07:08;2025-10-10 18:07:08
+554;31;Componentes y Suministros de Manufactura;3122;Extractos de teñir y de curtir;2025-10-10 18:07:08;2025-10-10 18:07:08
+555;31;Componentes y Suministros de Manufactura;3123;Materia prima en placas o barras labradas;2025-10-10 18:07:08;2025-10-10 18:07:08
+556;31;Componentes y Suministros de Manufactura;3124;Óptica industrial;2025-10-10 18:07:08;2025-10-10 18:07:08
+557;31;Componentes y Suministros de Manufactura;3125;"Sistemas de control neumático, hidráulico o eléctrico";2025-10-10 18:07:08;2025-10-10 18:07:08
+558;31;Componentes y Suministros de Manufactura;3126;"Cubiertas, cajas y envolturas";2025-10-10 18:07:09;2025-10-10 18:07:09
+559;31;Componentes y Suministros de Manufactura;3127;Piezas hechas a máquina;2025-10-10 18:07:09;2025-10-10 18:07:09
+560;31;Componentes y Suministros de Manufactura;3128;Componentes de placa y estampados;2025-10-10 18:07:09;2025-10-10 18:07:09
+561;31;Componentes y Suministros de Manufactura;3129;Extrusiones maquinadas;2025-10-10 18:07:09;2025-10-10 18:07:09
+562;31;Componentes y Suministros de Manufactura;3130;Forjas labradas;2025-10-10 18:07:09;2025-10-10 18:07:09
+563;31;Componentes y Suministros de Manufactura;3131;Ensambles de tubería fabricada;2025-10-10 18:07:10;2025-10-10 18:07:10
+564;31;Componentes y Suministros de Manufactura;3132;Ensambles fabricados de material en barras;2025-10-10 18:07:10;2025-10-10 18:07:10
+565;31;Componentes y Suministros de Manufactura;3133;Ensambles estructurales fabricados;2025-10-10 18:07:10;2025-10-10 18:07:10
+566;31;Componentes y Suministros de Manufactura;3134;Ensambles de lámina fabricado;2025-10-10 18:07:10;2025-10-10 18:07:10
+567;31;Componentes y Suministros de Manufactura;3135;Ensambles de tubería fabricada;2025-10-10 18:07:10;2025-10-10 18:07:10
+568;31;Componentes y Suministros de Manufactura;3136;Ensambles de placa fabricados;2025-10-10 18:07:11;2025-10-10 18:07:11
+569;31;Componentes y Suministros de Manufactura;3137;Refractarios;2025-10-10 18:07:11;2025-10-10 18:07:11
+570;31;Componentes y Suministros de Manufactura;3138;Imanes y materiales magnéticos;2025-10-10 18:07:11;2025-10-10 18:07:11
+571;31;Componentes y Suministros de Manufactura;3139;Maquinados;2025-10-10 18:07:11;2025-10-10 18:07:11
+572;31;Componentes y Suministros de Manufactura;3140;Empaques;2025-10-10 18:07:11;2025-10-10 18:07:11
+573;31;Componentes y Suministros de Manufactura;3141;Sellos;2025-10-10 18:07:12;2025-10-10 18:07:12
+574;31;Componentes y Suministros de Manufactura;3142;Partes sinterizadas;2025-10-10 18:07:12;2025-10-10 18:07:12
+575;32;Componentes y Suministros Electrónicos;3210;"Circuitos impresos, circuitos integrados y micro ensamblajes";2025-10-10 18:07:12;2025-10-10 18:07:12
+576;32;Componentes y Suministros Electrónicos;3211;Dispositivo semiconductor discreto;2025-10-10 18:07:12;2025-10-10 18:07:12
+577;32;Componentes y Suministros Electrónicos;3212;Componentes pasivos discretos;2025-10-10 18:07:12;2025-10-10 18:07:12
+578;32;Componentes y Suministros Electrónicos;3213;Piezas de componentes y hardware electrónicos y accesorios;2025-10-10 18:07:13;2025-10-10 18:07:13
+579;32;Componentes y Suministros Electrónicos;3214;Dispositivos de tubo electrónico y accesorios;2025-10-10 18:07:13;2025-10-10 18:07:13
+580;32;Componentes y Suministros Electrónicos;3215;Dispositivos y componentes y accesorios de control de automatización;2025-10-10 18:07:13;2025-10-10 18:07:13
+581;39;"Componentes, Accesorios y Suministros de Sistemas Eléctricos e Iluminación";3910;Lámparas y bombillas y componentes para lámparas;2025-10-10 18:07:13;2025-10-10 18:07:13
+582;39;"Componentes, Accesorios y Suministros de Sistemas Eléctricos e Iluminación";3911;"Iluminación, artefactos y accesorios";2025-10-10 18:07:13;2025-10-10 18:07:13
+583;39;"Componentes, Accesorios y Suministros de Sistemas Eléctricos e Iluminación";3912;"Equipos, suministros y componentes eléctricos";2025-10-10 18:07:14;2025-10-10 18:07:14
+584;39;"Componentes, Accesorios y Suministros de Sistemas Eléctricos e Iluminación";3913;Dispositivos y accesorios y suministros de manejo de cable eléctrico;2025-10-10 18:07:14;2025-10-10 18:07:14
+585;40;Componentes y Equipos para Distribución y Sistemas de Acondicionamiento;4010;"Calefacción, ventilación y circulación del aire";2025-10-10 18:07:14;2025-10-10 18:07:14
+586;40;Componentes y Equipos para Distribución y Sistemas de Acondicionamiento;4014;Distribución de fluidos y gas;2025-10-10 18:07:14;2025-10-10 18:07:14
+587;40;Componentes y Equipos para Distribución y Sistemas de Acondicionamiento;4015;Bombas y compresores industriales;2025-10-10 18:07:15;2025-10-10 18:07:15
+588;40;Componentes y Equipos para Distribución y Sistemas de Acondicionamiento;4016;Filtrado y purificación industrial;2025-10-10 18:07:15;2025-10-10 18:07:15
+589;40;Componentes y Equipos para Distribución y Sistemas de Acondicionamiento;4017;Instalaciones de tubos y entubamientos;2025-10-10 18:07:15;2025-10-10 18:07:15
+590;40;Componentes y Equipos para Distribución y Sistemas de Acondicionamiento;4018;Instalaciones de tubos y tuberías;2025-10-10 18:07:15;2025-10-10 18:07:15
+591;41;"Equipos y Suministros de Laboratorio, de Medición, de Observación y de Pruebas";4110;Equipo de laboratorio y científico;2025-10-10 18:07:15;2025-10-10 18:07:15
+592;41;"Equipos y Suministros de Laboratorio, de Medición, de Observación y de Pruebas";4111;"Instrumentos de medida, observación y ensayo";2025-10-10 18:07:16;2025-10-10 18:07:16
+593;41;"Equipos y Suministros de Laboratorio, de Medición, de Observación y de Pruebas";4112;Suministros y accesorios de laboratorio;2025-10-10 18:07:16;2025-10-10 18:07:16
+594;42;"Equipo Médico, Accesorios y Suministros";4212;Equipos y suministros veterinarios;2025-10-10 18:07:16;2025-10-10 18:07:16
+595;42;"Equipo Médico, Accesorios y Suministros";4213;Telas y vestidos médicos;2025-10-10 18:07:16;2025-10-10 18:07:16
+596;42;"Equipo Médico, Accesorios y Suministros";4214;"Suministros, productos de tratamiento y cuidado del enfermo";2025-10-10 18:07:16;2025-10-10 18:07:16
+597;42;"Equipo Médico, Accesorios y Suministros";4215;Equipos y suministros dentales;2025-10-10 18:07:17;2025-10-10 18:07:17
+598;42;"Equipo Médico, Accesorios y Suministros";4216;Equipo de diálisis y suministros;2025-10-10 18:07:17;2025-10-10 18:07:17
+599;42;"Equipo Médico, Accesorios y Suministros";4217;Productos para los servicios médicos de urgencias y campo;2025-10-10 18:07:17;2025-10-10 18:07:17
+600;42;"Equipo Médico, Accesorios y Suministros";4218;Productos de examen y control del paciente;2025-10-10 18:07:17;2025-10-10 18:07:17
+601;42;"Equipo Médico, Accesorios y Suministros";4219;Productos de centro médico;2025-10-10 18:07:17;2025-10-10 18:07:17
+602;42;"Equipo Médico, Accesorios y Suministros";4220;Productos de hacer imágenes diagnósticas médicas y de medicina nuclear;2025-10-10 18:07:18;2025-10-10 18:07:18
+603;42;"Equipo Médico, Accesorios y Suministros";4221;Ayuda para personas con desafíos físicos para vivir independiente;2025-10-10 18:07:18;2025-10-10 18:07:18
+604;42;"Equipo Médico, Accesorios y Suministros";4222;Productos para administración intravenosa y arterial;2025-10-10 18:07:18;2025-10-10 18:07:18
+605;42;"Equipo Médico, Accesorios y Suministros";4223;Nutrición clínica;2025-10-10 18:07:18;2025-10-10 18:07:18
+606;42;"Equipo Médico, Accesorios y Suministros";4224;Productos medicinales de deportes y ortopédicos y prótesis;2025-10-10 18:07:18;2025-10-10 18:07:18
+607;42;"Equipo Médico, Accesorios y Suministros";4225;Productos de rehabilitación y terapia ocupacional y física;2025-10-10 18:07:19;2025-10-10 18:07:19
+608;42;"Equipo Médico, Accesorios y Suministros";4226;Equipo y suministros post mortem y funerarios;2025-10-10 18:07:19;2025-10-10 18:07:19
+609;42;"Equipo Médico, Accesorios y Suministros";4227;"Productos de resucitación, anestesia y respiratorio";2025-10-10 18:07:19;2025-10-10 18:07:19
+610;42;"Equipo Médico, Accesorios y Suministros";4228;Productos para la esterilización médica;2025-10-10 18:07:19;2025-10-10 18:07:19
+611;42;"Equipo Médico, Accesorios y Suministros";4229;Productos quirúrgicos;2025-10-10 18:07:19;2025-10-10 18:07:19
+612;42;"Equipo Médico, Accesorios y Suministros";4230;Suministros para formación y estudios de medicina;2025-10-10 18:07:20;2025-10-10 18:07:20
+613;42;"Equipo Médico, Accesorios y Suministros";4231;Productos para el cuidado de heridas;2025-10-10 18:07:20;2025-10-10 18:07:20
+614;42;"Equipo Médico, Accesorios y Suministros";4232;Implantes ortopédicos quirúrgicos;2025-10-10 18:07:20;2025-10-10 18:07:20
+615;43;Difusión de Tecnologías de Información y Telecomunicaciones;4319;Dispositivos de comunicaciones y accesorios;2025-10-10 18:07:20;2025-10-10 18:07:20
+616;43;Difusión de Tecnologías de Información y Telecomunicaciones;4320;"Componentes para tecnología de la información, difusión o telecomunicaciones";2025-10-10 18:07:20;2025-10-10 18:07:20
+617;43;Difusión de Tecnologías de Información y Telecomunicaciones;4321;Equipo informático y accesorios;2025-10-10 18:07:21;2025-10-10 18:07:21
+618;43;Difusión de Tecnologías de Información y Telecomunicaciones;4322;Equipos o plataformas y accesorios de redes multimedia o de voz y datos;2025-10-10 18:07:21;2025-10-10 18:07:21
+619;43;Difusión de Tecnologías de Información y Telecomunicaciones;4323;Software;2025-10-10 18:07:21;2025-10-10 18:07:21
+620;44;"Equipos de Oficina, Accesorios y Suministros";4410;"Maquinaria, suministros y accesorios de oficina";2025-10-10 18:07:21;2025-10-10 18:07:21
+621;44;"Equipos de Oficina, Accesorios y Suministros";4411;Accesorios de oficina y escritorio;2025-10-10 18:07:21;2025-10-10 18:07:21
+622;44;"Equipos de Oficina, Accesorios y Suministros";4412;Suministros de oficina;2025-10-10 18:07:22;2025-10-10 18:07:22
+623;45;"Equipos y Suministros para Impresión, Fotografia y Audiovisuales";4510;Equipo de imprenta y publicación;2025-10-10 18:07:22;2025-10-10 18:07:22
+624;45;"Equipos y Suministros para Impresión, Fotografia y Audiovisuales";4511;Equipos de audio y video para presentación y composición;2025-10-10 18:07:22;2025-10-10 18:07:22
+625;45;"Equipos y Suministros para Impresión, Fotografia y Audiovisuales";4512;"Equipo de vídeo, filmación o fotografía";2025-10-10 18:07:22;2025-10-10 18:07:22
+626;45;"Equipos y Suministros para Impresión, Fotografia y Audiovisuales";4513;Medios fotográficos y de grabación;2025-10-10 18:07:22;2025-10-10 18:07:22
+627;45;"Equipos y Suministros para Impresión, Fotografia y Audiovisuales";4514;Suministros fotográficos para cine;2025-10-10 18:07:23;2025-10-10 18:07:23
+628;46;"Equipos y Suministros de Defensa, Orden Publico, Proteccion, Vigilancia y Seguridad";4610;Armas ligeras y munición;2025-10-10 18:07:23;2025-10-10 18:07:23
+629;46;"Equipos y Suministros de Defensa, Orden Publico, Proteccion, Vigilancia y Seguridad";4611;Armas de guerra convencionales;2025-10-10 18:07:23;2025-10-10 18:07:23
+630;46;"Equipos y Suministros de Defensa, Orden Publico, Proteccion, Vigilancia y Seguridad";4612;Misiles;2025-10-10 18:07:23;2025-10-10 18:07:23
+631;46;"Equipos y Suministros de Defensa, Orden Publico, Proteccion, Vigilancia y Seguridad";4613;Cohetes y subsistemas;2025-10-10 18:07:23;2025-10-10 18:07:23
+632;46;"Equipos y Suministros de Defensa, Orden Publico, Proteccion, Vigilancia y Seguridad";4614;Lanzadores;2025-10-10 18:07:24;2025-10-10 18:07:24
+633;46;"Equipos y Suministros de Defensa, Orden Publico, Proteccion, Vigilancia y Seguridad";4615;Protección del Orden Público;2025-10-10 18:07:24;2025-10-10 18:07:24
+634;46;"Equipos y Suministros de Defensa, Orden Publico, Proteccion, Vigilancia y Seguridad";4616;Seguridad y control público;2025-10-10 18:07:24;2025-10-10 18:07:24
+635;46;"Equipos y Suministros de Defensa, Orden Publico, Proteccion, Vigilancia y Seguridad";4617;"Seguridad, vigilancia y detección";2025-10-10 18:07:24;2025-10-10 18:07:24
+636;46;"Equipos y Suministros de Defensa, Orden Publico, Proteccion, Vigilancia y Seguridad";4618;Seguridad y protección personal;2025-10-10 18:07:24;2025-10-10 18:07:24
+637;46;"Equipos y Suministros de Defensa, Orden Publico, Proteccion, Vigilancia y Seguridad";4619;Protección contra incendios;2025-10-10 18:07:25;2025-10-10 18:07:25
+638;46;"Equipos y Suministros de Defensa, Orden Publico, Proteccion, Vigilancia y Seguridad";4620;"Equipo de entrenamiento de seguridad física e industrial, defensa y orden público";2025-10-10 18:07:25;2025-10-10 18:07:25
+639;47;Equipos de Limpieza y Suministros;4710;"Tratamiento, suministros y eliminación de agua y aguas residuales";2025-10-10 18:07:25;2025-10-10 18:07:25
+640;47;Equipos de Limpieza y Suministros;4711;Equipo industrial de lavandería y lavado en seco;2025-10-10 18:07:25;2025-10-10 18:07:25
+641;47;Equipos de Limpieza y Suministros;4712;Equipo de aseo;2025-10-10 18:07:25;2025-10-10 18:07:25
+642;47;Equipos de Limpieza y Suministros;4713;Suministros de aseo y limpieza;2025-10-10 18:07:26;2025-10-10 18:07:26
+643;48;"Maquinaria, Equipo y Suministros para la Industria de Servicios";4810;Equipos de servicios de alimentación para instituciones;2025-10-10 18:07:26;2025-10-10 18:07:26
+644;48;"Maquinaria, Equipo y Suministros para la Industria de Servicios";4811;Máquinas expendedoras;2025-10-10 18:07:26;2025-10-10 18:07:26
+645;48;"Maquinaria, Equipo y Suministros para la Industria de Servicios";4812;Equipo de Juego o de Apostar;2025-10-10 18:07:26;2025-10-10 18:07:26
+646;48;"Maquinaria, Equipo y Suministros para la Industria de Servicios";4813;Equipo y materiales funerarios;2025-10-10 18:07:26;2025-10-10 18:07:26
+647;49;"Equipos, Suministros y Accesorios para Deportes y Recreación";4910;Coleccionables y condecoraciones;2025-10-10 18:07:27;2025-10-10 18:07:27
+648;49;"Equipos, Suministros y Accesorios para Deportes y Recreación";4912;Equipos y accesorios para acampada y exteriores;2025-10-10 18:07:27;2025-10-10 18:07:27
+649;49;"Equipos, Suministros y Accesorios para Deportes y Recreación";4913;Equipos de pesca y caza;2025-10-10 18:07:27;2025-10-10 18:07:27
+650;49;"Equipos, Suministros y Accesorios para Deportes y Recreación";4914;Equipos para deportes acuáticos;2025-10-10 18:07:27;2025-10-10 18:07:27
+651;49;"Equipos, Suministros y Accesorios para Deportes y Recreación";4915;Equipos para deportes de invierno;2025-10-10 18:07:27;2025-10-10 18:07:27
+652;49;"Equipos, Suministros y Accesorios para Deportes y Recreación";4916;Equipos deportivos para campos y canchas;2025-10-10 18:07:28;2025-10-10 18:07:28
+653;49;"Equipos, Suministros y Accesorios para Deportes y Recreación";4917;Equipos de gimnasia y boxeo;2025-10-10 18:07:28;2025-10-10 18:07:28
+654;49;"Equipos, Suministros y Accesorios para Deportes y Recreación";4918;"Juegos, equipo de tiro y mesa";2025-10-10 18:07:28;2025-10-10 18:07:28
+655;49;"Equipos, Suministros y Accesorios para Deportes y Recreación";4920;Equipo para entrenamiento físico;2025-10-10 18:07:28;2025-10-10 18:07:28
+656;49;"Equipos, Suministros y Accesorios para Deportes y Recreación";4921;Otros deportes;2025-10-10 18:07:28;2025-10-10 18:07:28
+657;49;"Equipos, Suministros y Accesorios para Deportes y Recreación";4922;Equipo  y accesorios para deportes;2025-10-10 18:07:29;2025-10-10 18:07:29
+658;49;"Equipos, Suministros y Accesorios para Deportes y Recreación";4924;"Equipo de recreo, parques infantiles y equipo y suministros de natación y de spa";2025-10-10 18:07:29;2025-10-10 18:07:29
+659;50;"Alimentos, Bebidas y Tabaco ";5010;Frutos secos;2025-10-10 18:07:29;2025-10-10 18:07:29
+660;50;"Alimentos, Bebidas y Tabaco ";5011;Productos de carne y aves de corral;2025-10-10 18:07:29;2025-10-10 18:07:29
+661;50;"Alimentos, Bebidas y Tabaco ";5012;Pescados y mariscos;2025-10-10 18:07:29;2025-10-10 18:07:29
+662;50;"Alimentos, Bebidas y Tabaco ";5013;Productos lácteos y huevos;2025-10-10 18:07:30;2025-10-10 18:07:30
+663;50;"Alimentos, Bebidas y Tabaco ";5015;Aceites y grasas comestibles;2025-10-10 18:07:30;2025-10-10 18:07:30
+664;50;"Alimentos, Bebidas y Tabaco ";5016;"Chocolates, azúcares, edulcorantes y productos de confitería";2025-10-10 18:07:30;2025-10-10 18:07:30
+665;50;"Alimentos, Bebidas y Tabaco ";5017;Condimentos y conservantes;2025-10-10 18:07:30;2025-10-10 18:07:30
+666;50;"Alimentos, Bebidas y Tabaco ";5018;Productos de panadería;2025-10-10 18:07:30;2025-10-10 18:07:30
+667;50;"Alimentos, Bebidas y Tabaco ";5019;Alimentos preparados y conservados;2025-10-10 18:07:31;2025-10-10 18:07:31
+668;50;"Alimentos, Bebidas y Tabaco ";5020;Bebidas;2025-10-10 18:07:31;2025-10-10 18:07:31
+669;50;"Alimentos, Bebidas y Tabaco ";5021;Tabaco y productos de fumar y substitutos;2025-10-10 18:07:31;2025-10-10 18:07:31
+670;50;"Alimentos, Bebidas y Tabaco ";5022;Productos de cereales y legumbres;2025-10-10 18:07:31;2025-10-10 18:07:31
+671;50;"Alimentos, Bebidas y Tabaco ";5030;Fruta fresca;2025-10-10 18:07:31;2025-10-10 18:07:31
+672;50;"Alimentos, Bebidas y Tabaco ";5031;Fruta orgánica fresca;2025-10-10 18:07:32;2025-10-10 18:07:32
+673;50;"Alimentos, Bebidas y Tabaco ";5032;Fruta seca;2025-10-10 18:07:32;2025-10-10 18:07:32
+674;50;"Alimentos, Bebidas y Tabaco ";5033;Fruta orgánica seca;2025-10-10 18:07:32;2025-10-10 18:07:32
+675;50;"Alimentos, Bebidas y Tabaco ";5034;Fruta congelada;2025-10-10 18:07:32;2025-10-10 18:07:32
+676;50;"Alimentos, Bebidas y Tabaco ";5035;Fruta orgánica congelada;2025-10-10 18:07:32;2025-10-10 18:07:32
+677;50;"Alimentos, Bebidas y Tabaco ";5036;Fruta en lata o en frasco;2025-10-10 18:07:33;2025-10-10 18:07:33
+678;50;"Alimentos, Bebidas y Tabaco ";5037;Fruta orgánica en lata o en frasco;2025-10-10 18:07:33;2025-10-10 18:07:33
+679;50;"Alimentos, Bebidas y Tabaco ";5038;Puré de frutas;2025-10-10 18:07:33;2025-10-10 18:07:33
+680;50;"Alimentos, Bebidas y Tabaco ";5040;Vegetales frescos;2025-10-10 18:07:33;2025-10-10 18:07:33
+681;50;"Alimentos, Bebidas y Tabaco ";5041;Vegetales orgánicos frescos;2025-10-10 18:07:33;2025-10-10 18:07:33
+682;50;"Alimentos, Bebidas y Tabaco ";5042;Vegetales secos;2025-10-10 18:07:34;2025-10-10 18:07:34
+683;50;"Alimentos, Bebidas y Tabaco ";5043;Vegetales orgánicos secos;2025-10-10 18:07:34;2025-10-10 18:07:34
+684;50;"Alimentos, Bebidas y Tabaco ";5044;Vegetales congelados;2025-10-10 18:07:34;2025-10-10 18:07:34
+685;50;"Alimentos, Bebidas y Tabaco ";5045;Vegetales orgánicos congelados;2025-10-10 18:07:34;2025-10-10 18:07:34
+686;50;"Alimentos, Bebidas y Tabaco ";5046;Vegetales en lata o en frasco;2025-10-10 18:07:34;2025-10-10 18:07:34
+687;50;"Alimentos, Bebidas y Tabaco ";5047;Vegetales orgánicos en lata o en frasco;2025-10-10 18:07:35;2025-10-10 18:07:35
+688;51;Medicamentos y Productos Farmacéuticos;5110;Medicamentos antiinfecciosos;2025-10-10 18:07:35;2025-10-10 18:07:35
+689;51;Medicamentos y Productos Farmacéuticos;5111;Agentes antitumorales;2025-10-10 18:07:35;2025-10-10 18:07:35
+690;51;Medicamentos y Productos Farmacéuticos;5112;Medicamentos cardiovasculares;2025-10-10 18:07:35;2025-10-10 18:07:35
+691;51;Medicamentos y Productos Farmacéuticos;5113;Medicamentos hematólogos;2025-10-10 18:07:35;2025-10-10 18:07:35
+692;51;Medicamentos y Productos Farmacéuticos;5114;Medicamentos para el sistema nervioso central;2025-10-10 18:07:36;2025-10-10 18:07:36
+693;51;Medicamentos y Productos Farmacéuticos;5115;Medicamentos para el sistema nervioso autónomo;2025-10-10 18:07:36;2025-10-10 18:07:36
+694;51;Medicamentos y Productos Farmacéuticos;5116;Medicamentos que afectan al sistema respiratorio;2025-10-10 18:07:36;2025-10-10 18:07:36
+695;51;Medicamentos y Productos Farmacéuticos;5117;Medicamentos que afectan al sistema gastrointestinal;2025-10-10 18:07:36;2025-10-10 18:07:36
+696;51;Medicamentos y Productos Farmacéuticos;5118;Hormonas y antagonistas hormonales;2025-10-10 18:07:36;2025-10-10 18:07:36
+697;51;Medicamentos y Productos Farmacéuticos;5119;Agentes que afectan el agua y los electrolitos;2025-10-10 18:07:37;2025-10-10 18:07:37
+698;51;Medicamentos y Productos Farmacéuticos;5120;Medicamentos inmunomoduladores;2025-10-10 18:07:37;2025-10-10 18:07:37
+699;51;Medicamentos y Productos Farmacéuticos;5121;Categorías de medicamentos varios;2025-10-10 18:07:37;2025-10-10 18:07:37
+700;51;Medicamentos y Productos Farmacéuticos;5124;"Fármacos que afectan a los oídos, los ojos, la nariz y la piel";2025-10-10 18:07:37;2025-10-10 18:07:37
+701;51;Medicamentos y Productos Farmacéuticos;5125;Suplementos alimenticios veterinarios;2025-10-10 18:07:37;2025-10-10 18:07:37
+702;52;"Artículos Domésticos, Suministros y Productos Electrónicos de Consumo ";5210;Revestimientos de suelos;2025-10-10 18:07:38;2025-10-10 18:07:38
+703;52;"Artículos Domésticos, Suministros y Productos Electrónicos de Consumo ";5212;"Ropa de cama, mantelerías, paños de cocina y toallas";2025-10-10 18:07:38;2025-10-10 18:07:38
+704;52;"Artículos Domésticos, Suministros y Productos Electrónicos de Consumo ";5213;Tratamientos de ventanas;2025-10-10 18:07:38;2025-10-10 18:07:38
+705;52;"Artículos Domésticos, Suministros y Productos Electrónicos de Consumo ";5214;Aparatos electrodomésticos;2025-10-10 18:07:38;2025-10-10 18:07:38
+706;52;"Artículos Domésticos, Suministros y Productos Electrónicos de Consumo ";5215;Utensilios de cocina domésticos;2025-10-10 18:07:38;2025-10-10 18:07:38
+707;52;"Artículos Domésticos, Suministros y Productos Electrónicos de Consumo ";5216;Electrónica de consumo;2025-10-10 18:07:39;2025-10-10 18:07:39
+708;52;"Artículos Domésticos, Suministros y Productos Electrónicos de Consumo ";5217;Tratamientos de pared doméstica;2025-10-10 18:07:39;2025-10-10 18:07:39
+709;53;"Ropa, Maletas y Productos de Aseo Personal";5310;Ropa;2025-10-10 18:07:39;2025-10-10 18:07:39
+710;53;"Ropa, Maletas y Productos de Aseo Personal";5311;Calzado;2025-10-10 18:07:39;2025-10-10 18:07:39
+711;53;"Ropa, Maletas y Productos de Aseo Personal";5312;"Maletas, bolsos de mano, mochilas y estuches";2025-10-10 18:07:39;2025-10-10 18:07:39
+712;53;"Ropa, Maletas y Productos de Aseo Personal";5313;Artículos de tocador y cuidado personal;2025-10-10 18:07:40;2025-10-10 18:07:40
+713;53;"Ropa, Maletas y Productos de Aseo Personal";5314;Fuentes y accesorios de costura;2025-10-10 18:07:40;2025-10-10 18:07:40
+714;54;"Productos para Relojería, Joyería y Piedras Preciosas";5410;Joyería;2025-10-10 18:07:40;2025-10-10 18:07:40
+715;54;"Productos para Relojería, Joyería y Piedras Preciosas";5411;Relojes;2025-10-10 18:07:40;2025-10-10 18:07:40
+716;54;"Productos para Relojería, Joyería y Piedras Preciosas";5412;Gemas;2025-10-10 18:07:40;2025-10-10 18:07:40
+717;55;"Publicaciones Impresas, Publicaciones Electrónicas y Accesorios";5510;Medios impresos;2025-10-10 18:07:41;2025-10-10 18:07:41
+718;55;"Publicaciones Impresas, Publicaciones Electrónicas y Accesorios";5511;Material electrónico de referencia;2025-10-10 18:07:41;2025-10-10 18:07:41
+719;55;"Publicaciones Impresas, Publicaciones Electrónicas y Accesorios";5512;Etiquetado y accesorios;2025-10-10 18:07:41;2025-10-10 18:07:41
+720;56;"Muebles, Mobiliario y Decoración";5610;Muebles de alojamiento;2025-10-10 18:07:41;2025-10-10 18:07:41
+721;56;"Muebles, Mobiliario y Decoración";5611;Muebles comerciales e industriales;2025-10-10 18:07:41;2025-10-10 18:07:41
+722;56;"Muebles, Mobiliario y Decoración";5612;"Mobiliario institucional, escolar y educativo y accesorios";2025-10-10 18:07:42;2025-10-10 18:07:42
+723;56;"Muebles, Mobiliario y Decoración";5613;Muebles y accesorios para merchandising;2025-10-10 18:07:42;2025-10-10 18:07:42
+724;56;"Muebles, Mobiliario y Decoración";5614;Adornos para el hogar;2025-10-10 18:07:42;2025-10-10 18:07:42
+725;60;"Instrumentos Musicales, Juegos, Juguetes, Artes, Artesanías y Equipo educativo, Materiales, Accesorios y Suministros";6010;Materiales didácticos profesionales y de desarrollo y accesorios y suministros;2025-10-10 18:07:42;2025-10-10 18:07:42
+726;60;"Instrumentos Musicales, Juegos, Juguetes, Artes, Artesanías y Equipo educativo, Materiales, Accesorios y Suministros";6011;Decoraciones y suministros del aula;2025-10-10 18:07:42;2025-10-10 18:07:42
+727;60;"Instrumentos Musicales, Juegos, Juguetes, Artes, Artesanías y Equipo educativo, Materiales, Accesorios y Suministros";6012;"Equipo, accesorios y suministros de arte y manualidades";2025-10-10 18:07:43;2025-10-10 18:07:43
+728;60;"Instrumentos Musicales, Juegos, Juguetes, Artes, Artesanías y Equipo educativo, Materiales, Accesorios y Suministros";6013;"Instrumentos musicales, piezas y accesorios";2025-10-10 18:07:43;2025-10-10 18:07:43
+729;60;"Instrumentos Musicales, Juegos, Juguetes, Artes, Artesanías y Equipo educativo, Materiales, Accesorios y Suministros";6014;Juguetes y juegos;2025-10-10 18:07:43;2025-10-10 18:07:43
+730;70;"Servicios de Contratacion Agrícola, Pesquera, Forestal y de Fauna";7010;Pesquerías y acuicultura;2025-10-10 18:07:43;2025-10-10 18:07:43
+732;70;"Servicios de Contratación Agrícola, Pesquera, Forestal y de Fauna";7011;Horticultura;2025-10-10 18:07:44;2025-10-10 18:07:44
+733;70;"Servicios de Contratación Agrícola, Pesquera, Forestal y de Fauna";7012;Servicios de animales vivos;2025-10-10 18:07:44;2025-10-10 18:07:44
+734;70;"Servicios de Contratación Agrícola, Pesquera, Forestal y de Fauna";7013;"Preparación, gestión y protección del terreno y del suelo";2025-10-10 18:07:44;2025-10-10 18:07:44
+735;70;"Servicios de Contratación Agrícola, Pesquera, Forestal y de Fauna";7014;"Producción, gestión y protección de cultivos";2025-10-10 18:07:44;2025-10-10 18:07:44
+736;70;"Servicios de Contratación Agrícola, Pesquera, Forestal y de Fauna";7015;Silvicultura;2025-10-10 18:07:44;2025-10-10 18:07:44
+737;70;"Servicios de Contratación Agrícola, Pesquera, Forestal y de Fauna";7016;Fauna y flora silvestres;2025-10-10 18:07:45;2025-10-10 18:07:45
+738;70;"Servicios de Contratación Agrícola, Pesquera, Forestal y de Fauna";7017;Desarrollo y vigilancia de recursos hidráulicos;2025-10-10 18:07:45;2025-10-10 18:07:45
+739;71;"Servicios de Minería, Petróleo y Gas";7110;Servicios de minería;2025-10-10 18:07:45;2025-10-10 18:07:45
+740;71;"Servicios de Minería, Petróleo y Gas";7111;Servicios de perforación y prospección petrolífera y de gas;2025-10-10 18:07:45;2025-10-10 18:07:45
+741;71;"Servicios de Minería, Petróleo y Gas";7112;Servicios de construcción y perforación de pozos;2025-10-10 18:07:45;2025-10-10 18:07:45
+742;71;"Servicios de Minería, Petróleo y Gas";7113;Servicios de aumento de la extracción y producción de gas y petróleo;2025-10-10 18:07:46;2025-10-10 18:07:46
+743;71;"Servicios de Minería, Petróleo y Gas";7114;Servicios de restauración y recuperación de gas y petróleo;2025-10-10 18:07:46;2025-10-10 18:07:46
+744;71;"Servicios de Minería, Petróleo y Gas";7115;Servicios de procesamiento y gestión de datos de petróleo y gas;2025-10-10 18:07:46;2025-10-10 18:07:46
+745;71;"Servicios de Minería, Petróleo y Gas";7116;Servicios de gerencia de proyectos en pozos de petróleo y gas;2025-10-10 18:07:46;2025-10-10 18:07:46
+746;72;"Servicios de Edificación, Construcción de Instalaciones y Mantenimiento";7210;Servicios de mantenimiento y reparaciones de construcciones e instalaciones;2025-10-10 18:07:46;2025-10-10 18:07:46
+747;72;"Servicios de Edificación, Construcción de Instalaciones y Mantenimiento";7211;Servicios de construcción de edificaciones residenciales;2025-10-10 18:07:47;2025-10-10 18:07:47
+748;72;"Servicios de Edificación, Construcción de Instalaciones y Mantenimiento";7212;Servicios de construcción de edificaciones no residenciales;2025-10-10 18:07:47;2025-10-10 18:07:47
+749;72;"Servicios de Edificación, Construcción de Instalaciones y Mantenimiento";7214;Servicios de construcción pesada;2025-10-10 18:07:47;2025-10-10 18:07:47
+750;72;"Servicios de Edificación, Construcción de Instalaciones y Mantenimiento";7215;Servicios de mantenimiento y construcción de comercio especializado;2025-10-10 18:07:47;2025-10-10 18:07:47
+751;73;Servicios de Producción Industrial y Manufactura;7310;Industrias de plásticos y productos químicos;2025-10-10 18:07:47;2025-10-10 18:07:47
+752;73;Servicios de Producción Industrial y Manufactura;7311;Industrias de la madera y el papel;2025-10-10 18:07:48;2025-10-10 18:07:48
+753;73;Servicios de Producción Industrial y Manufactura;7312;Industrias del metal y de minerales;2025-10-10 18:07:48;2025-10-10 18:07:48
+754;73;Servicios de Producción Industrial y Manufactura;7313;Industrias de alimentos y bebidas;2025-10-10 18:07:48;2025-10-10 18:07:48
+755;73;Servicios de Producción Industrial y Manufactura;7314;"Industrias de fibras, textiles y de tejidos";2025-10-10 18:07:48;2025-10-10 18:07:48
+756;73;Servicios de Producción Industrial y Manufactura;7315;Servicios de apoyo a la fabricación;2025-10-10 18:07:48;2025-10-10 18:07:48
+757;73;Servicios de Producción Industrial y Manufactura;7316;Fabricación de maquinaria y equipo de transporte;2025-10-10 18:07:49;2025-10-10 18:07:49
+758;73;Servicios de Producción Industrial y Manufactura;7317;Fabricación de productos eléctricos e instrumentos de precisión;2025-10-10 18:07:49;2025-10-10 18:07:49
+759;73;Servicios de Producción Industrial y Manufactura;7318;Servicios de maquinado y procesado;2025-10-10 18:07:49;2025-10-10 18:07:49
+760;76;"Servicios de Limpieza, Descontaminación y Tratamiento de Residuos";7610;Servicios de descontaminación;2025-10-10 18:07:49;2025-10-10 18:07:49
+761;76;"Servicios de Limpieza, Descontaminación y Tratamiento de Residuos";7611;Servicios de aseo y limpieza;2025-10-10 18:07:49;2025-10-10 18:07:49
+762;76;"Servicios de Limpieza, Descontaminación y Tratamiento de Residuos";7612;Eliminación y tratamiento de desechos;2025-10-10 18:07:50;2025-10-10 18:07:50
+763;76;"Servicios de Limpieza, Descontaminación y Tratamiento de Residuos";7613;Limpieza de residuos tóxicos y peligrosos;2025-10-10 18:07:50;2025-10-10 18:07:50
+764;77;Servicios Medioambientales;7710;Gestión medioambiental;2025-10-10 18:07:50;2025-10-10 18:07:50
+765;77;Servicios Medioambientales;7711;Protección medioambiental;2025-10-10 18:07:50;2025-10-10 18:07:50
+766;77;Servicios Medioambientales;7712;"Seguimiento, control y rehabilitación de la contaminación";2025-10-10 18:07:50;2025-10-10 18:07:50
+767;77;Servicios Medioambientales;7713;"Servicios de seguimiento, control o rehabilitación de contaminantes";2025-10-10 18:07:51;2025-10-10 18:07:51
+768;78;"Servicios de Transporte, Almacenaje y Correo";7810;Transporte de correo y carga;2025-10-10 18:07:51;2025-10-10 18:07:51
+769;78;"Servicios de Transporte, Almacenaje y Correo";7811;Transporte de pasajeros;2025-10-10 18:07:51;2025-10-10 18:07:51
+770;78;"Servicios de Transporte, Almacenaje y Correo";7812;Manejo y embalaje de material;2025-10-10 18:07:51;2025-10-10 18:07:51
+771;78;"Servicios de Transporte, Almacenaje y Correo";7813;Almacenaje;2025-10-10 18:07:51;2025-10-10 18:07:51
+772;78;"Servicios de Transporte, Almacenaje y Correo";7814;Servicios de transporte;2025-10-10 18:07:52;2025-10-10 18:07:52
+773;78;"Servicios de Transporte, Almacenaje y Correo";7818;Servicios de mantenimiento o reparaciones de transportes;2025-10-10 18:07:52;2025-10-10 18:07:52
+774;80;"Servicios de Gestión, Servicios Profesionales de Empresa y Servicios Administrativos";8010;Servicios de asesoría de gestión;2025-10-10 18:07:52;2025-10-10 18:07:52
+775;80;"Servicios de Gestión, Servicios Profesionales de Empresa y Servicios Administrativos";8011;Servicios de recursos humanos;2025-10-10 18:07:52;2025-10-10 18:07:52
+776;80;"Servicios de Gestión, Servicios Profesionales de Empresa y Servicios Administrativos";8012;Servicios legales;2025-10-10 18:07:52;2025-10-10 18:07:52
+777;80;"Servicios de Gestión, Servicios Profesionales de Empresa y Servicios Administrativos";8013;Servicios inmobiliarios;2025-10-10 18:07:53;2025-10-10 18:07:53
+778;80;"Servicios de Gestión, Servicios Profesionales de Empresa y Servicios Administrativos";8014;Comercialización y distribución;2025-10-10 18:07:53;2025-10-10 18:07:53
+779;80;"Servicios de Gestión, Servicios Profesionales de Empresa y Servicios Administrativos";8015;Política comercial y servicios;2025-10-10 18:07:53;2025-10-10 18:07:53
+780;80;"Servicios de Gestión, Servicios Profesionales de Empresa y Servicios Administrativos";8016;Servicios de administración de empresas;2025-10-10 18:07:53;2025-10-10 18:07:53
+781;81;"Servicios Basados en Ingeniería, Investigación y Tecnología";8110;Servicios profesionales de ingeniería;2025-10-10 18:07:53;2025-10-10 18:07:53
+782;81;"Servicios Basados en Ingeniería, Investigación y Tecnología";8111;Servicios informáticos;2025-10-10 18:07:54;2025-10-10 18:07:54
+783;81;"Servicios Basados en Ingeniería, Investigación y Tecnología";8112;Economía;2025-10-10 18:07:54;2025-10-10 18:07:54
+784;81;"Servicios Basados en Ingeniería, Investigación y Tecnología";8113;Estadística;2025-10-10 18:07:54;2025-10-10 18:07:54
+785;81;"Servicios Basados en Ingeniería, Investigación y Tecnología";8114;Tecnologías de fabricación;2025-10-10 18:07:54;2025-10-10 18:07:54
+786;81;"Servicios Basados en Ingeniería, Investigación y Tecnología";8115;Servicios de pedología;2025-10-10 18:07:54;2025-10-10 18:07:54
+787;81;"Servicios Basados en Ingeniería, Investigación y Tecnología";8116;Entrega de servicios de tecnología de información;2025-10-10 18:07:55;2025-10-10 18:07:55
+788;82;"Servicios Editoriales, de Diseño, de Artes Graficas y Bellas Artes";8210;Publicidad;2025-10-10 18:07:55;2025-10-10 18:07:55
+789;82;"Servicios Editoriales, de Diseño, de Artes Graficas y Bellas Artes";8211;Escritura y traducciones;2025-10-10 18:07:55;2025-10-10 18:07:55
+790;82;"Servicios Editoriales, de Diseño, de Artes Graficas y Bellas Artes";8212;Servicios de reproducción;2025-10-10 18:07:55;2025-10-10 18:07:55
+791;82;"Servicios Editoriales, de Diseño, de Artes Graficas y Bellas Artes";8213;Servicios fotográficos;2025-10-10 18:07:56;2025-10-10 18:07:56
+792;82;"Servicios Editoriales, de Diseño, de Artes Graficas y Bellas Artes";8214;Diseño gráfico;2025-10-10 18:07:56;2025-10-10 18:07:56
+793;82;"Servicios Editoriales, de Diseño, de Artes Graficas y Bellas Artes";8215;Artistas e intérpretes profesionales;2025-10-10 18:07:56;2025-10-10 18:07:56
+794;83;Servicios Públicos y Servicios Relacionados con el Sector Público;8310;Servicios públicos;2025-10-10 18:07:56;2025-10-10 18:07:56
+795;83;Servicios Públicos y Servicios Relacionados con el Sector Público;8311;Servicios de medios de telecomunicaciones;2025-10-10 18:07:56;2025-10-10 18:07:56
+796;83;Servicios Públicos y Servicios Relacionados con el Sector Público;8312;Servicios de información;2025-10-10 18:07:56;2025-10-10 18:07:56
+797;84;Servicios Financieros y de Seguros;8410;Finanzas de desarrollo;2025-10-10 18:07:57;2025-10-10 18:07:57
+798;84;Servicios Financieros y de Seguros;8411;Servicios de contabilidad y auditorias;2025-10-10 18:07:57;2025-10-10 18:07:57
+799;84;Servicios Financieros y de Seguros;8412;Banca e inversiones;2025-10-10 18:07:57;2025-10-10 18:07:57
+800;84;Servicios Financieros y de Seguros;8413;Servicios de seguros y pensiones;2025-10-10 18:07:57;2025-10-10 18:07:57
+801;84;Servicios Financieros y de Seguros;8414;Agencias de crédito;2025-10-10 18:07:58;2025-10-10 18:07:58
+802;85;Servicios de Salud;8510;Servicios integrales de salud;2025-10-10 18:07:58;2025-10-10 18:07:58
+803;85;Servicios de Salud;8511;Prevención y control de enfermedades;2025-10-10 18:07:58;2025-10-10 18:07:58
+804;85;Servicios de Salud;8512;Práctica médica;2025-10-10 18:07:58;2025-10-10 18:07:58
+805;85;Servicios de Salud;8513;"Ciencia médica, investigación y experimentación";2025-10-10 18:07:58;2025-10-10 18:07:58
+806;85;Servicios de Salud;8514;Medicina alternativa y holística;2025-10-10 18:07:59;2025-10-10 18:07:59
+807;85;Servicios de Salud;8515;Servicios alimenticios y de nutrición;2025-10-10 18:07:59;2025-10-10 18:07:59
+808;85;Servicios de Salud;8516;"Servicios de mantenimiento, renovación y reparación de equipo médico quirúrgico";2025-10-10 18:07:59;2025-10-10 18:07:59
+809;85;Servicios de Salud;8517;Servicios de muerte y soporte al fallecimiento;2025-10-10 18:07:59;2025-10-10 18:07:59
+810;86;Servicios Educativos y de Formación;8610;Formación profesional;2025-10-10 18:07:59;2025-10-10 18:07:59
+811;86;Servicios Educativos y de Formación;8611;Sistemas educativos alternativos;2025-10-10 18:08:00;2025-10-10 18:08:00
+812;86;Servicios Educativos y de Formación;8612;Instituciones educativas;2025-10-10 18:08:00;2025-10-10 18:08:00
+813;86;Servicios Educativos y de Formación;8613;Servicios educativos especializados;2025-10-10 18:08:00;2025-10-10 18:08:00
+814;86;Servicios Educativos y de Formación;8614;Instalaciones educativas;2025-10-10 18:08:00;2025-10-10 18:08:00
+815;90;"Servicios de Viajes, Alimentación, Alojamiento y Entretenimiento";9010;Restaurantes y catering (servicios de comidas y bebidas);2025-10-10 18:08:00;2025-10-10 18:08:00
+816;90;"Servicios de Viajes, Alimentación, Alojamiento y Entretenimiento";9011;"Instalaciones hoteleras, alojamientos y centros de encuentros";2025-10-10 18:08:01;2025-10-10 18:08:01
+817;90;"Servicios de Viajes, Alimentación, Alojamiento y Entretenimiento";9012;Facilitación de viajes;2025-10-10 18:08:01;2025-10-10 18:08:01
+818;90;"Servicios de Viajes, Alimentación, Alojamiento y Entretenimiento";9013;Artes interpretativas;2025-10-10 18:08:01;2025-10-10 18:08:01
+819;90;"Servicios de Viajes, Alimentación, Alojamiento y Entretenimiento";9014;Deportes comerciales;2025-10-10 18:08:01;2025-10-10 18:08:01
+820;90;"Servicios de Viajes, Alimentación, Alojamiento y Entretenimiento";9015;Servicios de entretenimiento;2025-10-10 18:08:01;2025-10-10 18:08:01
+821;91;Servicios Personales y Domésticos;9110;Aspecto personal;2025-10-10 18:08:02;2025-10-10 18:08:02
+822;91;Servicios Personales y Domésticos;9111;Asistencia doméstica y personal;2025-10-10 18:08:02;2025-10-10 18:08:02
+823;92;"Servicios de Defensa Nacional, Orden Publico, Seguridad y Vigilancia";9210;Orden público y seguridad;2025-10-10 18:08:02;2025-10-10 18:08:02
+824;92;"Servicios de Defensa Nacional, Orden Publico, Seguridad y Vigilancia";9211;Servicios militares o defensa nacional;2025-10-10 18:08:02;2025-10-10 18:08:02
+825;92;"Servicios de Defensa Nacional, Orden Publico, Seguridad y Vigilancia";9212;Seguridad y protección personal;2025-10-10 18:08:02;2025-10-10 18:08:02
+826;93;Servicios Políticos y de Asuntos Cívicos;9310;Sistemas e instituciones políticas;2025-10-10 18:08:03;2025-10-10 18:08:03
+827;93;Servicios Políticos y de Asuntos Cívicos;9311;Condiciones sociopolíticas;2025-10-10 18:08:03;2025-10-10 18:08:03
+828;93;Servicios Políticos y de Asuntos Cívicos;9312;Relaciones internacionales;2025-10-10 18:08:03;2025-10-10 18:08:03
+829;93;Servicios Políticos y de Asuntos Cívicos;9313;Ayuda y asistencia humanitaria;2025-10-10 18:08:03;2025-10-10 18:08:03
+830;93;Servicios Políticos y de Asuntos Cívicos;9314;Servicios comunitarios y sociales;2025-10-10 18:08:03;2025-10-10 18:08:03
+831;93;Servicios Políticos y de Asuntos Cívicos;9315;Servicios de administración y financiación pública;2025-10-10 18:08:04;2025-10-10 18:08:04
+832;93;Servicios Políticos y de Asuntos Cívicos;9316;Tributación;2025-10-10 18:08:04;2025-10-10 18:08:04
+833;93;Servicios Políticos y de Asuntos Cívicos;9317;Política y regulación comercial;2025-10-10 18:08:04;2025-10-10 18:08:04
+834;94;Organizaciones y Clubes;9410;Organizaciones laborales;2025-10-10 18:08:04;2025-10-10 18:08:04
+835;94;Organizaciones y Clubes;9411;Organizaciones religiosas;2025-10-10 18:08:04;2025-10-10 18:08:04
+836;94;Organizaciones y Clubes;9412;Clubes;2025-10-10 18:08:05;2025-10-10 18:08:05
+837;94;Organizaciones y Clubes;9413;"Organizaciones, asociaciones y movimientos cívicos";2025-10-10 18:08:05;2025-10-10 18:08:05
+838;95;"Terrenos, Edificios, Estructuras y Vías";9510;Parcelas de tierra;2025-10-10 18:08:05;2025-10-10 18:08:05
+839;95;"Terrenos, Edificios, Estructuras y Vías";9511;Vías;2025-10-10 18:08:05;2025-10-10 18:08:05
+840;95;"Terrenos, Edificios, Estructuras y Vías";9512;Estructuras y edificios permanentes;2025-10-10 18:08:05;2025-10-10 18:08:05
+841;95;"Terrenos, Edificios, Estructuras y Vías";9513;Estructuras y edificios móviles;2025-10-10 18:08:06;2025-10-10 18:08:06
+842;95;"Terrenos, Edificios, Estructuras y Vías";9514;Estructuras y edificios prefabricados;2025-10-10 18:08:06;2025-10-10 18:08:06

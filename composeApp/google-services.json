@@ -1,0 +1,55 @@
+{
+  "project_info": {
+    "project_number": "794972415695",
+    "firebase_url": "https://ventago-25d2c-default-rtdb.firebaseio.com",
+    "project_id": "ventago-25d2c",
+    "storage_bucket": "ventago-25d2c.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:794972415695:android:aa5478aa7351abb86739ba",
+        "android_client_info": {
+          "package_name": "com.teco.ventago"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "794972415695-7idh181bd5av1aem1df2sb4rrehkoh07.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.teco.ventago",
+            "certificate_hash": "be134f3fc75c95cbd307b0de974b92307b6edefe"
+          }
+        },
+        {
+          "client_id": "794972415695-rfndlpvov5940ht0r313l1o83ecv6hfd.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCeZACzSAhSKcp4NuLb3BC4aZRKliD9ki4"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "794972415695-rfndlpvov5940ht0r313l1o83ecv6hfd.apps.googleusercontent.com",
+              "client_type": 3
+            },
+            {
+              "client_id": "794972415695-vrk8d8pj9u8mmale6b3j0df8724mc446.apps.googleusercontent.com",
+              "client_type": 2,
+              "ios_info": {
+                "bundle_id": "com.teco.ventago.VentaGo"
+              }
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
