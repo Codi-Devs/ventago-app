@@ -466,14 +466,17 @@ fun AddItemScreen(
             imeAction = ImeAction.Done,)
 
 
-        DMDropDownField(
-            label = stringResource(Res.string.category),
-            items = viewModel.categories().map { category -> category.name },
-            selectedIndex = viewModel.selectedCategoryIndex(),
-            modifier = Modifier.padding(start = 16.dp, end = 16.dp, bottom = 16.dp),
-            onItemSelected = { index, _ -> viewModel.onCategoryChanged(index) },
-            isError = false,
-        )
+        // Hide category selector if it's a personalized product and save product is unchecked
+        if (!(uiState.isPersonalizedProduct && !uiState.saveProduct)) {
+            DMDropDownField(
+                label = stringResource(Res.string.category),
+                items = viewModel.categories().map { category -> category.name },
+                selectedIndex = viewModel.selectedCategoryIndex(),
+                modifier = Modifier.padding(start = 16.dp, end = 16.dp, bottom = 16.dp),
+                onItemSelected = { index, _ -> viewModel.onCategoryChanged(index) },
+                isError = false,
+            )
+        }
 
 
         DMDropDownField(

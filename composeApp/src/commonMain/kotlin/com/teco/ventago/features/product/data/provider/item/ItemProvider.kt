@@ -96,16 +96,8 @@ class ItemProvider(private val client: HttpClient, private val authService: IAut
         }
 
         val body = res.body<JsonObject>()
-        val response = ApiResponse.fromJson(body)
-        if (response.error == ApiError.AUTH_001) {
-            return try {
-                authService.refreshToken(client)
-                removeItem(itemId)
-            } catch (e: Exception) {
-                response
-            }
-        }
-        return response
+        val status = body["status"]?.jsonPrimitive?.boolean ?: false
+        return ApiResponse(status, JsonPrimitive(status), ApiError.NO_ERROR)
     }
 
     override suspend fun changeItemOrder(items: List<Item>): ApiResponse {
@@ -125,15 +117,7 @@ class ItemProvider(private val client: HttpClient, private val authService: IAut
         }
 
         val body = res.body<JsonObject>()
-        val response = ApiResponse.fromJson(body)
-        if (response.error == ApiError.AUTH_001) {
-            return try {
-                authService.refreshToken(client)
-                changeItemOrder(items)
-            } catch (e: Exception) {
-                response
-            }
-        }
-        return response
+        val status = body["status"]?.jsonPrimitive?.boolean ?: false
+        return ApiResponse(status, JsonPrimitive(status), ApiError.NO_ERROR)
     }
 }

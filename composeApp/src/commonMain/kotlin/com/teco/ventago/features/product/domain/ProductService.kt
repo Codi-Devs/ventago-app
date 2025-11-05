@@ -195,6 +195,7 @@ class ProductService(
 
     suspend fun removeItem(itemId: Int): Boolean {
         val success = productsRepository.removeItem(itemId)
+        println("ASDASD: Product service $success")
         if (success) {
             state.update { menuAux ->
                 menuAux?.copy(categories = menuAux.categories.map { cat ->

@@ -8,16 +8,24 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.imePadding
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Add
+import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material.icons.rounded.ExpandMore
 import androidx.compose.material.icons.rounded.Remove
 import androidx.compose.material3.Button
+import androidx.compose.material3.Divider
 import androidx.compose.material3.ElevatedCard
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
@@ -39,6 +47,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.rotate
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
@@ -102,11 +111,13 @@ fun ModifyCartItemSheet(
                 percentText = d.bps.toString()
                 fixedRaw = ""
             }
+
             is Discount.Amount -> {
                 mode = DiscountMode.FIXED
                 fixedRaw = centsToRawText(d.value)
                 percentText = ""
             }
+
             null -> {
                 mode = DiscountMode.NONE
                 fixedRaw = ""
@@ -126,7 +137,7 @@ fun ModifyCartItemSheet(
 
     // Per-item Insurance
 //    val itemInsurancePreset = itemToModify.itemInsuranceCents ?: 0L
-    val itemInsurancePreset =  0L
+    val itemInsurancePreset = 0L
     var itemInsuranceRaw by rememberSaveable { mutableStateOf(centsToRawText(itemInsurancePreset)) }
     val itemInsuranceEnabled = !invoiceHasGlobalInsurance
 
@@ -140,15 +151,17 @@ fun ModifyCartItemSheet(
 
     // Parsed values
     val unitPriceCents = remember(unitPriceRaw) { rawTextToCents(unitPriceRaw) }
-    val fixedCents     = remember(fixedRaw)     { rawTextToCents(fixedRaw) }
-    val percent        = remember(percentText)  { percentText.filter(Char::isDigit).toIntOrNull()?.coerceIn(0, 100) ?: 0 }
+    val fixedCents = remember(fixedRaw) { rawTextToCents(fixedRaw) }
+    val percent = remember(percentText) {
+        percentText.filter(Char::isDigit).toIntOrNull()?.coerceIn(0, 100) ?: 0
+    }
 
     // Discounted unit price (never below 0)
     val discountedUnitCents = remember(unitPriceCents, mode, percent, fixedCents) {
         val raw = when (mode) {
-            DiscountMode.NONE    -> unitPriceCents
+            DiscountMode.NONE -> unitPriceCents
             DiscountMode.PERCENT -> unitPriceCents - (unitPriceCents * percent) / 100
-            DiscountMode.FIXED   -> unitPriceCents - fixedCents
+            DiscountMode.FIXED -> unitPriceCents - fixedCents
         }
         kotlin.math.max(0L, raw)
     }
@@ -157,159 +170,235 @@ fun ModifyCartItemSheet(
     ModalBottomSheet(
         containerColor = cardContainerColor(),
         onDismissRequest = onDismiss,
-        sheetState = sheetState
+        sheetState = sheetState,
+        dragHandle = null
     ) {
         Column(
             modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 16.dp, vertical = 12.dp)
+                .fillMaxSize()
+                .verticalScroll(rememberScrollState())
+                .imePadding()
+                .navigationBarsPadding()
         ) {
-            Text(itemToModify.name, style = titleLarge(), modifier = Modifier.padding(bottom = 12.dp))
-
-            // Unit price (raw cents digits)
-            DMMoneyOutlinedTextField(
-                text = unitPriceRaw,
-                label = "Precio unitario ($currencySymbol)",
-                onChange = { unitPriceRaw = it.filter(Char::isDigit) },
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(bottom = 12.dp),
-                imeAction = ImeAction.Done,
-                maxLines = 1,
-                leadingIcon = null
-            )
-
-            // Quantity
+            // Header with close button
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(bottom = 12.dp),
+                    .statusBarsPadding()
+                    .padding(horizontal = 16.dp, vertical = 12.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Text("Cantidad", style = labelMedium())
-                Spacer(Modifier.weight(1f))
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    IconButton(onClick = { qty = kotlin.math.max(1, qty - 1) }) {
-                        Icon(Icons.Rounded.Remove, contentDescription = "Disminuir")
-                    }
-                    Text(qty.toString(), style = titleMedium(), modifier = Modifier.widthIn(min = 24.dp))
-                    IconButton(onClick = { qty += 1 }) {
-                        Icon(Icons.Rounded.Add, contentDescription = "Incrementar")
-                    }
+                Text(itemToModify.name, style = titleLarge())
+                IconButton(onClick = onDismiss) {
+                    Icon(
+                        imageVector = Icons.Rounded.Close,
+                        contentDescription = "Cerrar",
+                        tint = MaterialTheme.colorScheme.onSurface
+                    )
                 }
             }
 
-            // Discount selector
-            Row(
+            Divider()
+
+            // Scrollable content
+            Column(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(bottom = 8.dp),
-                horizontalArrangement = Arrangement.SpaceBetween
+                    .padding(horizontal = 16.dp, vertical = 12.dp)
             ) {
-                FilterChip(modifier = Modifier.weight(1f).fillMaxWidth(), selected = mode == DiscountMode.NONE,    onClick = { mode = DiscountMode.NONE },    label = { Text("Sin desc.") })
-                FilterChip(modifier = Modifier.weight(1f).fillMaxWidth(), selected = mode == DiscountMode.PERCENT, onClick = { mode = DiscountMode.PERCENT }, label = { Text("%") })
-                FilterChip(modifier = Modifier.weight(1f).fillMaxWidth(), selected = mode == DiscountMode.FIXED,   onClick = { mode = DiscountMode.FIXED },   label = { Text("Fijo") })
-            }
 
-            when (mode) {
-                DiscountMode.PERCENT -> {
-                    DMOutlinedTextField(
-                        text = percentText,
-                        label = "Descuento (%)",
-                        onChange = { percentText = it.filter(Char::isDigit).take(3) },
-                        keyboardType = KeyboardType.Number,
-                        imeAction = ImeAction.Done,
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(bottom = 12.dp),
-                        maxLines = 1
-                    )
-                }
-                DiscountMode.FIXED -> {
-                    DMMoneyOutlinedTextField(
-                        text = fixedRaw,
-                        label = "Descuento fijo ($currencySymbol)",
-                        onChange = { fixedRaw = it.filter(Char::isDigit) },
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(bottom = 12.dp),
-                        imeAction = ImeAction.Done,
-                        maxLines = 1,
-                        leadingIcon = null
-                    )
-                }
-                else -> Unit
-            }
+                // Unit price (raw cents digits)
+                DMMoneyOutlinedTextField(
+                    text = unitPriceRaw,
+                    label = "Precio unitario ($currencySymbol)",
+                    onChange = { unitPriceRaw = it.filter(Char::isDigit) },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(bottom = 12.dp),
+                    imeAction = ImeAction.Done,
+                    maxLines = 1,
+                    leadingIcon = null
+                )
 
-            // =========================
-            // Collapsible: Extra fields
-            // =========================
-            AdditionalItemInfoCard(
-                expanded = extraOpen,
-                onToggle = { extraOpen = !extraOpen },
-                currencySymbol = currencySymbol,
-                // Shipping
-                shippingEnabled = itemShippingEnabled,
-                shippingRaw = itemShippingRaw,
-                onShippingRaw = { itemShippingRaw = it.filter(Char::isDigit) },
-                // Insurance
-                insuranceEnabled = itemInsuranceEnabled,
-                insuranceRaw = itemInsuranceRaw,
-                onInsuranceRaw = { itemInsuranceRaw = it.filter(Char::isDigit) },
-                // Pharma
-                isPharma = isPharma,
-                batchNumber = batchNumber,
-                onBatchNumber = { batchNumber = it },
-                batchQtyText = batchQtyText,
-                onBatchQtyText = { batchQtyText = it.filter(Char::isDigit) },
-                globalShipping = invoiceHasGlobalShipping,
-                globalInsurance = invoiceHasGlobalInsurance
-            )
-
-            // Preview
-            Text("Resumen", style = labelMediumBold(), modifier = Modifier.padding(top = 4.dp, bottom = 4.dp))
-            Text(
-                text = "$currencySymbol${formatNumberToMoney((discountedUnitCents / 100.0).toString())} × $qty",
-                style = bodyMedium()
-            )
-            Text(
-                text = "Total: $currencySymbol${formatNumberToMoney((lineTotalCents / 100.0).toString())}",
-                style = headlineMediumBold(color = MaterialTheme.colorScheme.primary),
-                modifier = Modifier.padding(top = 4.dp, bottom = 16.dp)
-            )
-
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
-                TextButton(onClick = onDismiss) { Text("Cancelar") }
-                Spacer(Modifier.width(8.dp))
-                Button(
-                    onClick = {
-                        val discountValue = when (mode) {
-                            DiscountMode.NONE    -> 0L
-                            DiscountMode.PERCENT -> percent.toLong()
-                            DiscountMode.FIXED   -> fixedCents
+                // Quantity
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(bottom = 12.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text("Cantidad", style = labelMedium())
+                    Spacer(Modifier.weight(1f))
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        IconButton(onClick = { qty = kotlin.math.max(1, qty - 1) }) {
+                            Icon(Icons.Rounded.Remove, contentDescription = "Disminuir")
                         }
-
-                        // Respect global/disabled: if disabled or zero/blank -> null
-                        val shippingCents = if (itemShippingEnabled) rawTextToCents(itemShippingRaw).takeIf { it > 0 } else null
-                        val insuranceCents = if (itemInsuranceEnabled) rawTextToCents(itemInsuranceRaw).takeIf { it > 0 } else null
-
-                        val batchQty = batchQtyText.toIntOrNull()
-                        val batchNumOut = if (isPharma && batchNumber.isNotBlank()) batchNumber else null
-                        val batchQtyOut = if (isPharma) batchQty else null
-
-                        onApply(
-                            unitPriceCents,
-                            qty,
-                            mode,
-                            discountValue,
-                            shippingCents,
-                            insuranceCents,
-                            batchNumOut,
-                            batchQtyOut
+                        Text(
+                            qty.toString(),
+                            style = titleMedium(),
+                            modifier = Modifier.widthIn(min = 24.dp)
                         )
-                        onDismiss()
+                        IconButton(onClick = { qty += 1 }) {
+                            Icon(Icons.Rounded.Add, contentDescription = "Incrementar")
+                        }
                     }
-                ) { Text("Aplicar") }
+                }
+
+                // Discount selector
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(bottom = 8.dp),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    FilterChip(
+                        modifier = Modifier.weight(1f),
+                        selected = mode == DiscountMode.NONE,
+                        onClick = { mode = DiscountMode.NONE },
+                        label = {
+                            Text(
+                                "Sin desc.",
+                                textAlign = TextAlign.Center,
+                                modifier = Modifier.fillMaxWidth()
+                            )
+                        }
+                    )
+                    FilterChip(
+                        modifier = Modifier.weight(1f),
+                        selected = mode == DiscountMode.PERCENT,
+                        onClick = { mode = DiscountMode.PERCENT },
+                        label = {
+                            Text(
+                                "%",
+                                textAlign = TextAlign.Center,
+                                modifier = Modifier.fillMaxWidth()
+                            )
+                        }
+                    )
+                    FilterChip(
+                        modifier = Modifier.weight(1f),
+                        selected = mode == DiscountMode.FIXED,
+                        onClick = { mode = DiscountMode.FIXED },
+                        label = {
+                            Text(
+                                "Fijo",
+                                textAlign = TextAlign.Center,
+                                modifier = Modifier.fillMaxWidth()
+                            )
+                        }
+                    )
+                }
+
+                when (mode) {
+                    DiscountMode.PERCENT -> {
+                        DMOutlinedTextField(
+                            text = percentText,
+                            label = "Descuento (%)",
+                            onChange = { percentText = it.filter(Char::isDigit).take(3) },
+                            keyboardType = KeyboardType.Number,
+                            imeAction = ImeAction.Done,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(bottom = 12.dp),
+                            maxLines = 1
+                        )
+                    }
+
+                    DiscountMode.FIXED -> {
+                        DMMoneyOutlinedTextField(
+                            text = fixedRaw,
+                            label = "Descuento fijo ($currencySymbol)",
+                            onChange = { fixedRaw = it.filter(Char::isDigit) },
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(bottom = 12.dp),
+                            imeAction = ImeAction.Done,
+                            maxLines = 1,
+                            leadingIcon = null
+                        )
+                    }
+
+                    else -> Unit
+                }
+
+                // =========================
+                // Collapsible: Extra fields
+                // =========================
+                AdditionalItemInfoCard(
+                    expanded = extraOpen,
+                    onToggle = { extraOpen = !extraOpen },
+                    currencySymbol = currencySymbol,
+                    // Shipping
+                    shippingEnabled = itemShippingEnabled,
+                    shippingRaw = itemShippingRaw,
+                    onShippingRaw = { itemShippingRaw = it.filter(Char::isDigit) },
+                    // Insurance
+                    insuranceEnabled = itemInsuranceEnabled,
+                    insuranceRaw = itemInsuranceRaw,
+                    onInsuranceRaw = { itemInsuranceRaw = it.filter(Char::isDigit) },
+                    // Pharma
+                    isPharma = isPharma,
+                    batchNumber = batchNumber,
+                    onBatchNumber = { batchNumber = it },
+                    batchQtyText = batchQtyText,
+                    onBatchQtyText = { batchQtyText = it.filter(Char::isDigit) },
+                    globalShipping = invoiceHasGlobalShipping,
+                    globalInsurance = invoiceHasGlobalInsurance
+                )
+
+                // Preview
+                Text(
+                    "Resumen",
+                    style = labelMediumBold(),
+                    modifier = Modifier.padding(top = 4.dp, bottom = 4.dp)
+                )
+                Text(
+                    text = "$currencySymbol${formatNumberToMoney((discountedUnitCents / 100.0).toString())} × $qty",
+                    style = bodyMedium()
+                )
+                Text(
+                    text = "Total: $currencySymbol${formatNumberToMoney((lineTotalCents / 100.0).toString())}",
+                    style = headlineMediumBold(color = MaterialTheme.colorScheme.primary),
+                    modifier = Modifier.padding(top = 4.dp, bottom = 16.dp)
+                )
+
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
+                    TextButton(onClick = onDismiss) { Text("Cancelar") }
+                    Spacer(Modifier.width(8.dp))
+                    Button(
+                        onClick = {
+                            val discountValue = when (mode) {
+                                DiscountMode.NONE -> 0L
+                                DiscountMode.PERCENT -> percent.toLong()
+                                DiscountMode.FIXED -> fixedCents
+                            }
+
+                            // Respect global/disabled: if disabled or zero/blank -> null
+                            val shippingCents =
+                                if (itemShippingEnabled) rawTextToCents(itemShippingRaw).takeIf { it > 0 } else null
+                            val insuranceCents =
+                                if (itemInsuranceEnabled) rawTextToCents(itemInsuranceRaw).takeIf { it > 0 } else null
+
+                            val batchQty = batchQtyText.toIntOrNull()
+                            val batchNumOut =
+                                if (isPharma && batchNumber.isNotBlank()) batchNumber else null
+                            val batchQtyOut = if (isPharma) batchQty else null
+
+                            onApply(
+                                unitPriceCents,
+                                qty,
+                                mode,
+                                discountValue,
+                                shippingCents,
+                                insuranceCents,
+                                batchNumOut,
+                                batchQtyOut
+                            )
+                            onDismiss()
+                        }
+                    ) { Text("Aplicar") }
+                }
             }
         }
     }

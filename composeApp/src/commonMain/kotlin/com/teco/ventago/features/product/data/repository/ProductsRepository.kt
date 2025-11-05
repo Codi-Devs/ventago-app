@@ -128,12 +128,14 @@ class ProductsRepository(
     override suspend fun removeItem(itemId: Int): Boolean {
         return try {
             val response = itemProvider.removeItem(itemId)
+            println("ASDASD: Response from backend ${response.toJson()}")
             if (response.error.isError()) {
                 throw BadRequestException(response.toJson())
             }
 
             response.successful
         } catch (e: Exception) {
+            println("ASDASD: Error removing item ${e.message}")
             logger.sendLog(Log(LogLevel.ERROR, "removeItem", "Error removing item. Error: ${e.message ?: "UNKNOWN" }"))
             false
         }

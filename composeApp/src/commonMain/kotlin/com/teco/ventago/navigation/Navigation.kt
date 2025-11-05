@@ -422,9 +422,13 @@ private fun NavGraphBuilder.addProductsNavigation(
                 }
             }
             
-            // Handle personalized product return - move it to ProductsManage graph and navigate back
+            // Handle personalized product return - store in both POS graph and ProductsManage graph, then navigate back
             val productsGraphEntry = remember { 
                 runCatching { navController.getBackStackEntry(PosScreens.ProductsManage.name) }.getOrNull()
+            }
+            
+            val posGraphEntryForProduct = remember {
+                runCatching { navController.getBackStackEntry(PosScreens.POS.name) }.getOrNull()
             }
             
             val personalizedProductJson by backStackEntry
@@ -435,7 +439,11 @@ private fun NavGraphBuilder.addProductsNavigation(
             LaunchedEffect(personalizedProductJson) {
                 println("ASDASD: $personalizedProductJson")
                 personalizedProductJson?.let { json ->
-                    // Move to ProductsManage graph's savedStateHandle
+                    // Store in POS graph's savedStateHandle (primary - always accessible)
+                    posGraphEntryForProduct?.let { entry ->
+                        entry.savedStateHandle[NavResults.KEY_PERSONALIZED_PRODUCT] = json
+                    }
+                    // Also store in ProductsManage graph's savedStateHandle (fallback)
                     productsGraphEntry?.let { entry ->
                         entry.savedStateHandle[NavResults.KEY_PERSONALIZED_PRODUCT] = json
                     }
@@ -559,24 +567,35 @@ private fun NavGraphBuilder.addPOSNavigation(
                             null // consume
                     }
                 }
-            }
 
-            // Handle personalized product return from AddItemScreen
-            val productsGraphEntry = remember { 
-                runCatching { navController.getBackStackEntry(PosScreens.ProductsManage.name) }.getOrNull()
-            }
-            
-            productsGraphEntry?.let { entry ->
-                println("ASDASD: Entered productsGraphEntry")
-                val personalizedProductJson by entry
+                // Handle personalized product return from AddItemScreen
+                // Check POS graph's savedStateHandle first (since we know it exists)
+                // Also try to get from ProductsManage graph as fallback
+                val personalizedProductFromPos by posGraphEntry
                     .savedStateHandle
                     .getStateFlow<String?>(NavResults.KEY_PERSONALIZED_PRODUCT, null)
                     .collectAsState()
+                
+                val productsGraphEntry = remember { 
+                    runCatching { navController.getBackStackEntry(PosScreens.ProductsManage.name) }.getOrNull()
+                }
+                
+                val personalizedProductFromProducts by remember(productsGraphEntry) {
+                    productsGraphEntry?.savedStateHandle
+                        ?.getStateFlow<String?>(NavResults.KEY_PERSONALIZED_PRODUCT, null)
+                        ?: kotlinx.coroutines.flow.MutableStateFlow<String?>(null)
+                }.collectAsState()
 
-                println("ASDASD: $personalizedProductJson")
+                // Use the first non-null value
+                val personalizedProductJson = personalizedProductFromPos ?: personalizedProductFromProducts
+
+                println("ASDASD: personalizedProductFromPos = $personalizedProductFromPos")
+                println("ASDASD: personalizedProductFromProducts = $personalizedProductFromProducts")
+                println("ASDASD: personalizedProductJson = $personalizedProductJson")
 
                 LaunchedEffect(personalizedProductJson) {
                     personalizedProductJson?.let { json ->
+                        println("ASDASD: Processing personalized product: $json")
                         val item = Json.decodeFromString<Item>(json)
                         // Add to cart with tax
                         viewModel.addItemToCart(
@@ -589,8 +608,9 @@ private fun NavGraphBuilder.addPOSNavigation(
                                 )
                             }
                         )
-                        // Clear the saved state
-                        entry.savedStateHandle[NavResults.KEY_PERSONALIZED_PRODUCT] = null
+                        // Clear from both locations
+                        posGraphEntry.savedStateHandle[NavResults.KEY_PERSONALIZED_PRODUCT] = null
+                        productsGraphEntry?.savedStateHandle?.set(NavResults.KEY_PERSONALIZED_PRODUCT, null)
                     }
                 }
             }
