@@ -60,8 +60,6 @@ fun ItemRow(
             StatusChip(active = item.active)
         },
         trailingSlot = {
-            Spacer(modifier = Modifier.weight(1f, fill = true))
-
             if (!reordering) {
                 IconButton(onClick = { onOptionsClick(item.itemId) }) {
                     Icon(
