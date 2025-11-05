@@ -11,6 +11,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -18,6 +19,7 @@ import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
@@ -39,6 +41,7 @@ import androidx.compose.material.icons.rounded.FindReplace
 import androidx.compose.material.icons.rounded.Search
 import androidx.compose.material3.BottomSheetDefaults
 import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ElevatedCard
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -88,6 +91,7 @@ import com.teco.ventago.design_system.molecules.pos.ModifyCartItemSheet
 import com.teco.ventago.design_system.textfields.DMOutlinedTextField
 import com.teco.ventago.design_system.textfields.helpers.DMDropDownField
 import com.teco.ventago.design_system.theme.WarningAmber
+import com.teco.ventago.design_system.theme.Gray70
 import com.teco.ventago.design_system.theme.bodyLargeBold
 import com.teco.ventago.design_system.theme.bodyMedium
 import com.teco.ventago.design_system.theme.bodyMediumBold
@@ -757,8 +761,9 @@ fun PosListOrganism(
             ) {
                 // Add "New Product" card at the beginning
                 item(key = "new_product") {
-                    ListRowCard(
+                    Card(
                         modifier = Modifier
+                            .fillMaxWidth()
                             .height(72.dp) // Make it taller
                             .padding(
                                 start = 16.dp, end = 16.dp, top = 8.dp, bottom = 8.dp
@@ -768,12 +773,26 @@ fun PosListOrganism(
                                 color = MaterialTheme.colorScheme.secondary,
                                 cornerRadiusDp = 10.dp
                             ),
+                        enabled = true,
+                        elevation = CardDefaults.elevatedCardElevation(4.dp),
+                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.background),
+                        shape = RoundedCornerShape(10.dp),
                         onClick = {
                             navigate(PosScreens.AddItemScreen)
-                        },
-                        startSlot = {
+                        }
+                    ) {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .fillMaxHeight()
+                                .padding(start = 16.dp, top = 8.dp, bottom = 8.dp, end = 8.dp),
+                            horizontalArrangement = Arrangement.Start,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            // LEFT - Icon
                             Column(
-                                modifier = Modifier.padding(end = 16.dp),
+                                modifier = Modifier
+                                    .padding(end = 16.dp),
                                 horizontalAlignment = Alignment.CenterHorizontally,
                                 verticalArrangement = Arrangement.Center
                             ) {
@@ -784,17 +803,32 @@ fun PosListOrganism(
                                     modifier = Modifier.size(28.dp)
                                 )
                             }
-                        },
-                        contentSlot = {
-                            Text(
-                                text = "Producto Personalizado",
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis,
-                                style = bodyMediumBold(color = MaterialTheme.colorScheme.secondary)
+
+                            // Divider - Full height
+                            Box(
+                                modifier = Modifier
+                                    .padding(horizontal = 12.dp)
+                                    .width(1.dp)
+                                    .fillMaxHeight()
+                                    .background(color = Gray70)
                             )
-                        },
-                        trailingSlot = {}
-                    )
+
+                            // CENTER - Text content
+                            Box(
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .fillMaxHeight(),
+                                contentAlignment = Alignment.CenterStart
+                            ) {
+                                Text(
+                                    text = "Producto Personalizado",
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis,
+                                    style = bodyMediumBold(color = MaterialTheme.colorScheme.secondary)
+                                )
+                            }
+                        }
+                    }
                 }
                 
                 items(uiState.items, key = { it.itemId }) { item ->
