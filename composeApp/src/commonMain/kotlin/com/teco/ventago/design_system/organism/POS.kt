@@ -77,6 +77,7 @@ import com.teco.ventago.design_system.buttons.ButtonM
 import com.teco.ventago.design_system.buttons.OutlinedButtonM
 import com.teco.ventago.design_system.buttons.TextButtonM
 import com.teco.ventago.design_system.buttons.TextButtonS
+import com.teco.ventago.design_system.buttons.dashedBorder
 import com.teco.ventago.design_system.molecules.DMAlertDialog
 import com.teco.ventago.design_system.molecules.InverseTicketDivider
 import com.teco.ventago.design_system.molecules.ListRowCard
@@ -757,9 +758,16 @@ fun PosListOrganism(
                 // Add "New Product" card at the beginning
                 item(key = "new_product") {
                     ListRowCard(
-                        modifier = Modifier.padding(
-                            start = 16.dp, end = 16.dp, top = 8.dp, bottom = 8.dp
-                        ),
+                        modifier = Modifier
+                            .height(72.dp) // Make it taller
+                            .padding(
+                                start = 16.dp, end = 16.dp, top = 8.dp, bottom = 8.dp
+                            )
+                            .dashedBorder(
+                                strokeWidth = 1.5.dp,
+                                color = MaterialTheme.colorScheme.secondary,
+                                cornerRadiusDp = 10.dp
+                            ),
                         onClick = {
                             navigate(PosScreens.AddItemScreen)
                         },
@@ -772,8 +780,8 @@ fun PosListOrganism(
                                 Icon(
                                     imageVector = Icons.Outlined.Add,
                                     contentDescription = null,
-                                    tint = MaterialTheme.colorScheme.primary,
-                                    modifier = Modifier.size(24.dp)
+                                    tint = MaterialTheme.colorScheme.secondary,
+                                    modifier = Modifier.size(28.dp)
                                 )
                             }
                         },
@@ -782,7 +790,7 @@ fun PosListOrganism(
                                 text = "Producto Personalizado",
                                 maxLines = 1,
                                 overflow = TextOverflow.Ellipsis,
-                                style = bodyMediumBold()
+                                style = bodyMediumBold(color = MaterialTheme.colorScheme.secondary)
                             )
                         },
                         trailingSlot = {}
