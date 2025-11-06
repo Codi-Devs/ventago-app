@@ -18,6 +18,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
@@ -387,15 +388,41 @@ fun OrderDetailsScreen(
                 Row(
                     modifier = Modifier.fillMaxWidth()
                         .padding(bottom = 4.dp, start = 16.dp, end = 16.dp),
-                    horizontalArrangement = Arrangement.SpaceBetween
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
                 ) {
                     Text(
                         modifier = Modifier,
-                        text = "Metodos de pago",
+                        text = "Métodos de pago",
                         style = bodyMedium()
                     )
 
                     Spacer(modifier = Modifier.weight(1f, fill = true))
+                    
+                    val shipColors = paymentStatusChipColors(order.paymentStatus)
+                    SuggestionChip(
+                        modifier = Modifier.heightIn(min = 23.dp),
+                        onClick = { },
+                        colors = SuggestionChipDefaults.suggestionChipColors(
+                            containerColor = shipColors.first,
+                            labelColor = shipColors.second,
+                        ),
+                        border = SuggestionChipDefaults.suggestionChipBorder(
+                            enabled = true,
+                            borderColor = shipColors.first,
+                            disabledBorderColor = shipColors.first,
+                            borderWidth = 1.dp
+                        ),
+                        label = {
+                            Text(
+                                text = if (!order.paymentLink.isNullOrBlank() && order.paymentStatus == PaymentStatus.UNPAID.id) "Esperando pago por enlace" else paymentStatusLabel(
+                                    order.paymentStatus
+                                ),
+                                maxLines = 2,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                        },
+                    )
                 }
                 if (order.orderPayments.isNotEmpty()) {
 
@@ -419,44 +446,6 @@ fun OrderDetailsScreen(
                             )
                         }
                     }
-                }
-                Row(
-                    modifier = Modifier.fillMaxWidth()
-                        .padding(bottom = 4.dp, start = 16.dp, end = 16.dp),
-                    horizontalArrangement = Arrangement.SpaceBetween
-                )
-                {
-                    Text(
-                        modifier = Modifier,
-                        text = "Estado",
-                        style = bodyMedium()
-                    )
-
-                    Spacer(modifier = Modifier.weight(1f, fill = true))
-                    val shipColors = paymentStatusChipColors(order.paymentStatus)
-                    SuggestionChip(
-                        modifier = Modifier.height(23.dp),
-                        onClick = { },
-                        colors = SuggestionChipDefaults.suggestionChipColors(
-                            containerColor = shipColors.first,
-                            labelColor = shipColors.second,
-                        ),
-                        border = SuggestionChipDefaults.suggestionChipBorder(
-                            enabled = true,
-                            borderColor = shipColors.first,
-                            disabledBorderColor = shipColors.first,
-                            borderWidth = 1.dp
-                        ),
-                        label = {
-                            Text(
-                                text = if (!order.paymentLink.isNullOrBlank() && order.paymentStatus == PaymentStatus.UNPAID.id) "Esperando pago por enlace" else paymentStatusLabel(
-                                    order.paymentStatus
-                                ),
-                                maxLines = 2,
-                                overflow = TextOverflow.Ellipsis
-                            )
-                        },
-                    )
                 }
             }
 

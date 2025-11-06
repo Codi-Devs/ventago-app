@@ -142,7 +142,7 @@ fun ForgotPasswordResultScreen(navigate: (PosScreens) -> Unit) {
                 textAlign = TextAlign.Center),
             onClick = {offset ->
                 annotatedString.getStringAnnotations(tag = "support_email", start = offset, end = offset).firstOrNull()?.let {
-                    platformState.openEmailIntent("support@tecodigi.com")
+                    platformState.openEmailIntent("soporte@tecodigi.com")
                 }
             })
     }

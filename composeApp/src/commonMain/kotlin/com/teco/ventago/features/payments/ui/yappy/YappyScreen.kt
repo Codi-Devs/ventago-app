@@ -334,7 +334,7 @@ fun YappyScreenView(
                         containerColor = Color(0xFF34C2FF),
                         contentColor = MaterialTheme.colorScheme.onPrimary/* Other colors use values from MaterialTheme */
                     ), onClick = {
-                            platformState.openEmailIntent("support@tecodigi.com")
+                            platformState.openEmailIntent("soporte@tecodigi.com")
                     }, modifier = Modifier.height(38.dp), content = {
                         Text(
                             text = stringResource(Res.string.email), style = TextStyle(

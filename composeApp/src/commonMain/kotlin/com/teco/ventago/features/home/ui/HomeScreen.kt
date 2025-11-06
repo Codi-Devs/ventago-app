@@ -358,7 +358,7 @@ fun HomeScreen(
 
 
         SupportCard(uiState.unreadCount) {
-            platformState.openEmailIntent("support@tecodigi.com")
+            platformState.openEmailIntent("soporte@tecodigi.com")
         }
 
     }

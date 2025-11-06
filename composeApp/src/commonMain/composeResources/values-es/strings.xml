@@ -303,7 +303,7 @@
     <string name="how_can_we_help">¿Cómo podemos ayudarte?</string>
     <string name="contact_support_team">Contacta a nuestro equipo de soporte</string>
     <string name="for_help_contact_support_team">Para ayuda y soporte contáctanos en</string>
-    <string name="support_team_email" translatable="false">support@tecodigi.com</string>
+    <string name="support_team_email" translatable="false">soporte@tecodigi.com</string>
     <string name="help_center_text1">o elige una categoría para encontrar rápidamente ayuda y respuestas a problemas y preguntas comunes</string>
     <string name="email_copied_to_clipboard">¡Correo copiado al portapapeles!</string>
 

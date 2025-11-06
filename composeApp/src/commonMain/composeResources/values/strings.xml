@@ -305,7 +305,7 @@
     <string name="how_can_we_help">How can we help you?</string>
     <string name="contact_support_team">Contact our support team</string>
     <string name="for_help_contact_support_team">For help and support contact us at</string>
-    <string name="support_team_email" translatable="false">support@tecodigi.com</string>
+    <string name="support_team_email" translatable="false">soporte@tecodigi.com</string>
     <string name="help_center_text1">or choose a category to quickly find the help and answer to common issues and questions</string>
     <string name="email_copied_to_clipboard">Email copied to clipboard!</string>
 

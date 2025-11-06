@@ -155,7 +155,7 @@ fun SupportCard(unreadCount: Int, startChatClick: () -> Unit) {
             end = 8.dp,
             bottom = 16.dp
         ),
-            text = AnnotatedString("support@tecodigi.com"),
+            text = AnnotatedString("soporte@tecodigi.com"),
             style = TextStyle(
                 fontSize = 14.sp,
                 lineHeight = 20.sp,
@@ -165,7 +165,7 @@ fun SupportCard(unreadCount: Int, startChatClick: () -> Unit) {
                 letterSpacing = 0.04.sp,
             ),
             onClick = {
-                platformState.openEmailIntent("support@tecodigi.com")
+                platformState.openEmailIntent("soporte@tecodigi.com")
             })
 
     }
