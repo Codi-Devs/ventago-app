@@ -623,6 +623,16 @@ fun AddItemScreen(
         }
     }
 
+    DMAlertDialog(
+        title = "No hay categorías activas",
+        message = "Para guardar un producto necesitas tener al menos una categoría activa. Ve a la gestión de productos para crear o activar una categoría.",
+        show = uiState.showNoCategoryAlert,
+        onDismiss = { viewModel.hideNoCategoryAlert() },
+        onConfirm = { viewModel.hideNoCategoryAlert() },
+        confirmText = "Entendido",
+        dismissText = "Cerrar"
+    )
+
     if (showHelpDialog) {
         AlertDialog(
             onDismissRequest = { showHelpDialog = false },

@@ -83,8 +83,7 @@ fun TransferenceScreenView(viewModel: PaymentMethodsViewModel) {
                 viewModel.onInstructionsChanged(value)
             },
             maxLines = 8,
-            keyboardType = KeyboardType.Text,
-            imeAction = ImeAction.Done,
+            imeAction = ImeAction.Default,
             enabled = true,
             supportingText = stringResource(Res.string.enter_payment_instructions),
             isError = false,

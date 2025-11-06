@@ -727,30 +727,79 @@ fun PosListOrganism(
         )
 
         if (uiState.items.isEmpty()) {
-            Box(
-                modifier = Modifier.fillMaxSize().padding(top = 30.dp),
-                contentAlignment = Alignment.Center
+            LazyColumn(
+                modifier = Modifier.fillMaxWidth().background(
+                    color = vanishedBackgroundColor(), shape = RoundedCornerShape(12.dp)
+                ).padding(top = 8.dp, bottom = 8.dp),
+                state = lazyListState,
             ) {
-                Column(
-                    modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp),
-                    horizontalAlignment = Alignment.CenterHorizontally
-                ) {
-                    Text(
-                        text = stringResource(Res.string.add_products_desc),
-                        style = titleMedium(),
-                        textAlign = TextAlign.Center
-                    )
-                    TextButtonS(
-                        label = stringResource(Res.string.add_products),
-                        icon = Icons.Outlined.Add,
+                item(key = "new_product") {
+                    Card(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(72.dp)
+                            .padding(
+                                start = 16.dp, end = 16.dp, top = 8.dp, bottom = 8.dp
+                            )
+                            .dashedBorder(
+                                strokeWidth = 1.5.dp,
+                                color = MaterialTheme.colorScheme.secondary,
+                                cornerRadiusDp = 10.dp
+                            ),
+                        enabled = true,
+                        elevation = CardDefaults.elevatedCardElevation(4.dp),
+                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.background),
+                        shape = RoundedCornerShape(10.dp),
                         onClick = {
-                            navigate(PosScreens.ProductsManage)
-                        },
-                        modifier = Modifier.fillMaxWidth()
-                            .padding(top = 16.dp, start = 16.dp, end = 16.dp)
-                    )
-                }
+                            navigate(PosScreens.AddItemScreen)
+                        }
+                    ) {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .fillMaxHeight()
+                                .padding(start = 16.dp, top = 8.dp, bottom = 8.dp, end = 8.dp),
+                            horizontalArrangement = Arrangement.Start,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Column(
+                                modifier = Modifier
+                                    .padding(end = 16.dp),
+                                horizontalAlignment = Alignment.CenterHorizontally,
+                                verticalArrangement = Arrangement.Center
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Outlined.Add,
+                                    contentDescription = null,
+                                    tint = MaterialTheme.colorScheme.secondary,
+                                    modifier = Modifier.size(28.dp)
+                                )
+                            }
 
+                            Box(
+                                modifier = Modifier
+                                    .padding(horizontal = 12.dp)
+                                    .width(1.dp)
+                                    .fillMaxHeight()
+                                    .background(color = Gray70)
+                            )
+
+                            Box(
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .fillMaxHeight(),
+                                contentAlignment = Alignment.CenterStart
+                            ) {
+                                Text(
+                                    text = "Producto Personalizado",
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis,
+                                    style = bodyMediumBold(color = MaterialTheme.colorScheme.secondary)
+                                )
+                            }
+                        }
+                    }
+                }
             }
         } else {
             LazyColumn(

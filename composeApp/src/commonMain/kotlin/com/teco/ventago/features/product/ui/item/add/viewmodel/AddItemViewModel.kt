@@ -92,6 +92,15 @@ class AddItemViewModel(
 
         val state = uiState.value
         
+        // Check if user wants to save a personalized product but there are no active categories
+        if (state.isPersonalizedProduct && state.saveProduct) {
+            if (!hasActiveCategories()) {
+                // No active categories - show alert (covers both no categories and no active categories)
+                updateState { copy(showNoCategoryAlert = true) }
+                return
+            }
+        }
+        
         // Check if this is a personalized product and should not be saved
         if (state.isPersonalizedProduct && !state.saveProduct) {
             // Create personalized product with id -1 (not saved to DB)
@@ -224,5 +233,18 @@ class AddItemViewModel(
 
     }
 
+    fun hideNoCategoryAlert() {
+        updateState { copy(showNoCategoryAlert = false) }
+    }
+    
+    fun hasActiveCategories(): Boolean {
+        val categories = productService.state.value?.categories ?: emptyList()
+        return categories.any { it.active }
+    }
+    
+    fun hasAnyCategories(): Boolean {
+        val categories = productService.state.value?.categories ?: emptyList()
+        return categories.isNotEmpty()
+    }
 
 }
