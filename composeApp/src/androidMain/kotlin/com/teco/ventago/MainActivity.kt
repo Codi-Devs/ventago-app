@@ -1,6 +1,7 @@
 package com.teco.ventago
 
 import android.Manifest
+import android.app.Activity
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.net.Uri
@@ -10,8 +11,12 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AlertDialog
+import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.SideEffect
+import androidx.compose.ui.platform.LocalView
 import androidx.core.content.ContextCompat
+import androidx.core.view.WindowInsetsControllerCompat
 import com.google.android.libraries.places.widget.Autocomplete
 import com.teco.ventago.core.deeplink.ExternalUriHandler
 import com.teco.ventago.features.business.domain.model.BusinessAddress
@@ -59,6 +64,14 @@ class MainActivity : ComponentActivity() {
         askNotificationPermission()
 
         setContent {
+            val darkTheme = isSystemInDarkTheme()
+            val view = LocalView.current
+            SideEffect {
+                val window = (view.context as Activity).window
+                val controller = WindowInsetsControllerCompat(window, window.decorView)
+                controller.isAppearanceLightStatusBars = !darkTheme
+            }
+
             App()
         }
     }

@@ -419,21 +419,19 @@ class PosViewModel(
             withContext(Dispatchers.IO) {
                 try {
                     val request = createOrderRequest(createPaymentLink, saveAsDraft)
-                    println("ASDASD: create order request: ${json.encodeToString(request)}")
-//                    val response = posService.createOrder(business!!.businessId, request)
-//                    updateState {
-//                        copy(
-//                            invoiceStatus = InvoiceStatus.fromId(response.invoiceStatus),
-//                            pdfDocument = response.invoiceFiles?.pdf ?: "",
-//                            paymentLink = response.links?.firstOrNull { link -> link.action == "payer_action" }?.url
-//                                ?: "",
-//                            orderNumber = response.orderNumber
-//                        )
-//                    }
-//                    withContext(Dispatchers.Main) {
-//                        showSuccess()
-//                    }
-                    showError()
+                   val response = posService.createOrder(business!!.businessId, request)
+                   updateState {
+                       copy(
+                           invoiceStatus = InvoiceStatus.fromId(response.invoiceStatus),
+                           pdfDocument = response.invoiceFiles?.pdf ?: "",
+                           paymentLink = response.links?.firstOrNull { link -> link.action == "payer_action" }?.url
+                               ?: "",
+                           orderNumber = response.orderNumber
+                       )
+                   }
+                   withContext(Dispatchers.Main) {
+                       showSuccess()
+                   }
                 } catch (e: Exception) {
                     println("Error creating order: ${e.message}")
                     withContext(Dispatchers.Main) {

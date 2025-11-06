@@ -302,7 +302,11 @@ fun PaymentScreenContent(
             PaymentLinkSection(
                 totalToCharge = totalToCharge,
                 onConfirm = {
-                    viewModel.createOrder(createPaymentLink = true, saveAsDraft = false)
+                    if (!ui.paymentsConfigured) {
+                        navigate(PosScreens.Payments, null)
+                    } else {
+                        viewModel.createOrder(createPaymentLink = true, saveAsDraft = false)
+                    }
                 }
             )
         }
