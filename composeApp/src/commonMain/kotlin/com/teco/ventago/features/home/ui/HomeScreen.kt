@@ -80,6 +80,8 @@ import ventago.composeapp.generated.resources.ic_arrow_forward_ios
 import ventago.composeapp.generated.resources.ic_paypal_onboarding
 import ventago.composeapp.generated.resources.pos
 import ventago.composeapp.generated.resources.sales
+import ventago.composeapp.generated.resources.yappy_logo
+import ventago.composeapp.generated.resources.yappy_logo_portrait
 
 
 @Composable
@@ -229,7 +231,7 @@ fun HomeScreen(
             modifier = Modifier.padding(start = 16.dp, end = 16.dp, top = 24.dp),
             data = uiState.sales ?: mutableListOf(),
             selectedIndex = uiState.selectedSalesIndex,
-            barGraphicHeight = 140.0,
+            barGraphicHeight = 100.0,
         ) {
             viewModel.setSelectedSalesIndex(it)
         }
@@ -290,7 +292,7 @@ fun HomeScreen(
                     Image(
                         modifier = Modifier.padding(start = 8.dp, end = 8.dp).height(40.dp)
                             .width(54.dp),
-                        painter = painterResource(Res.drawable.ic_paypal_onboarding),
+                        painter = painterResource(Res.drawable.yappy_logo_portrait),
                         contentDescription = "",
                     )
                     Column(
@@ -299,7 +301,7 @@ fun HomeScreen(
                             .padding(start = 8.dp, top = 8.dp, end = 8.dp)
                     ) {
                         Text(
-                            text = stringResource(Res.string.connect_paypal_title),
+                            text = "Recibe pagos con Yappy",
                             style = titleMediumBold().merge(
                                 TextStyle(
                                     textAlign = TextAlign.Start
@@ -307,7 +309,7 @@ fun HomeScreen(
                             )
                         )
                         Text(
-                            text = stringResource(Res.string.connect_paypal_subtitle),
+                            text = "Conecta tu cuenta Yappy y acepta pagos del método de pago más popular de Panamá. Los fondos llegan directamente a tu cuenta bancaria.",
                             style = bodyMedium().merge(
                                 TextStyle(
                                     textAlign = TextAlign.Start

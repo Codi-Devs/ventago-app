@@ -56,7 +56,7 @@ fun BarGraphic(
     if (data.isEmpty()) {
         Row(
             Modifier
-                .height(140.dp).fillMaxWidth(),
+                .height(barGraphicHeight.dp).fillMaxWidth(),
             horizontalArrangement = Arrangement.Center,
              verticalAlignment = Alignment.CenterVertically,
             ) {
@@ -85,7 +85,7 @@ fun BarGraphic(
         }
     } else {
         Row (
-            modifier = modifier.height(186.dp).fillMaxWidth(),
+            modifier = modifier.height((barGraphicHeight+40.0).dp).fillMaxWidth(),
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.Bottom
         ) {

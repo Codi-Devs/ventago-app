@@ -325,7 +325,7 @@ class SettingsViewModel(
                 )
             ) {
                 updateState {
-                    copy(newName = uiState.value.actualPhone)
+                    copy(newPhone = uiState.value.actualPhone)
                 }
             } else if (!addedUpdateInfoTask) {
                 tasks.add { updateBusinessInfo() }
