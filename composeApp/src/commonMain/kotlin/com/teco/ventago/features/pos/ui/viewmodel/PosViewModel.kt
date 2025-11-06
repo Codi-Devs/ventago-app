@@ -46,6 +46,7 @@ import com.teco.ventago.features.pos.domain.models.Money
 import com.teco.ventago.features.pos.domain.models.Tax
 import com.teco.ventago.features.product.domain.ProductService
 import com.teco.ventago.features.product.domain.model.Item
+import com.teco.ventago.json
 import com.teco.ventago.navigation.PosNoteRoute
 import com.teco.ventago.utils.dbFormat
 import com.teco.ventago.utils.randomUUID
@@ -61,6 +62,7 @@ import kotlinx.coroutines.withContext
 import kotlinx.datetime.Clock
 import kotlinx.datetime.TimeZone
 import kotlinx.datetime.toLocalDateTime
+import kotlinx.serialization.encodeToString
 import kotlin.String
 import kotlin.io.encoding.Base64
 import kotlin.io.encoding.ExperimentalEncodingApi
@@ -210,13 +212,18 @@ class PosViewModel(
         val priceCents = customUnitPrice
         val baseCents = item.price.toLongCents()
 
-        // Find a line we can merge with: same item, same effective price, same tax,
-        // and no per-line discount differences (adjust if you support discounts on tap).
-        val idx = cart.indexOfFirst { line ->
-            line.itemId == item.itemId &&
-                    (line.overrideUnitPrice == priceCents) &&
-                    (line.tax?.id == tax?.id) &&
-                    line.discount == null
+        // For personalized items (itemId < 0), always create a new line since each is unique
+        // For saved items, try to merge with existing line if same item, price, tax, and no discount
+        val isPersonalized = item.itemId < 0
+        val idx = if (!isPersonalized) {
+            cart.indexOfFirst { line ->
+                line.itemId == item.itemId &&
+                        (line.overrideUnitPrice == priceCents) &&
+                        (line.tax?.id == tax?.id) &&
+                        line.discount == null
+            }
+        } else {
+            -1 // Never merge personalized items
         }
 
         if (idx >= 0) {
@@ -226,14 +233,16 @@ class PosViewModel(
             val newCart = cart.toMutableList()
             if (newQty == 0) {
                 newCart.removeAt(idx)
+                copy(cart = newCart)
             } else {
                 newCart[idx] = cur.copy(quantity = newQty)
+                copy(cart = newCart)
             }
-            copy(cart = newCart)
         } else {
-            // New line (different variant: price/tax/discount)
+            // New line (different variant: price/tax/discount, or personalized item)
+            val lineId = "${item.itemId}-${randomUUID()}"
             val newLine = CartLine(
-                lineId = "${item.itemId}-${randomUUID()}",
+                lineId = lineId,
                 itemId = item.itemId,
                 name = item.name,
                 baseUnitPrice = baseCents,
@@ -242,7 +251,13 @@ class PosViewModel(
                 tax = tax,
                 discount = null,
             )
-            copy(cart = cart + newLine)
+            // Store personalized items (itemId < 0) keyed by lineId for later use in order creation
+            val newPersonalizedItems = if (isPersonalized) {
+                personalizedItems + (lineId to item)
+            } else {
+                personalizedItems
+            }
+            copy(cart = cart + newLine, personalizedItems = newPersonalizedItems)
         }
     }
 
@@ -291,9 +306,20 @@ class PosViewModel(
     fun toggleTaxExempt(enabled: Boolean) = updateState { copy(taxExempt = enabled) }
 
     fun removeLine(lineId: String) =
-        updateState { copy(cart = cart.filterNot { it.lineId == lineId }) }
+        updateState { 
+            val lineToRemove = cart.firstOrNull { it.lineId == lineId }
+            copy(
+                cart = cart.filterNot { it.lineId == lineId },
+                // Remove personalized item if this line was a personalized product
+                personalizedItems = if (lineToRemove?.itemId != null && lineToRemove.itemId < 0) {
+                    personalizedItems - lineId
+                } else {
+                    personalizedItems
+                }
+            )
+        }
 
-    fun clearCart() = updateState { copy(cart = emptyList()) }
+    fun clearCart() = updateState { copy(cart = emptyList(), personalizedItems = mapOf()) }
 
 
     fun getChange(): Long {
@@ -310,6 +336,7 @@ class PosViewModel(
         updateState {
             copy(
                 cart = emptyList(),
+                personalizedItems = mapOf(),
                 taxExempt = false,
                 query = "",
                 tipAmount = 0L,
@@ -392,19 +419,21 @@ class PosViewModel(
             withContext(Dispatchers.IO) {
                 try {
                     val request = createOrderRequest(createPaymentLink, saveAsDraft)
-                    val response = posService.createOrder(business!!.businessId, request)
-                    updateState {
-                        copy(
-                            invoiceStatus = InvoiceStatus.fromId(response.invoiceStatus),
-                            pdfDocument = response.invoiceFiles?.pdf ?: "",
-                            paymentLink = response.links?.firstOrNull { link -> link.action == "payer_action" }?.url
-                                ?: "",
-                            orderNumber = response.orderNumber
-                        )
-                    }
-                    withContext(Dispatchers.Main) {
-                        showSuccess()
-                    }
+                    println("ASDASD: create order request: ${json.encodeToString(request)}")
+//                    val response = posService.createOrder(business!!.businessId, request)
+//                    updateState {
+//                        copy(
+//                            invoiceStatus = InvoiceStatus.fromId(response.invoiceStatus),
+//                            pdfDocument = response.invoiceFiles?.pdf ?: "",
+//                            paymentLink = response.links?.firstOrNull { link -> link.action == "payer_action" }?.url
+//                                ?: "",
+//                            orderNumber = response.orderNumber
+//                        )
+//                    }
+//                    withContext(Dispatchers.Main) {
+//                        showSuccess()
+//                    }
+                    showError()
                 } catch (e: Exception) {
                     println("Error creating order: ${e.message}")
                     withContext(Dispatchers.Main) {
@@ -462,8 +491,20 @@ class PosViewModel(
 
         val orderItems = mutableListOf<OrderItem>()
         val itemsById = state.items.associateBy { it.itemId }
+        
+        // Helper to get item for a cart line (handles both saved and personalized items)
+        fun getItemForLine(line: CartLine): Item? {
+            return if (line.itemId < 0) {
+                // Personalized item: lookup by lineId
+                state.personalizedItems[line.lineId]
+            } else {
+                // Saved item: lookup by itemId
+                itemsById[line.itemId]
+            }
+        }
+        
         for (item in state.cart) {
-            val product = itemsById[item.itemId] ?: continue
+            val product = getItemForLine(item) ?: continue
 
             // Item Discounts
             val orderItemDiscounts = mutableListOf<OrderItemDiscount>()

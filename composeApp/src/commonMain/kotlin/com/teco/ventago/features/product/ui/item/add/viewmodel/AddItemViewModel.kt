@@ -203,7 +203,7 @@ class AddItemViewModel(
                         delay(600)
                         if (state.isPersonalizedProduct) {
                             // If it was a personalized product but user chose to save it, go back
-                            emitEvent(ItemStateUiEvent.GoBack)
+                            emitEvent(ItemStateUiEvent.ReturnPersonalizedProduct(savedItem))
                         } else {
                             resetView()
                         }

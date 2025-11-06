@@ -25,6 +25,7 @@ data class InstallmentUI(
 data class PosState(
     val items: List<Item> = listOf(),
     val cart: List<CartLine> = listOf(),
+    val personalizedItems: Map<String, Item> = mapOf(), // Stores personalized products keyed by lineId (since all have itemId = -1)
     val taxExempt: Boolean = false,
     val currency: String = "USD",
     val currencySymbol: String = "$",
@@ -174,6 +175,17 @@ object CartCalc {
         val perLineCharges = lines.sumOf { it.lineCharges() }
 
         val itemsById = state.items.associateBy { it.itemId }
+        
+        // Helper to get item for a cart line (handles both saved and personalized items)
+        fun getItemForLine(line: CartLine): Item? {
+            return if (line.itemId < 0) {
+                // Personalized item: lookup by lineId
+                state.personalizedItems[line.lineId]
+            } else {
+                // Saved item: lookup by itemId
+                itemsById[line.itemId]
+            }
+        }
 
         // TAX (kept as your existing per-line tax; make sure it includes charges in its base if needed)
         fun baseForTaxes(line: CartLine): Long =
@@ -183,13 +195,15 @@ object CartCalc {
 
         // ISC/OTI desde Item (porcentaje en item.iscRate/otiRate; null = 0)
         val isc = lines.sumOf { line ->
-            val ratePct = itemsById[line.itemId]?.iscRate ?: 0.0
+            val item = getItemForLine(line)
+            val ratePct = item?.iscRate ?: 0.0
             if (ratePct <= 0.0 || state.taxExempt) 0L
             else ((baseForTaxes(line) * ratePct) / 100.0).roundToLong()
         }
         // === OTI (Multiple rates per item) ===
         val oti = lines.sumOf { line ->
-            val otiList = itemsById[line.itemId]?.otiTaxes.orEmpty()
+            val item = getItemForLine(line)
+            val otiList = item?.otiTaxes.orEmpty()
             if (otiList.isEmpty() || state.taxExempt) return@sumOf 0L
 
             val base = baseForTaxes(line)

@@ -182,7 +182,9 @@ fun OrderDetailsItem(orderItem: OrderLineDto) {
 
         ) {
 
-            Column {
+            Column(
+                modifier = Modifier.weight(1f)
+            ) {
                 Text(
                     maxLines = 2,
                     overflow = TextOverflow.Ellipsis,
@@ -198,7 +200,7 @@ fun OrderDetailsItem(orderItem: OrderLineDto) {
                 )
             }
 
-            Spacer(modifier = Modifier)
+            Spacer(modifier = Modifier.width(8.dp))
 
             Text(
                 modifier = Modifier.padding(bottom = 4.dp),
