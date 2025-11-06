@@ -764,14 +764,33 @@ private fun NavGraphBuilder.addPaymentsNavigation(
             PaypalScreenContent(viewModel)
         }
 
-        composable(route = PosScreens.PaymentsYappyScreen.name) {
+        composable(route = PosScreens.PaymentsYappyScreen.name) { yappyBackStackEntry ->
             val backStackEntry =
                 remember { navController.getBackStackEntry(PosScreens.Payments.name) }
             val viewModel: YappyViewModel = koinViewModel(viewModelStoreOwner = backStackEntry)
             analyticsService.logScreenView("PaymentsYappyScreen")
-            YappyScreenView(viewModel) {
-                navController.navigateUp()
+            
+            // Watch for flag from top app bar back button
+            val showYappyHelpFlag by yappyBackStackEntry
+                .savedStateHandle
+                .getStateFlow<Boolean?>("show_yappy_help", null)
+                .collectAsState()
+            
+            LaunchedEffect(showYappyHelpFlag) {
+                if (showYappyHelpFlag == true) {
+                    // The flag will be handled by YappyScreenView
+                    // We'll pass it as a parameter or use a callback
+                    yappyBackStackEntry.savedStateHandle["show_yappy_help"] = null
+                }
             }
+            
+            YappyScreenView(
+                viewModel = viewModel,
+                showHelpFromTopBar = showYappyHelpFlag == true,
+                navigateBack = {
+                    navController.navigateUp()
+                }
+            )
         }
     }
 }

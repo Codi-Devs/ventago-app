@@ -60,6 +60,7 @@ import com.teco.ventago.design_system.molecules.DMTopAppBar
 import com.teco.ventago.design_system.molecules.rememberAppChromeState
 import com.teco.ventago.design_system.theme.DigitalMenuTheme
 import com.teco.ventago.design_system.theme.cardContainerColor
+import com.teco.ventago.features.payments.ui.yappy.viewmodel.YappyViewModel
 import com.teco.ventago.navigation.LocalNavController
 import com.teco.ventago.navigation.Navigation
 import com.teco.ventago.navigation.PosScreens
@@ -198,11 +199,45 @@ fun App(
 
                         )
                     } else {
+                        // Get Yappy ViewModel state for top app bar back button interception
+                        val paymentsBackStackEntry = remember(currentScreen) {
+                            if (currentScreen == PosScreens.PaymentsYappyScreen) {
+                                runCatching {
+                                    navController.getBackStackEntry(PosScreens.Payments.name)
+                                }.getOrNull()
+                            } else {
+                                null
+                            }
+                        }
+                        
+                        val yappyViewModel = if (paymentsBackStackEntry != null) {
+                            koinViewModel<YappyViewModel>(viewModelStoreOwner = paymentsBackStackEntry)
+                        } else {
+                            null
+                        }
+                        
+                        val yappyUiState by yappyViewModel?.uiState?.collectAsState() 
+                            ?: remember { mutableStateOf(com.teco.ventago.features.payments.ui.yappy.viewmodel.YappyUiState()) }
+                        
+                        val yappyHelpNeeded = if (currentScreen == PosScreens.PaymentsYappyScreen && yappyViewModel != null) {
+                            !yappyUiState.linkedYappyAccount && !yappyViewModel.canConfigureYappy()
+                        } else {
+                            false
+                        }
+                        
                         DMTopAppBar(
                             title = if (currentScreen.showAppBar) stringResource(currentScreen.title) else "",
                             showBackButton = currentScreen.showAppBar && currentScreen.showBackButton &&navController.previousBackStackEntry != null,
                             navigateBack = {
-                                if (navController.previousBackStackEntry != null) navController.navigateUp()
+                                if (navController.previousBackStackEntry != null) {
+                                    // Special handling for YappyScreen - show help modal if not configured
+                                    if (yappyHelpNeeded) {
+                                        // Store flag to show help sheet in YappyScreen
+                                        backStackEntry?.savedStateHandle?.set("show_yappy_help", true)
+                                    } else {
+                                        navController.navigateUp()
+                                    }
+                                }
                             },
                             actions = {
                                 if (currentScreen.isPosScreens()) {

@@ -2,6 +2,7 @@ package com.teco.ventago.features.payments.ui.yappy
 
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.text.ClickableText
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -118,6 +119,7 @@ import ventago.composeapp.generated.resources.yappy_user_agreement
 fun YappyScreenView(
     viewModel: YappyViewModel,
     navigateBack: () -> Unit = {},
+    showHelpFromTopBar: Boolean = false,
 //    navigate: (Int, Bundle?, NavOptions?) -> Unit,
 ) {
     val uiState by viewModel.uiState.collectAsState()
@@ -136,6 +138,13 @@ fun YappyScreenView(
     // Intercept system back button if Yappy is not configured
     BackHandler(enabled = isNotConfigured) {
         showHelpBottomSheet = true
+    }
+    
+    // Watch for flag from top app bar back button
+    LaunchedEffect(showHelpFromTopBar) {
+        if (showHelpFromTopBar && isNotConfigured) {
+            showHelpBottomSheet = true
+        }
     }
 
     LaunchedEffect(Unit) {
@@ -303,72 +312,6 @@ fun YappyScreenView(
             }
         }
 
-
-        // Support card
-        Row(
-            modifier = Modifier.padding(horizontal = 8.dp),
-            horizontalArrangement = Arrangement.Center,
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Image(
-                modifier = Modifier.padding(start = 16.dp, end = 8.dp),
-                painter = painterResource(Res.drawable.fi_rr_headset),
-                contentDescription = "",
-            )
-            Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(start = 8.dp, top = 8.dp, end = 8.dp)
-            ) {
-                Text(
-                    text = stringResource(Res.string.need_help), style = TextStyle(
-                        fontSize = 14.sp,
-                        lineHeight = 20.sp,
-                        fontFamily = latoFontFamily(),
-                        fontWeight = FontWeight(500),
-                        letterSpacing = 0.1.sp,
-                    )
-                )
-                Text(
-                    text = stringResource(Res.string.contact_support_yappy), style = TextStyle(
-                        fontSize = 14.sp,
-                        lineHeight = 20.sp,
-                        fontFamily = latoFontFamily(),
-                        fontWeight = FontWeight(500),
-                        letterSpacing = 0.1.sp
-                    )
-                )
-                Row(
-                    modifier = Modifier
-                        .padding(top = 16.dp, end = 8.dp, bottom = 16.dp)
-                        .fillMaxWidth(),
-                    horizontalArrangement = Arrangement.End,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-
-                    Button(
-                        colors = ButtonDefaults.buttonColors(
-                        containerColor = Color(0xFF34C2FF),
-                        contentColor = MaterialTheme.colorScheme.onPrimary/* Other colors use values from MaterialTheme */
-                    ), onClick = {
-                            platformState.openEmailIntent("soporte@tecodigi.com")
-                    }, modifier = Modifier.height(38.dp), content = {
-                        Text(
-                            text = stringResource(Res.string.email), style = TextStyle(
-                                fontSize = 14.sp,
-                                lineHeight = 20.sp,
-                                fontFamily = latoFontFamily(),
-                                fontWeight = FontWeight(700),
-                                letterSpacing = 0.04.sp,
-                            )
-                        )
-                    }, shape = RoundedCornerShape(10.dp), enabled = true
-                    )
-                }
-
-            }
-        }
-
         Spacer(Modifier.weight(1f))
 
 
@@ -385,31 +328,54 @@ fun YappyScreenView(
                 }
             }
         } else {
-            Text(
-                buildAnnotatedString {
-                    append(stringResource(Res.string.by_continuing_accept))
-                    withStyle(
-                        style = SpanStyle(
-                            color = Color(0xFF0070BA),
-                            textDecoration = TextDecoration.Underline
-                        )
-                    ) {
-                        append(stringResource(Res.string.terms_conditions))
+            val termsAnnotated = buildAnnotatedString {
+                append(stringResource(Res.string.by_continuing_accept))
+                
+                pushStringAnnotation(
+                    tag = "terms",
+                    annotation = "https://www.yappy.com.pa/comercial/terminos-y-condiciones/"
+                )
+                withStyle(
+                    style = SpanStyle(
+                        color = Color(0xFF0070BA),
+                        textDecoration = TextDecoration.Underline
+                    )
+                ) {
+                    append(stringResource(Res.string.terms_conditions))
+                }
+                pop()
+                
+                append(stringResource(Res.string.and_the))
+                
+                pushStringAnnotation(
+                    tag = "privacy",
+                    annotation = "https://www.yappy.com.pa/comercial/aviso-de-privacidad/"
+                )
+                withStyle(
+                    style = SpanStyle(
+                        color = Color(0xFF0070BA),
+                        textDecoration = TextDecoration.Underline
+                    )
+                ) {
+                    append(stringResource(Res.string.yappy_user_agreement))
+                }
+                pop()
+                
+                append(".")
+            }
+            
+            ClickableText(
+                text = termsAnnotated,
+                style = labelSmall(color = Gray50).copy(textAlign = TextAlign.Center),
+                modifier = Modifier.padding(bottom = 24.dp, start = 16.dp, end = 16.dp, top = 16.dp),
+                onClick = { offset ->
+                    termsAnnotated.getStringAnnotations(tag = "terms", start = offset, end = offset).firstOrNull()?.let {
+                        openCustomTab("https://www.yappy.com.pa/comercial/terminos-y-condiciones/")
                     }
-                    append(stringResource(Res.string.and_the))
-                    withStyle(
-                        style = SpanStyle(
-                            color = Color(0xFF0070BA),
-                            textDecoration = TextDecoration.Underline
-                        )
-                    ) {
-                        append(stringResource(Res.string.yappy_user_agreement))
+                    termsAnnotated.getStringAnnotations(tag = "privacy", start = offset, end = offset).firstOrNull()?.let {
+                        openCustomTab("https://www.yappy.com.pa/comercial/aviso-de-privacidad/")
                     }
-                    append(".")
-                },
-                style = labelSmall(color = Gray50),
-                textAlign = TextAlign.Center,
-                modifier = Modifier.padding(bottom = 24.dp, start = 16.dp, end = 16.dp, top = 16.dp)
+                }
             )
 
             ButtonM(
