@@ -81,7 +81,8 @@ class CategoriesManageViewModel(
     }
 
     fun activateCategory(categoryId: Int, active: Boolean) {
-        state.showLoading("Activando categoría")
+        val message = if (active) "Activando categoría" else "Desactivando categoría"
+        state.showLoading(message)
         viewModelScope.launch(Dispatchers.IO) {
             try {
                 val res = productService.setCategoryActive(categoryId, active)

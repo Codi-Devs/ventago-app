@@ -123,7 +123,8 @@ class EditCategoryViewModel(
         val item = state.items.value.firstOrNull { it.itemId == itemId }
         item?.let {
             val itemCopy = it.copy(active = active)
-            state.showLoading("Activando elemento")
+            val message = if (active) "Activando elemento" else "Desactivando elemento"
+            state.showLoading(message)
             viewModelScope.launch(Dispatchers.IO) {
                 try {
                     val res = productService.editItem(itemCopy)

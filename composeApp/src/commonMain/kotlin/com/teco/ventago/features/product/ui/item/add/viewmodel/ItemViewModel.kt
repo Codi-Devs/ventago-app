@@ -308,6 +308,38 @@ abstract class ItemViewModel(private val productService: ProductService) :
         updateState { copy(selectedFamilyIndex = index) }
     }
 
+    fun onOpenUnitMeasureDialog() {
+        val currentCode = uiState.value.unitMeasureCode.ifBlank { "und" }
+        val index = UomRegistry.all().indexOfFirst { it.code == currentCode }.takeIf { it >= 0 } ?: 0
+        updateState { copy(showUnitMeasureDialog = true, selectedUnitMeasureIndex = index) }
+    }
+
+    fun onCloseUnitMeasureDialog() {
+        updateState { copy(showUnitMeasureDialog = false) }
+    }
+
+    fun onSelectUnitMeasure(index: Int) {
+        updateState { copy(selectedUnitMeasureIndex = index) }
+    }
+
+    fun onConfirmUnitMeasureSelection() {
+        val state = uiState.value
+        val uom = UomRegistry.all().getOrNull(state.selectedUnitMeasureIndex)
+        
+        if (uom != null) {
+            // Add or replace the unit measure in additional info
+            addOrReplaceAdditionalInfo(
+                key = AdditionalInfoKey.PANAMA_GOODS_SERVICES_UNIT_CODE,
+                value = uom.code,
+                title = "Unidad: ${uom.code} - ${uom.nameEs}"
+            )
+            // Also update the main unit measure code
+            updateState { copy(unitMeasureCode = uom.code) }
+        }
+        
+        updateState { copy(showUnitMeasureDialog = false) }
+    }
+
     fun onConfirmGoodsSelection() {
         val state = uiState.value
         val seg = state.goodsSegments.getOrNull(state.selectedSegmentIndex)

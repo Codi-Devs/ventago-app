@@ -542,7 +542,8 @@ fun AddItemScreen(
                 onDelete = { idx -> viewModel.onRemoveAdditionalInfo(idx) },
                 keyOptions = viewModel.additionalInfoOptions(), // List<String> built from AdditionalInfoKey enum titles
                 keyValueTypes = viewModel.additionalInfoValueTypes(), // List<AdditionalValueType> aligned with options
-                onOpenGoodsDialog = { viewModel.onOpenGoodsDialog() }
+                onOpenGoodsDialog = { viewModel.onOpenGoodsDialog() },
+                onOpenUnitMeasureDialog = { viewModel.onOpenUnitMeasureDialog() }
             )
         }
 
@@ -669,6 +670,14 @@ fun AddItemScreen(
         onDismiss = { viewModel.onCloseGoodsDialog() }
     )
 
+    UnitMeasureSelectorDialog(
+        show = uiState.showUnitMeasureDialog,
+        selectedIndex = uiState.selectedUnitMeasureIndex,
+        onSelect = { viewModel.onSelectUnitMeasure(it) },
+        onConfirm = { viewModel.onConfirmUnitMeasureSelection() },
+        onDismiss = { viewModel.onCloseUnitMeasureDialog() }
+    )
+
 }
 
 
@@ -683,7 +692,8 @@ fun InformacionAdicionalCard(
     onDelete: (Int) -> Unit,
     keyOptions: List<String>,
     keyValueTypes: List<AdditionalValueType>,
-    onOpenGoodsDialog: () -> Unit
+    onOpenGoodsDialog: () -> Unit,
+    onOpenUnitMeasureDialog: () -> Unit
 ) {
     Card(
         modifier = Modifier
@@ -720,25 +730,46 @@ fun InformacionAdicionalCard(
                 else -> KeyboardType.Text
             }
 
-            if (keyValueTypes.getOrNull(selectedKeyIndex) == AdditionalValueType.STRING &&
-                keyOptions.getOrNull(selectedKeyIndex)?.contains("bienes/servicios") == true
-            ) {
-                TextButtonS(
-                    label = "Seleccionar código de bienes/servicios",
-                    modifier = Modifier.fillMaxWidth(),
-                ) {
-                    onOpenGoodsDialog()
+            // Check if this is the goods/services CODE key (not unit code) and if it hasn't been added yet
+            val isGoodsServicesCodeKey = keyOptions.getOrNull(selectedKeyIndex)?.contains("Código bienes/servicios") == true
+            val goodsServicesCodeExists = entries.any { it.keyName == "panama_goods_services_code" }
+            val shouldShowGoodsDialogButton = keyValueTypes.getOrNull(selectedKeyIndex) == AdditionalValueType.STRING &&
+                isGoodsServicesCodeKey &&
+                !goodsServicesCodeExists
+
+            // Check if this is the goods/services UNIT CODE key
+            val isGoodsServicesUnitKey = keyOptions.getOrNull(selectedKeyIndex)?.contains("Unidad bienes/servicios") == true
+            val shouldShowUnitMeasureDialogButton = keyValueTypes.getOrNull(selectedKeyIndex) == AdditionalValueType.STRING &&
+                isGoodsServicesUnitKey
+
+            when {
+                shouldShowGoodsDialogButton -> {
+                    TextButtonS(
+                        label = "Seleccionar código de bienes/servicios",
+                        modifier = Modifier.fillMaxWidth(),
+                    ) {
+                        onOpenGoodsDialog()
+                    }
                 }
-            } else {
-                DMOutlinedTextField(
-                    text = inputValue,
-                    label = inputLabel,
-                    modifier = Modifier.fillMaxWidth(),
-                    onChange = onValueChanged,
-                    maxLines = 1,
-                    imeAction = ImeAction.Done,
-                    keyboardType = kbType,
-                )
+                shouldShowUnitMeasureDialogButton -> {
+                    TextButtonS(
+                        label = "Seleccionar unidad de medida",
+                        modifier = Modifier.fillMaxWidth(),
+                    ) {
+                        onOpenUnitMeasureDialog()
+                    }
+                }
+                else -> {
+                    DMOutlinedTextField(
+                        text = inputValue,
+                        label = inputLabel,
+                        modifier = Modifier.fillMaxWidth(),
+                        onChange = onValueChanged,
+                        maxLines = 1,
+                        imeAction = ImeAction.Done,
+                        keyboardType = kbType,
+                    )
+                }
             }
 
             Spacer(Modifier.height(8.dp))
@@ -829,6 +860,42 @@ fun GoodsSelectorDialog(
                         modifier = Modifier.fillMaxWidth()
                     )
                 }
+            }
+        }
+    )
+}
+
+@Composable
+fun UnitMeasureSelectorDialog(
+    show: Boolean,
+    selectedIndex: Int,
+    onSelect: (Int) -> Unit,
+    onConfirm: () -> Unit,
+    onDismiss: () -> Unit,
+) {
+    if (!show) return
+
+    val uomOptions = UomRegistry.all().map { "${it.code} - ${it.nameEs}" }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        confirmButton = {
+            TextButton(onClick = onConfirm) { Text("Confirmar") }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) { Text("Cancelar") }
+        },
+        title = { Text("Seleccionar unidad de medida") },
+        text = {
+            Column(modifier = Modifier.fillMaxWidth()) {
+                Text("Seleccione la unidad de medida:")
+                DMDropDownField(
+                    label = "Unidad de medida",
+                    items = uomOptions,
+                    selectedIndex = selectedIndex.coerceIn(0, uomOptions.size - 1),
+                    onItemSelected = { idx, _ -> onSelect(idx) },
+                    modifier = Modifier.fillMaxWidth()
+                )
             }
         }
     )

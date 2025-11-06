@@ -82,6 +82,7 @@ import com.teco.ventago.features.product.ui.item.add.EditModeTabs
 import com.teco.ventago.features.product.ui.item.add.GoodsSelectorDialog
 import com.teco.ventago.features.product.ui.item.add.InformacionAdicionalCard
 import com.teco.ventago.features.product.ui.item.add.OTITaxesCard
+import com.teco.ventago.features.product.ui.item.add.UnitMeasureSelectorDialog
 import com.teco.ventago.features.product.ui.item.add.viewmodel.ItemEditMode
 import com.teco.ventago.features.product.ui.item.add.viewmodel.ItemStateUiEvent
 import com.teco.ventago.features.product.ui.item.add.viewmodel.ItemViewModel
@@ -501,7 +502,8 @@ fun ItemScreenContent(
                 onDelete = { idx -> viewModel.onRemoveAdditionalInfo(idx) },
                 keyOptions = viewModel.additionalInfoOptions(), // List<String> built from AdditionalInfoKey enum titles
                 keyValueTypes = viewModel.additionalInfoValueTypes(), // List<AdditionalValueType> aligned with options
-                onOpenGoodsDialog = { viewModel.onOpenGoodsDialog() }
+                onOpenGoodsDialog = { viewModel.onOpenGoodsDialog() },
+                onOpenUnitMeasureDialog = { viewModel.onOpenUnitMeasureDialog() }
             )
         }
 
@@ -599,5 +601,13 @@ fun ItemScreenContent(
         onSelectFamily = { viewModel.onSelectFamily(it) },
         onConfirm = { viewModel.onConfirmGoodsSelection() },
         onDismiss = { viewModel.onCloseGoodsDialog() }
+    )
+
+    UnitMeasureSelectorDialog(
+        show = uiState.showUnitMeasureDialog,
+        selectedIndex = uiState.selectedUnitMeasureIndex,
+        onSelect = { viewModel.onSelectUnitMeasure(it) },
+        onConfirm = { viewModel.onConfirmUnitMeasureSelection() },
+        onDismiss = { viewModel.onCloseUnitMeasureDialog() }
     )
 }

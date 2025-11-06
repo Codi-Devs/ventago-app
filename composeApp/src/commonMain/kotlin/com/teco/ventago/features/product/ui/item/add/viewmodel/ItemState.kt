@@ -71,6 +71,10 @@ data class ItemState(
     val selectedFamilyIndex: Int = -1,
     val showGoodsDialog: Boolean = false,
 
+    // Unit measure dialog
+    val showUnitMeasureDialog: Boolean = false,
+    val selectedUnitMeasureIndex: Int = -1,
+
     // Personalized product mode
     val isPersonalizedProduct: Boolean = false,
     val saveProduct: Boolean = true,
