@@ -73,6 +73,7 @@ import com.teco.ventago.core.firebase.AnalyticsService
 import com.teco.ventago.design_system.buttons.ButtonM
 import com.teco.ventago.design_system.buttons.DottedButton
 import com.teco.ventago.design_system.buttons.TextButtonS
+import com.teco.ventago.design_system.buttons.dashedBorder
 import com.teco.ventago.design_system.molecules.DMAlertDialog
 import com.teco.ventago.design_system.organism.LoadingBottomSheet
 import com.teco.ventago.design_system.organism.LoadingSheet
@@ -80,8 +81,10 @@ import com.teco.ventago.design_system.textfields.DMMoneyOutlinedTextField
 import com.teco.ventago.design_system.textfields.DMOutlinedTextField
 import com.teco.ventago.design_system.textfields.helpers.DMDropDownField
 import com.teco.ventago.design_system.theme.bodyMedium
+import com.teco.ventago.design_system.theme.cardContainerColor
 import com.teco.ventago.design_system.theme.headlineSmall
 import com.teco.ventago.design_system.theme.latoFontFamily
+import com.teco.ventago.design_system.theme.vanishedBackgroundColor
 import com.teco.ventago.features.product.domain.model.AdditionalValueType
 import com.teco.ventago.features.product.domain.model.GoodsSegment
 import com.teco.ventago.features.product.domain.model.ItemTax
@@ -95,6 +98,7 @@ import com.teco.ventago.features.product.ui.item.add.viewmodel.OTITaxUI
 import com.teco.ventago.features.product.ui.item.edit.EditItemViewModel
 import com.teco.ventago.navigation.NavResults
 import com.teco.ventago.utils.BarcodeScannerScreen
+import com.teco.ventago.utils.formatTwoDecimals
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.launch
@@ -686,7 +690,7 @@ fun InformacionAdicionalCard(
             .padding(horizontal = 16.dp, vertical = 8.dp)
             .fillMaxWidth(),
         shape = RoundedCornerShape(12.dp),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+        colors = CardDefaults.cardColors(containerColor = vanishedBackgroundColor()),
     ) {
         Column(Modifier.padding(16.dp)) {
             Text("Información adicional", style = headlineSmall())
@@ -752,8 +756,13 @@ fun InformacionAdicionalCard(
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .background(
-                                    MaterialTheme.colorScheme.surfaceVariant,
+                                    vanishedBackgroundColor(),
                                     RoundedCornerShape(8.dp)
+                                )
+                                .dashedBorder(
+                                    strokeWidth = 1.5.dp,
+                                    color = MaterialTheme.colorScheme.secondary,
+                                    cornerRadiusDp = 8.dp
                                 )
                                 .padding(12.dp),
                             verticalAlignment = Alignment.CenterVertically,
@@ -882,7 +891,7 @@ fun OTITaxesCard(
             .padding(horizontal = 16.dp, vertical = 8.dp)
             .fillMaxWidth(),
         shape = RoundedCornerShape(12.dp),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+        colors = CardDefaults.cardColors(containerColor = vanishedBackgroundColor()),
     ) {
         Column(Modifier.padding(16.dp)) {
             Text("Impuestos OTI", style = headlineSmall())
@@ -927,8 +936,13 @@ fun OTITaxesCard(
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .background(
-                                    MaterialTheme.colorScheme.surfaceVariant,
+                                    vanishedBackgroundColor(),
                                     RoundedCornerShape(8.dp)
+                                )
+                                .dashedBorder(
+                                    strokeWidth = 1.5.dp,
+                                    color = MaterialTheme.colorScheme.secondary,
+                                    cornerRadiusDp = 8.dp
                                 )
                                 .padding(12.dp),
                             verticalAlignment = Alignment.CenterVertically,
@@ -936,7 +950,10 @@ fun OTITaxesCard(
                         ) {
                             Column(Modifier.weight(1f)) {
                                 Text(oti.name, style = bodyMedium(MaterialTheme.colorScheme.onSurface))
-                                Text("${oti.rate}%", style = bodyMedium(MaterialTheme.colorScheme.onSurfaceVariant))
+                                Text(
+                                    "${(oti.rate.toDoubleOrNull() ?: 0.0).formatTwoDecimals()}%",
+                                    style = bodyMedium(MaterialTheme.colorScheme.onSurfaceVariant)
+                                )
                             }
                             IconButton(onClick = { onDeleteOti(idx) }) {
                                 Icon(Icons.Outlined.Delete, contentDescription = "Eliminar")

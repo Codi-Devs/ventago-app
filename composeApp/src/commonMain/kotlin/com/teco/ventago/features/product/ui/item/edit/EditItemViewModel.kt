@@ -18,6 +18,7 @@ import com.teco.ventago.features.product.ui.item.add.viewmodel.OTITaxUI
 import com.teco.ventago.features.product.ui.item.add.viewmodel.toJsonObject
 import com.teco.ventago.utils.randomUUID
 import com.teco.ventago.utils.uploadImageToBunnyCdn
+import com.teco.ventago.utils.formatTwoDecimals
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.IO
 import kotlinx.coroutines.delay
@@ -64,7 +65,7 @@ class EditItemViewModel (
                                 OTITaxUI(
                                     code = oti.id,
                                     name = otiNameFromCode(oti.id),
-                                    rate = (oti.rate * 100).toString() // convert decimal fraction to percentage string
+                                    rate = (oti.rate * 100).formatTwoDecimals() // convert decimal fraction to percentage string, rounded to 2 decimals
                                 )
                             } ?: emptyList()
 

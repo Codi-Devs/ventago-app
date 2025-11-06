@@ -9,10 +9,12 @@ import com.teco.ventago.core.logger.LogLevel
 import com.teco.ventago.features.auth.domain.IAuthService
 import com.teco.ventago.features.auth.domain.model.User
 import com.teco.ventago.features.auth.domain.model.firebase.FirebaseUserDM
+import com.teco.ventago.features.branches.domain.BranchService
 import com.teco.ventago.features.business.domain.BusinessService
 import com.teco.ventago.features.business.domain.model.BusinessAddress
 import com.teco.ventago.features.customers.domain.CustomerService
 import com.teco.ventago.features.financialProfile.domain.FinancialProfileService
+import com.teco.ventago.features.orders.domain.OrderService
 import com.teco.ventago.features.payments.ui.home.viewmodel.PaymentMethodItem
 import com.teco.ventago.features.product.domain.ProductService
 import com.teco.ventago.features.settings.domain.SettingsService
@@ -35,6 +37,8 @@ class SettingsViewModel(
     private val productService: ProductService,
     private val settingsService: SettingsService,
     private val customerService: CustomerService,
+    private val branchService: BranchService,
+    private val orderService: OrderService,
     private val logger: ILoggerService
 ) : BaseViewModel<SettingsState, SettingsStateUiEvent>(SettingsState()) {
 
@@ -132,6 +136,7 @@ class SettingsViewModel(
     fun signOut() {
         viewModelScope.launch(Dispatchers.IO) {
 //            AnalyticsHelper.logEvent("session_closed")
+            // Sign out from auth service (handles listeners, cache, Firebase, tokens)
             authService.signOut()
 //
 //            val gso = GoogleSignInOptions.Builder(GoogleSignInOptions.DEFAULT_SIGN_IN)
@@ -142,10 +147,13 @@ class SettingsViewModel(
 //            val mGoogleSignInClient = GoogleSignIn.getClient(getApplication<MainApplication>(), gso)
 //            mGoogleSignInClient.signOut()
 
+            // Clear all service states
             productService.signOut()
             businessService.clear()
             financialProfileService.clear()
             customerService.clear()
+            branchService.clear()
+            orderService.clear()
 
         }
 //        state.signOut.value = true

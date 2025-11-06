@@ -29,6 +29,7 @@ import io.ktor.http.contentType
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.IO
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -54,6 +55,7 @@ class AuthService(
     private val client: HttpClient
 ) : IAuthService {
     var user = MutableStateFlow<User?>(null)
+    private var userChangesJob: Job? = null
 
     init {
         CoroutineScope(Dispatchers.IO+ SupervisorJob()).launch {
@@ -82,7 +84,9 @@ class AuthService(
     }
 
     private suspend fun listenUserChanges() {
-        CoroutineScope(Dispatchers.IO).launch {
+        userChangesJob?.cancel()
+        val scope = CoroutineScope(Dispatchers.IO + SupervisorJob())
+        userChangesJob = scope.launch {
             changesManager.userListener().onEach {
                 if (it != 1) {
                     try {
@@ -246,11 +250,20 @@ class AuthService(
 
     override suspend fun signOut() {
         try {
+            // Cancel user changes listener job
+            userChangesJob?.cancel()
+            userChangesJob = null
+            // Remove Firebase Realtime Database listeners
+            changesManager.removeListeners()
+            // Clear cache
             cache.clearAllCache()
+            // Sign out from Firebase
             firebase.signOut()
+            // Clear user state
             if (user.value != null) {
                 user.update { null }
             }
+            // Delete JWT tokens
             store.deleteObject(SecureConstants.JWT_TOKEN)
             store.deleteObject(SecureConstants.REFRESH_JWT_TOKEN)
         } catch (_: Exception) {

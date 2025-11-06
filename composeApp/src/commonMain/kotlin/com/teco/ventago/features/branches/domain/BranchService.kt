@@ -148,4 +148,12 @@ class BranchService(
 
     private suspend fun cacheGet(): List<Branch>? =
         runCatching { cache.getCache<List<Branch>>(CacheUtils.BRANCHES) }.getOrNull()
+
+    fun clear() {
+        currentBusinessId = null
+        isInitialized = false
+        changesJob?.cancel()
+        changesJob = null
+        state.value = emptyList()
+    }
 }

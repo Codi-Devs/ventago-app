@@ -1,6 +1,7 @@
 package com.teco.ventago.utils
 
 import kotlin.math.pow
+import kotlin.math.roundToInt
 
 fun isNumeric(toCheck: String): Boolean {
     return toCheck.toDoubleOrNull() != null
@@ -51,3 +52,15 @@ val emailRegex =
     "^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}$".toRegex()
 
 private val strictEmailRegex = """[a-zA-Z0-9+._%\-]{1,256}@[a-zA-Z0-9][a-zA-Z0-9\-]{0,64}(\.[a-zA-Z0-9][a-zA-Z0-9\-]{0,25})+""".toRegex()
+
+/**
+ * Formats a Double to a string with exactly 2 decimal places.
+ * Multiplatform-compatible alternative to String.format("%.2f", value)
+ */
+fun Double.formatTwoDecimals(): String {
+    val rounded = (this * 100).roundToInt() / 100.0
+    val parts = rounded.toString().split(".")
+    val intPart = parts[0]
+    val decimalPart = parts.getOrNull(1)?.take(2)?.padEnd(2, '0') ?: "00"
+    return "$intPart.$decimalPart"
+}

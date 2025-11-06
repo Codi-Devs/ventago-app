@@ -51,7 +51,13 @@ import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.em
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.backhandler.BackHandler
+import androidx.compose.material3.ModalBottomSheet
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.ui.ExperimentalComposeUiApi
+import kotlinx.coroutines.launch
 import com.teco.ventago.core.firebase.AnalyticsService
+import com.teco.ventago.utils.openWhatsappMessage
 import com.teco.ventago.design_system.buttons.ButtonM
 import com.teco.ventago.design_system.buttons.TextButtonS
 import com.teco.ventago.design_system.molecules.CircularBadge
@@ -107,19 +113,30 @@ import ventago.composeapp.generated.resources.yappy_commission_info
 import ventago.composeapp.generated.resources.yappy_user_agreement
 
 
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalComposeUiApi::class)
 @Composable
 fun YappyScreenView(
     viewModel: YappyViewModel,
-//    navigateBack: () -> Unit,
+    navigateBack: () -> Unit = {},
 //    navigate: (Int, Bundle?, NavOptions?) -> Unit,
 ) {
     val uiState by viewModel.uiState.collectAsState()
     val loadingSheetState = rememberModalBottomSheetState(confirmValueChange = { false })
     val analytics = koinInject<AnalyticsService>()
     val platformState = rememberPlatformState()
+    val scope = rememberCoroutineScope()
 
     var showUnlinkDialog by remember { mutableStateOf(false) }
+    var showHelpBottomSheet by remember { mutableStateOf(false) }
+    val helpSheetState = rememberModalBottomSheetState()
+
+    // Check if Yappy is not configured (not linked and fields are incomplete)
+    val isNotConfigured = !uiState.linkedYappyAccount && !viewModel.canConfigureYappy()
+    
+    // Intercept system back button if Yappy is not configured
+    BackHandler(enabled = isNotConfigured) {
+        showHelpBottomSheet = true
+    }
 
     LaunchedEffect(Unit) {
         viewModel.events.collect { event ->
@@ -467,6 +484,73 @@ fun YappyScreenView(
                 sheetState = loadingSheetState
             ) {
                 viewModel.hideLoading()
+            }
+        }
+
+        // Help bottom sheet when trying to go back without configuring
+        if (showHelpBottomSheet) {
+            ModalBottomSheet(
+                containerColor = MaterialTheme.colorScheme.background,
+                sheetState = helpSheetState,
+                onDismissRequest = {
+                    scope.launch {
+                        helpSheetState.hide()
+                    }.invokeOnCompletion {
+                        showHelpBottomSheet = false
+                    }
+                }
+            ) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 24.dp, vertical = 16.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally
+                ) {
+                    Text(
+                        text = "Necesitas ayuda para configurar Yappy. Contacta a nuestro equipo de soporte estamos para ayudarte",
+                        style = TextStyle(
+                            fontSize = 16.sp,
+                            lineHeight = 24.sp,
+                            fontFamily = latoFontFamily(),
+                            fontWeight = FontWeight.W400,
+                            color = MaterialTheme.colorScheme.onBackground,
+                            textAlign = TextAlign.Center
+                        ),
+                        modifier = Modifier.padding(bottom = 24.dp)
+                    )
+
+                    ButtonM(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(bottom = 12.dp),
+                        onClick = {
+                            openWhatsappMessage("50763879477", "Necesito ayuda para configurar Yappy")
+                            scope.launch {
+                                helpSheetState.hide()
+                            }.invokeOnCompletion {
+                                showHelpBottomSheet = false
+                            }
+                        }
+                    ) {
+                        Text(
+                            text = "Contactar por WhatsApp",
+                            style = bodyLargeBold(color = Color.White)
+                        )
+                    }
+
+                    TextButtonS(
+                        label = "Tal vez más tarde",
+                        modifier = Modifier.fillMaxWidth(),
+                        onClick = {
+                            scope.launch {
+                                helpSheetState.hide()
+                            }.invokeOnCompletion {
+                                showHelpBottomSheet = false
+                                navigateBack()
+                            }
+                        }
+                    )
+                }
             }
         }
     }

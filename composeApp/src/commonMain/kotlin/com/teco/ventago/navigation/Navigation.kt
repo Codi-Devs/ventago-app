@@ -769,7 +769,9 @@ private fun NavGraphBuilder.addPaymentsNavigation(
                 remember { navController.getBackStackEntry(PosScreens.Payments.name) }
             val viewModel: YappyViewModel = koinViewModel(viewModelStoreOwner = backStackEntry)
             analyticsService.logScreenView("PaymentsYappyScreen")
-            YappyScreenView(viewModel)
+            YappyScreenView(viewModel) {
+                navController.navigateUp()
+            }
         }
     }
 }

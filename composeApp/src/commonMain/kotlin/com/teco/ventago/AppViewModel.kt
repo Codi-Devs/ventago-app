@@ -51,7 +51,6 @@ class AppViewModel(
                 .combine(authService.getUser()) { fbUser: FirebaseUserDM?, user: User? ->
                     Pair(fbUser, user)
                 }.collect { newState ->
-                println("newState: $newState")
                 val fbUser = newState.first
                 val user = newState.second
                 if (fbUser != null && user != null) {
@@ -60,7 +59,7 @@ class AppViewModel(
                         missingBusiness = user.missingBusiness
                     )
                     if (businessService.business.value == null && !user.missingBusiness) {
-                        loadBusinessData()
+                        loadBusinessData(user = user)
                     } else if (this@AppViewModel::loadDataJob.isInitialized) {
                         if (loadDataJob.isActive) {
                             loadDataJob.cancel()
@@ -98,9 +97,13 @@ class AppViewModel(
         getToken()
     }
 
-    private fun loadBusinessData() {
+    private fun loadBusinessData(user: User? = null) {
         loadDataJob = viewModelScope.launch(Dispatchers.IO) {
-            authService.getUserSync()?.let { user ->
+            var userAux: User? = user
+            if (user == null) {
+                userAux = authService.getUserSync()
+            }
+            userAux?.let { user ->
                 try {
                     supervisorScope {
                         val businessId = user.businessIds.first().businessId
@@ -140,6 +143,7 @@ class AppViewModel(
                             )
                         }
                         productRes.exceptionOrNull()?.let {
+                            println("ASDASD: getProductsByBusinessId failed: ${it.message ?: "UNKNOWN"}")
                             logger.sendLog(
                                 Log(
                                     LogLevel.ERROR,
@@ -150,6 +154,7 @@ class AppViewModel(
                         }
 
                         val ok = businessRes.isSuccess && productRes.isSuccess
+
                         withContext(Dispatchers.Main) {
                             if (ok) {
                                 _mainState.value =
@@ -174,7 +179,7 @@ class AppViewModel(
                         )
                     )
                 }
-            }
+            } ?: println("ASDASD: No user getUserSync() is null")
         }
 
     }

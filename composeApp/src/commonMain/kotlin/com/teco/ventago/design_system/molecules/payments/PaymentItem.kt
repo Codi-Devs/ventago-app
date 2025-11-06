@@ -109,7 +109,7 @@ fun CheckMarkItem(text: String, modifier: Modifier = Modifier) {
                 .padding(end = 8.dp)
                 .size(16.dp),
             contentDescription = null,
-            tint = MaterialTheme.colorScheme.primary
+            tint = MaterialTheme.colorScheme.secondary
         )
         Text(
             text,

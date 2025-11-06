@@ -11,6 +11,7 @@ import com.teco.ventago.features.product.domain.model.Products
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.IO
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -33,10 +34,11 @@ class ProductService(
     var selectedCategoryId: Int? = null
     var selectedItemId: Int? = null
 
+    private var listenerJob: Job? = null
+    private val serviceScope = CoroutineScope(Dispatchers.IO)
+
     init {
-
-
-        CoroutineScope(Dispatchers.IO).launch {
+        serviceScope.launch {
             cache.getCache(Products::class)?.let { productsData ->
                 withContext(Dispatchers.Main) {
                     state.update {
@@ -45,7 +47,8 @@ class ProductService(
                 }
             }
 
-            changesManager.productsListener().onEach { value ->
+            listenerJob?.cancel()
+            listenerJob = changesManager.productsListener().onEach { value ->
                 if (value != 1) {
                     state.value?.let { menuAux ->
                         authService.getUserSync()?.businessIds?.let {
@@ -58,7 +61,7 @@ class ProductService(
                     }
 
                 }
-            }.launchIn(this)
+            }.launchIn(serviceScope)
         }
     }
 
@@ -246,9 +249,16 @@ class ProductService(
     }
 
     fun signOut() {
+        // Cancel Firebase Realtime Database listener
+        listenerJob?.cancel()
+        listenerJob = null
+        // Clear state
         state.update {
             null
         }
+        // Reset selection state
+        selectedCategoryId = null
+        selectedItemId = null
     }
 
     fun canAddItem(category: Category): Boolean {

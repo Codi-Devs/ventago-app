@@ -33,7 +33,12 @@ class AddItemViewModel(
     init {
         loadGoodsCsv()
         if ((productService.state.value?.categories?.size ?: 0) > 0) {
-            productService.state.value?.categories?.get(0)?.let { category ->
+            // Check if there's a selected category from navigation
+            val selectedCategory = productService.selectedCategoryId?.let { categoryId ->
+                productService.state.value?.categories?.find { it.id == categoryId }
+            } ?: productService.state.value?.categories?.get(0)
+            
+            selectedCategory?.let { category ->
                 updateState { copy(selectedCategory = category) }
             }
         }
@@ -215,6 +220,7 @@ class AddItemViewModel(
                             emitEvent(ItemStateUiEvent.ReturnPersonalizedProduct(savedItem))
                         } else {
                             resetView()
+                            emitEvent(ItemStateUiEvent.GoBack)
                         }
                     } else {
                         // TODO Add logs

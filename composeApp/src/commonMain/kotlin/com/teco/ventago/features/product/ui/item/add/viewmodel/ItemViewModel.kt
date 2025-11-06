@@ -134,7 +134,21 @@ abstract class ItemViewModel(private val productService: ProductService) :
     }
 
     fun onOtiRateChanged(value: String) {
-        updateState { copy(otiRateInput = value) }
+        // Sanitize: replace comma with dot, ensure only one decimal point
+        val replaced = value.replace(',', '.')
+        val sanitized = buildString {
+            var dotSeen = false
+            for (char in replaced) {
+                when {
+                    char.isDigit() -> append(char)
+                    char == '.' && !dotSeen -> {
+                        append(char)
+                        dotSeen = true
+                    }
+                }
+            }
+        }
+        updateState { copy(otiRateInput = sanitized) }
     }
 
     fun onAddOtiTax() {

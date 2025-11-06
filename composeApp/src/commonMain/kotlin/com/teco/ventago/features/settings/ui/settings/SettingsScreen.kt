@@ -549,14 +549,14 @@ fun SettingsScreen(
                 SettingsTextButton(
                     label = stringResource(Res.string.terms_and_conditions),
                     onClick = {
-                        uriHandler.openUri("https://sites.google.com/view/ventago-terms/p%C3%A1gina-principal")
+                        uriHandler.openUri("https://sites.google.com/view/ventago-terms")
                     }
                 )
 
                 SettingsTextButton(
                     label = stringResource(Res.string.privacy_policy),
                     onClick = {
-                        uriHandler.openUri("https://sites.google.com/view/digitalmenuprivacypolicy/p%C3%A1gina-principal")
+                        uriHandler.openUri("https://sites.google.com/view/ventago-politicas-privacidad")
                     }
                 )
 

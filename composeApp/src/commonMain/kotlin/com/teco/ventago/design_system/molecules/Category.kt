@@ -2,8 +2,8 @@ package com.teco.ventago.design_system.molecules
 
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Menu
 import androidx.compose.material.icons.rounded.MoreHoriz
@@ -56,15 +56,14 @@ fun CategoryItem(
         contentSlot = {
             Text(
                 text = category.name,
-                maxLines = 1,
+                modifier = Modifier.fillMaxWidth(),
+                maxLines = 2,
                 overflow = TextOverflow.Ellipsis,
                 style = bodyMediumBold()
             )
             StatusChip(active = category.active)
         },
         trailingSlot = {
-            Spacer(modifier = Modifier.weight(1f, fill = true))
-
             if (!reordering) {
                 IconButton(onClick = { onOptionsClick(category.id) }) {
                     Icon(
