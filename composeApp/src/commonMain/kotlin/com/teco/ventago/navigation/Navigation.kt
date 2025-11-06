@@ -302,6 +302,10 @@ fun Navigation(
         navController = navController,
         startDestination = PosScreens.LoginRegister.name,
         modifier = modifier,
+        enterTransition = NavTransitions.enterTransition,
+        exitTransition = NavTransitions.exitTransition,
+        popEnterTransition = NavTransitions.popEnterTransition,
+        popExitTransition = NavTransitions.popExitTransition
     ) {
         addLoginNavigation(navController, analyticsService)
 
