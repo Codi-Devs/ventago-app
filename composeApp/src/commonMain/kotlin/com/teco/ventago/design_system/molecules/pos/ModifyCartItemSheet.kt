@@ -130,16 +130,20 @@ fun ModifyCartItemSheet(
     var extraOpen by rememberSaveable { mutableStateOf(false) }
 
     // Per-item Shipping (Acarreo)
-//    val itemShippingPreset = itemToModify.itemShippingCents ?: 0L
-    val itemShippingPreset = 0L
+    val itemShippingPreset = itemToModify.shippingCents ?: 0L
     var itemShippingRaw by rememberSaveable { mutableStateOf(centsToRawText(itemShippingPreset)) }
     val itemShippingEnabled = !invoiceHasGlobalShipping
 
     // Per-item Insurance
-//    val itemInsurancePreset = itemToModify.itemInsuranceCents ?: 0L
-    val itemInsurancePreset = 0L
+    val itemInsurancePreset = itemToModify.insuranceCents ?: 0L
     var itemInsuranceRaw by rememberSaveable { mutableStateOf(centsToRawText(itemInsurancePreset)) }
     val itemInsuranceEnabled = !invoiceHasGlobalInsurance
+
+    // Sync shipping and insurance values when item changes
+    LaunchedEffect(itemToModify.lineId) {
+        itemShippingRaw = centsToRawText(itemToModify.shippingCents ?: 0L)
+        itemInsuranceRaw = centsToRawText(itemToModify.insuranceCents ?: 0L)
+    }
 
     // Pharma
 //    val isPharma = itemToModify.isPharma == true
