@@ -160,7 +160,10 @@ fun CartOrganism(
         Spacer(Modifier.height(16.dp))
 
         LazyColumn(
-            modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp)
+            modifier = Modifier
+                .weight(1f)
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp)
                 .background(vanishedBackgroundColor(), RoundedCornerShape(10.dp)),
             verticalArrangement = Arrangement.Center,
             state = lazyListState
