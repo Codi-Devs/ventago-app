@@ -187,20 +187,25 @@ object CartCalc {
             }
         }
 
-        // TAX (kept as your existing per-line tax; make sure it includes charges in its base if needed)
+        // Base for all taxes: subtotal - discount (does NOT include charges)
+        // This matches the calculation in PosViewModel.createOrderRequest()
         fun baseForTaxes(line: CartLine): Long =
-            (line.lineSubtotal() - line.discountAmount() + line.lineCharges()).coerceAtLeast(0L)
+            (line.lineSubtotal() - line.discountAmount()).coerceAtLeast(0L)
 
+        // ITBMS: calculated from CartLine.tax field (separate tax, shown separately)
         val itbms = lines.sumOf { it.taxTotal(state.taxExempt) }
 
-        // ISC/OTI desde Item (porcentaje en item.iscRate/otiRate; null = 0)
+        // ISC: calculated from item.iscRate (percentage, e.g., 7.0 for 7%)
+        // Shown separately as sum of all ISC taxes only
         val isc = lines.sumOf { line ->
             val item = getItemForLine(line)
             val ratePct = item?.iscRate ?: 0.0
             if (ratePct <= 0.0 || state.taxExempt) 0L
             else ((baseForTaxes(line) * ratePct) / 100.0).roundToLong()
         }
-        // === OTI (Multiple rates per item) ===
+
+        // OTI: calculated from item.otiTaxes (rate stored as decimal, e.g., 0.07 for 7%)
+        // Shown separately as sum of all OTI taxes only
         val oti = lines.sumOf { line ->
             val item = getItemForLine(line)
             val otiList = item?.otiTaxes.orEmpty()
@@ -208,8 +213,8 @@ object CartCalc {
 
             val base = baseForTaxes(line)
             otiList.sumOf { oti ->
-                val ratePct = oti.rate * 100  // backend stores as decimal (e.g., 0.07 → 7%)
-                ((base * ratePct) / 100.0).roundToLong()
+                // Backend stores rate as decimal (e.g., 0.07 for 7%), use directly
+                ((base * oti.rate) / 1.0).roundToLong()
             }
         }
 

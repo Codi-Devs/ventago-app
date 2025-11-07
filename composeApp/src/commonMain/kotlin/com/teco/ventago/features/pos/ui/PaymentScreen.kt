@@ -468,10 +468,20 @@ private fun ManualAndInstallmentsSection(
                             }
                         }
                         DMMoneyOutlinedTextField(
-                            text = inst.amountCents.toString(),
+                            text = if (inst.amountCents == 0L) "" else inst.amountCents.toString(),
                             label = "Monto",
                             onChange = { raw ->
-                                val cents = raw.filter(Char::isDigit).toLongOrNull() ?: 0L
+                                // Filter digits only
+                                val digits = raw.filter(Char::isDigit)
+                                
+                                // Handle empty input or remove leading zeros: "02" -> "2", "002" -> "2"
+                                val cleanedDigits = digits.trimStart('0')
+                                val cents = if (cleanedDigits.isEmpty()) {
+                                    0L
+                                } else {
+                                    cleanedDigits.toLongOrNull() ?: 0L
+                                }
+                                
                                 onInstallmentAmount(idx, cents)
                             },
                             leadingIcon = null,

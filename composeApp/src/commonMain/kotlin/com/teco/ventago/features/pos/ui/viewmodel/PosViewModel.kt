@@ -60,7 +60,14 @@ import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import kotlinx.datetime.Clock
+import kotlinx.datetime.DateTimeUnit
+import kotlinx.datetime.Instant
+import kotlinx.datetime.LocalDate
+import kotlinx.datetime.LocalDateTime
+import kotlinx.datetime.LocalTime
 import kotlinx.datetime.TimeZone
+import kotlinx.datetime.plus
+import kotlinx.datetime.toInstant
 import kotlinx.datetime.toLocalDateTime
 import kotlinx.serialization.encodeToString
 import kotlin.String
@@ -419,19 +426,21 @@ class PosViewModel(
             withContext(Dispatchers.IO) {
                 try {
                     val request = createOrderRequest(createPaymentLink, saveAsDraft)
-                   val response = posService.createOrder(business!!.businessId, request)
-                   updateState {
-                       copy(
-                           invoiceStatus = InvoiceStatus.fromId(response.invoiceStatus),
-                           pdfDocument = response.invoiceFiles?.pdf ?: "",
-                           paymentLink = response.links?.firstOrNull { link -> link.action == "payer_action" }?.url
-                               ?: "",
-                           orderNumber = response.orderNumber
-                       )
-                   }
-                   withContext(Dispatchers.Main) {
-                       showSuccess()
-                   }
+                    println("ASDASD: Create Order Request: ${json.encodeToString(request)}")
+                  val response = posService.createOrder(business!!.businessId, request)
+                  updateState {
+                      copy(
+                          invoiceStatus = InvoiceStatus.fromId(response.invoiceStatus),
+                          pdfDocument = response.invoiceFiles?.pdf ?: "",
+                          paymentLink = response.links?.firstOrNull { link -> link.action == "payer_action" }?.url
+                              ?: "",
+                          orderNumber = response.orderNumber
+                      )
+                  }
+                  withContext(Dispatchers.Main) {
+                      showSuccess()
+                  }
+                    showError()
                 } catch (e: Exception) {
                     println("Error creating order: ${e.message}")
                     withContext(Dispatchers.Main) {
@@ -615,7 +624,7 @@ class PosViewModel(
                 additionalCharges.add(
                     Charge(
                         description = "SEGURO",
-                        amount = (item.shippingCents ?: 0L).toDecimalString()
+                        amount = (item.insuranceCents ?: 0L).toDecimalString()
                     )
                 )
             }
@@ -627,8 +636,6 @@ class PosViewModel(
                     pharmaBatchQuantity = item.pharmaBatchQty ?: 0,
                 )
             }
-
-            item.insuranceCents
 
             val additionalInfo = mutableListOf<NameValue>()
             product.additionalInfo?.let { infoJson ->
@@ -737,22 +744,53 @@ class PosViewModel(
             )
         } else if (!saveAsDraft) {
             for ((key, value) in state.charged) {
+                // For type 99 (OTHER), use custom description and ensure it's bigger than 10 characters
+                val description = if (key == 99) {
+                    val customDesc = state.otherPaymentDescription.ifBlank { 
+                        manualMethodOptions()[key].second 
+                    }
+                    // Add meaningful text instead of padding with spaces (server trims spaces)
+                    if (customDesc.length <= 10) {
+                        "Otro: $customDesc"
+                    } else {
+                        customDesc
+                    }
+                } else {
+                    manualMethodOptions()[key].second
+                }
+                
                 payments.add(
                     CreateOrderPayment(
                         type = key,
-                        description = manualMethodOptions()[key].second,
+                        description = description,
                         amount = value.toDecimalString(),
                         dueDate = null
                     )
                 )
             }
             for (installment in state.installments) {
+                // Convert "YYYY-MM-DD" to ISO 8601 format with time and timezone: "YYYY-MM-DDTHH:mm:ss-00:00"
+                val dueDateIso = if (installment.dueDateIso.isNotBlank()) {
+                    convertDateToIso8601(installment.dueDateIso)
+                } else {
+                    null
+                }
+                
+                // Ensure installment description is bigger than 15 characters
+                val baseDescription = "Cuota ${state.installments.indexOf(installment) + 1} de ${state.installments.size}"
+                val description = if (baseDescription.length <= 15) {
+                    // Add meaningful text instead of padding with spaces (server trims spaces)
+                    "Pago en ${baseDescription.lowercase()}"
+                } else {
+                    baseDescription
+                }
+                
                 payments.add(
                     CreateOrderPayment(
                         type = 11,
-                        description = "Cuota ${state.installments.indexOf(installment) + 1} de ${state.installments.size}",
+                        description = description,
                         amount = installment.amountCents.toDecimalString(),
-                        dueDate = installment.dueDateIso
+                        dueDate = dueDateIso
                     )
                 )
             }
@@ -798,7 +836,7 @@ class PosViewModel(
             logistics = Logistics(
                 totalPackagesNumber = state.logisticsBoxesQty.toIntOrNull() ?: 1,
                 totalCargoWeight = state.logisticsTotalWeightLb.toDoubleOrNull() ?: 0.0,
-                totalWeightUnit = "LB",
+                totalWeightUnit = "4",
                 cargoVehicleLicense = state.logisticsVehiclePlate,
                 carrierLegalName = state.logisticsCarrierLegalName,
                 carrierTaxpayerType = if (state.logisticsCarrierTaxpayerTypeIndex == 0) "01" else "02",
@@ -1248,7 +1286,14 @@ class PosViewModel(
     // ---------- Installments ----------
     fun addInstallment() = updateState {
         if (paymentFlowMode == PaymentFlowMode.PAYMENT_LINK) this
-        else copy(installments = installments + InstallmentUI())
+        else {
+            // Calculate default due date: 30 days from now
+            val today = Clock.System.now().toLocalDateTime(TimeZone.currentSystemDefault()).date
+            val defaultDueDate = today.plus(30, DateTimeUnit.DAY)
+            val defaultDueDateIso = "${defaultDueDate.year}-${defaultDueDate.monthNumber.toString().padStart(2, '0')}-${defaultDueDate.dayOfMonth.toString().padStart(2, '0')}"
+            
+            copy(installments = installments + InstallmentUI(dueDateIso = defaultDueDateIso))
+        }
     }
 
     fun removeInstallment(index: Int) = updateState {
@@ -1256,11 +1301,25 @@ class PosViewModel(
         else copy(installments = installments.toMutableList().also { it.removeAt(index) })
     }
 
-    fun setInstallmentAmount(index: Int, cents: Long) = updateState {
-        if (index !in installments.indices) this
-        else copy(installments = installments.toMutableList().also {
-            it[index] = it[index].copy(amountCents = cents.coerceAtLeast(0L))
-        })
+    fun setInstallmentAmount(index: Int, cents: Long) {
+        val totalToCharge = amountToCharge() // legal + tips
+        val state = uiState.value
+        
+        // Calculate remaining amount: total - manual payments - other installments (excluding current one)
+        val manualPaid = state.charged.values.sum()
+        val otherInstallments = state.installments.filterIndexed { i, _ -> i != index }
+            .sumOf { it.amountCents }
+        val remaining = totalToCharge - manualPaid - otherInstallments
+        
+        // Cap the installment amount at the remaining total
+        val finalAmount = cents.coerceIn(0L, remaining.coerceAtLeast(0L))
+        
+        updateState {
+            if (index !in installments.indices) this
+            else copy(installments = installments.toMutableList().also {
+                it[index] = it[index].copy(amountCents = finalAmount)
+            })
+        }
     }
 
     fun setInstallmentDueDate(index: Int, iso: String) = updateState {
@@ -1308,6 +1367,44 @@ class PosViewModel(
         val total = amountToCharge() // includes tips
         val allocated = manualPaidSum() + installmentsSum()
         return (total - allocated).coerceAtLeast(0L)
+    }
+
+    /**
+     * Converts a date string from "YYYY-MM-DD" format to ISO 8601 format with time and timezone.
+     * Example: "2025-12-06" -> "2025-12-06T00:00:00-00:00"
+     */
+    private fun convertDateToIso8601(dateString: String): String? {
+        return try {
+            if (dateString.isBlank()) return null
+            
+            // Parse "YYYY-MM-DD" to LocalDate
+            val parts = dateString.split("-")
+            if (parts.size != 3) return null
+            
+            val year = parts[0].toInt()
+            val month = parts[1].toInt()
+            val day = parts[2].toInt()
+            
+            val localDate = LocalDate(year, month, day)
+            
+            // Convert to LocalDateTime at midnight (00:00:00)
+            val localDateTime = LocalDateTime(
+                date = localDate,
+                time = LocalTime(0, 0, 0)
+            )
+            
+            // Format as ISO 8601 with timezone offset: "YYYY-MM-DDTHH:mm:ss-00:00"
+            val yearStr = localDateTime.year.toString()
+            val monthStr = localDateTime.monthNumber.toString().padStart(2, '0')
+            val dayStr = localDateTime.dayOfMonth.toString().padStart(2, '0')
+            val hourStr = localDateTime.hour.toString().padStart(2, '0')
+            val minuteStr = localDateTime.minute.toString().padStart(2, '0')
+            val secondStr = localDateTime.second.toString().padStart(2, '0')
+            
+            "$yearStr-$monthStr-${dayStr}T$hourStr:$minuteStr:$secondStr-00:00"
+        } catch (e: Exception) {
+            null
+        }
     }
 
     fun openPdfDocument() {
