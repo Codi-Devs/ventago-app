@@ -95,8 +95,6 @@ import ventago.composeapp.generated.resources.connect_yappy
 import ventago.composeapp.generated.resources.contact_support_yappy
 import ventago.composeapp.generated.resources.copy_paste_merchant_id
 import ventago.composeapp.generated.resources.delete
-import ventago.composeapp.generated.resources.domain
-import ventago.composeapp.generated.resources.domain_exact_match
 import ventago.composeapp.generated.resources.email
 import ventago.composeapp.generated.resources.fi_rr_headset
 import ventago.composeapp.generated.resources.funds_go_to_bank
@@ -234,22 +232,6 @@ fun YappyScreenView(
                 imeAction = ImeAction.Next,
                 enabled = true,
                 supportingText = stringResource(Res.string.copy_paste_merchant_id),
-                isError = false,
-                readOnly = false,
-            )
-
-            DMOutlinedTextField(
-                text = uiState.domain,
-                label = stringResource(Res.string.domain),
-                modifier = Modifier.padding(start = 16.dp, end = 16.dp, bottom = 16.dp),
-                onChange = { value ->
-                    viewModel.onDomainChange(value)
-                },
-                maxLines = 8,
-                keyboardType = KeyboardType.Text,
-                imeAction = ImeAction.Done,
-                enabled = true,
-                supportingText = stringResource(Res.string.domain_exact_match),
                 isError = false,
                 readOnly = false,
             )

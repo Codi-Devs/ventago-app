@@ -73,7 +73,7 @@ class YappyViewModel(
             try {
                 business?.let {
                     val connected = paymentService.connectYappy(it.businessId,
-                        uiState.value.merchantID, uiState.value.domain, uiState.value.secretKey)
+                        uiState.value.merchantID, "https://tecodigi.com", uiState.value.secretKey)
                     updateState {
                         copy(
                             loadingBottomSheet = LoadingBottomSheetState(LoadingState.SUCCESS, ""),
@@ -117,7 +117,6 @@ class YappyViewModel(
 
     fun canConfigureYappy(): Boolean {
         return uiState.value.merchantID.length > 3 &&
-                uiState.value.domain.length > 3 &&
                 uiState.value.secretKey.length > 3
     }
 
