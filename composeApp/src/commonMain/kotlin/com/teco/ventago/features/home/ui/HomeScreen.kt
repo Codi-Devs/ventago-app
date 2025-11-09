@@ -216,24 +216,28 @@ fun HomeScreen(
 
 
 
-        Text(
-            stringResource(Res.string.sales),
-            modifier = Modifier.padding(start = 16.dp, end = 16.dp, top = 16.dp),
-            style = TextStyle(
-                fontSize = 16.sp,
-                lineHeight = 24.sp,
-                fontFamily = latoFontFamily(),
-                fontWeight = FontWeight(500),
-                letterSpacing = 0.15.sp,
+        val salesData = uiState.sales ?: mutableListOf()
+        val hasNonZeroSales = salesData.isNotEmpty() && salesData.any { it.second > 0.0 }
+        if (hasNonZeroSales) {
+            Text(
+                stringResource(Res.string.sales),
+                modifier = Modifier.padding(start = 16.dp, end = 16.dp, top = 16.dp),
+                style = TextStyle(
+                    fontSize = 16.sp,
+                    lineHeight = 24.sp,
+                    fontFamily = latoFontFamily(),
+                    fontWeight = FontWeight(500),
+                    letterSpacing = 0.15.sp,
+                )
             )
-        )
-        BarGraphic(
-            modifier = Modifier.padding(start = 16.dp, end = 16.dp, top = 24.dp),
-            data = uiState.sales ?: mutableListOf(),
-            selectedIndex = uiState.selectedSalesIndex,
-            barGraphicHeight = 100.0,
-        ) {
-            viewModel.setSelectedSalesIndex(it)
+            BarGraphic(
+                modifier = Modifier.padding(start = 16.dp, end = 16.dp, top = 24.dp),
+                data = salesData,
+                selectedIndex = uiState.selectedSalesIndex,
+                barGraphicHeight = 100.0,
+            ) {
+                viewModel.setSelectedSalesIndex(it)
+            }
         }
 
 
