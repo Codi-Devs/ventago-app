@@ -53,6 +53,8 @@ androidx-lifecycle-viewmodelCompose = { module = "org.jetbrains.androidx.lifecyc
 androidx-lifecycle-runtimeCompose = { module = "org.jetbrains.androidx.lifecycle:lifecycle-runtime-compose", version.ref = "androidx-lifecycle" }
 android-firebase-bom = { module = "com.google.firebase:firebase-bom", version.ref = "firebase-bom" }
 android-firebase-messaging = { module = "com.google.firebase:firebase-messaging" }
+android-firebase-crashlytics = { module = "com.google.firebase:firebase-crashlytics-ndk" }
+android-firebase-analytics = { module = "com.google.firebase:firebase-analytics" }
 firebase-auth = { module = "dev.gitlive:firebase-auth", version.ref = "firebase" }
 firebase-analytics = { module = "dev.gitlive:firebase-analytics", version.ref = "firebase" }
 firebase-firestore = { module = "dev.gitlive:firebase-firestore", version.ref = "firebase" }

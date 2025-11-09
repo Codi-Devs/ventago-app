@@ -54,12 +54,14 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import kotlinx.coroutines.delay
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -82,6 +84,7 @@ import com.teco.ventago.design_system.buttons.TextButtonM
 import com.teco.ventago.design_system.buttons.TextButtonS
 import com.teco.ventago.design_system.buttons.dashedBorder
 import com.teco.ventago.design_system.molecules.DMAlertDialog
+import com.teco.ventago.design_system.molecules.DMSimpleAlertDialog
 import com.teco.ventago.design_system.molecules.InverseTicketDivider
 import com.teco.ventago.design_system.molecules.ListRowCard
 import com.teco.ventago.design_system.molecules.PosItemRow
@@ -108,6 +111,7 @@ import com.teco.ventago.features.pos.ui.viewmodel.PosViewModel
 import com.teco.ventago.navigation.PosScreens
 import com.teco.ventago.utils.formatNumberToMoney
 import com.teco.ventago.utils.generateQR
+import com.teco.ventago.utils.openWhatsappMessage
 import com.teco.ventago.utils.shareLink
 import com.teco.ventago.utils.toDecimalString
 import io.github.alexzhirkevich.compottie.LottieCompositionSpec
@@ -918,9 +922,60 @@ fun PosSuccessScreen(
 
     val uiState by viewModel.uiState.collectAsState()
 
+    // Determine screen state from viewModel state
+    val orderFailed = uiState.orderCreationFailed
+    // Invoice failed if: order succeeded, order number exists, and invoice status is FAILED
+    val invoiceFailed = !orderFailed && 
+                        uiState.orderNumber.isNotEmpty() && 
+                        uiState.invoiceStatus == InvoiceStatus.FAILED
+
+    // State to control invoice failure alert dialog
+    // Track which order number we've already shown the alert for to avoid showing it multiple times
+    var shownAlertForOrderNumber by rememberSaveable { mutableStateOf<String?>(null) }
+    
+    // State to control when to actually display the dialog
+    var showInvoiceFailureAlert by remember { mutableStateOf(false) }
+    
+    // Trigger showing the alert dialog when invoice failure is detected for a new order
+    LaunchedEffect(uiState.orderNumber, uiState.invoiceStatus, invoiceFailed) {
+        val shouldShow = invoiceFailed && 
+                        uiState.orderNumber.isNotEmpty() && 
+                        shownAlertForOrderNumber != uiState.orderNumber
+        
+        if (shouldShow) {
+            // Wait a moment for the screen to render before showing the dialog
+            delay(500)
+            
+            // Double-check conditions after delay (in case state changed)
+            // Re-read from uiState to get latest values
+            val currentOrderNumber = uiState.orderNumber
+            val currentInvoiceStatus = uiState.invoiceStatus
+            val currentOrderFailed = uiState.orderCreationFailed
+            
+            val stillFailed = !currentOrderFailed && 
+                             currentOrderNumber.isNotEmpty() && 
+                             currentInvoiceStatus == InvoiceStatus.FAILED &&
+                             shownAlertForOrderNumber != currentOrderNumber
+            
+            if (stillFailed) {
+                showInvoiceFailureAlert = true
+            }
+        } else {
+            // Hide dialog if conditions no longer apply
+            showInvoiceFailureAlert = false
+        }
+    }
+
+    // Use failure animation if order failed, success animation otherwise
+    val animationFile = if (orderFailed) {
+        "files/wrong.json"
+    } else {
+        "files/57767-done.json"
+    }
+    
     val composition by rememberLottieComposition {
         LottieCompositionSpec.JsonString(
-            Res.readBytes("files/57767-done.json").decodeToString()
+            Res.readBytes(animationFile).decodeToString()
         )
     }
     val progress by animateLottieCompositionAsState(composition, iterations = 1)
@@ -933,111 +988,224 @@ fun PosSuccessScreen(
     ) {
         Spacer(modifier = Modifier.weight(1f, fill = true))
 
-        if (uiState.paymentLink.isNotEmpty()) {
-            val bitmap = remember(uiState.paymentLink) {
-                generateQR(
-                    width = 500, // Pass width in pixels
-                    height = 500,
-                    url = uiState.paymentLink
-                )
-            }
-            bitmap.toImageBitmap()?.let {
-                Image(
-                    painter = BitmapPainter(it),
-                    contentDescription = "QR Code for Table",
-                    modifier = Modifier.fillMaxWidth().height(300.dp)
-                )
-            } ?: run {
-                Text(stringResource(Res.string.qr_not_available))
-            }
-
-            TextButtonM(
-                label = stringResource(Res.string.share_payment_link), icon = Icons.Filled.Share
+        if (orderFailed) {
+            // Order creation failed - show failure UI
+            Image(
+                painter = rememberLottiePainter(
+                    composition = composition,
+                    progress = { progress },
+                ),
+                modifier = Modifier.size(height = 150.dp, width = 150.dp),
+                contentDescription = "Lottie animation"
+            )
+            
+            Spacer(modifier = Modifier.height(24.dp))
+            
+            Text(
+                text = "Error al crear pedido",
+                style = titleLarge(),
+                color = MaterialTheme.colorScheme.error
+            )
+            
+            Spacer(modifier = Modifier.height(8.dp))
+            
+            Text(
+                text = "No se pudo crear el pedido. Por favor, intenta nuevamente o contacta al soporte.",
+                style = bodyMedium(),
+                modifier = Modifier.padding(horizontal = 32.dp),
+                textAlign = TextAlign.Center
+            )
+            
+            Spacer(modifier = Modifier.weight(1f, fill = true))
+            
+            ButtonM(
+                modifier = Modifier.padding(start = 16.dp, end = 16.dp, bottom = 8.dp),
+                onClick = {
+                    openWhatsappMessage(
+                        "50763879477",
+                        "Hola, necesito ayuda. El pedido no se pudo crear."
+                    )
+                },
+                containerColor = Color(0xFF25D366), // WhatsApp green
             ) {
-                analytics.logEvent("share_payment_link", analytics.getAnalyticsBundle().apply {
-                    "payment_link" to uiState.paymentLink
-                })
-                shareLink(uiState.paymentLink)
+                Text("Contactar soporte por WhatsApp", color = Color.White)
             }
-        }
+            
+            ButtonM(
+                modifier = Modifier.padding(start = 16.dp, end = 16.dp, bottom = 16.dp),
+                onClick = {
+                    newSale()
+                },
+                containerColor = MaterialTheme.colorScheme.primary,
+            ) {
+                Text(stringResource(Res.string.pos_new_sale))
+            }
+        } else {
+            // Normal success flow
+            if (uiState.paymentLink.isNotEmpty()) {
+                val bitmap = remember(uiState.paymentLink) {
+                    generateQR(
+                        width = 500, // Pass width in pixels
+                        height = 500,
+                        url = uiState.paymentLink
+                    )
+                }
+                bitmap.toImageBitmap()?.let {
+                    Image(
+                        painter = BitmapPainter(it),
+                        contentDescription = "QR Code for Table",
+                        modifier = Modifier.fillMaxWidth().height(300.dp)
+                    )
+                } ?: run {
+                    Text(stringResource(Res.string.qr_not_available))
+                }
 
-        Image(
-            painter = rememberLottiePainter(
-                composition = composition,
-                progress = { progress },
-            ),
-            modifier = Modifier.size(height = 150.dp, width = 150.dp),
-            contentDescription = "Lottie animation"
-        )
+                TextButtonM(
+                    label = stringResource(Res.string.share_payment_link), icon = Icons.Filled.Share
+                ) {
+                    analytics.logEvent("share_payment_link", analytics.getAnalyticsBundle().apply {
+                        "payment_link" to uiState.paymentLink
+                    })
+                    shareLink(uiState.paymentLink)
+                }
+            }
 
+            Image(
+                painter = rememberLottiePainter(
+                    composition = composition,
+                    progress = { progress },
+                ),
+                modifier = Modifier.size(height = 150.dp, width = 150.dp),
+                contentDescription = "Lottie animation"
+            )
 
-        Spacer(modifier = Modifier.weight(1f, fill = true))
+            Spacer(modifier = Modifier.weight(1f, fill = true))
 
-        Text(stringResource(Res.string.ready), style = titleLarge())
-        Text(
-            formatNumberToMoney(viewModel.legalInvoiceTotal().toDecimalString()),
-            modifier = Modifier.padding(8.dp),
-            style = headlineMediumBold(color = Color(0xFF5A6372))
-        )
-        if (viewModel.getChange() > 0) {
-            if (viewModel.getTipsTotal() > 0L) {
+            Text(stringResource(Res.string.ready), style = titleLarge())
+            Text(
+                formatNumberToMoney(viewModel.legalInvoiceTotal().toDecimalString()),
+                modifier = Modifier.padding(8.dp),
+                style = headlineMediumBold(color = Color(0xFF5A6372))
+            )
+            
+            // Show invoice warning if invoice failed
+            if (invoiceFailed) {
+                Spacer(modifier = Modifier.height(16.dp))
+                Card(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp),
+                    colors = CardDefaults.cardColors(
+                        containerColor = WarningAmber.copy(alpha = 0.1f)
+                    ),
+                    border = BorderStroke(1.dp, WarningAmber)
+                ) {
+                    Row(
+                        modifier = Modifier.padding(16.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(
+                            imageVector = Icons.Filled.Warning,
+                            contentDescription = null,
+                            tint = WarningAmber,
+                            modifier = Modifier.size(24.dp)
+                        )
+                        Spacer(modifier = Modifier.width(12.dp))
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                text = "Advertencia",
+                                style = bodyMediumBold(),
+                                color = MaterialTheme.colorScheme.onSurface
+                            )
+                            Text(
+                                text = "La factura electrónica no se pudo generar. El pedido fue creado exitosamente, pero deberás generar la factura manualmente.",
+                                style = bodyMedium(),
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                modifier = Modifier.padding(top = 4.dp)
+                            )
+                        }
+                    }
+                }
+            }
+            
+            if (viewModel.getChange() > 0) {
+                if (viewModel.getTipsTotal() > 0L) {
+                    Text(
+                        "${stringResource(Res.string.pos_tip)}: ${
+                            formatNumberToMoney(
+                                viewModel.getTipsTotal().toDecimalString()
+                            )
+                        }", style = bodyMedium()
+                    )
+                }
+                Text(
+                    "${stringResource(Res.string.pos_change)}: ${
+                        formatNumberToMoney(
+                            viewModel.getChange().toDecimalString()
+                        )
+                    }", modifier = Modifier.padding(bottom = 42.dp), style = bodyMedium()
+                )
+            } else if (viewModel.getTipsTotal() > 0L) {
                 Text(
                     "${stringResource(Res.string.pos_tip)}: ${
                         formatNumberToMoney(
-                            viewModel.getTipsTotal().toDecimalString()
+                            viewModel.tipsTotal().toDecimalString()
                         )
-                    }", style = bodyMedium()
+                    }", modifier = Modifier.padding(bottom = 42.dp), style = bodyMedium()
                 )
             }
-            Text(
-                "${stringResource(Res.string.pos_change)}: ${
-                    formatNumberToMoney(
-                        viewModel.getChange().toDecimalString()
-                    )
-                }", modifier = Modifier.padding(bottom = 42.dp), style = bodyMedium()
-            )
-        } else if (viewModel.getTipsTotal() > 0L) {
-            Text(
-                "${stringResource(Res.string.pos_tip)}: ${
-                    formatNumberToMoney(
-                        viewModel.tipsTotal().toDecimalString()
-                    )
-                }", modifier = Modifier.padding(bottom = 42.dp), style = bodyMedium()
-            )
-        }
 
 
-        OutlinedButtonM(
-            modifier = Modifier.padding(start = 16.dp, end = 16.dp, bottom = 8.dp), onClick = {
-                navigate(PosScreens.Orders) {
-                    popUpTo(PosScreens.POS.name) {
-                        inclusive = true
-                    }
-                }
-            }) {
-            Text(stringResource(Res.string.pos_see_orders))
-        }
-
-        if (uiState.invoiceStatus == InvoiceStatus.ISSUED && uiState.pdfDocument.isNotEmpty()) {
             OutlinedButtonM(
                 modifier = Modifier.padding(start = 16.dp, end = 16.dp, bottom = 8.dp), onClick = {
-                    viewModel.openPdfDocument()
+                    navigate(PosScreens.Orders) {
+                        popUpTo(PosScreens.POS.name) {
+                            inclusive = true
+                        }
+                    }
                 }) {
-                Text("Ver factura")
+                Text(stringResource(Res.string.pos_see_orders))
             }
-        }
 
-        ButtonM(
-            modifier = Modifier.padding(start = 16.dp, end = 16.dp, bottom = 16.dp),
-            onClick = {
-                newSale()
-            },
-            containerColor = MaterialTheme.colorScheme.primary,
-        ) {
-            Text(stringResource(Res.string.pos_new_sale))
+            if (uiState.invoiceStatus == InvoiceStatus.ISSUED && uiState.pdfDocument.isNotEmpty()) {
+                OutlinedButtonM(
+                    modifier = Modifier.padding(start = 16.dp, end = 16.dp, bottom = 8.dp), onClick = {
+                        viewModel.openPdfDocument()
+                    }) {
+                    Text("Ver factura")
+                }
+            }
+
+            ButtonM(
+                modifier = Modifier.padding(start = 16.dp, end = 16.dp, bottom = 16.dp),
+                onClick = {
+                    newSale()
+                },
+                containerColor = MaterialTheme.colorScheme.primary,
+            ) {
+                Text(stringResource(Res.string.pos_new_sale))
+            }
         }
 
     }
+
+    // Invoice failure alert dialog - shows automatically when invoice fails
+    DMSimpleAlertDialog(
+        title = "Advertencia: Factura no generada",
+        message = "La factura electrónica no se pudo generar. El pedido fue creado exitosamente (N° ${uiState.orderNumber}), pero deberás generar la factura manualmente desde la sección de pedidos.",
+        show = showInvoiceFailureAlert,
+        onDismiss = { 
+            // Hide dialog and mark that we've shown it for this order
+            showInvoiceFailureAlert = false
+            shownAlertForOrderNumber = uiState.orderNumber
+        },
+        onConfirm = { 
+            // Hide dialog and mark that we've shown it for this order
+            showInvoiceFailureAlert = false
+            shownAlertForOrderNumber = uiState.orderNumber
+        },
+        btnText = "Entendido"
+    )
 }
 
 @Composable

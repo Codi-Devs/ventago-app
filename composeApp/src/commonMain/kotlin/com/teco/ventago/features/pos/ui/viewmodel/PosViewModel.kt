@@ -426,23 +426,37 @@ class PosViewModel(
             withContext(Dispatchers.IO) {
                 try {
                     val request = createOrderRequest(createPaymentLink, saveAsDraft)
-                    println("ASDASD: Create Order Request: ${json.encodeToString(request)}")
                   val response = posService.createOrder(business!!.businessId, request)
+                  val hasValidOrderNumber = response.orderNumber.isNotBlank()
+                  var invoiceStatusFromResponse = InvoiceStatus.fromId(response.invoiceStatus)
+                  
+                  // If creating a confirmed order (not draft, not payment link) and invoice status is NONE,
+                  // treat it as invoice generation failure
+                  if (!createPaymentLink && !saveAsDraft && invoiceStatusFromResponse == InvoiceStatus.NONE) {
+                      invoiceStatusFromResponse = InvoiceStatus.FAILED
+                  }
+                  
                   updateState {
                       copy(
-                          invoiceStatus = InvoiceStatus.fromId(response.invoiceStatus),
+                          invoiceStatus = invoiceStatusFromResponse,
                           pdfDocument = response.invoiceFiles?.pdf ?: "",
                           paymentLink = response.links?.firstOrNull { link -> link.action == "payer_action" }?.url
                               ?: "",
-                          orderNumber = response.orderNumber
+                          orderNumber = response.orderNumber,
+                          orderCreationFailed = !hasValidOrderNumber
                       )
                   }
+                  
                   withContext(Dispatchers.Main) {
-                      showSuccess()
+                      if (!hasValidOrderNumber) {
+                          showError()
+                      } else {
+                        showSuccess()
+                      }
                   }
-                    showError()
                 } catch (e: Exception) {
                     println("Error creating order: ${e.message}")
+                    updateState { copy(orderCreationFailed = true) }
                     withContext(Dispatchers.Main) {
                         showError()
                     }

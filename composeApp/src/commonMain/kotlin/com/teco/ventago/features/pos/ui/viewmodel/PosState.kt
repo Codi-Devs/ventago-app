@@ -130,6 +130,7 @@ data class PosState(
     val paymentLink: String = "",
     val orderNumber: String = "",
 
+    val orderCreationFailed: Boolean = false,
 
     override val loadingBottomSheet: LoadingBottomSheetState = LoadingBottomSheetState(),
 ) : LoadableState<PosState> {
