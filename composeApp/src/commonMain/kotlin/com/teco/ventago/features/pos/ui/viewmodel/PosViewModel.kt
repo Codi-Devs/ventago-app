@@ -472,13 +472,17 @@ class PosViewModel(
 
         val operationDestination = if (state.selectedDocType == "03" || state.selectedDocType == "10") "2" else "1"
 
+
+        val panamaZone = TimeZone.of("America/Panama")
+        val localDateTime = Clock.System.now().toLocalDateTime(panamaZone)
+
         val invoice = Invoice(
             type = state.selectedDocType,
-            deliveryDate = null, // TODO Null by now, but in future we cloud add delivery dates
+            deliveryDate = null,
             operationNature = state.selectedOperationNature,
             operationDestination = operationDestination,
             issuerFeAdditionalInfo = "",
-            issuedDatetime = now().toString()
+            issuedDatetime = localDateTime.toString() // 2025-11-08T09:23:00
         )
 
         val branch = Branch(
