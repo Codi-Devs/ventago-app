@@ -52,7 +52,7 @@ class ItemProvider(private val client: HttpClient, private val authService: IAut
         return response
     }
 
-    override suspend fun editItem(item: Item): ApiResponse {
+    override suspend fun editItem(item: Item, categoryId: Int): ApiResponse {
         val res = client.post(Configs.serverBasePath+"item/edit-item"){
             headers {
                 append(HttpHeaders.Accept, "*/*")
@@ -60,7 +60,7 @@ class ItemProvider(private val client: HttpClient, private val authService: IAut
                 append(HttpHeaders.ContentType, "application/json")
             }
             contentType(ContentType.Application.Json)
-            setBody(ItemRequests.editItem(item))
+            setBody(ItemRequests.editItem(item, categoryId))
         }
 
         if (!res.status.isSuccess()) {
@@ -72,7 +72,7 @@ class ItemProvider(private val client: HttpClient, private val authService: IAut
         if (response.error == ApiError.AUTH_001) {
             return try {
                 authService.refreshToken(client)
-                editItem(item)
+                editItem(item, categoryId)
             } catch (e: Exception) {
                 response
             }

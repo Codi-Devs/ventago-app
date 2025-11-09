@@ -177,18 +177,27 @@ class ProductService(
         return savedItem
     }
 
-    suspend fun editItem(item: Item): Boolean {
-        val success = productsRepository.editItem(item)
+    suspend fun editItem(item: Item, categoryId: Int): Boolean {
+        val success = productsRepository.editItem(item, categoryId)
         if (success) {
             state.update { menuAux ->
                 menuAux?.copy(categories = menuAux.categories.map { cat ->
-                    cat.copy(items = cat.items.map {
-                        if (it.itemId == item.itemId) {
-                            item
+                    if (cat.id == categoryId) {
+                        // Target category: add item if not present, or update if present
+                        val existingItemIndex = cat.items.indexOfFirst { it.itemId == item.itemId }
+                        if (existingItemIndex >= 0) {
+                            // Item already in this category, update it
+                            cat.copy(items = cat.items.map {
+                                if (it.itemId == item.itemId) item else it
+                            })
                         } else {
-                            it
+                            // Item moved to this category, add it
+                            cat.copy(items = cat.items + item)
                         }
-                    })
+                    } else {
+                        // Other categories: remove item if present
+                        cat.copy(items = cat.items.filter { it.itemId != item.itemId })
+                    }
                 })
             }
             saveCache()

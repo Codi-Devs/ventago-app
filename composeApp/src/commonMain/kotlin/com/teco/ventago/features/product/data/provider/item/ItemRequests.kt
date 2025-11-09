@@ -34,7 +34,7 @@ object ItemRequests {
     }
 
 
-    fun editItem(item: Item): String {
+    fun editItem(item: Item, categoryId: Int): String {
         val otiTaxesJson = item.otiTaxes?.let { buildOtiTaxesJson(it) } ?: "null"
         return """
             {
@@ -49,6 +49,7 @@ object ItemRequests {
                 "price": ${item.price},
                 "active": ${item.active},
                 "img": "${item.img}",
+                "id_category": $categoryId,
                 "unit_measure_code": "${item.unitMeasureCode}",
                 "isc_rate": ${item.iscRate ?: 0.0},
                 "oti_taxes": $otiTaxesJson,

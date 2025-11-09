@@ -12,7 +12,7 @@ interface IProductsRepository {
     suspend fun addCategory(category: Category, menuId: Int): Category
     suspend fun removeCategory(categoryId: Int): Boolean
     suspend fun addItem(item: Item, categoryId: Int): Item
-    suspend fun editItem(item: Item): Boolean
+    suspend fun editItem(item: Item, categoryId: Int): Boolean
     suspend fun removeItem(itemId: Int): Boolean
     suspend fun changeItemOrder(items: List<Item>): Boolean
     suspend fun getProductsByBusinessId(businessId: Int): Products

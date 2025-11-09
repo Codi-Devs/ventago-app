@@ -111,9 +111,9 @@ class ProductsRepository(
         }
     }
 
-    override suspend fun editItem(item: Item): Boolean {
+    override suspend fun editItem(item: Item, categoryId: Int): Boolean {
         return try {
-            val response = itemProvider.editItem(item)
+            val response = itemProvider.editItem(item, categoryId)
             if (response.error.isError()) {
                 throw BadRequestException(response.toJson())
             }

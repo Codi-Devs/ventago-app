@@ -119,6 +119,18 @@ class EditItemViewModel (
         productService.selectedItemId = null
     }
 
+    fun categories() = productService.state.value?.categories ?: listOf()
+
+    fun selectedCategoryIndex() = uiState.value.selectedCategory?.let { category ->
+        productService.state.value?.categories?.indexOfFirst { it.id == category.id } ?: 0
+    } ?: 0
+
+    fun onCategoryChanged(index: Int) {
+        productService.state.value?.categories?.get(index)?.let { category ->
+            updateState { copy(selectedCategory = category) }
+        }
+    }
+
     override fun saveItem(image: SharedImage?) {
         if (uiState.value.name.isBlank()) {
             updateState { copy(wrongName = true) }
@@ -169,6 +181,10 @@ class EditItemViewModel (
                     if (rate > 0) OTITax(id = it.code, rate = rate) else null
                 }
                 try {
+                    val categoryId = state.selectedCategory?.id
+                        ?: productService.selectedCategoryId
+                        ?: return@launch
+                    
                     val res = productService.editItem(item.copy(
                         barcode = uiState.value.barcode,
                         sku = uiState.value.sku,
@@ -185,7 +201,7 @@ class EditItemViewModel (
                         additionalInfo = state.additionalInfo.toJsonObject(),
                         unitMeasureCode = state.unitMeasureCode,
                         iscRate = state.iscRate?.toDoubleOrNull() ?: 0.0,
-                    ))
+                    ), categoryId)
 
                     if (res) {
                         showSuccess()

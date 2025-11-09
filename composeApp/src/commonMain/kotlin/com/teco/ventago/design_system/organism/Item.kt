@@ -97,6 +97,7 @@ import org.jetbrains.compose.resources.vectorResource
 import org.koin.compose.koinInject
 import org.koin.compose.viewmodel.koinViewModel
 import ventago.composeapp.generated.resources.Res
+import ventago.composeapp.generated.resources.category
 import ventago.composeapp.generated.resources.description
 import ventago.composeapp.generated.resources.description_optional
 import ventago.composeapp.generated.resources.description_optional_desc
@@ -418,7 +419,7 @@ fun ItemScreenContent(
         )
 
         DMOutlinedTextField(text = uiState.barcode,
-            label = stringResource(Res.string.description_optional),
+            label = "Código de barras",
             modifier = Modifier.padding(start = 16.dp, end = 16.dp, bottom = 0.dp),
             onChange = {
                 viewModel.onBarcodeChange(it)
@@ -431,7 +432,7 @@ fun ItemScreenContent(
             })
 
         DMOutlinedTextField(text = uiState.sku,
-            label = stringResource(Res.string.description_optional),
+            label = "Referencia interna (SKU)",
             modifier = Modifier.padding(start = 16.dp, end = 16.dp, bottom = 0.dp),
             onChange = {
                 viewModel.onSkuChange(it)
@@ -442,6 +443,18 @@ fun ItemScreenContent(
             trailingIconClick = {
                 showHelpDialog = true
             })
+
+        // Category dropdown - only show if viewModel supports category editing
+        if (viewModel is EditItemViewModel) {
+            DMDropDownField(
+                label = stringResource(Res.string.category),
+                items = viewModel.categories().map { category -> category.name },
+                selectedIndex = viewModel.selectedCategoryIndex(),
+                modifier = Modifier.padding(start = 16.dp, end = 16.dp, bottom = 16.dp),
+                onItemSelected = { index, _ -> viewModel.onCategoryChanged(index) },
+                isError = false,
+            )
+        }
 
         DMDropDownField(
             label = "Tasa ITBMS",
