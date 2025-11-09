@@ -7,6 +7,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Row
@@ -15,6 +16,7 @@ import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
@@ -156,22 +158,30 @@ fun CartOrganism(
 
     var showNotInvoiceCustomerDialog by remember { mutableStateOf(false) }
 
-    Column(
-        modifier = modifier.padding(horizontal = 0.dp).fillMaxSize().background(
+    BoxWithConstraints(
+        modifier = modifier.fillMaxSize().background(
             color = MaterialTheme.colorScheme.background
         )
     ) {
-        Spacer(Modifier.height(16.dp))
+        // Calculate max height for LazyColumn: available height minus button space
+        // Button: ~56dp height + 32dp vertical padding = ~88dp total
+        val buttonSpace = 88.dp
+        val topSpacer = 16.dp
+        val maxLazyColumnHeight = maxHeight - buttonSpace - topSpacer
 
-        LazyColumn(
-            modifier = Modifier
-                .weight(1f)
-                .fillMaxWidth()
-                .padding(horizontal = 16.dp)
-                .background(vanishedBackgroundColor(), RoundedCornerShape(10.dp)),
-            verticalArrangement = Arrangement.Center,
-            state = lazyListState
+        Column(
+            modifier = Modifier.fillMaxSize()
         ) {
+            Spacer(Modifier.height(16.dp))
+
+            LazyColumn(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .heightIn(max = maxLazyColumnHeight)
+                    .padding(horizontal = 16.dp)
+                    .background(vanishedBackgroundColor(), RoundedCornerShape(10.dp)),
+                state = lazyListState
+            ) {
             // Customer Section
             item { Spacer(modifier = Modifier.height(16.dp)) }
             item {
@@ -605,17 +615,21 @@ fun CartOrganism(
                     )
                 }
             }
-        }
+            }
+            
+            // Spacer to push button to bottom when LazyColumn content is short
+            Spacer(modifier = Modifier.weight(1f, fill = true))
 
-        OutlinedButtonM(
-            onClick = {viewModel.openAdditionalSheet()},
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 16.dp, vertical = 16.dp),
-            contentColor = MaterialTheme.colorScheme.secondary,
-            border = BorderStroke(1.dp, MaterialTheme.colorScheme.secondary),
-            ) {
-            Text("Información adicional")
+            OutlinedButtonM(
+                onClick = {viewModel.openAdditionalSheet()},
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp, vertical = 16.dp),
+                contentColor = MaterialTheme.colorScheme.secondary,
+                border = BorderStroke(1.dp, MaterialTheme.colorScheme.secondary),
+                ) {
+                Text("Información adicional")
+            }
         }
 
         if (showNotInvoiceCustomerDialog) {
