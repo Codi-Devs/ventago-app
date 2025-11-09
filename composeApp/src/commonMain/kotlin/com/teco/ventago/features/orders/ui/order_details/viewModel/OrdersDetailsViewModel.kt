@@ -110,6 +110,24 @@ class OrdersDetailsViewModel(
             data.add(Pair("Propinas:", order.tipsTotal))
         }
 
+        order.acarreoTotal?.let { acarreo ->
+            if (acarreo.isNotEmpty() && acarreo.doubleTryParse() > 0.00) {
+                data.add(Pair("Acarreo:", acarreo))
+            }
+        }
+
+        order.insuranceTotal?.let { insurance ->
+            if (insurance.isNotEmpty() && insurance.doubleTryParse() > 0.00) {
+                data.add(Pair("Seguro:", insurance))
+            }
+        }
+
+        order.otherChargesTotal?.let { otherCharges ->
+            if (otherCharges.isNotEmpty() && otherCharges.doubleTryParse() > 0.00) {
+                data.add(Pair("Otros cargos:", otherCharges))
+            }
+        }
+
         return data
     }
 

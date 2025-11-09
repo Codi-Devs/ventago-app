@@ -24,6 +24,9 @@ data class Order(
     @SerialName("taxable_base") val taxableBase: String,
     @SerialName("tax_total") val taxTotal: String,
     @SerialName("tips_total") val tipsTotal: String,
+    @SerialName("acarreo_total") val acarreoTotal: String? = null,
+    @SerialName("insurance_total") val insuranceTotal: String? = null,
+    @SerialName("other_charges_total") val otherChargesTotal: String? = null,
     @SerialName("total_amount") val totalAmount: String,
 
     val status: Int,
