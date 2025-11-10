@@ -1017,9 +1017,9 @@ class PosViewModel(
 
     // TODO Convert to proper enum
     fun finalIdTypeDisplayNames(): List<String> = listOf(
-        "Cedula",
+        "Cédula",
         "Pasaporte",
-        "Identificacion Extranjera"
+        "Identificación Extranjera"
     )
     
     private fun finalIdTypeKeys(): List<String> = listOf("cedula", "passport", "foreing_taxid")

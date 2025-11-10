@@ -216,7 +216,7 @@ fun YappyScreenView(
                     .padding(start = 24.dp, end = 24.dp, bottom = 16.dp)
                     .fillMaxWidth(0.9f)
                     .clickable {
-                        openCustomTab("https://www.youtube.com/watch?v=1b2g3h4i5j6")
+                        openCustomTab("https://youtu.be/h6Z4_V0QnDY")
                     }
             )
 

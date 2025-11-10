@@ -101,7 +101,7 @@ fun InvoicingLandingScreen() {
 
                 // Checklist items (short like the sample)
                 Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                    CheckItem("Desde $19.99 anual")
+                    CheckItem("Desde $17.99 anual")
                     CheckItem("Firma electrónica")
                     CheckItem("Soporte especializado")
                     CheckItem("Integrado en Ventago")
@@ -125,7 +125,7 @@ fun InvoicingLandingScreen() {
                     TextButtonS(
                         label = "Más información sobre Facturación Electrónica",
                     ) {
-                        openCustomTab("https://ventago.app/facturacion-electronica/")
+                        openCustomTab("https://tecodigi.com/facturacion-electronica-en-panama-firma-digital/")
 
                     }
                 }

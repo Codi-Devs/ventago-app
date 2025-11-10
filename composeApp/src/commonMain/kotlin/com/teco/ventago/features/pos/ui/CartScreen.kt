@@ -10,6 +10,7 @@ import androidx.compose.ui.unit.dp
 import androidx.navigation.NavBackStackEntry
 import com.teco.ventago.design_system.buttons.ButtonM
 import com.teco.ventago.design_system.organism.CartOrganism
+import com.teco.ventago.features.pos.ui.viewmodel.CartCalc
 import com.teco.ventago.features.pos.ui.viewmodel.PosViewModel
 import com.teco.ventago.navigation.PosScreens
 import com.teco.ventago.utils.formatNumberToMoney
@@ -32,6 +33,9 @@ fun CartScreenBottomBar(backStackEntry: NavBackStackEntry?, navigate: (PosScreen
     } ?: koinViewModel()
 
     val uiState by viewModel.uiState.collectAsState()
+    
+    // Calculate total amount directly from collected state to ensure recomposition
+    val totalAmount = CartCalc.summarize(uiState).grandTotal
 
     ButtonM(
         onClick = {
@@ -46,6 +50,6 @@ fun CartScreenBottomBar(backStackEntry: NavBackStackEntry?, navigate: (PosScreen
         },
         modifier = Modifier.padding(start = 16.dp, end = 16.dp, bottom = 16.dp)
     ) {
-        Text("${stringResource(Res.string.pos_invoicing)} ${formatNumberToMoney(viewModel.getTotalAmount().toDecimalString())}")
+        Text("${stringResource(Res.string.pos_invoicing)} ${formatNumberToMoney(totalAmount.toDecimalString())}")
     }
 }
