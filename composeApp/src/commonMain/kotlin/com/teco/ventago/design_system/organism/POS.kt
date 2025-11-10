@@ -45,6 +45,7 @@ import androidx.compose.material3.BottomSheetDefaults
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.Checkbox
 import androidx.compose.material3.ElevatedCard
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
@@ -182,282 +183,259 @@ fun CartOrganism(
                     .background(vanishedBackgroundColor(), RoundedCornerShape(10.dp)),
                 state = lazyListState
             ) {
-            // Customer Section
-            item { Spacer(modifier = Modifier.height(16.dp)) }
-            item {
-                uiState.customer?.let { customer ->
-                    Row(
-                        modifier = Modifier.fillMaxWidth().padding(start = 24.dp, end = 8.dp),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Text(
-                            modifier = Modifier, text = "Cliente", style = bodyMediumBold()
-                        )
+                // Customer Section
+                item { Spacer(modifier = Modifier.height(16.dp)) }
+                item {
+                    uiState.customer?.let { customer ->
+                        Row(
+                            modifier = Modifier.fillMaxWidth().padding(start = 24.dp, end = 8.dp),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(
+                                modifier = Modifier, text = "Cliente", style = bodyMediumBold()
+                            )
 
-                        if (uiState.invoicingEnabled && customer.invoiceCustomer <= 0) {
-                            Icon(
-                                imageVector = Icons.Filled.Warning,
-                                contentDescription = null,
-                                tint = WarningAmber,
-                                modifier = Modifier.size(24.dp).padding(start = 8.dp)
-                                    .clickable(onClick = {
-                                        showNotInvoiceCustomerDialog = true
-                                    })
+                            if (uiState.invoicingEnabled && customer.invoiceCustomer <= 0) {
+                                Icon(
+                                    imageVector = Icons.Filled.Warning,
+                                    contentDescription = null,
+                                    tint = WarningAmber,
+                                    modifier = Modifier.size(24.dp).padding(start = 8.dp)
+                                        .clickable(onClick = {
+                                            showNotInvoiceCustomerDialog = true
+                                        })
+                                )
+                            }
+
+                            Spacer(modifier = Modifier.weight(1f, fill = true))
+
+                            IconButton(
+                                onClick = {
+                                    navigate(PosScreens.SearchCustomerScreen)
+                                },
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Rounded.FindReplace,
+                                    contentDescription = null,
+                                    tint = MaterialTheme.colorScheme.secondary
+                                )
+                            }
+
+                            IconButton(
+                                onClick = {
+                                    viewModel.selectCustomer(null)
+                                },
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Rounded.Close,
+                                    contentDescription = null,
+                                    tint = MaterialTheme.colorScheme.error
+                                )
+                            }
+
+
+                        }
+
+                        Row(
+                            modifier = Modifier.fillMaxWidth()
+                                .padding(bottom = 8.dp, start = 24.dp, end = 16.dp),
+                            horizontalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            Text(
+                                modifier = Modifier,
+                                text = "Nombre: ${customer.name}",
+                                style = bodyMedium()
                             )
                         }
 
-                        Spacer(modifier = Modifier.weight(1f, fill = true))
+                        if (customer.ruc != null && customer.ruc.isNotEmpty()) {
+                            Row(
+                                modifier = Modifier.fillMaxWidth()
+                                    .padding(bottom = 8.dp, start = 24.dp, end = 16.dp),
+                                horizontalArrangement = Arrangement.SpaceBetween
+                            ) {
+                                Text(
+                                    modifier = Modifier,
+                                    text = "Ruc: ${customer.ruc}",
+                                    style = bodyMedium()
+                                )
+                            }
+                        }
 
-                        IconButton(
-                            onClick = {
+                        if (customer.email != null && customer.email.isNotEmpty() && !customer.email.contains(
+                                "pos.com"
+                            )
+                        ) {
+                            Row(
+                                modifier = Modifier.fillMaxWidth()
+                                    .padding(bottom = 8.dp, start = 24.dp, end = 16.dp),
+                                horizontalArrangement = Arrangement.SpaceBetween
+                            ) {
+                                Text(
+                                    modifier = Modifier,
+                                    text = "Correo: ${customer.email}",
+                                    style = bodyMedium()
+                                )
+                            }
+                        }
+                    } ?: run {
+                        Column(
+                            modifier = Modifier.fillMaxWidth().clickable(onClick = {
                                 navigate(PosScreens.SearchCustomerScreen)
-                            },
+                            }),
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                            verticalArrangement = Arrangement.Center
+                        ) {
+                            TextButtonS(
+                                label = "Consumidor Final",
+                                onClick = {
+                                    navigate(PosScreens.SearchCustomerScreen)
+                                },
+                                color = MaterialTheme.colorScheme.secondary,
+                                modifier = Modifier.padding(bottom = 0.dp)
+                            )
+                        }
+                    }
+                }
+
+                // Items Section
+                item { InverseTicketDivider() }
+                items(uiState.cart, key = { it.lineId }) { cartItem ->
+                    Row(
+                        modifier = Modifier.padding(
+                            start = 16.dp, end = 16.dp, top = 16.dp, bottom = 16.dp
+                        ).clickable(onClick = {
+                            itemToModify = cartItem
+                            showModifyItemDialog = true
+                        })
+                    ) {
+                        Column(
+                            modifier = Modifier.weight(1f)
+                        ) {
+                            Text(
+                                text = cartItem.name,
+                                style = bodyMediumBold(),
+                                modifier = Modifier.padding(start = 16.dp, end = 16.dp),
+                                maxLines = 2,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                            Row {
+                                Text(
+                                    text = formatNumberToMoney(
+                                        (cartItem.overrideUnitPrice
+                                            ?: cartItem.baseUnitPrice).toDecimalString()
+                                    ),
+                                    style = bodyMedium(
+                                        color = if (cartItem.discountAmount() > 0L) MaterialTheme.colorScheme.onSurface.copy(
+                                            alpha = 0.5f
+                                        ) else null
+                                    ),
+                                    textDecoration = if (cartItem.discountAmount() > 0L) TextDecoration.LineThrough else TextDecoration.None,
+                                    modifier = Modifier.padding(start = 16.dp, end = 8.dp)
+                                )
+                                if (cartItem.discountAmount() > 0L) {
+                                    Text(
+                                        text = formatNumberToMoney(
+                                            ((cartItem.overrideUnitPrice
+                                                ?: cartItem.baseUnitPrice) - cartItem.discountAmount()).toDecimalString()
+                                        ),
+                                        style = bodyMedium(),
+                                    )
+                                }
+                            }
+
+                        }
+
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier.padding(start = 8.dp)
                         ) {
                             Icon(
-                                imageVector = Icons.Rounded.FindReplace,
-                                contentDescription = null,
+                                modifier = Modifier.clickable {
+                                    viewModel.setLineQty(cartItem.lineId, cartItem.quantity + 1)
+                                },
+                                imageVector = Icons.Outlined.Add,
+                                contentDescription = "",
                                 tint = MaterialTheme.colorScheme.secondary
                             )
-                        }
 
-                        IconButton(
-                            onClick = {
-                                viewModel.selectCustomer(null)
-                            },
-                        ) {
+                            Text(
+                                text = cartItem.quantity.toString(),
+                                style = bodyLargeBold(),
+                                modifier = Modifier.padding(start = 12.dp, end = 12.dp)
+                            )
+
                             Icon(
-                                imageVector = Icons.Rounded.Close,
-                                contentDescription = null,
+                                modifier = Modifier.clickable {
+                                    if (cartItem.quantity <= 1) {
+                                        viewModel.removeLine(cartItem.lineId)
+                                    } else {
+                                        viewModel.setLineQty(
+                                            cartItem.lineId, cartItem.quantity - 1
+                                        )
+                                    }
+                                },
+                                imageVector = Icons.Outlined.Remove,
+                                contentDescription = "",
                                 tint = MaterialTheme.colorScheme.error
                             )
                         }
 
 
                     }
+                }
 
+                // Totals Section
+                item { InverseTicketDivider() }
+                // 1. Subtotal
+                item {
                     Row(
                         modifier = Modifier.fillMaxWidth()
-                            .padding(bottom = 8.dp, start = 24.dp, end = 16.dp),
+                            .padding(bottom = 8.dp, start = 32.dp, end = 32.dp),
                         horizontalArrangement = Arrangement.SpaceBetween
                     ) {
                         Text(
                             modifier = Modifier,
-                            text = "Nombre: ${customer.name}",
+                            text = stringResource(Res.string.invoice_i_subtotal),
                             style = bodyMedium()
                         )
-                    }
-
-                    if (customer.ruc != null && customer.ruc.isNotEmpty()) {
-                        Row(
-                            modifier = Modifier.fillMaxWidth()
-                                .padding(bottom = 8.dp, start = 24.dp, end = 16.dp),
-                            horizontalArrangement = Arrangement.SpaceBetween
-                        ) {
-                            Text(
-                                modifier = Modifier,
-                                text = "Ruc: ${customer.ruc}",
-                                style = bodyMedium()
-                            )
-                        }
-                    }
-
-                    if (customer.email != null && customer.email.isNotEmpty() && !customer.email.contains(
-                            "pos.com"
-                        )
-                    ) {
-                        Row(
-                            modifier = Modifier.fillMaxWidth()
-                                .padding(bottom = 8.dp, start = 24.dp, end = 16.dp),
-                            horizontalArrangement = Arrangement.SpaceBetween
-                        ) {
-                            Text(
-                                modifier = Modifier,
-                                text = "Correo: ${customer.email}",
-                                style = bodyMedium()
-                            )
-                        }
-                    }
-                } ?: run {
-                    Column(
-                        modifier = Modifier.fillMaxWidth().clickable(onClick = {
-                            navigate(PosScreens.SearchCustomerScreen)
-                        }),
-                        horizontalAlignment = Alignment.CenterHorizontally,
-                        verticalArrangement = Arrangement.Center
-                    ) {
-                        TextButtonS(
-                            label = "Consumidor Final",
-                            onClick = {
-                                navigate(PosScreens.SearchCustomerScreen)
-                            },
-                            color = MaterialTheme.colorScheme.secondary,
-                            modifier = Modifier.padding(bottom = 0.dp)
-                        )
-                    }
-                }
-            }
-
-            // Items Section
-            item { InverseTicketDivider() }
-            items(uiState.cart, key = { it.lineId }) { cartItem ->
-                Row(
-                    modifier = Modifier.padding(
-                        start = 16.dp, end = 16.dp, top = 16.dp, bottom = 16.dp
-                    ).clickable(onClick = {
-                        itemToModify = cartItem
-                        showModifyItemDialog = true
-                    })
-                ) {
-                    Column(
-                        modifier = Modifier.weight(1f)
-                    ) {
+                        Spacer(modifier = Modifier.weight(1f, fill = true))
                         Text(
-                            text = cartItem.name,
+                            text = formatNumberToMoney(
+                                viewModel.getSubtotalAmount().toDecimalString()
+                            ),
                             style = bodyMediumBold(),
-                            modifier = Modifier.padding(start = 16.dp, end = 16.dp),
-                            maxLines = 2,
-                            overflow = TextOverflow.Ellipsis
                         )
-                        Row {
+                    }
+                }
+
+                // 2. Discounts
+                val totalDiscounts = viewModel.getDiscountTotal()
+                if (totalDiscounts > 0L) {
+                    item {
+                        Row(
+                            modifier = Modifier.fillMaxWidth()
+                                .padding(bottom = 8.dp, start = 32.dp, end = 32.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.SpaceBetween
+
+                        ) {
                             Text(
-                                text = formatNumberToMoney(
-                                    (cartItem.overrideUnitPrice
-                                        ?: cartItem.baseUnitPrice).toDecimalString()
-                                ),
-                                style = bodyMedium(
-                                    color = if (cartItem.discountAmount() > 0L) MaterialTheme.colorScheme.onSurface.copy(
-                                        alpha = 0.5f
-                                    ) else null
-                                ),
-                                textDecoration = if (cartItem.discountAmount() > 0L) TextDecoration.LineThrough else TextDecoration.None,
-                                modifier = Modifier.padding(start = 16.dp, end = 8.dp)
+                                modifier = Modifier,
+                                text = stringResource(Res.string.pos_discount),
+                                style = bodyMedium()
                             )
-                            if (cartItem.discountAmount() > 0L) {
-                                Text(
-                                    text = formatNumberToMoney(
-                                        ((cartItem.overrideUnitPrice
-                                            ?: cartItem.baseUnitPrice) - cartItem.discountAmount()).toDecimalString()
-                                    ),
-                                    style = bodyMedium(),
-                                )
-                            }
+                            Spacer(modifier = Modifier.weight(1f, fill = true))
+                            Text(
+                                text = "-${formatNumberToMoney(totalDiscounts.toDecimalString())}",
+                                style = bodyMedium(color = MaterialTheme.colorScheme.error),
+                            )
                         }
-
-                    }
-
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        modifier = Modifier.padding(start = 8.dp)
-                    ) {
-                        Icon(
-                            modifier = Modifier.clickable {
-                                viewModel.setLineQty(cartItem.lineId, cartItem.quantity + 1)
-                            },
-                            imageVector = Icons.Outlined.Add,
-                            contentDescription = "",
-                            tint = MaterialTheme.colorScheme.secondary
-                        )
-
-                        Text(
-                            text = cartItem.quantity.toString(),
-                            style = bodyLargeBold(),
-                            modifier = Modifier.padding(start = 12.dp, end = 12.dp)
-                        )
-
-                        Icon(
-                            modifier = Modifier.clickable {
-                                if (cartItem.quantity <= 1) {
-                                    viewModel.removeLine(cartItem.lineId)
-                                } else {
-                                    viewModel.setLineQty(
-                                        cartItem.lineId, cartItem.quantity - 1
-                                    )
-                                }
-                            },
-                            imageVector = Icons.Outlined.Remove,
-                            contentDescription = "",
-                            tint = MaterialTheme.colorScheme.error
-                        )
-                    }
-
-
-                }
-            }
-
-            // Totals Section
-            item { InverseTicketDivider() }
-            // 1. Subtotal
-            item {
-                Row(
-                    modifier = Modifier.fillMaxWidth()
-                        .padding(bottom = 8.dp, start = 32.dp, end = 32.dp),
-                    horizontalArrangement = Arrangement.SpaceBetween
-                ) {
-                    Text(
-                        modifier = Modifier,
-                        text = stringResource(Res.string.invoice_i_subtotal),
-                        style = bodyMedium()
-                    )
-                    Spacer(modifier = Modifier.weight(1f, fill = true))
-                    Text(
-                        text = formatNumberToMoney(
-                            viewModel.getSubtotalAmount().toDecimalString()
-                        ),
-                        style = bodyMediumBold(),
-                    )
-                }
-            }
-
-            // 2. Discounts
-            val totalDiscounts = viewModel.getDiscountTotal()
-            if (totalDiscounts > 0L) {
-                item {
-                    Row(
-                        modifier = Modifier.fillMaxWidth()
-                            .padding(bottom = 8.dp, start = 32.dp, end = 32.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.SpaceBetween
-
-                    ) {
-                        Text(
-                            modifier = Modifier,
-                            text = stringResource(Res.string.pos_discount),
-                            style = bodyMedium()
-                        )
-                        Spacer(modifier = Modifier.weight(1f, fill = true))
-                        Text(
-                            text = "-${formatNumberToMoney(totalDiscounts.toDecimalString())}",
-                            style = bodyMedium(color = MaterialTheme.colorScheme.error),
-                        )
                     }
                 }
-            }
 
-            // 3. ITBMS Taxes
-            item {
-                Row(
-                    modifier = Modifier.fillMaxWidth()
-                        .padding(bottom = 8.dp, start = 32.dp, end = 32.dp),
-                    horizontalArrangement = Arrangement.SpaceBetween
-                ) {
-                    Text(
-                        modifier = Modifier,
-                        text = stringResource(Res.string.taxes_title),
-                        style = bodyMedium()
-                    )
-                    Spacer(modifier = Modifier.weight(1f, fill = true))
-                    Text(
-                        text = formatNumberToMoney(
-                            viewModel.getITBMS().toDecimalString()
-                        ),
-                        style = bodyMedium(),
-                    )
-                }
-            }
-
-            // 4. ISC Taxes
-            if (viewModel.getISC() > 0L) {
+                // 3. ITBMS Taxes
                 item {
                     Row(
                         modifier = Modifier.fillMaxWidth()
@@ -466,92 +444,21 @@ fun CartOrganism(
                     ) {
                         Text(
                             modifier = Modifier,
-                            text = "ISC",
+                            text = stringResource(Res.string.taxes_title),
                             style = bodyMedium()
                         )
                         Spacer(modifier = Modifier.weight(1f, fill = true))
                         Text(
                             text = formatNumberToMoney(
-                                viewModel.getISC().toDecimalString()
+                                viewModel.getITBMS().toDecimalString()
                             ),
                             style = bodyMedium(),
                         )
                     }
                 }
-            }
 
-
-            // 5. OTI Taxes
-            if (viewModel.getOTI() > 0L) {
-                item {
-                    Row(
-                        modifier = Modifier.fillMaxWidth()
-                            .padding(bottom = 8.dp, start = 32.dp, end = 32.dp),
-                        horizontalArrangement = Arrangement.SpaceBetween
-                    ) {
-                        Text(
-                            modifier = Modifier,
-                            text = "OTI",
-                            style = bodyMedium()
-                        )
-                        Spacer(modifier = Modifier.weight(1f, fill = true))
-                        Text(
-                            text = formatNumberToMoney(
-                                viewModel.getOTI().toDecimalString()
-                            ),
-                            style = bodyMedium(),
-                        )
-                    }
-                }
-            }
-
-
-
-            // 6. Acarreos/Shipping
-            val itemAcarreos = viewModel.getItemsShippingTotal()
-            val globalAcarreo = uiState.globalShippingCents ?: 0L
-            val acarreosEffective = if (itemAcarreos > 0L) itemAcarreos else globalAcarreo
-            if (acarreosEffective > 0L) {
-                item {
-                    Row(
-                        modifier = Modifier.fillMaxWidth()
-                            .padding(bottom = 8.dp, start = 32.dp, end = 32.dp),
-                        horizontalArrangement = Arrangement.SpaceBetween
-                    ) {
-                        Text(text = "Acarreo", style = bodyMedium())
-                        Spacer(Modifier.weight(1f))
-                        Text(
-                            text = formatNumberToMoney(acarreosEffective.toDecimalString()),
-                            style = bodyMedium()
-                        )
-                    }
-                }
-            }
-
-            // 7. Insurance
-            val itemIns = viewModel.getItemsInsuranceTotal()
-            val globalIns = uiState.globalInsuranceCents ?: 0L
-            val insuranceEffective = if (itemIns > 0L) itemIns else globalIns
-            if (insuranceEffective > 0L) {
-                item {
-                    Row(
-                        modifier = Modifier.fillMaxWidth()
-                            .padding(bottom = 8.dp, start = 32.dp, end = 32.dp),
-                        horizontalArrangement = Arrangement.SpaceBetween
-                    ) {
-                        Text(text = "Seguro", style = bodyMedium())
-                        Spacer(Modifier.weight(1f))
-                        Text(
-                            text = formatNumberToMoney(insuranceEffective.toDecimalString()),
-                            style = bodyMedium()
-                        )
-                    }
-                }
-            }
-
-            // 8. Other Charges
-            uiState.globalOtherChargesCents?.let { otherCharges ->
-                if (otherCharges > 0L) {
+                // 4. ISC Taxes
+                if (viewModel.getISC() > 0L) {
                     item {
                         Row(
                             modifier = Modifier.fillMaxWidth()
@@ -560,74 +467,186 @@ fun CartOrganism(
                         ) {
                             Text(
                                 modifier = Modifier,
-                                text = "Otros cargos",
+                                text = "ISC",
                                 style = bodyMedium()
                             )
                             Spacer(modifier = Modifier.weight(1f, fill = true))
                             Text(
-                                text = formatNumberToMoney(otherCharges.toDecimalString()),
+                                text = formatNumberToMoney(
+                                    viewModel.getISC().toDecimalString()
+                                ),
                                 style = bodyMedium(),
                             )
                         }
                     }
                 }
-            }
 
-            // 9. Grand Total
-            item {
-                Row(
-                    modifier = Modifier.fillMaxWidth()
-                        .padding(bottom = 0.dp, start = 32.dp, end = 32.dp),
-                    horizontalArrangement = Arrangement.SpaceBetween
-                ) {
-                    Text(
-                        modifier = Modifier,
-                        text = stringResource(Res.string.total),
-                        style = bodyMediumBold()
-                    )
-                    Spacer(modifier = Modifier.weight(1f, fill = true))
-                    Text(
-                        text = formatNumberToMoney(
-                            viewModel.getTotalAmount().toDecimalString()
-                        ),
-                        style = bodyMediumBold(),
-                    )
+
+                // 5. OTI Taxes
+                if (viewModel.getOTI() > 0L) {
+                    item {
+                        Row(
+                            modifier = Modifier.fillMaxWidth()
+                                .padding(bottom = 8.dp, start = 32.dp, end = 32.dp),
+                            horizontalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            Text(
+                                modifier = Modifier,
+                                text = "OTI",
+                                style = bodyMedium()
+                            )
+                            Spacer(modifier = Modifier.weight(1f, fill = true))
+                            Text(
+                                text = formatNumberToMoney(
+                                    viewModel.getOTI().toDecimalString()
+                                ),
+                                style = bodyMedium(),
+                            )
+                        }
+                    }
+                }
+
+
+                // 6. Acarreos/Shipping
+                val itemAcarreos = viewModel.getItemsShippingTotal()
+                val globalAcarreo = uiState.globalShippingCents ?: 0L
+                val acarreosEffective = if (itemAcarreos > 0L) itemAcarreos else globalAcarreo
+                if (acarreosEffective > 0L) {
+                    item {
+                        Row(
+                            modifier = Modifier.fillMaxWidth()
+                                .padding(bottom = 8.dp, start = 32.dp, end = 32.dp),
+                            horizontalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            Text(text = "Acarreo", style = bodyMedium())
+                            Spacer(Modifier.weight(1f))
+                            Text(
+                                text = formatNumberToMoney(acarreosEffective.toDecimalString()),
+                                style = bodyMedium()
+                            )
+                        }
+                    }
+                }
+
+                // 7. Insurance
+                val itemIns = viewModel.getItemsInsuranceTotal()
+                val globalIns = uiState.globalInsuranceCents ?: 0L
+                val insuranceEffective = if (itemIns > 0L) itemIns else globalIns
+                if (insuranceEffective > 0L) {
+                    item {
+                        Row(
+                            modifier = Modifier.fillMaxWidth()
+                                .padding(bottom = 8.dp, start = 32.dp, end = 32.dp),
+                            horizontalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            Text(text = "Seguro", style = bodyMedium())
+                            Spacer(Modifier.weight(1f))
+                            Text(
+                                text = formatNumberToMoney(insuranceEffective.toDecimalString()),
+                                style = bodyMedium()
+                            )
+                        }
+                    }
+                }
+
+                // 8. Other Charges
+                uiState.globalOtherChargesCents?.let { otherCharges ->
+                    if (otherCharges > 0L) {
+                        item {
+                            Row(
+                                modifier = Modifier.fillMaxWidth()
+                                    .padding(bottom = 8.dp, start = 32.dp, end = 32.dp),
+                                horizontalArrangement = Arrangement.SpaceBetween
+                            ) {
+                                Text(
+                                    modifier = Modifier,
+                                    text = "Otros cargos",
+                                    style = bodyMedium()
+                                )
+                                Spacer(modifier = Modifier.weight(1f, fill = true))
+                                Text(
+                                    text = formatNumberToMoney(otherCharges.toDecimalString()),
+                                    style = bodyMedium(),
+                                )
+                            }
+                        }
+                    }
+                }
+
+                // 9. Grand Total
+                item {
+                    Row(
+                        modifier = Modifier.fillMaxWidth()
+                            .padding(bottom = 0.dp, start = 32.dp, end = 32.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Text(
+                            modifier = Modifier,
+                            text = stringResource(Res.string.total),
+                            style = bodyMediumBold()
+                        )
+                        Spacer(modifier = Modifier.weight(1f, fill = true))
+                        Text(
+                            text = formatNumberToMoney(
+                                viewModel.getTotalAmount().toDecimalString()
+                            ),
+                            style = bodyMediumBold(),
+                        )
+                    }
+                }
+
+
+                // Tax Exempt Checkbox
+                item {
+                    Row(
+                        modifier = Modifier.fillMaxWidth()
+                            .padding(bottom = 8.dp, start = 24.dp, end = 32.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Checkbox(
+                            checked = uiState.taxExempt,
+                            onCheckedChange = { viewModel.toggleTaxExempt(it) }
+                        )
+                        Text(
+                            text = "Orden exenta de impuestos",
+                            style = bodyMedium(),
+                            modifier = Modifier.padding(start = 8.dp)
+                        )
+                    }
+                }
+
+                // 10. Modify Global Pricing Button
+                item {
+                    Row(
+                        modifier = Modifier.fillMaxWidth()
+                            .padding(bottom = 16.dp, start = 32.dp, end = 32.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Spacer(modifier = Modifier.weight(1f, fill = true))
+                        TextButtonS(
+                            label = "Otros ajustes de precios",
+                            onClick = {
+                                showGlobalPricingDialog = true
+                            },
+                            prefixIcon = rememberVectorPainter(Icons.Outlined.Money),
+                            color = MaterialTheme.colorScheme.secondary,
+                            modifier = Modifier,
+                        )
+                    }
                 }
             }
 
-
-            // 10. Modify Global Pricing Button
-            item {
-                Row(
-                    modifier = Modifier.fillMaxWidth()
-                        .padding(bottom = 16.dp, start = 32.dp, end = 32.dp),
-                    horizontalArrangement = Arrangement.SpaceBetween
-                ) {
-                    Spacer(modifier = Modifier.weight(1f, fill = true))
-                    TextButtonS(
-                        label = "Otros ajustes de precios",
-                        onClick = {
-                            showGlobalPricingDialog = true
-                        },
-                        prefixIcon = rememberVectorPainter(Icons.Outlined.Money),
-                        color = MaterialTheme.colorScheme.secondary,
-                        modifier = Modifier,
-                    )
-                }
-            }
-            }
-            
             // Spacer to push button to bottom when LazyColumn content is short
             Spacer(modifier = Modifier.weight(1f, fill = true))
 
             OutlinedButtonM(
-                onClick = {viewModel.openAdditionalSheet()},
+                onClick = { viewModel.openAdditionalSheet() },
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(horizontal = 16.dp, vertical = 16.dp),
                 contentColor = MaterialTheme.colorScheme.secondary,
                 border = BorderStroke(1.dp, MaterialTheme.colorScheme.secondary),
-                ) {
+            ) {
                 Text("Información adicional")
             }
         }
@@ -900,7 +919,7 @@ fun PosListOrganism(
                         }
                     }
                 }
-                
+
                 items(uiState.items, key = { it.itemId }) { item ->
                     PosItemRow(
                         item = item,
@@ -939,38 +958,38 @@ fun PosSuccessScreen(
     // Determine screen state from viewModel state
     val orderFailed = uiState.orderCreationFailed
     // Invoice failed if: order succeeded, order number exists, and invoice status is FAILED
-    val invoiceFailed = !orderFailed && 
-                        uiState.orderNumber.isNotEmpty() && 
-                        uiState.invoiceStatus == InvoiceStatus.FAILED
+    val invoiceFailed = !orderFailed &&
+            uiState.orderNumber.isNotEmpty() &&
+            uiState.invoiceStatus == InvoiceStatus.FAILED
 
     // State to control invoice failure alert dialog
     // Track which order number we've already shown the alert for to avoid showing it multiple times
     var shownAlertForOrderNumber by rememberSaveable { mutableStateOf<String?>(null) }
-    
+
     // State to control when to actually display the dialog
     var showInvoiceFailureAlert by remember { mutableStateOf(false) }
-    
+
     // Trigger showing the alert dialog when invoice failure is detected for a new order
     LaunchedEffect(uiState.orderNumber, uiState.invoiceStatus, invoiceFailed) {
-        val shouldShow = invoiceFailed && 
-                        uiState.orderNumber.isNotEmpty() && 
-                        shownAlertForOrderNumber != uiState.orderNumber
-        
+        val shouldShow = invoiceFailed &&
+                uiState.orderNumber.isNotEmpty() &&
+                shownAlertForOrderNumber != uiState.orderNumber
+
         if (shouldShow) {
             // Wait a moment for the screen to render before showing the dialog
             delay(500)
-            
+
             // Double-check conditions after delay (in case state changed)
             // Re-read from uiState to get latest values
             val currentOrderNumber = uiState.orderNumber
             val currentInvoiceStatus = uiState.invoiceStatus
             val currentOrderFailed = uiState.orderCreationFailed
-            
-            val stillFailed = !currentOrderFailed && 
-                             currentOrderNumber.isNotEmpty() && 
-                             currentInvoiceStatus == InvoiceStatus.FAILED &&
-                             shownAlertForOrderNumber != currentOrderNumber
-            
+
+            val stillFailed = !currentOrderFailed &&
+                    currentOrderNumber.isNotEmpty() &&
+                    currentInvoiceStatus == InvoiceStatus.FAILED &&
+                    shownAlertForOrderNumber != currentOrderNumber
+
             if (stillFailed) {
                 showInvoiceFailureAlert = true
             }
@@ -986,7 +1005,7 @@ fun PosSuccessScreen(
     } else {
         "files/57767-done.json"
     }
-    
+
     val composition by rememberLottieComposition {
         LottieCompositionSpec.JsonString(
             Res.readBytes(animationFile).decodeToString()
@@ -1012,26 +1031,26 @@ fun PosSuccessScreen(
                 modifier = Modifier.size(height = 150.dp, width = 150.dp),
                 contentDescription = "Lottie animation"
             )
-            
+
             Spacer(modifier = Modifier.height(24.dp))
-            
+
             Text(
                 text = "Error al crear pedido",
                 style = titleLarge(),
                 color = MaterialTheme.colorScheme.error
             )
-            
+
             Spacer(modifier = Modifier.height(8.dp))
-            
+
             Text(
                 text = "No se pudo crear el pedido. Por favor, intenta nuevamente o contacta al soporte.",
                 style = bodyMedium(),
                 modifier = Modifier.padding(horizontal = 32.dp),
                 textAlign = TextAlign.Center
             )
-            
+
             Spacer(modifier = Modifier.weight(1f, fill = true))
-            
+
             ButtonM(
                 modifier = Modifier.padding(start = 16.dp, end = 16.dp, bottom = 8.dp),
                 onClick = {
@@ -1044,7 +1063,7 @@ fun PosSuccessScreen(
             ) {
                 Text("Contactar soporte por WhatsApp", color = Color.White)
             }
-            
+
             ButtonM(
                 modifier = Modifier.padding(start = 16.dp, end = 16.dp, bottom = 16.dp),
                 onClick = {
@@ -1101,7 +1120,7 @@ fun PosSuccessScreen(
                 modifier = Modifier.padding(8.dp),
                 style = headlineMediumBold(color = Color(0xFF5A6372))
             )
-            
+
             // Show invoice warning if invoice failed
             if (invoiceFailed) {
                 Spacer(modifier = Modifier.height(16.dp))
@@ -1141,7 +1160,7 @@ fun PosSuccessScreen(
                     }
                 }
             }
-            
+
             if (viewModel.getChange() > 0) {
                 if (viewModel.getTipsTotal() > 0L) {
                     Text(
@@ -1183,7 +1202,8 @@ fun PosSuccessScreen(
 
             if (uiState.invoiceStatus == InvoiceStatus.ISSUED && uiState.pdfDocument.isNotEmpty()) {
                 OutlinedButtonM(
-                    modifier = Modifier.padding(start = 16.dp, end = 16.dp, bottom = 8.dp), onClick = {
+                    modifier = Modifier.padding(start = 16.dp, end = 16.dp, bottom = 8.dp),
+                    onClick = {
                         viewModel.openPdfDocument()
                     }) {
                     Text("Ver factura")
@@ -1208,12 +1228,12 @@ fun PosSuccessScreen(
         title = "Advertencia: Factura no generada",
         message = "La factura electrónica no se pudo generar. El pedido fue creado exitosamente (N° ${uiState.orderNumber}), pero deberás generar la factura manualmente desde la sección de pedidos.",
         show = showInvoiceFailureAlert,
-        onDismiss = { 
+        onDismiss = {
             // Hide dialog and mark that we've shown it for this order
             showInvoiceFailureAlert = false
             shownAlertForOrderNumber = uiState.orderNumber
         },
-        onConfirm = { 
+        onConfirm = {
             // Hide dialog and mark that we've shown it for this order
             showInvoiceFailureAlert = false
             shownAlertForOrderNumber = uiState.orderNumber
@@ -1262,7 +1282,7 @@ private fun AdditionalInfoSheet(
 ) {
     // local expand states (start collapsed)
     var openLogistics by rememberSaveable { mutableStateOf(false) }
-    var openDelivery  by rememberSaveable { mutableStateOf(false) }
+    var openDelivery by rememberSaveable { mutableStateOf(false) }
     var openRetentions by rememberSaveable { mutableStateOf(false) }
     var openExport by rememberSaveable { mutableStateOf(uiState.expandExportSection) }
 
@@ -1454,7 +1474,10 @@ private fun AdditionalInfoSheet(
             )
             DMDropDownField(
                 label = "Corregimiento",
-                items = viewModel.corregOptions(uiState.deliveryProvinceIndex, uiState.deliveryDistrictIndex),
+                items = viewModel.corregOptions(
+                    uiState.deliveryProvinceIndex,
+                    uiState.deliveryDistrictIndex
+                ),
                 selectedIndex = uiState.deliveryCorregIndex,
                 onItemSelected = { idx, _ -> viewModel.onCorregSelected(idx) },
                 isError = false,

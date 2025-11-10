@@ -545,53 +545,66 @@ class PosViewModel(
 
             // Item taxes
             val itemTaxes = mutableListOf<OrderItemTax>()
-            when (product.taxPercent) {
-                7 -> {
-                    itemTaxes.add(
-                        OrderItemTax(
-                            code = "01",
-                            type = "ITBMS",
-                            description = "ITBMS",
-                            rate = "0.07",
-                            amount = item.taxTotal(state.taxExempt).toDecimalString()
-                        )
+            // If tax exempt, override all ITBMS taxes to code 00, rate 0, amount 0
+            if (state.taxExempt) {
+                itemTaxes.add(
+                    OrderItemTax(
+                        code = "00",
+                        type = "ITBMS",
+                        description = "ITBMS",
+                        rate = "0.00",
+                        amount = "0.00"
                     )
-                }
+                )
+            } else {
+                when (product.taxPercent) {
+                    7 -> {
+                        itemTaxes.add(
+                            OrderItemTax(
+                                code = "01",
+                                type = "ITBMS",
+                                description = "ITBMS",
+                                rate = "0.07",
+                                amount = item.taxTotal(state.taxExempt).toDecimalString()
+                            )
+                        )
+                    }
 
-                10 -> {
-                    itemTaxes.add(
-                        OrderItemTax(
-                            code = "02",
-                            type = "ITBMS",
-                            description = "ITBMS",
-                            rate = "0.10",
-                            amount = item.taxTotal(state.taxExempt).toDecimalString()
+                    10 -> {
+                        itemTaxes.add(
+                            OrderItemTax(
+                                code = "02",
+                                type = "ITBMS",
+                                description = "ITBMS",
+                                rate = "0.10",
+                                amount = item.taxTotal(state.taxExempt).toDecimalString()
+                            )
                         )
-                    )
-                }
+                    }
 
-                15 -> {
-                    itemTaxes.add(
-                        OrderItemTax(
-                            code = "03",
-                            type = "ITBMS",
-                            description = "ITBMS",
-                            rate = "0.15",
-                            amount = item.taxTotal(state.taxExempt).toDecimalString()
+                    15 -> {
+                        itemTaxes.add(
+                            OrderItemTax(
+                                code = "03",
+                                type = "ITBMS",
+                                description = "ITBMS",
+                                rate = "0.15",
+                                amount = item.taxTotal(state.taxExempt).toDecimalString()
+                            )
                         )
-                    )
-                }
+                    }
 
-                else -> {
-                    itemTaxes.add(
-                        OrderItemTax(
-                            code = "00",
-                            type = "ITBMS",
-                            description = "ITBMS",
-                            rate = "0.00",
-                            amount = "0.00"
+                    else -> {
+                        itemTaxes.add(
+                            OrderItemTax(
+                                code = "00",
+                                type = "ITBMS",
+                                description = "ITBMS",
+                                rate = "0.00",
+                                amount = "0.00"
+                            )
                         )
-                    )
+                    }
                 }
             }
 
