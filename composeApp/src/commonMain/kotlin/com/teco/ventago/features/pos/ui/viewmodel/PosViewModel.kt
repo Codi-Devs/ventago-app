@@ -426,6 +426,7 @@ class PosViewModel(
             withContext(Dispatchers.IO) {
                 try {
                     val request = createOrderRequest(createPaymentLink, saveAsDraft)
+                    println("ASDASD: ${json.encodeToString(request)}")
                   val response = posService.createOrder(business!!.businessId, request)
                   val hasValidOrderNumber = response.orderNumber.isNotBlank()
                   var invoiceStatusFromResponse = InvoiceStatus.fromId(response.invoiceStatus)
@@ -1001,9 +1002,20 @@ class PosViewModel(
     fun onFinalEmailChanged(v: String) = updateState { copy(finalEmail = v) }
     fun onFinalPhoneChanged(v: String) = updateState { copy(finalPhone = v) }
 
+    // TODO Convert to proper enum
+    fun finalIdTypeDisplayNames(): List<String> = listOf(
+        "Cedula",
+        "Pasaporte",
+        "Identificacion Extranjera"
+    )
+    
+    private fun finalIdTypeKeys(): List<String> = listOf("cedula", "passport", "foreing_taxid")
+    
     fun onFinalIdTypeSelected(idx: Int) {
-        val types = listOf("cedula", "passport", "foreing_taxid")
-        updateState { copy(finalIdTypeIndex = idx, finalIdType = types[idx]) }
+        val types = finalIdTypeKeys()
+        if (idx in types.indices) {
+            updateState { copy(finalIdTypeIndex = idx, finalIdType = types[idx]) }
+        }
     }
 
     fun onFinalIdNumberChanged(v: String) = updateState { copy(finalIdNumber = v) }

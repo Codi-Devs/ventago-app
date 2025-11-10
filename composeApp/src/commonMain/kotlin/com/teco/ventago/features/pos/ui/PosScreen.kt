@@ -135,6 +135,7 @@ fun PosScreen(
         // === Customer selector ===
         CustomerSelectorCard(
             uiState = uiState,
+            viewModel = viewModel,
             onPickCustomer = { viewModel.onPickCustomerClick() }, // open your customer picker flow
             onFinalToggle = { isFinal -> viewModel.onFinalCustomerToggle(isFinal) },
             onFinalName = { viewModel.onFinalNameChanged(it) },
@@ -179,6 +180,7 @@ private fun ReadOnlyInfoRow(label: String, value: String) {
 @Composable
 private fun CustomerSelectorCard(
     uiState: PosState, // or PosState in your codebase
+    viewModel: PosViewModel,
     onPickCustomer: () -> Unit,
     onFinalToggle: (Boolean) -> Unit,
     onFinalName: (String) -> Unit,
@@ -279,6 +281,7 @@ private fun CustomerSelectorCard(
                 finalIdType = uiState.finalIdType,
                 finalIdNumber = uiState.finalIdNumber,
                 finalPassportCountry = uiState.finalPassportCountry,
+                idTypeDisplayNames = viewModel.finalIdTypeDisplayNames(),
                 onFinalName = onFinalName,
                 onFinalEmail = onFinalEmail,
                 onFinalPhone = onFinalPhone,
@@ -302,6 +305,7 @@ private fun AdditionalInfoCollapsibleCard(
     finalIdType: String,             // "cedula" | "passport" | "foreing_taxid"
     finalIdNumber: String?,
     finalPassportCountry: String?,
+    idTypeDisplayNames: List<String>,
     onFinalName: (String) -> Unit,
     onFinalEmail: (String) -> Unit,
     onFinalPhone: (String) -> Unit,
@@ -376,7 +380,7 @@ private fun AdditionalInfoCollapsibleCard(
 
                 DMDropDownField(
                     label = "Tipo de identificación",
-                    items = listOf("cedula", "passport", "foreing_taxid"),
+                    items = idTypeDisplayNames,
                     selectedIndex = finalIdTypeIndex,
                     modifier = Modifier.padding(vertical = 6.dp),
                     onItemSelected = { idx, _ -> onIdType(idx) },
