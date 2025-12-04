@@ -215,64 +215,74 @@ fun OrderDetailsActions(backStackEntry: NavBackStackEntry?,  navigateAny: (Any) 
 
 
     if (order?.invoiceStatus == InvoiceStatus.ISSUED.id) {
-        var menuExpanded by remember { mutableStateOf(false) }
-        Box {
-            IconButton(onClick = { menuExpanded = true }) {
-                Icon(
-                    imageVector = Icons.Rounded.MoreVert,
-                    contentDescription = "Más opciones",
-                    tint = MaterialTheme.colorScheme.primary
-                )
-            }
+        val documentType = order.orderType.let { FEDocumentType.fromCode(it) }
+        val isCreditOrDebitNote = documentType in listOf(
+            FEDocumentType.CREDIT_NOTE_REFERENCING_FE,
+            FEDocumentType.DEBIT_NOTE_REFERENCING_FE,
+            FEDocumentType.GENERIC_CREDIT_NOTE,
+            FEDocumentType.GENERIC_DEBIT_NOTE
+        )
+        
+        if (!isCreditOrDebitNote) {
+            var menuExpanded by remember { mutableStateOf(false) }
+            Box {
+                IconButton(onClick = { menuExpanded = true }) {
+                    Icon(
+                        imageVector = Icons.Rounded.MoreVert,
+                        contentDescription = "Más opciones",
+                        tint = MaterialTheme.colorScheme.primary
+                    )
+                }
 
-            DropdownMenu(
-                expanded = menuExpanded,
-                onDismissRequest = { menuExpanded = false }
-            ) {
-                DropdownMenuItem(
-                    text = { Text("Generar nota de crédito") },
-                    onClick = {
-                        menuExpanded = false
-                        val cufe = order.externalInvoiceNumber ?: return@DropdownMenuItem
+                DropdownMenu(
+                    expanded = menuExpanded,
+                    onDismissRequest = { menuExpanded = false }
+                ) {
+                    DropdownMenuItem(
+                        text = { Text("Generar nota de crédito") },
+                        onClick = {
+                            menuExpanded = false
+                            val cufe = order.externalInvoiceNumber ?: return@DropdownMenuItem
 
-                        navigateAny(
-                            PosNoteRoute(
-                                op = FEDocumentType.CREDIT_NOTE_REFERENCING_FE.code,
-                                cufe = cufe,
-                                createdAt = order.createdAt,
-                                customerId = order.customer?.id,
-                                customerName = order.customer?.name,
-                                customerEmail = order.customer?.email,
-                                customerphone = order.customer?.phone,
-                                customerRuc = order.customer?.ruc,
-                                customerStatus = order.customer?.status ?: 1,
-                                customerInvoiceID = order.customer?.customerInvoiceID,
+                            navigateAny(
+                                PosNoteRoute(
+                                    op = FEDocumentType.CREDIT_NOTE_REFERENCING_FE.code,
+                                    cufe = cufe,
+                                    createdAt = order.createdAt,
+                                    customerId = order.customer?.id,
+                                    customerName = order.customer?.name,
+                                    customerEmail = order.customer?.email,
+                                    customerphone = order.customer?.phone,
+                                    customerRuc = order.customer?.ruc,
+                                    customerStatus = order.customer?.status ?: 1,
+                                    customerInvoiceID = order.customer?.customerInvoiceID,
+                                )
                             )
-                        )
-                    }
-                )
+                        }
+                    )
 
-                DropdownMenuItem(
-                    text = { Text("Generar nota de débito") },
-                    onClick = {
-                        menuExpanded = false
-                        val cufe = order.externalInvoiceNumber ?: return@DropdownMenuItem
-                        navigateAny(
-                            PosNoteRoute(
-                                op = FEDocumentType.DEBIT_NOTE_REFERENCING_FE.code,
-                                cufe = cufe,
-                                createdAt = order.createdAt,
-                                customerId = order.customer?.id,
-                                customerName = order.customer?.name,
-                                customerEmail = order.customer?.email,
-                                customerphone = order.customer?.phone,
-                                customerRuc = order.customer?.ruc,
-                                customerStatus = order.customer?.status ?: 1,
-                                customerInvoiceID = order.customer?.customerInvoiceID,
+                    DropdownMenuItem(
+                        text = { Text("Generar nota de débito") },
+                        onClick = {
+                            menuExpanded = false
+                            val cufe = order.externalInvoiceNumber ?: return@DropdownMenuItem
+                            navigateAny(
+                                PosNoteRoute(
+                                    op = FEDocumentType.DEBIT_NOTE_REFERENCING_FE.code,
+                                    cufe = cufe,
+                                    createdAt = order.createdAt,
+                                    customerId = order.customer?.id,
+                                    customerName = order.customer?.name,
+                                    customerEmail = order.customer?.email,
+                                    customerphone = order.customer?.phone,
+                                    customerRuc = order.customer?.ruc,
+                                    customerStatus = order.customer?.status ?: 1,
+                                    customerInvoiceID = order.customer?.customerInvoiceID,
+                                )
                             )
-                        )
-                    }
-                )
+                        }
+                    )
+                }
             }
         }
     }

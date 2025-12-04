@@ -216,7 +216,7 @@
     <string name="accept_online_payments">Comienza a aceptar pagos en línea seguros de tus clientes con solo unos pocos clics.</string>
     <string name="create_and_share_links">Crea y comparte enlaces de pago para transacciones rápidas y sin complicaciones.</string>
     <string name="accept_via_qr_or_links">Acepta pagos mediante códigos QR o enviando enlaces por WhatsApp, correo electrónico y más.</string>
-    <string name="multiple_payment_options">Múltiples opciones de pago: PayPal, Yappy (Panamá) y transferencia bancaria manual.</string>
+    <string name="multiple_payment_options">Múltiples opciones de pago: PayPal, Yappy y transferencia bancaria manual.</string>
     <string name="security_priority">🔒 Tu seguridad es nuestra prioridad. Todas las transacciones utilizan cifrado de nivel industrial, garantizando que tu información y la de tus clientes estén siempre protegidas.</string>
     <string name="confirm_address">Confirma tu dirección</string>
     <string name="need_address_desc">Para activar los métodos de pago, tu negocio debe tener una dirección registrada. ¿Te gustaría agregar una dirección ahora?</string>

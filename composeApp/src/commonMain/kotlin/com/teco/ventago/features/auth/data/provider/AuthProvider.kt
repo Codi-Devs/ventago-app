@@ -51,7 +51,7 @@ class AuthProvider(private val client: HttpClient): IAuthProvider {
     }
 
     override suspend fun emailLogin(request: EmailLoginRequest): ApiResponse {
-        val res = client.post(Configs.serverBasePath+"auth/email-login") {
+        val res = client.post(Configs.serverBasePath+"auth/email-login881j-iasq9js921") {
             headers {
                 append(HttpHeaders.Accept, "*/*")
                 append(HttpHeaders.ContentType, "application/json")
@@ -64,7 +64,7 @@ class AuthProvider(private val client: HttpClient): IAuthProvider {
     }
 
     override suspend fun emailRegister(request: CreateUserRequest): ApiResponse {
-        val res = client.post(Configs.serverBasePath+"auth/email-create") {
+        val res = client.post(Configs.serverBasePath+"auth/email-register881j-iasq9js921") {
             headers {
                 append(HttpHeaders.Accept, "*/*")
                 append(HttpHeaders.ContentType, "application/json")
