@@ -532,13 +532,13 @@ class PosViewModel(
         for (item in state.cart) {
             val product = getItemForLine(item) ?: continue
 
-            // Item Discounts
+            // Item Discounts - send PER UNIT discount amount (not total)
             val orderItemDiscounts = mutableListOf<OrderItemDiscount>()
-            val discountAmount = item.discountAmount()
-            if (discountAmount > 0L) {
+            val discountPerUnit = item.discountPerUnit()
+            if (discountPerUnit > 0L) {
                 orderItemDiscounts.add(
                     OrderItemDiscount(
-                        amount = discountAmount.toDecimalString()
+                        amount = discountPerUnit.toDecimalString()
                     )
                 )
             }
@@ -610,8 +610,9 @@ class PosViewModel(
 
             product.iscRate?.let {
                 if (product.iscRate > 0.0 && !state.taxExempt) {
-                    val iscAmount =
-                        (((item.lineSubtotal() - item.discountAmount()).coerceAtLeast(0L) * product.iscRate) / 100.0).roundToLong()
+                    // Base for ISC is the subtotal after per-unit discounts
+                    val base = item.lineSubtotal().coerceAtLeast(0L)
+                    val iscAmount = ((base * product.iscRate) / 100.0).roundToLong()
                     itemTaxes.add(
                         OrderItemTax(
                             code = "",
@@ -626,7 +627,8 @@ class PosViewModel(
 
             if (!state.taxExempt) {
                 val otiList = product.otiTaxes.orEmpty()
-                val base = (item.lineSubtotal() - item.discountAmount()).coerceAtLeast(0L)
+                // Base for OTI is the subtotal after per-unit discounts
+                val base = item.lineSubtotal().coerceAtLeast(0L)
 
                 otiList.forEach { oti ->
                     val otiAmount = ((base * oti.rate) / 1.0).roundToLong() // backend already stores rate as decimal (e.g. 0.07)
@@ -690,9 +692,9 @@ class PosViewModel(
                 orderItemTaxes = itemTaxes,
                 additionalCharges = additionalCharges,
                 totals = ItemTotals(
-                    beforeDiscounts = item.lineSubtotal().toDecimalString(),
-                    afterDiscounts = (item.lineSubtotal() - item.discountAmount()).toDecimalString(),
-                    beforeTaxes = (item.lineSubtotal() - item.discountAmount()).toDecimalString(),
+                    beforeDiscounts = item.lineSubtotalBeforeDiscount().toDecimalString(),
+                    afterDiscounts = item.lineSubtotal().toDecimalString(),
+                    beforeTaxes = item.lineSubtotal().toDecimalString(),
                     taxes = item.taxTotal(state.taxExempt).toDecimalString(),
                     afterTaxes = (item.total(state.taxExempt) - item.lineCharges()).toDecimalString(),
                     total = item.total(state.taxExempt).toDecimalString(),

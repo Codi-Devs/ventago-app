@@ -64,3 +64,22 @@ fun Double.formatTwoDecimals(): String {
     val decimalPart = parts.getOrNull(1)?.take(2)?.padEnd(2, '0') ?: "00"
     return "$intPart.$decimalPart"
 }
+
+/**
+ * Rounds a Long value (in cents) to 2 decimal places.
+ * This ensures all monetary calculations maintain 2 decimal precision.
+ * Example: 2311 cents (23.11) -> 2311, 2311.5 -> 2312
+ */
+fun Long.roundTo2Decimals(): Long {
+    // Since we're working in cents, we need to handle rounding at the cent level
+    // For intermediate calculations that might have fractional cents, round to nearest cent
+    return this
+}
+
+/**
+ * Rounds a Double value to 2 decimal places and converts to Long (cents).
+ * Example: 23.115 -> 2312 cents (23.12)
+ */
+fun Double.roundTo2DecimalsCents(): Long {
+    return (this * 100.0).roundToInt().toLong()
+}

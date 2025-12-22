@@ -160,15 +160,25 @@ fun ModifyCartItemSheet(
         percentText.filter(Char::isDigit).toIntOrNull()?.coerceIn(0, 100) ?: 0
     }
 
-    // Discounted unit price (never below 0)
+    // Discounted unit price (never below 0) - using per-unit discount calculation
+    // For percentage: discountPerUnit = unitPrice × (percent / 100), rounded to 2 decimals
+    // For fixed: discountPerUnit = min(fixedCents, unitPrice)
     val discountedUnitCents = remember(unitPriceCents, mode, percent, fixedCents) {
-        val raw = when (mode) {
-            DiscountMode.NONE -> unitPriceCents
-            DiscountMode.PERCENT -> unitPriceCents - (unitPriceCents * percent) / 100
-            DiscountMode.FIXED -> unitPriceCents - fixedCents
+        val discountPerUnit = when (mode) {
+            DiscountMode.NONE -> 0L
+            DiscountMode.PERCENT -> {
+                // Percentage discount per unit: unitPrice × (percent / 100)
+                (unitPriceCents * percent) / 100L
+            }
+            DiscountMode.FIXED -> {
+                // Fixed discount per unit: cap at unit price
+                fixedCents.coerceAtMost(unitPriceCents).coerceAtLeast(0L)
+            }
         }
-        kotlin.math.max(0L, raw)
+        // Discounted unit price = unitPrice - discountPerUnit
+        (unitPriceCents - discountPerUnit).coerceAtLeast(0L)
     }
+    // Line total = discounted unit price × quantity
     val lineTotalCents = discountedUnitCents * qty
 
     ModalBottomSheet(

@@ -171,7 +171,9 @@ object CartCalc {
     fun summarize(state: PosState): Summary {
         val lines = state.cart
 
-        val subtotal = lines.sumOf { it.lineSubtotal() }
+        // Subtotal BEFORE discounts: sum of (unitPrice × quantity) for all items
+        val subtotal = lines.sumOf { it.lineSubtotalBeforeDiscount() }
+        // Line discounts: sum of (discountPerUnit × quantity) for all items
         val lineDiscounts = lines.sumOf { it.discountAmount() }
         val perLineCharges = lines.sumOf { it.lineCharges() }
 
@@ -188,10 +190,9 @@ object CartCalc {
             }
         }
 
-        // Base for all taxes: subtotal - discount (does NOT include charges)
-        // This matches the calculation in PosViewModel.createOrderRequest()
-        fun baseForTaxes(line: CartLine): Long =
-            (line.lineSubtotal() - line.discountAmount()).coerceAtLeast(0L)
+        // Base for all taxes: subtotal AFTER per-unit discounts (does NOT include charges)
+        // This is the discounted unit price × quantity for each line
+        fun baseForTaxes(line: CartLine): Long = line.lineSubtotal().coerceAtLeast(0L)
 
         // ITBMS: calculated from CartLine.tax field (separate tax, shown separately)
         val itbms = lines.sumOf { it.taxTotal(state.taxExempt) }
@@ -222,8 +223,10 @@ object CartCalc {
 
         val tax = itbms + isc + oti
 
-        // Global discount base = items subtotal - line discounts + per-line charges
-        val baseForGlobalDiscount = (subtotal - lineDiscounts + perLineCharges).coerceAtLeast(0L)
+        // Global discount base = items subtotal BEFORE discounts - line discounts + per-line charges
+        // This represents the total after item-level discounts but before global discount
+        val subtotalAfterItemDiscounts = (subtotal - lineDiscounts).coerceAtLeast(0L)
+        val baseForGlobalDiscount = (subtotalAfterItemDiscounts + perLineCharges).coerceAtLeast(0L)
         val globalDiscount = when (state.globalDiscountMode) {
             GlobalDiscountMode.NONE    -> 0L
             GlobalDiscountMode.PERCENT -> (baseForGlobalDiscount * state.globalDiscountPercent.coerceIn(0, 100)) / 100L
@@ -239,8 +242,8 @@ object CartCalc {
         val globalOther = state.globalOtherChargesCents ?: 0L
         val globalCharges = globalShipping + globalInsurance + globalOther
 
-        // Base before tip (we keep tax from lines only; if you must tax global charges, add it here)
-        val base = (subtotal - lineDiscounts + perLineCharges - globalDiscount + tax + globalCharges).coerceAtLeast(0L)
+        // Base before tip: subtotal after item discounts + per-line charges - global discount + taxes + global charges
+        val base = (subtotalAfterItemDiscounts + perLineCharges - globalDiscount + tax + globalCharges).coerceAtLeast(0L)
 
         val tip = if (state.tipIsPercentage) base * state.tipAmount / 10_000L else state.tipAmount
         val grand = (base + tip).coerceAtLeast(0L)

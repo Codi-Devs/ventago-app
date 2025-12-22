@@ -2,6 +2,22 @@ package com.teco.ventago.features.pos.domain.models
 
 typealias Money = Long
 
+private const val BPS_DENOMINATOR = 10_000L
+private const val BPS_HALF_DENOMINATOR = BPS_DENOMINATOR / 2
+
+/**
+ * Applies [bps] (basis points) to a cents amount and rounds half-up to the nearest cent.
+ *
+ * Example: 35.96 (3596 cents) at 10% (1000 bps) => 3.596 => 3.60 (360 cents).
+ */
+private fun applyBpsRounded(amountCents: Long, bps: Int): Long {
+    if (amountCents == 0L || bps == 0) return 0L
+    val numerator = amountCents * bps.toLong()
+    // Round half-up at the cent level (works for both positive/negative numerators).
+    val adjusted = if (numerator >= 0L) numerator + BPS_HALF_DENOMINATOR else numerator - BPS_HALF_DENOMINATOR
+    return adjusted / BPS_DENOMINATOR
+}
+
 data class CartLine(
     val lineId: String,               // unique per line (UUID or itemId+timestamp)
     val itemId: Int,
@@ -11,7 +27,7 @@ data class CartLine(
     val quantity: Int = 1,
     val overrideUnitPrice: Money? = null, // custom unit price (replaces baseUnitPrice)
 
-    val discount: Discount? = null,   // per-line discount applied on (unitPrice * qty)
+    val discount: Discount? = null,   // per-unit discount (stored as per-unit value)
     val tax: Tax? = null,
 
     val notes: String? = null,
@@ -24,24 +40,64 @@ data class CartLine(
 ) {
     fun unitPrice(): Money = overrideUnitPrice ?: baseUnitPrice
 
-    fun lineSubtotal(): Money = unitPrice() * quantity
+    /**
+     * Returns the subtotal BEFORE discounts (unitPrice × quantity).
+     * This is used for calculating totals and taxes.
+     */
+    fun lineSubtotalBeforeDiscount(): Money = unitPrice() * quantity
 
-    fun discountAmount(): Money = when (val d = discount) {
+    /**
+     * Calculates the discount amount PER UNIT (not total).
+     * For percentage: discountPerUnit = unitPrice × (percent / 100)
+     * For fixed: discountPerUnit = min(discountValue, unitPrice)
+     * All values are rounded to 2 decimal places (cents).
+     */
+    fun discountPerUnit(): Money = when (val d = discount) {
         null -> 0L
-        is Discount.Amount  -> d.value.coerceAtMost(lineSubtotal()).coerceAtLeast(0L)
-        is Discount.Percent -> (lineSubtotal() * d.bps / 10_000L)
+        is Discount.Amount -> {
+            // Fixed discount per unit: cap at unit price, round to 2 decimals
+            val unitPrice = unitPrice()
+            val discountPerUnit = d.value.coerceAtMost(unitPrice).coerceAtLeast(0L)
+            discountPerUnit // Already in cents, no rounding needed
+        }
+        is Discount.Percent -> {
+            // Percentage discount per unit: unitPrice × (percent / 100)
+            val unitPrice = unitPrice()
+            applyBpsRounded(unitPrice, d.bps)
+        }
+    }
+
+    /**
+     * Returns the total discount amount (discountPerUnit × quantity).
+     * This is the total discount applied to the line.
+     */
+    fun discountAmount(): Money {
+        val perUnit = discountPerUnit()
+        return perUnit * quantity
+    }
+
+    /**
+     * Returns the subtotal AFTER discounts.
+     * Calculated as: (unitPrice - discountPerUnit) × quantity
+     * All values are rounded to 2 decimal places.
+     */
+    fun lineSubtotal(): Money {
+        val unitPrice = unitPrice()
+        val discountPerUnit = discountPerUnit()
+        val discountedUnitPrice = (unitPrice - discountPerUnit).coerceAtLeast(0L)
+        return discountedUnitPrice * quantity
     }
 
     fun lineCharges(): Long = (shippingCents ?: 0L) + (insuranceCents ?: 0L)
 
     fun taxTotal(taxExempt: Boolean): Money {
         if (taxExempt || tax == null) return 0L
-        val base = (lineSubtotal() - discountAmount()).coerceAtLeast(0L)
-        val rateBps = tax.rateBps // e.g., 700 for 7.00% if your model stores basis points
-        return (base * rateBps) / 10_000L
+        // Base for taxes is the subtotal after discount (per-unit discount applied)
+        val base = lineSubtotal().coerceAtLeast(0L)
+        val rateBps = tax.rateBps // basis points: 7% = 700, 10% = 1000
+        return applyBpsRounded(base, rateBps)
     }
 
-
     fun total(orderTaxExempt: Boolean): Money =
-        (lineSubtotal() - discountAmount() + taxTotal(orderTaxExempt) + lineCharges()).coerceAtLeast(0L)
+        (lineSubtotal() + taxTotal(orderTaxExempt) + lineCharges()).coerceAtLeast(0L)
 }
