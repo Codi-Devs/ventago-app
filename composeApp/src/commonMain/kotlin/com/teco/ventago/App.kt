@@ -65,6 +65,7 @@ import com.teco.ventago.navigation.LocalNavController
 import com.teco.ventago.navigation.Navigation
 import com.teco.ventago.navigation.PosScreens
 import com.teco.ventago.navigation.toPosScreenOrNull
+import io.ktor.util.reflect.instanceOf
 import org.jetbrains.compose.resources.stringResource
 import org.jetbrains.compose.ui.tooling.preview.Preview
 import org.koin.compose.KoinContext
@@ -108,10 +109,11 @@ fun App(
 //    }
 
     val graphReady = backStackEntry != null
-    data class AuthBucket(val authed: Boolean, val hasBusiness: Boolean)
+    data class AuthBucket(val authed: Boolean, val hasBusiness: Boolean, val invoiceActive: Boolean)
     val currentBucket = AuthBucket(
         authed = mainState.isAuthenticated,
-        hasBusiness = !mainState.missingBusiness
+        hasBusiness = !mainState.missingBusiness,
+        invoiceActive = mainState.invoicingConfigured
     )
     var lastBucket by remember { mutableStateOf<AuthBucket?>(null) }
     var didInitialRedirect by remember { mutableStateOf(false) }
@@ -127,10 +129,13 @@ fun App(
             lastBucket = currentBucket
             didInitialRedirect = true
 
-            val target = if (currentBucket.authed && currentBucket.hasBusiness) {
+            println("ASDADS invoiceActive ${currentBucket.invoiceActive}")
+            val target = if (currentBucket.authed && currentBucket.hasBusiness && currentBucket.invoiceActive) {
                 PosScreens.HomeScreen.name
             } else if (currentBucket.authed && !currentBucket.hasBusiness) {
                 PosScreens.BusinessRegisterScreen.name
+            } else if (!currentBucket.invoiceActive) {
+                PosScreens.InvoiceLandingScreen.name
             } else {
                 PosScreens.LoginScreen.name
             }

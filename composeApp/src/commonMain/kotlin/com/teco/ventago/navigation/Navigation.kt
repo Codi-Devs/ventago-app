@@ -26,6 +26,7 @@ import com.teco.ventago.Greetings
 import com.teco.ventago.core.deeplink.ExternalUriHandler
 import com.teco.ventago.core.firebase.AnalyticsService
 import com.teco.ventago.design_system.organism.ItemScreenActions
+import com.teco.ventago.features.auth.ui.invoice_landing.InvoiceLandingScreen
 import com.teco.ventago.features.auth.ui.login.ForgotPasswordResultScreen
 import com.teco.ventago.features.auth.ui.login.ForgotPasswordScreen
 import com.teco.ventago.features.auth.ui.login.LoginScreen
@@ -161,10 +162,9 @@ enum class PosScreens(
         Res.string.login,
         false
     ),
-    RegisterScreen(Res.string.register, false), BusinessRegisterScreen(
-        Res.string.register_business,
-        false
-    ),
+    RegisterScreen(Res.string.register, false),
+    BusinessRegisterScreen(Res.string.register_business, false),
+    InvoiceLandingScreen(Res.string.invoice_title, false),
     ForgotPasswordScreen(Res.string.reset_password), ForgotPasswordResultScreen(
         Res.string.reset_password,
         true
@@ -355,6 +355,11 @@ private fun NavGraphBuilder.addLoginNavigation(
             BusinessRegisterScreen { route ->
                 navController.navigate(route.name)
             }
+        }
+
+        composable(route = PosScreens.InvoiceLandingScreen.name) {
+            analyticsService.logScreenView("InvoiceLandingScreen")
+            InvoiceLandingScreen()
         }
 
         composable(route = PosScreens.RegisterScreen.name) {

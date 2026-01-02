@@ -76,7 +76,9 @@ class AppViewModel(
                 profile?.let {
                     try {
                         withContext(Dispatchers.Main) {
-                            _mainState.value = _mainState.value.copy(paymentsConfigured = financialProfileService.paymentsConfigured())
+                            _mainState.value = _mainState.value.copy(
+                                invoicingConfigured = profile.invoicingActive,
+                                paymentsConfigured = financialProfileService.paymentsConfigured())
                         }
                         if (profile.invoicingActive && !branchService.isInitialized) {
                             branchService.initialize(profile.businessId)
@@ -162,7 +164,8 @@ class AppViewModel(
                                         business = businessRes.getOrNull(),
                                         products = productRes.getOrNull(),
                                         isAuthenticated = true,
-                                        paymentsConfigured = financialProfileService.paymentsConfigured()
+                                        paymentsConfigured = financialProfileService.paymentsConfigured(),
+                                        invoicingConfigured = financialProfileService.invoicingEnabled(),
                                     )
                             }
                         }
@@ -197,4 +200,5 @@ data class MainState(
     val business: Business? = null,
     val products: Products? = null,
     val paymentsConfigured: Boolean = true,
+    val invoicingConfigured: Boolean = true,
 )
