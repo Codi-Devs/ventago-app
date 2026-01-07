@@ -7,7 +7,17 @@ import androidx.compose.ui.text.input.VisualTransformation
 
 class PrefixTransformation(private val prefix: String): VisualTransformation {
     override fun filter(text: AnnotatedString): TransformedText {
+        val prefixLength = prefix.length
         val result = AnnotatedString(prefix) + text
-        return TransformedText(result, OffsetMapping.Identity)
+        val offsetMapping = object : OffsetMapping {
+            override fun originalToTransformed(offset: Int): Int {
+                return offset + prefixLength
+            }
+
+            override fun transformedToOriginal(offset: Int): Int {
+                return (offset - prefixLength).coerceIn(0, text.length)
+            }
+        }
+        return TransformedText(result, offsetMapping)
     }
 }

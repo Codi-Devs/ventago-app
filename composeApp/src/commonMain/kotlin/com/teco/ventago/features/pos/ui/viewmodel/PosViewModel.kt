@@ -46,6 +46,7 @@ import com.teco.ventago.features.pos.domain.models.Money
 import com.teco.ventago.features.pos.domain.models.Tax
 import com.teco.ventago.features.product.domain.ProductService
 import com.teco.ventago.features.product.domain.model.Item
+import com.teco.ventago.features.product.domain.model.AdditionalInfoKey
 import com.teco.ventago.json
 import com.teco.ventago.navigation.PosNoteRoute
 import com.teco.ventago.utils.dbFormat
@@ -69,6 +70,9 @@ import kotlinx.datetime.TimeZone
 import kotlinx.datetime.plus
 import kotlinx.datetime.toInstant
 import kotlinx.datetime.toLocalDateTime
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.contentOrNull
+import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.encodeToString
 import kotlin.String
 import kotlin.io.encoding.Base64
@@ -195,6 +199,51 @@ class PosViewModel(
 
     fun selectCustomer(customer: CustomerListItem?) {
         updateState { copy(customer = customer) }
+    }
+
+    fun governmentWarningInvalidProducts(): List<String> {
+        if (!isGovernmentLikeCustomer()) {
+            return emptyList()
+        }
+        return validateGovernmentInvoiceProducts()
+    }
+
+    private fun isGovernmentLikeCustomer(): Boolean {
+        val state = uiState.value
+        if (state.finalCustomer) {
+            return false
+        }
+        val ruc = state.customer?.ruc?.uppercase()?.trim().orEmpty()
+        return ruc.isNotEmpty() && ruc.contains("NT")
+    }
+
+    private fun validateGovernmentInvoiceProducts(): List<String> {
+        val state = uiState.value
+        val invalidProducts = state.cart.mapNotNull { line ->
+            val product = resolveProductForLine(state, line)
+            val info = product?.additionalInfo
+            val goodsCode = info.valueOrBlank(AdditionalInfoKey.PANAMA_GOODS_SERVICES_CODE.keyName)
+            val unitCode = info.valueOrBlank(AdditionalInfoKey.PANAMA_GOODS_SERVICES_UNIT_CODE.keyName)
+            if (goodsCode.isBlank() || unitCode.isBlank()) {
+                line.name.ifBlank { "Producto ${line.itemId}" }
+            } else {
+                null
+            }
+        }
+        return invalidProducts.distinct()
+    }
+
+    private fun resolveProductForLine(state: PosState, line: CartLine): Item? {
+        return if (line.itemId < 0) {
+            state.personalizedItems[line.lineId]
+        } else {
+            items.firstOrNull { it.itemId == line.itemId }
+                ?: state.items.firstOrNull { it.itemId == line.itemId }
+        }
+    }
+
+    private fun JsonObject?.valueOrBlank(key: String): String {
+        return this?.get(key)?.jsonPrimitive?.contentOrNull?.trim().orEmpty()
     }
 
     fun hasExportationData(): Boolean {
@@ -847,11 +896,18 @@ class PosViewModel(
         val orderReference: OrderReference? = null // TODO add references if needed
 
         var retentions: Retentions? = null
-        if (state.retentionCodeIndex != 0) {
-            val retentionCodes = listOf("", "1", "2", "3", "4", "7", "8")
+        val retentionOption = retentionOptionsList.getOrNull(state.retentionCodeIndex)
+        val retentionCode = retentionOption?.code.orEmpty()
+        val retentionRate = when {
+            retentionCode.isEmpty() -> ""
+            retentionOption?.defaultRate != null -> retentionOption.defaultRate
+            retentionCode == "8" -> state.retentionAmount
+            else -> ""
+        }
+        if (retentionCode.isNotEmpty() && retentionRate.isNotBlank()) {
             retentions = Retentions(
-                code = retentionCodes[state.retentionCodeIndex],
-                amount = state.retentionAmount
+                code = retentionCode,
+                rate = retentionRate
             )
         }
 
@@ -1166,17 +1222,27 @@ class PosViewModel(
 
     /* ---------- Options providers ---------- */
     fun taxpayerTypeOptions(): List<String> = listOf("01 - Natural", "02 - Jurídico")
-    fun retentionOptions(): List<Pair<String, String>> = listOf(
-        "1" to "Estado (Profesional) 100%",
-        "2" to "Estado (Bienes/Servicios) 50%",
-        "3" to "No domiciliado exterior 100%",
-        "4" to "Compra Bienes/Servicios 50%",
-        "7" to "Comercio afiliado TCTD 50%",
-        "8" to "Otros (disminución)"
+    private data class RetentionOption(
+        val code: String,
+        val label: String,
+        val defaultRate: String?
     )
 
-    fun retentionLabels(): List<String> = retentionOptions().map { it.second }
-    fun retentionCodeAt(index: Int): String = retentionOptions().getOrNull(index)?.first ?: "1"
+    private val retentionOptionsList = listOf(
+        RetentionOption("", "Sin retención", null),
+        RetentionOption("1", "Estado (Profesional) 100%", "100"),
+        RetentionOption("2", "Estado (Bienes/Servicios) 50%", "50"),
+        RetentionOption("3", "No domiciliado exterior 100%", "100"),
+        RetentionOption("4", "Compra Bienes/Servicios 50%", "50"),
+        RetentionOption("7", "Comercio afiliado TCTD 50%", "50"),
+        RetentionOption("8", "Otros (disminución)", null)
+    )
+
+    fun retentionOptions(): List<Pair<String, String>> =
+        retentionOptionsList.map { it.code to it.label }
+
+    fun retentionLabels(): List<String> = retentionOptionsList.map { it.label }
+    fun retentionCodeAt(index: Int): String = retentionOptionsList.getOrNull(index)?.code ?: ""
 
     // 🗺️ Replace these with your real data sources
     fun provinceOptions(): List<String> = listOf("Panamá", "Panamá Oeste", "Colón")
@@ -1231,9 +1297,27 @@ class PosViewModel(
     fun onCorregSelected(idx: Int) = updateState { copy(deliveryCorregIndex = idx) }
 
     /* ---------- Retention setters ---------- */
-    fun onRetentionSelected(idx: Int) = updateState { copy(retentionCodeIndex = idx) }
+    fun onRetentionSelected(idx: Int) = updateState {
+        val option = retentionOptionsList.getOrNull(idx) ?: retentionOptionsList.first()
+        val nextAmount = when {
+            option.code.isEmpty() -> ""
+            option.defaultRate != null -> option.defaultRate
+            option.code == "8" && retentionCodeAt(retentionCodeIndex) == "8" -> retentionAmount
+            else -> ""
+        }
+        copy(retentionCodeIndex = idx, retentionAmount = nextAmount)
+    }
     fun onRetentionAmount(v: String) = updateState {
-        copy(retentionAmount = v.filter { it.isDigit() || it == '.' }.take(12))
+        // Only allow digits (no decimals), filter and limit to 3 digits (0-100)
+        val filtered = v.filter { it.isDigit() }.take(3)
+        // Validate that the value is between 0-100
+        val validated = if (filtered.isEmpty()) {
+            ""
+        } else {
+            val numValue = filtered.toIntOrNull() ?: 0
+            if (numValue > 100) "100" else filtered
+        }
+        copy(retentionAmount = validated)
     }
 
     fun selectedRetentionRequiresAmount(): Boolean =

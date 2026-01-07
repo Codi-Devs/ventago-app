@@ -1504,11 +1504,12 @@ private fun AdditionalInfoSheet(
             if (viewModel.selectedRetentionRequiresAmount()) {
                 DMOutlinedTextField(
                     text = uiState.retentionAmount,
-                    label = "Monto de retención",
+                    label = "Tasa de retención (%)",
                     onChange = viewModel::onRetentionAmount,
                     keyboardType = KeyboardType.Number,
                     modifier = Modifier.padding(horizontal = 16.dp, vertical = 6.dp),
-                    maxLines = 1
+                    maxLines = 1,
+                    prefix = "%"
                 )
             }
         }

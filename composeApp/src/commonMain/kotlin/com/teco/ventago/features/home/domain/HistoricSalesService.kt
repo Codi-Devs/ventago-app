@@ -4,6 +4,7 @@ import com.teco.ventago.core.logger.ILoggerService
 import com.teco.ventago.utils.LocaleHelper
 import dev.gitlive.firebase.Firebase
 import dev.gitlive.firebase.database.database
+import dev.gitlive.firebase.firestore.DocumentSnapshot
 import dev.gitlive.firebase.firestore.firestore
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.datetime.Clock
@@ -25,7 +26,6 @@ class HistoricSalesService(private val loggerService: ILoggerService) {
         val docRef = db.collection("sales")
             .document(businessId.toString())
             .collection("daily")
-            .limit(6)
 
         docRef.snapshots.collect{
             val data = mutableListOf<Pair<String, Double>>()
@@ -34,27 +34,17 @@ class HistoricSalesService(private val loggerService: ILoggerService) {
                 return@collect
             }
 
-            var firstDate = ""
-
             val values = it.documents.map { doc ->
                 val date = doc.id
-                val value = doc.get("total_amount") as Double
+                val value = readTotalAmount(doc)
                 Pair(date, value)
             }
 
             val sortedValues = values.sortedBy { (key, _) -> parseDate(key) }
+            val recentValues = sortedValues.takeLast(6)
 
-            for (entry in sortedValues) {
-                if (firstDate == "") {
-                    firstDate = entry.first
-                }
+            for (entry in recentValues) {
                 data.add(Pair(formatVisitDate(entry.first), entry.second))
-            }
-
-            if (data.size < 6) {
-                getPreviousDays(firstDate, 6 - data.size).forEach { date ->
-                    data.add(0, Pair(formatVisitDate(date), 0.0))
-                }
             }
 
             sales.emit(data)
@@ -68,6 +58,21 @@ class HistoricSalesService(private val loggerService: ILoggerService) {
     private fun parseDate(inputDate: String): LocalDate {
         val (year, month, day) = inputDate.split("-").map { it.toInt() }
         return LocalDate(year, month, day)
+    }
+
+    private fun readTotalAmount(doc: DocumentSnapshot): Double {
+        val doubleValue = runCatching { doc.get<Double>("total_amount") }.getOrNull()
+        if (doubleValue != null) {
+            return doubleValue
+        }
+
+        val longValue = runCatching { doc.get<Long>("total_amount") }.getOrNull()
+        if (longValue != null) {
+            return longValue.toDouble()
+        }
+
+        val stringValue = runCatching { doc.get<String>("total_amount") }.getOrNull()
+        return stringValue?.toDoubleOrNull() ?: 0.0
     }
 
     private fun formatDate(date: LocalDate): String {

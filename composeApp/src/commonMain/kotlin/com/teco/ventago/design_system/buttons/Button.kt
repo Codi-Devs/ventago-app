@@ -129,9 +129,10 @@ fun TextButtonM(
     label: String,
     color: Color? = null,
     icon: ImageVector? = null,
+    enabled: Boolean = true,
     onClick: () -> Unit,
 ) {
-    TextButton(onClick = onClick, modifier = Modifier.padding(0.dp)) {
+    TextButton(onClick = onClick, enabled = enabled, modifier = Modifier.padding(0.dp)) {
         Row(
             horizontalArrangement = Arrangement.Center,
             verticalAlignment = Alignment.CenterVertically,

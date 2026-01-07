@@ -70,8 +70,13 @@ class HomeViewModel(
                 }
             }.launchIn(this)
 
-            salesService.getSales().onEach {
-                updateState { copy(sales = it) }
+            salesService.getSales().onEach { newSales ->
+                val nextIndex = if (!newSales.isNullOrEmpty()) {
+                    newSales.lastIndex
+                } else {
+                    uiState.value.selectedSalesIndex
+                }
+                updateState { copy(sales = newSales, selectedSalesIndex = nextIndex) }
             }.launchIn(this)
         }
     }

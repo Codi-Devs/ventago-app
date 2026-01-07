@@ -76,6 +76,7 @@ import com.teco.ventago.design_system.buttons.ButtonM
 import com.teco.ventago.design_system.buttons.TextButtonM
 import com.teco.ventago.design_system.buttons.TextButtonS
 import com.teco.ventago.design_system.molecules.InstallmentDueDateFieldKmp
+import com.teco.ventago.design_system.molecules.DMAlertDialog
 import com.teco.ventago.design_system.organism.LoadingSheet
 import com.teco.ventago.design_system.organism.PriceElevatedDecimalText
 import com.teco.ventago.design_system.organism.ShortcutItem
@@ -209,8 +210,24 @@ fun PaymentScreenContent(
     val tips = remember(ui) { viewModel.tipsTotal() }
     val totalToCharge = remember(ui) { viewModel.amountToCharge() }
     val remaining = remember(ui) { viewModel.remainingToAllocate() }
+    val hasPositiveAmount = totalToCharge > 0L
 
     val loadingSheetState = rememberModalBottomSheetState(confirmValueChange = { false })
+
+    var showGovernmentWarning by remember { mutableStateOf(false) }
+    var governmentInvalidProducts by remember { mutableStateOf<List<String>>(emptyList()) }
+    var pendingGovernmentAction by remember { mutableStateOf<(() -> Unit)?>(null) }
+
+    fun requestGovernmentWarningOrProceed(action: () -> Unit) {
+        val invalidProducts = viewModel.governmentWarningInvalidProducts()
+        if (invalidProducts.isNotEmpty()) {
+            governmentInvalidProducts = invalidProducts
+            pendingGovernmentAction = action
+            showGovernmentWarning = true
+        } else {
+            action()
+        }
+    }
 
 //    var editMod
 
@@ -295,17 +312,28 @@ fun PaymentScreenContent(
                 onInstallmentDate = viewModel::setInstallmentDueDate,
                 methodOptions = viewModel.manualMethodOptions(),
                 onConfirm = {
-                    viewModel.createOrder(createPaymentLink = false, saveAsDraft = false)
-                }
+                    requestGovernmentWarningOrProceed {
+                        viewModel.createOrder(createPaymentLink = false, saveAsDraft = false)
+                    }
+                },
+                onSaveDraft = {
+                    requestGovernmentWarningOrProceed {
+                        viewModel.createOrder(createPaymentLink = false, saveAsDraft = true)
+                    }
+                },
+                saveDraftEnabled = hasPositiveAmount
             )
         } else {
             PaymentLinkSection(
                 totalToCharge = totalToCharge,
+                enabled = hasPositiveAmount,
                 onConfirm = {
-                    if (!ui.paymentsConfigured) {
-                        navigate(PosScreens.Payments, null)
-                    } else {
-                        viewModel.createOrder(createPaymentLink = true, saveAsDraft = false)
+                    requestGovernmentWarningOrProceed {
+                        if (!ui.paymentsConfigured) {
+                            navigate(PosScreens.Payments, null)
+                        } else {
+                            viewModel.createOrder(createPaymentLink = true, saveAsDraft = false)
+                        }
                     }
                 }
             )
@@ -324,6 +352,37 @@ fun PaymentScreenContent(
                 launchSingleTop = true
             }
         }
+    }
+
+    if (showGovernmentWarning) {
+        val warningMessage = buildString {
+            append("El RUC del cliente parece de gobierno. ")
+            append("Las facturas para gobierno requieren que cada producto tenga configurado:\n")
+            append("- Código de bienes/servicios de Panamá\n")
+            append("- Unidad de bienes/servicios de Panamá\n\n")
+            append("Productos sin estos valores:\n")
+            governmentInvalidProducts.forEach { name ->
+                append("- ").append(name).append("\n")
+            }
+        }.trimEnd()
+
+        DMAlertDialog(
+            title = "Advertencia: Posible factura de gobierno",
+            message = warningMessage,
+            show = showGovernmentWarning,
+            onDismiss = {
+                showGovernmentWarning = false
+                pendingGovernmentAction = null
+            },
+            onConfirm = {
+                showGovernmentWarning = false
+                val action = pendingGovernmentAction
+                pendingGovernmentAction = null
+                action?.invoke()
+            },
+            confirmText = "Continuar",
+            dismissText = "Volver"
+        )
     }
 
     // Tips bottom sheet
@@ -362,7 +421,9 @@ private fun ManualAndInstallmentsSection(
     onRemoveInstallment: (Int) -> Unit,
     onInstallmentAmount: (Int, Long) -> Unit,
     onInstallmentDate: (Int, String) -> Unit,
-    onConfirm: () -> Unit
+    onConfirm: () -> Unit,
+    onSaveDraft: () -> Unit,
+    saveDraftEnabled: Boolean
 ) {
     val ui by viewModel.uiState.collectAsState()
 
@@ -506,6 +567,7 @@ private fun ManualAndInstallmentsSection(
             // Allocation summary
             val allocated = ui.charged.values.sum() + ui.installments.sumOf { it.amountCents }
             val change = remember(ui) { viewModel.calculateChange() }
+            val canConfirm = totalToCharge > 0L && allocated >= totalToCharge
 
             Column {
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
@@ -533,7 +595,7 @@ private fun ManualAndInstallmentsSection(
             Spacer(Modifier.height(12.dp))
             ButtonM(
                 onClick = onConfirm,
-                enabled = allocated >= totalToCharge,
+                enabled = canConfirm,
             ) {
                 Text(
                     "Confirmar cobro",
@@ -543,8 +605,9 @@ private fun ManualAndInstallmentsSection(
             Spacer(Modifier.height(12.dp))
             TextButtonM(
                 label = "Guardar sin cobrar",
+                enabled = saveDraftEnabled,
                 onClick = {
-                    viewModel.createOrder(createPaymentLink = false, saveAsDraft = true)
+                    onSaveDraft()
                 }
             )
         }
@@ -554,6 +617,7 @@ private fun ManualAndInstallmentsSection(
 @Composable
 private fun PaymentLinkSection(
     totalToCharge: Long,
+    enabled: Boolean,
     onConfirm: () -> Unit
 ) {
     ElevatedCard(
@@ -573,6 +637,7 @@ private fun PaymentLinkSection(
             Spacer(Modifier.height(12.dp))
             ButtonM(
                 onClick = onConfirm,
+                enabled = enabled,
             ) {
                 Text(
                     text = "Generar enlace por ${formatNumberToMoney((totalToCharge / 100.0).toString())}",
@@ -642,4 +707,3 @@ private fun TipsEditor(
         }
     }
 }
-

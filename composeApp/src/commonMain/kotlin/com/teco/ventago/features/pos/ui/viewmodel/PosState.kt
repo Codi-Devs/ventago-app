@@ -109,8 +109,8 @@ data class PosState(
     val deliveryCorregIndex: Int = 0,
 
     // Retention
-    val retentionCodeIndex: Int = 0,      // index in retention list
-    val retentionAmount: String = "",     // required only if "Otros (8)"
+    val retentionCodeIndex: Int = 0,      // index in retention list (0 = none)
+    val retentionAmount: String = "",     // retention rate (%) for code 8
 
     // Exportation (only visible if selectedOperationNature == "02")
     val exportIncoterm: String = "",

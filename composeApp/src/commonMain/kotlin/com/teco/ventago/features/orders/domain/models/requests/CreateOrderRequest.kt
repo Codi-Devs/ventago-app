@@ -212,7 +212,7 @@ data class ReferenceNumber(
 @Serializable
 data class Retentions(
     val code: String,
-    val amount: String
+    @SerialName("amount") val rate: String
 )
 
 @Serializable

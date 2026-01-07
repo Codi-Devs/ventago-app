@@ -7,8 +7,8 @@ import kotlinx.serialization.Serializable
 data class CustomerListItem(
     @SerialName("id") val id: Long,
     @SerialName("name") val name: String,
-    @SerialName("email") val email: String?,
-    @SerialName("ruc") val ruc: String?,
+    @SerialName("email") val email: String? = null,
+    @SerialName("ruc") val ruc: String? = null,
     @SerialName("status") val status: Int,
     @SerialName("invoice_customer") val invoiceCustomer: Int,
     @SerialName("updated_at") val updatedAt: Long,
