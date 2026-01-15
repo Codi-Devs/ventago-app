@@ -45,7 +45,6 @@ data class SettingsState(
     val availablePaymentMethods: Map<String, PaymentMethodItem> = emptyMap(),
     val loadingPaymentMethods: Boolean = true,
 
-
     // User info
     val isVerified: Boolean = true,
     val canChangePassword: Boolean = false,
@@ -54,6 +53,11 @@ data class SettingsState(
 
     val invoicingEnabled: Boolean = false,
 
+    // Quotes
+    val hasQuotesAccess: Boolean = false,
+    val defaultQuoteAdditionalInfo: String = "",
+    val defaultQuoteStyle: String = "style1",
+    val defaultQuoteIncludePaymentButton: Boolean = false,
 
     // Loading state
     override val loadingBottomSheet: LoadingBottomSheetState = LoadingBottomSheetState(),

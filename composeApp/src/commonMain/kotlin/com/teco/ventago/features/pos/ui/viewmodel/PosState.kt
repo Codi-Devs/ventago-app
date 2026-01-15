@@ -12,6 +12,7 @@ import com.teco.ventago.features.invoicing.domain.models.InvoiceStatus
 import com.teco.ventago.features.pos.domain.models.CartLine
 import com.teco.ventago.features.pos.domain.models.Money
 import com.teco.ventago.features.product.domain.model.Item
+import com.teco.ventago.features.quotes.domain.models.QuoteSettings
 import com.teco.ventago.utils.ViewState
 import kotlin.math.roundToLong
 
@@ -108,6 +109,15 @@ data class PosState(
     val deliveryDistrictIndex: Int = 0,
     val deliveryCorregIndex: Int = 0,
 
+    // === Quotes ===
+    val flowMode: FlowMode = FlowMode.SALE,
+    val quoteId: Long? = null,
+    val quoteStyle: String = "style1",
+    val quoteExpiryDate: String? = null,
+    val quoteAdditionalInfo: String? = null,
+    val quotesSettings: QuoteSettings? = null,
+    val lastQuoteId: Long? = null,
+
     // Retention
     val retentionCodeIndex: Int = 0,      // index in retention list (0 = none)
     val retentionAmount: String = "",     // retention rate (%) for code 8
@@ -137,6 +147,10 @@ data class PosState(
     override fun withLoading(state: LoadingBottomSheetState): PosState {
         return copy(loadingBottomSheet = state)
     }
+}
+
+enum class FlowMode {
+    SALE, QUOTE
 }
 
 sealed class PosStateUiEvent {

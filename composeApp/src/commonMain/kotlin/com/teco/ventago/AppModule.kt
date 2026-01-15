@@ -1,6 +1,9 @@
 package com.teco.ventago
 
 import com.teco.ventago.core.SnackbarService
+import com.teco.ventago.core.beta.BetaProvider
+import com.teco.ventago.core.beta.BetaRepository
+import com.teco.ventago.core.beta.BetaService
 import com.teco.ventago.core.cache.ICacheService
 import com.teco.ventago.core.cache.RoomCache
 import com.teco.ventago.core.changes.ChangesManager
@@ -65,12 +68,17 @@ import com.teco.ventago.features.product.data.provider.item.ItemProvider
 import com.teco.ventago.features.product.data.provider.product.ProductProvider
 import com.teco.ventago.features.product.data.repository.ProductsRepository
 import com.teco.ventago.features.product.domain.ProductService
+import com.teco.ventago.features.quotes.data.provider.QuotesProvider
+import com.teco.ventago.features.quotes.data.repository.QuotesRepository
+import com.teco.ventago.features.quotes.domain.QuotesService
 import com.teco.ventago.features.product.ui.category.add.viewmodel.AddCategoryViewModel
 import com.teco.ventago.features.product.ui.category.add.viewmodel.ModifyCategoryViewModel
 import com.teco.ventago.features.product.ui.category.edit.viewmodel.EditCategoryViewModel
 import com.teco.ventago.features.product.ui.category.manage.viewmodel.CategoriesManageViewModel
 import com.teco.ventago.features.product.ui.item.add.viewmodel.AddItemViewModel
 import com.teco.ventago.features.product.ui.item.edit.EditItemViewModel
+import com.teco.ventago.features.quotes.ui.list.QuotesListViewModel
+import com.teco.ventago.features.quotes.ui.details.QuoteDetailsViewModel
 import com.teco.ventago.features.settings.data.provider.SettingsProvider
 import com.teco.ventago.features.settings.data.repository.SettingsRepository
 import com.teco.ventago.features.settings.domain.SettingsService
@@ -174,6 +182,8 @@ internal val viewModels = module {
     viewModelOf(::EditItemViewModel)
     viewModelOf(::ModifyCategoryViewModel)
     viewModelOf(::PosViewModel)
+    viewModelOf(::QuotesListViewModel)
+    viewModelOf(::QuoteDetailsViewModel)
     viewModelOf(::OrdersViewModel)
     viewModelOf(::ChangeImageViewModel)
     viewModelOf(::ChangeNameViewModel)
@@ -399,6 +409,39 @@ internal fun appModule() = module {
             changesManager = get(),
             authService = get(),
             productService = get(),
+        )
+    }
+
+    single {
+        BetaService(
+            repository = BetaRepository(
+                provider = BetaProvider(
+                    client = get(),
+                    authService = get()
+                ),
+                logger = get(),
+                json = json
+            ),
+            authService = get(),
+            storage = get(),
+            json = json
+        )
+    }
+
+    single {
+        QuotesService(
+            repository = QuotesRepository(
+                provider = QuotesProvider(
+                    client = get(),
+                    authService = get()
+                ),
+                logger = get()
+            ),
+            businessService = get(),
+            logger = get(),
+            authService = get(),
+            storage = get(),
+            json = json
         )
     }
 

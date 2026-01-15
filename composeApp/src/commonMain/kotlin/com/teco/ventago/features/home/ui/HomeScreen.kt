@@ -79,7 +79,9 @@ import ventago.composeapp.generated.resources.dgi
 import ventago.composeapp.generated.resources.ic_arrow_forward_ios
 import ventago.composeapp.generated.resources.ic_paypal_onboarding
 import ventago.composeapp.generated.resources.pos
+import ventago.composeapp.generated.resources.quotes
 import ventago.composeapp.generated.resources.sales
+import ventago.composeapp.generated.resources.view_quotes
 import ventago.composeapp.generated.resources.yappy_logo
 import ventago.composeapp.generated.resources.yappy_logo_portrait
 
@@ -190,6 +192,63 @@ fun HomeScreen(
                 )
             }
 
+        }
+
+//        if (uiState.hasQuotesAccess) {
+        if (true) {
+            Card(
+                modifier = Modifier.padding(top = 12.dp, start = 16.dp, end = 16.dp).height(90.dp),
+                elevation = CardDefaults.cardElevation(4.dp),
+                colors = CardDefaults.cardColors(
+                    containerColor = MaterialTheme.colorScheme.primary
+                ),
+                onClick = {
+                    com.teco.ventago.features.quotes.domain.QuoteSelectionStore.startQuoteFlow = true
+                    navigate(PosScreens.POSScreen)
+                }
+            ) {
+                Row(
+                    modifier = Modifier.fillMaxSize(),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Icon(
+                        imageVector = Icons.Rounded.Description,
+                        contentDescription = "",
+                        modifier = Modifier.padding(start = 16.dp, end = 8.dp),
+                        tint = MaterialTheme.colorScheme.onPrimary
+                    )
+                    Text(
+                        text = stringResource(Res.string.quotes),
+                        style = headlineLarge().copy(color = MaterialTheme.colorScheme.onPrimary)
+                    )
+
+                    Spacer(modifier = Modifier.weight(1f))
+
+                    Icon(
+                        imageVector = Icons.Rounded.ReceiptLong,
+                        contentDescription = "",
+                        modifier = Modifier.padding(start = 8.dp, end = 16.dp).height(40.dp),
+                        tint = MaterialTheme.colorScheme.onPrimary
+                    )
+                }
+            }
+            TextButton(
+                modifier = Modifier
+                    .padding(top = 6.dp, start = 16.dp, end = 16.dp)
+                    .fillMaxWidth(),
+                onClick = { navigate(PosScreens.QuotesListScreen) }
+            ) {
+                Icon(
+                    imageVector = Icons.Rounded.ReceiptLong,
+                    contentDescription = "",
+                    tint = MaterialTheme.colorScheme.primary
+                )
+                Spacer(modifier = Modifier.width(8.dp))
+                Text(
+                    text = stringResource(Res.string.view_quotes),
+                    style = bodyMediumBold(color = MaterialTheme.colorScheme.primary)
+                )
+            }
         }
 
 

@@ -18,7 +18,7 @@ import com.teco.ventago.utils.ApiError
 import com.teco.ventago.utils.ApiResponse
 import com.teco.ventago.utils.AuthException
 import com.teco.ventago.utils.base64.base64Decoded
-import com.teco.ventago.utils.isExpired
+import com.teco.ventago.utils.base64.base64UrlDecoded
 import io.ktor.client.HttpClient
 import io.ktor.client.call.body
 import io.ktor.client.request.get
@@ -44,6 +44,8 @@ import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.decodeFromJsonElement
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
+import kotlinx.serialization.json.longOrNull
+import kotlinx.datetime.Clock
 
 class AuthService(
     private val store: SecureStorage,
@@ -118,10 +120,12 @@ class AuthService(
     }
 
     override fun isAuthenticated(): Boolean {
-        val jwt: String? = store.string(forKey = SecureConstants.JWT_TOKEN)
-        return jwt?.let {
-            return !isTokenExpired(it)
-        } ?: false
+        val userSync = getUserSync()
+        if (userSync != null) {
+            return true
+        }
+        val refreshToken = getJwtToken(true)
+        return !refreshToken.isNullOrBlank() && !isTokenExpired(refreshToken)
     }
 
     override fun getJwtToken(refresh: Boolean): String? {
@@ -317,13 +321,16 @@ class AuthService(
     }
 
     private fun isTokenExpired(jwt: String): Boolean {
-        val aux = jwt.split(".")
-        if (aux.isEmpty()) {
-            return false
+        val parts = jwt.split(".")
+        if (parts.size < 2) {
+            return true
         }
-        val data = Json.parseToJsonElement(aux[1].base64Decoded)
-        val iat = data.jsonObject["iat"]
-        return !isExpired(iat.toString())
+        val payload = runCatching { parts[1].base64UrlDecoded }
+            .getOrElse { runCatching { parts[1].base64Decoded }.getOrNull() }
+            ?: return true
+        val data = runCatching { Json.parseToJsonElement(payload) }.getOrNull() ?: return true
+        val exp = data.jsonObject["exp"]?.jsonPrimitive?.longOrNull ?: return true
+        return exp <= Clock.System.now().epochSeconds
     }
 
     private fun saveJwt(token: String, refresh: Boolean = false) {

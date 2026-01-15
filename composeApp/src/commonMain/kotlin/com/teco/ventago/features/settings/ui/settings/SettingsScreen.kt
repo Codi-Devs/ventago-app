@@ -93,6 +93,7 @@ import com.teco.ventago.features.settings.ui.settings.viewmodel.SettingsViewMode
 import com.teco.ventago.navigation.PosScreens
 import com.teco.ventago.rememberPlatformState
 import com.teco.ventago.utils.launchAutocompleteWidget
+import com.teco.ventago.features.quotes.ui.settings.QuoteSettingsSection
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -528,6 +529,15 @@ fun SettingsScreen(
 
             }
 
+//            if (uiState.hasQuotesAccess) {
+                QuoteSettingsSection(
+                    additionalInfo = uiState.defaultQuoteAdditionalInfo,
+                    style = uiState.defaultQuoteStyle,
+                    onAdditionalInfoChange = { viewModel.setDefaultQuoteAdditionalInfo(it) },
+                    onStyleChange = { viewModel.setDefaultQuoteStyle(it) }
+                )
+//            }
+
             Card(modifier = Modifier.fillMaxWidth().padding(all = 16.dp),
                 elevation = CardDefaults.elevatedCardElevation(4.dp),
                 colors = CardDefaults.cardColors(
@@ -681,4 +691,3 @@ private fun rememberIsDirty(uiState: SettingsState, viewModel: SettingsViewModel
 //            viewModel.isValidPhone(uiState.actualPhone)
 //    return nameValid && phoneValid
 //}
-

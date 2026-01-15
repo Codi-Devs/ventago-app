@@ -11,6 +11,8 @@ import com.teco.ventago.features.financialProfile.domain.model.BusinessFinancial
 import com.teco.ventago.features.home.domain.HistoricSalesService
 import com.teco.ventago.features.payments.domain.PaymentService
 import com.teco.ventago.features.product.domain.ProductService
+import com.teco.ventago.core.beta.BetaService
+import com.teco.ventago.core.beta.BetaFeature
 import com.teco.ventago.viewModels
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.combine
@@ -24,6 +26,7 @@ class HomeViewModel(
     private val financialProfileService: FinancialProfileService,
     private val authService: IAuthService,
     private val salesService: HistoricSalesService,
+    private val betaService: BetaService,
 ): BaseViewModel<HomeState, HomeStateUiEvent>(HomeState()) {
 
     init {
@@ -37,6 +40,7 @@ class HomeViewModel(
             }.onEach { newState ->
                 val business = newState.first
                 val products = newState.second
+                println("ASDASD: hasQuotes: ${business != null && products != null}")
                 if (business != null && products != null) {
                     updateState {
                         copy(
@@ -47,6 +51,13 @@ class HomeViewModel(
                     delay(200)
                     updateState { copy(isLoadingData = false) }
                     salesService.initialize(business.businessId)
+
+                    // Beta access
+                    viewModelScope.launch {
+//                        val hasQuotes = betaService.hasAccess(BetaFeature.QUOTES)
+//                        println("ASDASD: hasQuotes: $hasQuotes")
+                        updateState { copy(hasQuotesAccess = true) }
+                    }
                 }
             }.launchIn(this)
 

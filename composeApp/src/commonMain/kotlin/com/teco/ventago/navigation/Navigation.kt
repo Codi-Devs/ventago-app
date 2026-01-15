@@ -133,6 +133,10 @@ import ventago.composeapp.generated.resources.pos_cart
 import ventago.composeapp.generated.resources.pos_clients
 import ventago.composeapp.generated.resources.pos_invoice
 import ventago.composeapp.generated.resources.pos_payment
+import ventago.composeapp.generated.resources.quote_details
+import ventago.composeapp.generated.resources.quote_success
+import ventago.composeapp.generated.resources.quote_summary
+import ventago.composeapp.generated.resources.quotes
 import ventago.composeapp.generated.resources.register
 import ventago.composeapp.generated.resources.register_business
 import ventago.composeapp.generated.resources.reset_password
@@ -205,6 +209,12 @@ enum class PosScreens(
         Res.string.invoice_title,
         true
     ),
+    // Quotes creation screens
+    Quotes(Res.string.quotes),
+    QuoteSummaryScreen(Res.string.quote_summary),
+    QuoteSuccessScreen(Res.string.quote_success, showAppBar = false, showBackButton = false),
+    QuotesListScreen(Res.string.quotes, true, showBackButton = false),
+    QuoteDetailsScreen(Res.string.quote_details),
     CustomersScreen(
         Res.string.pos_clients,
         actions = { backStackEntry, navigate, _ -> ClientListActions(backStackEntry, navigate) }),
@@ -248,7 +258,6 @@ enum class PosScreens(
         Res.string.pos_invoice, true,
         actions = { backStackEntry, navigate, _ -> OrderInvoiceActions(backStackEntry) },
     ),
-
 
     // Invoicing Screens
     Invoicing(Res.string.invoicing), InvoicingLandingScreen(
@@ -324,6 +333,7 @@ fun Navigation(
         addProductsNavigation(navController, analyticsService)
 
         addPOSNavigation(navController, appViewModel, analyticsService)
+        addQuotesNavigation(navController, analyticsService)
 
         addPaymentsNavigation(navController, appViewModel, analyticsService)
 
@@ -796,6 +806,59 @@ private fun NavGraphBuilder.addPaymentsNavigation(
                     navController.navigateUp()
                 }
             )
+        }
+    }
+}
+
+private fun NavGraphBuilder.addQuotesNavigation(
+    navController: NavHostController, analyticsService: AnalyticsService
+) {
+    navigation(
+        route = PosScreens.Quotes.name, startDestination = PosScreens.QuotesListScreen.name
+    ) {
+        composable(route = PosScreens.QuotesListScreen.name) {
+            val quotesOwner = rememberGraphOwner(navController, PosScreens.Quotes.name)
+            val viewModel: com.teco.ventago.features.quotes.ui.list.QuotesListViewModel =
+                koinViewModel(viewModelStoreOwner = quotesOwner)
+            analyticsService.logScreenView("QuotesListScreen")
+            com.teco.ventago.features.quotes.ui.list.QuotesListScreen(viewModel) { route ->
+                navController.navigate(route.name)
+            }
+        }
+
+            composable(route = PosScreens.QuoteDetailsScreen.name) {
+                val quotesOwner = rememberGraphOwner(navController, PosScreens.Quotes.name)
+                val viewModel: com.teco.ventago.features.quotes.ui.details.QuoteDetailsViewModel =
+                    koinViewModel(viewModelStoreOwner = quotesOwner)
+                analyticsService.logScreenView("QuoteDetailsScreen")
+                com.teco.ventago.features.quotes.ui.details.QuoteDetailsScreen(
+                    viewModel = viewModel,
+                    onBack = { navController.navigateUp() },
+                    onModify = {
+                        com.teco.ventago.features.quotes.domain.QuoteSelectionStore.startQuoteFlow = true
+                        navController.navigate(PosScreens.POSScreen.name)
+                    }
+                )
+            }
+
+        composable(route = PosScreens.QuoteSummaryScreen.name) {
+            val quotesOwner = rememberGraphOwner(navController, PosScreens.Quotes.name)
+            val posOwner = rememberSafeGraphOwner(navController, PosScreens.POS.name, quotesOwner)
+            val viewModel: PosViewModel = koinViewModel(viewModelStoreOwner = posOwner)
+            analyticsService.logScreenView("QuoteSummaryScreen")
+            com.teco.ventago.features.quotes.ui.summary.QuoteSummaryScreen(viewModel) { route, builder ->
+                navController.navigate(route, builder)
+            }
+        }
+
+        composable(route = PosScreens.QuoteSuccessScreen.name) {
+            val quotesOwner = rememberGraphOwner(navController, PosScreens.Quotes.name)
+            val posOwner = rememberSafeGraphOwner(navController, PosScreens.POS.name, quotesOwner)
+            val viewModel: PosViewModel = koinViewModel(viewModelStoreOwner = posOwner)
+            analyticsService.logScreenView("QuoteSuccessScreen")
+            com.teco.ventago.features.quotes.ui.success.QuoteSuccessScreen(viewModel) { route, builder ->
+                navController.navigate(route, builder)
+            }
         }
     }
 }

@@ -11,6 +11,7 @@ import androidx.navigation.NavBackStackEntry
 import com.teco.ventago.design_system.buttons.ButtonM
 import com.teco.ventago.design_system.organism.CartOrganism
 import com.teco.ventago.features.pos.ui.viewmodel.CartCalc
+import com.teco.ventago.features.pos.ui.viewmodel.FlowMode
 import com.teco.ventago.features.pos.ui.viewmodel.PosViewModel
 import com.teco.ventago.navigation.PosScreens
 import com.teco.ventago.utils.formatNumberToMoney
@@ -33,6 +34,7 @@ fun CartScreenBottomBar(backStackEntry: NavBackStackEntry?, navigate: (PosScreen
     } ?: koinViewModel()
 
     val uiState by viewModel.uiState.collectAsState()
+    val isQuoteFlow = uiState.flowMode == FlowMode.QUOTE
     
     // Calculate total amount directly from collected state to ensure recomposition
     val totalAmount = CartCalc.summarize(uiState).grandTotal
@@ -46,7 +48,7 @@ fun CartScreenBottomBar(backStackEntry: NavBackStackEntry?, navigate: (PosScreen
                     return@ButtonM
                 }
             }
-            navigate(PosScreens.PaymentScreen)
+            navigate(if (isQuoteFlow) PosScreens.QuoteSummaryScreen else PosScreens.PaymentScreen)
         },
         modifier = Modifier.padding(start = 16.dp, end = 16.dp, bottom = 16.dp)
     ) {

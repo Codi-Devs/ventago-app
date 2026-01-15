@@ -30,6 +30,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
@@ -50,6 +51,8 @@ import com.teco.ventago.design_system.theme.labelMedium
 import com.teco.ventago.design_system.theme.vanishedBackgroundColor
 import com.teco.ventago.features.pos.ui.viewmodel.PosState
 import com.teco.ventago.features.pos.ui.viewmodel.PosViewModel
+import com.teco.ventago.features.pos.ui.viewmodel.FlowMode
+import com.teco.ventago.features.quotes.domain.QuoteSelectionStore
 import com.teco.ventago.navigation.PosScreens
 import com.teco.ventago.utils.DateFormat
 
@@ -59,6 +62,15 @@ fun PosScreen(
     navigate: (PosScreens) -> Unit
 ) {
     val uiState by viewModel.uiState.collectAsState()
+    val isQuoteFlow = uiState.flowMode == FlowMode.QUOTE
+
+    LaunchedEffect(Unit) {
+        if (QuoteSelectionStore.startQuoteFlow) {
+            viewModel.setFlowMode(FlowMode.QUOTE, quoteId = QuoteSelectionStore.selected?.id)
+            QuoteSelectionStore.startQuoteFlow = false
+        }
+    }
+
     Column(
         modifier = Modifier
             .padding(horizontal = 0.dp)
@@ -69,53 +81,55 @@ fun PosScreen(
 
         Spacer(modifier = Modifier.height(16.dp))
 
-        // === Branch ===
-        if (uiState.branches.isNotEmpty()) {
+        if (!isQuoteFlow) {
+            // === Branch ===
+            if (uiState.branches.isNotEmpty()) {
+                DMDropDownField(
+                    label = "Sucursal",
+                    items = uiState.branches.map { it.name },
+                    selectedIndex = uiState.selectedBranchIndex,
+                    modifier = Modifier.padding(start = 16.dp, end = 16.dp, top = 16.dp, bottom = 8.dp),
+                    onItemSelected = { idx, _ -> viewModel.onBranchSelected(idx) },
+                    isError = false,
+                    enabled = uiState.branches.size > 1,
+                )
+            }
+
+            // === Billing Point (depends on branch) ===
+            if (uiState.billingPoints.isNotEmpty()) {
+                DMDropDownField(
+                    label = "Punto de facturación",
+                    items = uiState.billingPoints.map { it.description },
+                    selectedIndex = uiState.selectedBillingPointIndex,
+                    modifier = Modifier.padding(start = 16.dp, end = 16.dp, top = 8.dp, bottom = 8.dp),
+                    onItemSelected = { idx, _ -> viewModel.onBillingPointSelected(idx) },
+                    isError = false,
+                    enabled = uiState.billingPoints.size > 1,
+                )
+            }
+
+            // === Doc Type ===
             DMDropDownField(
-                label = "Sucursal",
-                items = uiState.branches.map { it.name },
-                selectedIndex = uiState.selectedBranchIndex,
-                modifier = Modifier.padding(start = 16.dp, end = 16.dp, top = 16.dp, bottom = 8.dp),
-                onItemSelected = { idx, _ -> viewModel.onBranchSelected(idx) },
+                label = "Tipo de factura",
+                items = viewModel.docTypeOptions(),              // e.g., ["01 - Factura de Operación Interna", ...]
+                selectedIndex = uiState.selectedDocTypeIndex,    // default points to "01"
+                modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+                onItemSelected = { idx, _ -> viewModel.onDocTypeSelected(idx) },
                 isError = false,
-                enabled = uiState.branches.size > 1,
+                enabled = uiState.enabledSelectionDocType
+            )
+
+            // === Operation Nature ===
+            DMDropDownField(
+                label = "Naturaleza de la operación",
+                items = viewModel.operationNatureOptions(),           // e.g., ["01 - Venta", "02 - Exportación", ...]
+                selectedIndex = uiState.selectedOperationNatureIndex, // default to "01"
+                modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+                onItemSelected = { idx, _ -> viewModel.onOperationNatureSelected(idx) },
+                isError = false,
+                enabled = uiState.enabledOperationNature
             )
         }
-
-        // === Billing Point (depends on branch) ===
-        if (uiState.billingPoints.isNotEmpty()) {
-            DMDropDownField(
-                label = "Punto de facturación",
-                items = uiState.billingPoints.map { it.description },
-                selectedIndex = uiState.selectedBillingPointIndex,
-                modifier = Modifier.padding(start = 16.dp, end = 16.dp, top = 8.dp, bottom = 8.dp),
-                onItemSelected = { idx, _ -> viewModel.onBillingPointSelected(idx) },
-                isError = false,
-                enabled = uiState.billingPoints.size > 1,
-            )
-        }
-
-        // === Doc Type ===
-        DMDropDownField(
-            label = "Tipo de factura",
-            items = viewModel.docTypeOptions(),              // e.g., ["01 - Factura de Operación Interna", ...]
-            selectedIndex = uiState.selectedDocTypeIndex,    // default points to "01"
-            modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
-            onItemSelected = { idx, _ -> viewModel.onDocTypeSelected(idx) },
-            isError = false,
-            enabled = uiState.enabledSelectionDocType
-        )
-
-        // === Operation Nature ===
-        DMDropDownField(
-            label = "Naturaleza de la operación",
-            items = viewModel.operationNatureOptions(),           // e.g., ["01 - Venta", "02 - Exportación", ...]
-            selectedIndex = uiState.selectedOperationNatureIndex, // default to "01"
-            modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
-            onItemSelected = { idx, _ -> viewModel.onOperationNatureSelected(idx) },
-            isError = false,
-            enabled = uiState.enabledOperationNature
-        )
 
         if (uiState.referencedNoteCUFE.isNotBlank()) {
             OutlinedCard(

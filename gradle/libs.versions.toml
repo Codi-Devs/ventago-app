@@ -25,6 +25,7 @@ coilCompose = "3.1.0"
 google-play-services = "4.4.2"
 firebase-crashlytics-plugin = "3.0.3"
 playServicesMlkitBarcodeScanning = "18.3.1"
+richeditorCompose = "1.0.0-rc13"
 sqlite = "2.5.2"
 
 compottie="2.0.0-rc04"
@@ -85,6 +86,7 @@ androidx-camera-view = { module = "androidx.camera:camera-view", version.ref = "
 coil-compose = { module = "io.coil-kt.coil3:coil-compose", version.ref = "coilCompose" }
 coil-network-ktor2 = { module = "io.coil-kt.coil3:coil-network-ktor2", version.ref = "coilCompose" }
 play-services-mlkit-barcode-scanning = { module = "com.google.android.gms:play-services-mlkit-barcode-scanning", version.ref = "playServicesMlkitBarcodeScanning" }
+richeditor-compose = { module = "com.mohamedrejeb.richeditor:richeditor-compose", version.ref = "richeditorCompose" }
 sqlite-bundled = { module = "androidx.sqlite:sqlite-bundled", version.ref = "sqlite" }
 
 androidx-credentials = { module = "androidx.credentials:credentials", version.ref = "credentialsPlayServicesAuth" }

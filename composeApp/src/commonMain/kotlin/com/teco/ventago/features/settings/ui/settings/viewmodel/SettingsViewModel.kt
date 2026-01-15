@@ -6,6 +6,8 @@ import com.teco.ventago.core.camera.SharedImage
 import com.teco.ventago.core.logger.ILoggerService
 import com.teco.ventago.core.logger.Log
 import com.teco.ventago.core.logger.LogLevel
+import com.teco.ventago.core.beta.BetaFeature
+import com.teco.ventago.core.beta.BetaService
 import com.teco.ventago.features.auth.domain.IAuthService
 import com.teco.ventago.features.auth.domain.model.User
 import com.teco.ventago.features.auth.domain.model.firebase.FirebaseUserDM
@@ -17,6 +19,8 @@ import com.teco.ventago.features.financialProfile.domain.FinancialProfileService
 import com.teco.ventago.features.orders.domain.OrderService
 import com.teco.ventago.features.payments.ui.home.viewmodel.PaymentMethodItem
 import com.teco.ventago.features.product.domain.ProductService
+import com.teco.ventago.features.quotes.domain.QuotesService
+import com.teco.ventago.features.quotes.domain.models.QuoteSettings
 import com.teco.ventago.features.settings.domain.SettingsService
 import com.teco.ventago.utils.randomUUID
 import com.teco.ventago.utils.uploadImageToBunnyCdn
@@ -24,7 +28,10 @@ import dev.gitlive.firebase.Firebase
 import dev.gitlive.firebase.auth.auth
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.IO
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.flow.launchIn
 import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.launch
@@ -39,11 +46,15 @@ class SettingsViewModel(
     private val customerService: CustomerService,
     private val branchService: BranchService,
     private val orderService: OrderService,
-    private val logger: ILoggerService
+    private val logger: ILoggerService,
+    private val betaService: BetaService,
+    private val quotesService: QuotesService,
 ) : BaseViewModel<SettingsState, SettingsStateUiEvent>(SettingsState()) {
 
+    private var saveQuoteSettingsJob: Job? = null
 
     init {
+        observeQuoteSettings()
         viewModelScope.launch {
             authService.getFirebaseUser()
                 .combine(authService.getUser()) { fbUser: FirebaseUserDM?, user: User? ->
@@ -109,6 +120,17 @@ class SettingsViewModel(
                             loadingPaymentMethods = false,
                             invoicingEnabled = profile.invoicingActive,
                         )
+                    }
+                }
+
+                // Beta quotes access
+                viewModelScope.launch {
+                    // TODO OScar
+//                    val hasQuotes = betaService.hasAccess(BetaFeature.QUOTES)
+                    val hasQuotes = true
+                    updateState { copy(hasQuotesAccess = hasQuotes) }
+                    if (hasQuotes) {
+                        refreshQuoteSettingsInBackground()
                     }
                 }
 
@@ -202,6 +224,58 @@ class SettingsViewModel(
                     newAddress = null
                 )
             }
+        }
+    }
+
+    fun setDefaultQuoteAdditionalInfo(value: String) {
+        updateState { copy(defaultQuoteAdditionalInfo = value) }
+        scheduleQuoteSettingsSave()
+    }
+
+    fun setDefaultQuoteStyle(value: String) {
+        updateState { copy(defaultQuoteStyle = value) }
+        scheduleQuoteSettingsSave()
+    }
+
+    private fun observeQuoteSettings() {
+        viewModelScope.launch {
+            quotesService.quoteSettings().collect { settings ->
+                if (settings != null) {
+                    applyQuoteSettings(settings)
+                }
+            }
+        }
+    }
+
+    private fun refreshQuoteSettingsInBackground() {
+        viewModelScope.launch(Dispatchers.IO) {
+            quotesService.refreshQuoteSettings()
+        }
+    }
+
+    private fun applyQuoteSettings(settings: QuoteSettings) {
+        updateState {
+            copy(
+                defaultQuoteAdditionalInfo = settings.defaultAdditionalInfo,
+                defaultQuoteStyle = settings.defaultQuoteStyle,
+                defaultQuoteIncludePaymentButton = settings.defaultIncludePaymentButton
+            )
+        }
+    }
+
+    private fun scheduleQuoteSettingsSave() {
+        if (!uiState.value.hasQuotesAccess) {
+            return
+        }
+        val settings = QuoteSettings(
+            defaultQuoteStyle = uiState.value.defaultQuoteStyle,
+            defaultAdditionalInfo = uiState.value.defaultQuoteAdditionalInfo,
+            defaultIncludePaymentButton = uiState.value.defaultQuoteIncludePaymentButton
+        )
+        saveQuoteSettingsJob?.cancel()
+        saveQuoteSettingsJob = viewModelScope.launch {
+            delay(700)
+            quotesService.updateQuoteSettings(settings)
         }
     }
 

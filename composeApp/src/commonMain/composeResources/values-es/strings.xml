@@ -38,6 +38,9 @@
     <string name="ready_pickup">Listo para recoger</string>
     <string name="cancel">Cancelar</string>
     <string name="search">Buscar</string>
+    <string name="filters">Filtros</string>
+    <string name="apply_filters">Aplicar filtros</string>
+    <string name="clear_filters">Limpiar filtros</string>
 
     <!-- Order Statuses Strings   -->
     <string name="order_status_new">Pedido creado</string>
@@ -261,6 +264,7 @@
     <string name="pos_change">Cambio</string>
     <string name="pos_see_ticket">Ver o enviar factura</string>
     <string name="pos_new_sale">Nueva venta</string>
+    <string name="pos_new_quote">Nueva cotización</string>
     <string name="pos_clients_tag">Etiquetas</string>
     <string name="pos_clients_email">Correo electrónico (opcional)</string>
     <string name="pos_clients_ruc">Identificación fiscal (opcional)</string>
@@ -435,5 +439,46 @@
 
     <string name="share_by_whatsapp">Enviar por Whatsapp</string>
     <string name="share_by_message">Enviar por mensajes</string>
-</resources>
 
+    <!-- Cotizaciones -->
+    <string name="quotes">Cotizaciones</string>
+    <string name="quote_number">Número de cotización</string>
+    <string name="customer_name_label">Nombre del cliente</string>
+    <string name="customer_ruc">RUC del cliente</string>
+    <string name="quote_summary">Resumen de Cotización</string>
+    <string name="quote_success">Cotización Creada</string>
+    <string name="generate_quote">Generar Cotización</string>
+    <string name="new_quote">Nueva Cotización</string>
+    <string name="download_pdf">Descargar PDF</string>
+    <string name="quote_style">Estilo de Cotización</string>
+    <string name="expiry_date">Fecha de vencimiento</string>
+    <string name="additional_info">Información adicional</string>
+    <string name="quote_details">Detalle de Cotización</string>
+    <string name="send_by_email">Enviar por email</string>
+    <string name="modify_quote">Modificar cotización</string>
+    <string name="cancel_quote">Cancelar cotización</string>
+    <string name="quote_status_draft">Borrador</string>
+    <string name="quote_status_created">Creada</string>
+    <string name="quote_status_accepted">Aceptada</string>
+    <string name="quote_status_rejected">Rechazada</string>
+    <string name="quote_status_cancelled">Cancelada</string>
+    <string name="invalid_email">Correo inválido</string>
+    <string name="cancel_reason_min">La razón debe tener al menos 10 caracteres</string>
+    <string name="quote_settings">Configuración de Cotizaciones</string>
+    <string name="default_additional_info">Información adicional por defecto</string>
+    <string name="default_quote_style">Estilo de cotización por defecto</string>
+    <string name="view_quotes">Ver cotizaciones</string>
+    <string name="quote_style_minimal">Minimalista</string>
+    <string name="quote_style_corporate">Corporativo</string>
+    <string name="quote_style_premium">Premium</string>
+    <string name="quote_style_tech">Tech</string>
+    <string name="preview_quote_styles">Ver estilos de cotización</string>
+    <string name="quote_style_preview_title">Vista previa de estilos</string>
+    <string name="use_quote_style">Usar este estilo</string>
+    <string name="save_default_additional_info">Guardar como predeterminado</string>
+    <string name="quote_items_label">Artículos</string>
+    <string name="quote_subtotal_label">Subtotal</string>
+    <string name="quote_taxes_label">Impuestos</string>
+    <string name="quote_total_label">Total</string>
+    <string name="quote_additional_info_hint">Puedes mejorar el formato de este texto desde la versión web.</string>
+</resources>

@@ -17,6 +17,7 @@ data class HomeState(
 
     val invoicingEnabled: Boolean = false,
     val invoicingPlanState: InvoicingPlanState? = null,
+    val hasQuotesAccess: Boolean = false,
 
     override val loadingBottomSheet: LoadingBottomSheetState = LoadingBottomSheetState(),
 ): LoadableState<HomeState> {

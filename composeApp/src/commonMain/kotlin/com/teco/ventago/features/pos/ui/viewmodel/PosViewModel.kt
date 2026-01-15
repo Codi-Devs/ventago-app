@@ -47,6 +47,10 @@ import com.teco.ventago.features.pos.domain.models.Tax
 import com.teco.ventago.features.product.domain.ProductService
 import com.teco.ventago.features.product.domain.model.Item
 import com.teco.ventago.features.product.domain.model.AdditionalInfoKey
+import com.teco.ventago.features.quotes.domain.QuoteRequestBuilder
+import com.teco.ventago.features.quotes.domain.QuotesService
+import com.teco.ventago.features.quotes.domain.models.Quote
+import com.teco.ventago.features.quotes.domain.models.QuoteSettings
 import com.teco.ventago.json
 import com.teco.ventago.navigation.PosNoteRoute
 import com.teco.ventago.utils.dbFormat
@@ -89,6 +93,7 @@ class PosViewModel(
     private val productService: ProductService,
     private val posService: PosService,
     private val financialProfileService: FinancialProfileService,
+    private val quotesService: QuotesService,
     private val pdfSharer: PdfSharer,
 ) : BaseViewModel<PosState, PosStateUiEvent>(PosState()) {
     var business: Business? = null
@@ -1063,6 +1068,71 @@ class PosViewModel(
         // navigate to customer picker or open dialog
     }
 
+    fun setFlowMode(mode: FlowMode, quoteId: Long? = null) {
+        updateState { copy(flowMode = mode, quoteId = quoteId) }
+        if (mode == FlowMode.QUOTE) {
+            observeQuoteSettings()
+        }
+    }
+
+    fun setQuoteMeta(style: String? = null, expiryDate: String? = null, additionalInfo: String? = null) {
+        updateState {
+            copy(
+                quoteStyle = style ?: quoteStyle,
+                quoteExpiryDate = expiryDate ?: quoteExpiryDate,
+                quoteAdditionalInfo = additionalInfo ?: quoteAdditionalInfo
+            )
+        }
+    }
+
+    fun buildQuoteRequest(): com.teco.ventago.features.quotes.domain.models.requests.CreateQuoteRequest {
+        val state = uiState.value
+        return QuoteRequestBuilder.build(
+            state = state,
+            quoteStyle = state.quoteStyle,
+            expiryDate = state.quoteExpiryDate,
+            additionalInfo = state.quoteAdditionalInfo,
+            quoteId = state.quoteId
+        )
+    }
+
+    suspend fun createQuote(): Quote = withContext(Dispatchers.IO) {
+        val request = buildQuoteRequest().copy(quoteId = null)
+        val quote = quotesService.createQuote(request)
+        updateState { copy(lastQuoteId = quote.id) }
+        quote
+    }
+
+    suspend fun updateQuote(): Quote = withContext(Dispatchers.IO) {
+        val state = uiState.value
+        val createReq = buildQuoteRequest().copy(quoteId = state.quoteId ?: 0)
+        val updateReq = com.teco.ventago.features.quotes.domain.models.requests.UpdateQuoteRequest(
+            customerId = createReq.customerId,
+            finalCustomer = createReq.finalCustomer,
+            finalCustomerInfo = createReq.finalCustomerInfo,
+            quoteStyle = createReq.quoteStyle,
+            expiryDate = createReq.expiryDate,
+            items = createReq.items,
+            totals = createReq.totals,
+            includePaymentButton = createReq.includePaymentButton,
+            additionalInfo = createReq.additionalInfo,
+            quoteId = createReq.quoteId ?: 0
+        )
+        val quote = quotesService.updateQuote(updateReq)
+        updateState { copy(lastQuoteId = quote.id) }
+        quote
+    }
+
+    suspend fun openQuotePdf(quoteId: Long?) {
+        if (quoteId == null) return
+        val pdfB64 = withContext(Dispatchers.IO) { quotesService.getQuotePdf(quoteId) }
+        val pdfBytes = Base64.decode(pdfB64)
+        val filename = "quote_${quoteId}.pdf"
+        withContext(Dispatchers.Main) {
+            pdfSharer.openPdf(filename, pdfBytes)
+        }
+    }
+
     fun onFinalCustomerToggle(isFinal: Boolean) {
         updateState {
             copy(finalCustomer = isFinal, customer = if (isFinal) null else customer)
@@ -1545,5 +1615,45 @@ class PosViewModel(
         val pdfBytes = Base64.decode(pdfB64)
         val filename = "${state.orderNumber}.pdf"
         pdfSharer.openPdf(filename, pdfBytes)
+    }
+
+    private fun observeQuoteSettings() {
+        viewModelScope.launch {
+            quotesService.quoteSettings().collect { settings ->
+                if (settings != null) {
+                    applyQuoteSettings(settings)
+                }
+            }
+        }
+    }
+
+    private fun applyQuoteSettings(settings: QuoteSettings) {
+        updateState {
+            copy(
+                quoteAdditionalInfo = settings.defaultAdditionalInfo,
+                quotesSettings = settings
+            )
+        }
+    }
+
+    fun saveQuoteAdditionalInfoAsDefault() {
+        viewModelScope.launch {
+            showLoading()
+            try {
+                val currentInfo = _uiState.value.quoteAdditionalInfo.orEmpty()
+                val settings = _uiState.value.quotesSettings
+                val payload = settings?.copy(defaultAdditionalInfo = currentInfo)
+                    ?: QuoteSettings(
+                        defaultQuoteStyle = "style1",
+                        defaultAdditionalInfo = currentInfo,
+                        defaultIncludePaymentButton = false
+                    )
+                withContext(Dispatchers.IO) {
+                    quotesService.updateQuoteSettings(payload)
+                }
+            } finally {
+                hideLoading()
+            }
+        }
     }
 }

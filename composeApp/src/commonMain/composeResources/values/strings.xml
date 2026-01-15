@@ -38,6 +38,9 @@
     <string name="ready_pickup">Pickup Ready</string>
     <string name="cancel">Cancel</string>
     <string name="search">Search</string>
+    <string name="filters">Filters</string>
+    <string name="apply_filters">Apply filters</string>
+    <string name="clear_filters">Clear filters</string>
 
     <!-- Order Statuses Strings   -->
     <string name="order_status_new">Order Created</string>
@@ -263,6 +266,7 @@
     <string name="pos_change">Change</string>
     <string name="pos_see_ticket">See or send invoice</string>
     <string name="pos_new_sale">New Sale</string>
+    <string name="pos_new_quote">New Quote</string>
     <string name="pos_clients_tag">Tags</string>
     <string name="pos_clients_email">Email (Optional)</string>
     <string name="pos_clients_ruc">Tax identification (Optional)</string>
@@ -441,4 +445,46 @@
 
     <string name="share_by_whatsapp">Share by Whatsapp</string>
     <string name="share_by_message">Share by Message</string>
+
+    <!-- Quotes -->
+    <string name="quotes">Quotes</string>
+    <string name="quote_number">Quote number</string>
+    <string name="customer_name_label">Customer name</string>
+    <string name="customer_ruc">Customer RUC</string>
+    <string name="quote_summary">Quote Summary</string>
+    <string name="quote_success">Quote Created</string>
+    <string name="generate_quote">Generate Quote</string>
+    <string name="new_quote">New Quote</string>
+    <string name="download_pdf">Download PDF</string>
+    <string name="quote_style">Quote Style</string>
+    <string name="expiry_date">Expiry date</string>
+    <string name="additional_info">Additional info</string>
+    <string name="quote_details">Quote Details</string>
+    <string name="send_by_email">Send by email</string>
+    <string name="modify_quote">Modify quote</string>
+    <string name="cancel_quote">Cancel quote</string>
+    <string name="quote_status_draft">Draft</string>
+    <string name="quote_status_created">Created</string>
+    <string name="quote_status_accepted">Accepted</string>
+    <string name="quote_status_rejected">Rejected</string>
+    <string name="quote_status_cancelled">Cancelled</string>
+    <string name="invalid_email">Invalid email</string>
+    <string name="cancel_reason_min">Reason must be at least 10 characters</string>
+    <string name="quote_settings">Quote settings</string>
+    <string name="default_additional_info">Default additional info</string>
+    <string name="default_quote_style">Default quote style</string>
+    <string name="view_quotes">View quotes</string>
+    <string name="quote_style_minimal">Minimalista</string>
+    <string name="quote_style_corporate">Corporativo</string>
+    <string name="quote_style_premium">Premium</string>
+    <string name="quote_style_tech">Tech</string>
+    <string name="preview_quote_styles">Preview quote styles</string>
+    <string name="quote_style_preview_title">Quote style preview</string>
+    <string name="use_quote_style">Use this style</string>
+    <string name="save_default_additional_info">Save as default</string>
+    <string name="quote_items_label">Items</string>
+    <string name="quote_subtotal_label">Subtotal</string>
+    <string name="quote_taxes_label">Taxes</string>
+    <string name="quote_total_label">Total</string>
+    <string name="quote_additional_info_hint">You can enhance this text formatting from the web version.</string>
 </resources>

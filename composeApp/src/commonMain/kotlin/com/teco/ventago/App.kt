@@ -60,6 +60,9 @@ import com.teco.ventago.design_system.molecules.DMTopAppBar
 import com.teco.ventago.design_system.molecules.rememberAppChromeState
 import com.teco.ventago.design_system.theme.DigitalMenuTheme
 import com.teco.ventago.design_system.theme.cardContainerColor
+import com.teco.ventago.features.pos.ui.viewmodel.FlowMode
+import com.teco.ventago.features.pos.ui.viewmodel.PosState
+import com.teco.ventago.features.pos.ui.viewmodel.PosViewModel
 import com.teco.ventago.features.payments.ui.yappy.viewmodel.YappyViewModel
 import com.teco.ventago.navigation.LocalNavController
 import com.teco.ventago.navigation.Navigation
@@ -71,6 +74,8 @@ import org.jetbrains.compose.ui.tooling.preview.Preview
 import org.koin.compose.KoinContext
 import org.koin.compose.koinInject
 import org.koin.compose.viewmodel.koinViewModel
+import ventago.composeapp.generated.resources.Res
+import ventago.composeapp.generated.resources.pos_new_quote
 
 val LocalAppChrome = staticCompositionLocalOf<AppChromeState> {
     error("AppChromeState not provided")
@@ -168,6 +173,30 @@ fun App(
                     }
                     // TODO: decide when to use colored app bar
                     val wantsColored = false
+                    val isPosTitleScreen = currentScreen == PosScreens.POSScreen ||
+                        currentScreen == PosScreens.POSProductScreen ||
+                        currentScreen == PosScreens.CartScreen
+                    val posBackStackEntry = remember(currentScreen) {
+                        if (isPosTitleScreen) {
+                            runCatching { navController.getBackStackEntry(PosScreens.POS.name) }.getOrNull()
+                        } else {
+                            null
+                        }
+                    }
+                    val posViewModel = posBackStackEntry?.let {
+                        koinViewModel<PosViewModel>(viewModelStoreOwner = it)
+                    }
+                    val posUiState by posViewModel?.uiState?.collectAsState()
+                        ?: remember { mutableStateOf(PosState()) }
+                    val appBarTitle = if (currentScreen.showAppBar) {
+                        if (isPosTitleScreen && posUiState.flowMode == FlowMode.QUOTE) {
+                            stringResource(Res.string.pos_new_quote)
+                        } else {
+                            stringResource(currentScreen.title)
+                        }
+                    } else {
+                        ""
+                    }
 //                        currentScreen == PosScreens.SearchCustomerScreen
                     if (wantsColored) {
                         val onPrimary = MaterialTheme.colorScheme.onSecondary
@@ -179,7 +208,7 @@ fun App(
                             actionIconContentColor = onPrimary
                         )
                         DMTopAppBar(
-                            title = stringResource(currentScreen.title),
+                            title = appBarTitle,
                             showBackButton = currentScreen.showBackButton && navController.previousBackStackEntry != null,
                             navigateBack = { if (navController.previousBackStackEntry != null) navController.navigateUp() },
                             // make sure your DMTopAppBar uses containerColor = Color.Transparent inside
@@ -231,7 +260,7 @@ fun App(
                         }
                         
                         DMTopAppBar(
-                            title = if (currentScreen.showAppBar) stringResource(currentScreen.title) else "",
+                            title = appBarTitle,
                             showBackButton = currentScreen.showAppBar && currentScreen.showBackButton &&navController.previousBackStackEntry != null,
                             navigateBack = {
                                 if (navController.previousBackStackEntry != null) {
