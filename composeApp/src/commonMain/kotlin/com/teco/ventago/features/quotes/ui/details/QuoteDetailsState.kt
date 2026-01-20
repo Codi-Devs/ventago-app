@@ -7,5 +7,6 @@ data class QuoteDetailsState(
     val isLoading: Boolean = false,
     val isCancelling: Boolean = false,
     val isSendingEmail: Boolean = false,
+    val isDownloadingPdf: Boolean = false,
     val error: String? = null
 )

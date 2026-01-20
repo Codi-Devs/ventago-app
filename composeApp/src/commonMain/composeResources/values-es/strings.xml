@@ -482,4 +482,10 @@
     <string name="quote_taxes_label">Impuestos</string>
     <string name="quote_total_label">Total</string>
     <string name="quote_additional_info_hint">Puedes mejorar el formato de este texto desde la versión web.</string>
+    <string name="quotes_badge_new">Nuevo</string>
+    <string name="quotes_badge_beta">Beta</string>
+    <string name="quotes_welcome_title">¡Bienvenido a Cotizaciones!</string>
+    <string name="quotes_welcome_message">Estás probando nuestra nueva función de cotizaciones. Es completamente gratis por tiempo limitado mientras está en beta.</string>
+    <string name="quotes_welcome_message_small">Aprovecha esta oportunidad para crear cotizaciones profesionales y convertirlas en órdenes.</string>
+    <string name="action_continue">Continuar</string>
 </resources>

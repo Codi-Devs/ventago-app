@@ -529,16 +529,14 @@ fun SettingsScreen(
 
             }
 
-//            if (uiState.hasQuotesAccess) {
-                QuoteSettingsSection(
-                    additionalInfo = uiState.defaultQuoteAdditionalInfo,
-                    style = uiState.defaultQuoteStyle,
-                    quotePrefix = uiState.quotePrefix,
-                    onAdditionalInfoChange = { viewModel.setDefaultQuoteAdditionalInfo(it) },
-                    onStyleChange = { viewModel.setDefaultQuoteStyle(it) },
-                    onQuotePrefixChange = { viewModel.setQuotePrefix(it) }
-                )
-//            }
+            QuoteSettingsSection(
+                additionalInfo = uiState.defaultQuoteAdditionalInfo,
+                style = uiState.defaultQuoteStyle,
+                quotePrefix = uiState.quotePrefix,
+                onAdditionalInfoChange = { viewModel.setDefaultQuoteAdditionalInfo(it) },
+                onStyleChange = { viewModel.setDefaultQuoteStyle(it) },
+                onQuotePrefixChange = { viewModel.setQuotePrefix(it) }
+            )
 
             Card(modifier = Modifier.fillMaxWidth().padding(all = 16.dp),
                 elevation = CardDefaults.elevatedCardElevation(4.dp),

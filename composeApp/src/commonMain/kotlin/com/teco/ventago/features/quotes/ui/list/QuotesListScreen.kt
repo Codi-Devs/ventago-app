@@ -24,6 +24,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.material.ExperimentalMaterialApi
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ReceiptLong
+import androidx.compose.material.icons.rounded.Redeem
 import androidx.compose.material.icons.rounded.Tune
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -42,6 +43,7 @@ import androidx.compose.material.pullrefresh.PullRefreshIndicator
 import androidx.compose.material.pullrefresh.pullRefresh
 import androidx.compose.material.pullrefresh.rememberPullRefreshState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -57,12 +59,17 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.teco.ventago.core.LocalStorage
 import com.teco.ventago.design_system.buttons.ButtonM
 import com.teco.ventago.design_system.buttons.OutlinedButtonM
 import com.teco.ventago.design_system.buttons.TextButtonS
 import com.teco.ventago.design_system.loaders.shimmerBrush
 import com.teco.ventago.design_system.molecules.DMTopAppBar
 import com.teco.ventago.design_system.textfields.DMOutlinedTextField
+import com.teco.ventago.design_system.theme.bodyMedium
+import com.teco.ventago.design_system.theme.bodyMediumBold
+import com.teco.ventago.design_system.theme.labelSmall
+import com.teco.ventago.features.quotes.domain.QuotesOnboarding
 import com.teco.ventago.features.quotes.domain.models.Quote
 import com.teco.ventago.features.quotes.domain.models.QuoteStatus
 import com.teco.ventago.features.quotes.domain.QuoteSelectionStore
@@ -70,7 +77,9 @@ import com.teco.ventago.navigation.PosScreens
 import com.teco.ventago.utils.DateFormat.getFormattedDate
 import com.teco.ventago.utils.formatNumberToMoney
 import org.jetbrains.compose.resources.stringResource
+import org.koin.compose.koinInject
 import ventago.composeapp.generated.resources.Res
+import ventago.composeapp.generated.resources.action_continue
 import ventago.composeapp.generated.resources.apply_filters
 import ventago.composeapp.generated.resources.clear_filters
 import ventago.composeapp.generated.resources.customer_name_label
@@ -83,6 +92,9 @@ import ventago.composeapp.generated.resources.quote_status_created
 import ventago.composeapp.generated.resources.quote_status_draft
 import ventago.composeapp.generated.resources.quote_status_rejected
 import ventago.composeapp.generated.resources.quotes
+import ventago.composeapp.generated.resources.quotes_welcome_message
+import ventago.composeapp.generated.resources.quotes_welcome_message_small
+import ventago.composeapp.generated.resources.quotes_welcome_title
 import ventago.composeapp.generated.resources.see_more
 import ventago.composeapp.generated.resources.status
 import ventago.composeapp.generated.resources.items
@@ -94,9 +106,21 @@ fun QuotesListScreen(
     navigate: (PosScreens) -> Unit,
     onBack: () -> Unit
 ) {
+    val storage: LocalStorage = koinInject()
     val uiState by viewModel.uiState.collectAsState()
     var showFilters by remember { mutableStateOf(false) }
     val filterSheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+    var showWelcomeSheet by remember { mutableStateOf(false) }
+    val welcomeSheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+    val hasShownWelcome = storage.bool(QuotesOnboarding.KEY_WELCOME_SHEET_SHOWN) == true
+
+    LaunchedEffect(Unit) {
+        storage.set(QuotesOnboarding.KEY_HAS_ENTERED_QUOTES, true)
+        if (!hasShownWelcome) {
+            showWelcomeSheet = true
+        }
+    }
+
     val pullRefreshState = rememberPullRefreshState(
         refreshing = uiState.refreshing,
         onRefresh = { viewModel.loadQuotes(refresh = true) }
@@ -216,6 +240,64 @@ fun QuotesListScreen(
                 state = pullRefreshState,
                 modifier = Modifier.align(Alignment.TopCenter)
             )
+        }
+    }
+
+    if (showWelcomeSheet) {
+        ModalBottomSheet(
+            onDismissRequest = {
+                storage.set(QuotesOnboarding.KEY_WELCOME_SHEET_SHOWN, true)
+                showWelcomeSheet = false
+            },
+            sheetState = welcomeSheetState,
+            containerColor = MaterialTheme.colorScheme.background
+        ) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(24.dp),
+                horizontalAlignment = Alignment.CenterHorizontally
+            ) {
+                Icon(
+                    imageVector = Icons.Rounded.Redeem,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.secondary,
+                    modifier = Modifier.size(44.dp)
+                )
+                Spacer(Modifier.height(12.dp))
+                Text(
+                    text = stringResource(Res.string.quotes_welcome_title),
+                    style = MaterialTheme.typography.titleLarge,
+                    textAlign = TextAlign.Center
+                )
+                Spacer(Modifier.height(12.dp))
+                Text(
+                    text = stringResource(Res.string.quotes_welcome_message),
+                    style = bodyMedium(),
+                    textAlign = TextAlign.Center
+                )
+                Spacer(Modifier.height(8.dp))
+                Text(
+                    text = stringResource(Res.string.quotes_welcome_message_small),
+                    style = labelSmall(color = MaterialTheme.colorScheme.onSurfaceVariant),
+                    textAlign = TextAlign.Center
+                )
+                Spacer(Modifier.height(16.dp))
+                ButtonM(
+                    onClick = {
+                        storage.set(QuotesOnboarding.KEY_WELCOME_SHEET_SHOWN, true)
+                        showWelcomeSheet = false
+                    },
+                    containerColor = MaterialTheme.colorScheme.secondary,
+                    contentColor = MaterialTheme.colorScheme.onSecondary
+                ) {
+                    Text(
+                        stringResource(Res.string.action_continue),
+                        style = bodyMediumBold(color = MaterialTheme.colorScheme.onSecondary)
+                    )
+                }
+                Spacer(Modifier.height(12.dp))
+            }
         }
     }
 

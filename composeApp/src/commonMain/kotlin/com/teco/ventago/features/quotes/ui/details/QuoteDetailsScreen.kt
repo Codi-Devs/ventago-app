@@ -2,6 +2,7 @@ package com.teco.ventago.features.quotes.ui.details
 
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -119,21 +120,34 @@ fun QuoteDetailsScreen(
         }
     }
 
-    when {
-        uiState.isLoading -> {
-            QuoteDetailsSkeleton()
+    Box(modifier = Modifier.fillMaxSize()) {
+        when {
+            uiState.isLoading -> {
+                QuoteDetailsSkeleton()
+            }
+            uiState.quote == null -> {
+                Text("No quote loaded", modifier = Modifier.padding(16.dp))
+            }
+            else -> QuoteDetailsContent(
+                quote = uiState.quote!!,
+                isCancelling = uiState.isCancelling,
+                errorMessage = uiState.error,
+                onCancel = { reason -> viewModel.cancel(reason) },
+                onModify = onModify,
+                onCreateOrder = onCreateOrder
+            )
         }
-        uiState.quote == null -> {
-            Text("No quote loaded", modifier = Modifier.padding(16.dp))
+
+        if (uiState.isDownloadingPdf) {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(Color.Black.copy(alpha = 0.35f)),
+                contentAlignment = Alignment.Center
+            ) {
+                CircularProgressIndicator()
+            }
         }
-        else -> QuoteDetailsContent(
-            quote = uiState.quote!!,
-            isCancelling = uiState.isCancelling,
-            errorMessage = uiState.error,
-            onCancel = { reason -> viewModel.cancel(reason) },
-            onModify = onModify,
-            onCreateOrder = onCreateOrder
-        )
     }
 }
 
@@ -345,7 +359,14 @@ private fun QuoteDetailsContent(
                 TicketDivider(color = MaterialTheme.colorScheme.outlineVariant)
                 Spacer(modifier = Modifier.height(8.dp))
                 TicketSectionTitle(text = additionalInfoLabel)
-                Text(text = additionalInfo, style = bodySmall())
+                Row(
+                    modifier = Modifier.fillMaxWidth()
+                        .padding(bottom = 6.dp, start = 16.dp, end = 16.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Text(text = additionalInfo, style = bodySmall())
+                }
+
             }
 
             Spacer(modifier = Modifier.height(8.dp))
@@ -513,13 +534,21 @@ fun QuoteDetailsActions(
 
     IconButton(
         onClick = { menuExpanded = true },
-        enabled = quote != null
+        enabled = quote != null && !uiState.isDownloadingPdf
     ) {
-        Icon(
-            imageVector = Icons.Rounded.MoreVert,
-            contentDescription = null,
-            tint = MaterialTheme.colorScheme.primary
-        )
+        if (uiState.isDownloadingPdf) {
+            CircularProgressIndicator(
+                modifier = Modifier.size(18.dp),
+                strokeWidth = 2.dp,
+                color = MaterialTheme.colorScheme.primary
+            )
+        } else {
+            Icon(
+                imageVector = Icons.Rounded.MoreVert,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.primary
+            )
+        }
     }
 
     DropdownMenu(
@@ -545,6 +574,7 @@ fun QuoteDetailsActions(
                 menuExpanded = false
                 viewModel.downloadPdf()
             },
+            enabled = !uiState.isDownloadingPdf,
             leadingIcon = {
                 Icon(imageVector = Icons.Outlined.FileDownload, contentDescription = null)
             }
@@ -695,13 +725,15 @@ private fun QuoteDetailsHeader(
                     QuoteHeaderValue(text = if (createdAt.isBlank()) "-" else createdAt)
                     QuoteHeaderValue(text = formatMoney(quote.totals?.total))
                 }
+
             }
-            QuoteStatusBadge(
-                label = statusLabel,
-                textColor = statusTextColor,
-                backgroundColor = statusBackgroundColor
-            )
+
         }
+        QuoteStatusBadge(
+            label = statusLabel,
+            textColor = statusTextColor,
+            backgroundColor = statusBackgroundColor
+        )
     }
 }
 
@@ -785,7 +817,7 @@ private fun QuoteSummaryRow(label: String, amount: String) {
 private fun QuoteDetailRow(label: String, value: String) {
     Row(
         modifier = Modifier.fillMaxWidth()
-            .padding(bottom = 6.dp),
+            .padding(bottom = 6.dp, start = 16.dp, end = 16.dp),
         horizontalArrangement = Arrangement.SpaceBetween
     ) {
         Text(text = label, style = bodyMedium())

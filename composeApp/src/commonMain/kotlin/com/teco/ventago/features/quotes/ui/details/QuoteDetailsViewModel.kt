@@ -75,7 +75,9 @@ class QuoteDetailsViewModel(
 
     fun downloadPdf() {
         val quoteId = _uiState.value.quote?.id ?: return
+        if (_uiState.value.isDownloadingPdf) return
         viewModelScope.launch {
+            _uiState.value = _uiState.value.copy(isDownloadingPdf = true, error = null)
             try {
                 val pdfB64 = withContext(Dispatchers.IO) { quotesService.getQuotePdf(quoteId) }
                 val pdfBytes = kotlin.io.encoding.Base64.decode(pdfB64)
@@ -83,6 +85,8 @@ class QuoteDetailsViewModel(
                 pdfSharer.openPdf(filename, pdfBytes)
             } catch (e: Exception) {
                 _uiState.value = _uiState.value.copy(error = e.message)
+            } finally {
+                _uiState.value = _uiState.value.copy(isDownloadingPdf = false)
             }
         }
     }

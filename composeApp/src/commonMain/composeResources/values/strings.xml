@@ -494,4 +494,10 @@
     <string name="quote_taxes_label">Taxes</string>
     <string name="quote_total_label">Total</string>
     <string name="quote_additional_info_hint">You can enhance this text formatting from the web version.</string>
+    <string name="quotes_badge_new">New</string>
+    <string name="quotes_badge_beta">Beta</string>
+    <string name="quotes_welcome_title">Welcome to Quotes!</string>
+    <string name="quotes_welcome_message">You’re trying our new quotes feature. It’s completely free for a limited time while it’s in beta.</string>
+    <string name="quotes_welcome_message_small">Take advantage of this opportunity to create professional quotes and turn them into orders.</string>
+    <string name="action_continue">Continue</string>
 </resources>
