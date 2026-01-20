@@ -475,6 +475,7 @@
     <string name="preview_quote_styles">Ver estilos de cotización</string>
     <string name="quote_style_preview_title">Vista previa de estilos</string>
     <string name="use_quote_style">Usar este estilo</string>
+    <string name="create_order">Crear orden</string>
     <string name="save_default_additional_info">Guardar como predeterminado</string>
     <string name="quote_items_label">Artículos</string>
     <string name="quote_subtotal_label">Subtotal</string>

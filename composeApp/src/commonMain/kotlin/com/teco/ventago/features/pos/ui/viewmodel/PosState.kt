@@ -113,10 +113,12 @@ data class PosState(
     val flowMode: FlowMode = FlowMode.SALE,
     val quoteId: Long? = null,
     val quoteStyle: String = "style1",
+    val quoteStyleWasEdited: Boolean = false,
     val quoteExpiryDate: String? = null,
     val quoteAdditionalInfo: String? = null,
     val quotesSettings: QuoteSettings? = null,
     val lastQuoteId: Long? = null,
+    val lastQuoteNumber: String? = null,
 
     // Retention
     val retentionCodeIndex: Int = 0,      // index in retention list (0 = none)

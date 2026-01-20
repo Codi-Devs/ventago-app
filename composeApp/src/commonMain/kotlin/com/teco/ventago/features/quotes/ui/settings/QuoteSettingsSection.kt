@@ -43,6 +43,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.painter.ColorPainter
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.unit.dp
@@ -50,9 +51,12 @@ import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextDecoration
+import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.input.KeyboardType
 import coil3.compose.AsyncImage
 import com.mohamedrejeb.richeditor.model.rememberRichTextState
 import com.mohamedrejeb.richeditor.ui.material3.OutlinedRichTextEditor
+import com.teco.ventago.design_system.textfields.DMOutlinedTextField
 import com.teco.ventago.design_system.textfields.helpers.DMDropDownField
 import com.teco.ventago.design_system.theme.cardContainerColor
 import com.teco.ventago.features.quotes.ui.quoteStyleOptions
@@ -64,6 +68,7 @@ import ventago.composeapp.generated.resources.quote_additional_info_hint
 import ventago.composeapp.generated.resources.quote_settings
 import ventago.composeapp.generated.resources.default_additional_info
 import ventago.composeapp.generated.resources.default_quote_style
+import ventago.composeapp.generated.resources.quote_prefix
 import ventago.composeapp.generated.resources.preview_quote_styles
 import ventago.composeapp.generated.resources.quote_style_preview_title
 import ventago.composeapp.generated.resources.use_quote_style
@@ -73,8 +78,10 @@ import ventago.composeapp.generated.resources.use_quote_style
 fun QuoteSettingsSection(
     additionalInfo: String,
     style: String,
+    quotePrefix: String,
     onAdditionalInfoChange: (String) -> Unit,
     onStyleChange: (String) -> Unit,
+    onQuotePrefixChange: (String) -> Unit,
 ) {
     val richTextState = rememberRichTextState()
     val styleOptions = quoteStyleOptions()
@@ -86,18 +93,22 @@ fun QuoteSettingsSection(
     val isUnorderedList = richTextState.isUnorderedList
     val additionalInfoHint = stringResource(Res.string.quote_additional_info_hint)
     var showPreview by remember { mutableStateOf(false) }
+    var editBaselineHtml by remember { mutableStateOf<String?>(null) }
 
     LaunchedEffect(additionalInfo) {
         if (additionalInfo != richTextState.toHtml()) {
             richTextState.setHtml(additionalInfo)
         }
+        editBaselineHtml = null
     }
 
     LaunchedEffect(richTextState) {
         snapshotFlow { richTextState.toHtml() }
             .distinctUntilChanged()
             .collectLatest { html ->
-                if (html != additionalInfo) {
+                val baseline = editBaselineHtml ?: return@collectLatest
+                if (html != baseline) {
+                    editBaselineHtml = html
                     onAdditionalInfoChange(html)
                 }
             }
@@ -157,10 +168,32 @@ fun QuoteSettingsSection(
             Spacer(Modifier.height(8.dp))
             OutlinedRichTextEditor(
                 state = richTextState,
-                modifier = Modifier.fillMaxWidth(),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .onFocusChanged { focus ->
+                        if (focus.isFocused && editBaselineHtml == null) {
+                            editBaselineHtml = richTextState.toHtml()
+                        }
+                        if (!focus.isFocused) {
+                            editBaselineHtml = null
+                        }
+                    },
                 supportingText = { Text(additionalInfoHint) },
                 minLines = 4,
                 maxLines = 8
+            )
+
+            Spacer(Modifier.height(12.dp))
+            DMOutlinedTextField(
+                text = quotePrefix,
+                label = stringResource(Res.string.quote_prefix),
+                modifier = Modifier.fillMaxWidth(),
+                onChange = { value ->
+                    onQuotePrefixChange(value.take(5))
+                },
+                keyboardType = KeyboardType.Text,
+                imeAction = ImeAction.Done,
+                isError = false
             )
 
             Spacer(Modifier.height(12.dp))

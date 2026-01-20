@@ -7,6 +7,8 @@ import kotlinx.serialization.Serializable
 data class Quote(
     val id: Long? = null,
     @SerialName("quote_number") val quoteNumber: String? = null,
+    @SerialName("display_number") val displayNumber: String? = null,
+    @SerialName("branch_code") val branchCode: String? = null,
     @SerialName("customer_id") val customerId: Long? = null,
     @SerialName("customer_name") val customerName: String? = null,
     @SerialName("customer_ruc") val customerRuc: String? = null,
@@ -21,7 +23,10 @@ data class Quote(
     val totals: QuoteTotals? = null,
     val lines: List<QuoteLine>? = null,
     @SerialName("final_customer_info") val finalCustomerInfo: FinalCustomerInfo? = null
-)
+) {
+    val displayNumberOrQuoteNumber: String
+        get() = displayNumber ?: quoteNumber ?: ""
+}
 
 @Serializable
 data class FinalCustomerInfo(

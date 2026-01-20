@@ -65,6 +65,18 @@ fun PosScreen(
     val isQuoteFlow = uiState.flowMode == FlowMode.QUOTE
 
     LaunchedEffect(Unit) {
+        if (QuoteSelectionStore.startOrderFlowFromQuote) {
+            val quoteId = QuoteSelectionStore.selected?.id
+            QuoteSelectionStore.startOrderFlowFromQuote = false
+            QuoteSelectionStore.startQuoteFlow = false
+
+            viewModel.resetForNewSale()
+            viewModel.setFlowMode(FlowMode.SALE, quoteId = null)
+            if (quoteId != null) {
+                viewModel.startSaleFromQuote(quoteId)
+            }
+            return@LaunchedEffect
+        }
         if (QuoteSelectionStore.startQuoteFlow) {
             viewModel.setFlowMode(FlowMode.QUOTE, quoteId = QuoteSelectionStore.selected?.id)
             QuoteSelectionStore.startQuoteFlow = false

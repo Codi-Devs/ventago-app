@@ -12,6 +12,7 @@ import com.teco.ventago.features.quotes.domain.models.QuoteSettings
 import com.teco.ventago.json
 import com.teco.ventago.utils.ApiError
 import com.teco.ventago.utils.ApiResponse
+import com.teco.ventago.utils.isError
 import io.ktor.client.HttpClient
 import io.ktor.client.call.body
 import io.ktor.client.request.get
@@ -24,6 +25,7 @@ import io.ktor.http.HttpHeaders
 import io.ktor.http.HttpStatusCode
 import io.ktor.http.contentType
 import kotlinx.serialization.encodeToString
+import kotlinx.serialization.json.JsonNull
 import kotlinx.serialization.json.JsonObject
 
 class QuotesProvider(
@@ -162,7 +164,7 @@ class QuotesProvider(
             setBody(json.encodeToString(request))
         }
         val body = res.body<JsonObject>()
-        val response = ApiResponse.fromJson(body)
+        val response = normalizeResponse(body, ApiResponse.fromJson(body))
         if (response.error == ApiError.AUTH_001 || res.status == HttpStatusCode.Unauthorized) {
             return try {
                 authService.refreshToken(client)
@@ -186,13 +188,26 @@ class QuotesProvider(
             setBody(json.encodeToString(request))
         }
         val body = res.body<JsonObject>()
-        val response = ApiResponse.fromJson(body)
+        val response = normalizeResponse(body, ApiResponse.fromJson(body))
         if (response.error == ApiError.AUTH_001 || res.status == HttpStatusCode.Unauthorized) {
             return try {
                 authService.refreshToken(client)
                 updateQuote(businessId, request)
             } catch (e: Exception) {
                 response
+            }
+        }
+        return response
+    }
+
+    private fun normalizeResponse(body: JsonObject, response: ApiResponse): ApiResponse {
+        if (response.error.isError()) return response
+        if (response.data == null || response.data is JsonNull) {
+            val hasQuoteFields = body["id"] != null ||
+                body["quote_number"] != null ||
+                body["display_number"] != null
+            if (hasQuoteFields) {
+                return ApiResponse(successful = true, data = body, error = ApiError.NO_ERROR)
             }
         }
         return response

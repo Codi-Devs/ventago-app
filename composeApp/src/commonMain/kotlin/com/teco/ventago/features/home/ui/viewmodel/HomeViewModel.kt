@@ -35,6 +35,11 @@ class HomeViewModel(
         }
 
         viewModelScope.launch {
+            betaService.accessFlow(BetaFeature.QUOTES)
+                .onEach { hasAccess -> updateState { copy(hasQuotesAccess = hasAccess) } }
+                .launchIn(this)
+            betaService.getFeatures()
+
             businessService.getBusiness().combine(productService.state) { business, menu ->
                 Pair(business, menu)
             }.onEach { newState ->
@@ -51,13 +56,6 @@ class HomeViewModel(
                     delay(200)
                     updateState { copy(isLoadingData = false) }
                     salesService.initialize(business.businessId)
-
-                    // Beta access
-                    viewModelScope.launch {
-//                        val hasQuotes = betaService.hasAccess(BetaFeature.QUOTES)
-//                        println("ASDASD: hasQuotes: $hasQuotes")
-                        updateState { copy(hasQuotesAccess = true) }
-                    }
                 }
             }.launchIn(this)
 

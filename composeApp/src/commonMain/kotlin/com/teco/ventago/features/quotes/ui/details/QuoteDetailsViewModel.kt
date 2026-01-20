@@ -8,6 +8,7 @@ import com.teco.ventago.features.quotes.domain.models.requests.CancelQuoteReques
 import com.teco.ventago.features.quotes.domain.models.requests.GetQuoteRequest
 import com.teco.ventago.features.quotes.domain.models.requests.SendQuoteEmailRequest
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.IO
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -29,7 +30,7 @@ class QuoteDetailsViewModel(
                 val quote = withContext(Dispatchers.IO) {
                     val selected = com.teco.ventago.features.quotes.domain.QuoteSelectionStore.selected
                     val idToLoad = quoteId ?: selected?.id
-                    val numberToLoad = quoteNumber ?: selected?.quoteNumber
+                    val numberToLoad = quoteNumber ?: selected?.displayNumber ?: selected?.quoteNumber
                     quotesService.getQuote(GetQuoteRequest(quoteId = idToLoad, quoteNumber = numberToLoad))
                 }
                 _uiState.value = _uiState.value.copy(quote = quote, isLoading = false, error = null)
@@ -42,6 +43,7 @@ class QuoteDetailsViewModel(
     fun cancel(reason: String) {
         val quoteId = _uiState.value.quote?.id ?: return
         viewModelScope.launch {
+            _uiState.value = _uiState.value.copy(isCancelling = true, error = null)
             try {
                 withContext(Dispatchers.IO) {
                     quotesService.cancelQuote(CancelQuoteRequest(quoteId = quoteId, reason = reason))
@@ -49,6 +51,8 @@ class QuoteDetailsViewModel(
                 loadQuote(quoteId)
             } catch (e: Exception) {
                 _uiState.value = _uiState.value.copy(error = e.message)
+            } finally {
+                _uiState.value = _uiState.value.copy(isCancelling = false)
             }
         }
     }
@@ -56,12 +60,15 @@ class QuoteDetailsViewModel(
     fun sendEmail(email: String) {
         val quoteId = _uiState.value.quote?.id ?: return
         viewModelScope.launch {
+            _uiState.value = _uiState.value.copy(isSendingEmail = true, error = null)
             try {
                 withContext(Dispatchers.IO) {
                     quotesService.sendQuoteEmail(SendQuoteEmailRequest(quoteId = quoteId, recipientEmail = email))
                 }
             } catch (e: Exception) {
                 _uiState.value = _uiState.value.copy(error = e.message)
+            } finally {
+                _uiState.value = _uiState.value.copy(isSendingEmail = false)
             }
         }
     }

@@ -7,6 +7,7 @@ import com.teco.ventago.design_system.molecules.pos.DiscountMode
 import com.teco.ventago.design_system.molecules.pos.GlobalDiscountMode
 import com.teco.ventago.features.auth.domain.IAuthService
 import com.teco.ventago.features.branches.domain.BranchService
+import com.teco.ventago.features.branches.domain.model.Branch as BranchModel
 import com.teco.ventago.features.business.domain.BusinessService
 import com.teco.ventago.features.business.domain.model.Business
 import com.teco.ventago.features.customers.domain.models.CustomerListItem
@@ -51,6 +52,9 @@ import com.teco.ventago.features.quotes.domain.QuoteRequestBuilder
 import com.teco.ventago.features.quotes.domain.QuotesService
 import com.teco.ventago.features.quotes.domain.models.Quote
 import com.teco.ventago.features.quotes.domain.models.QuoteSettings
+import com.teco.ventago.features.quotes.domain.models.QuoteLine
+import com.teco.ventago.features.quotes.domain.models.requests.GetQuoteRequest
+import com.teco.ventago.features.quotes.domain.models.requests.SendQuoteEmailRequest
 import com.teco.ventago.json
 import com.teco.ventago.navigation.PosNoteRoute
 import com.teco.ventago.utils.dbFormat
@@ -82,6 +86,7 @@ import kotlin.String
 import kotlin.io.encoding.Base64
 import kotlin.io.encoding.ExperimentalEncodingApi
 import kotlin.math.roundToLong
+import kotlin.math.roundToInt
 import kotlin.time.Clock.System.now
 import kotlin.time.ExperimentalTime
 
@@ -96,10 +101,15 @@ class PosViewModel(
     private val quotesService: QuotesService,
     private val pdfSharer: PdfSharer,
 ) : BaseViewModel<PosState, PosStateUiEvent>(PosState()) {
+    private companion object {
+        const val DEFAULT_QUOTE_BRANCH_CODE = "0000"
+    }
+
     var business: Business? = null
     var items: List<Item> = emptyList()
 
     private var order: Order? = null
+    private var pendingQuoteBranchCode: String? = null
 
     init {
         viewModelScope.launch {
@@ -113,11 +123,24 @@ class PosViewModel(
 
             branchService.observe().onEach { branches ->
                 if (branches.isEmpty()) return@onEach
-                updateState {
-                    copy(
-                        branches = branches,
-                        billingPoints = branches[0].fiscalBillingPoints
-                    )
+                val currentState = uiState.value
+                val safeCurrentIndex = currentState.selectedBranchIndex
+                    .takeIf { it in branches.indices } ?: 0
+                val defaultIndex = branches.indexOfFirst { it.branchCode == DEFAULT_QUOTE_BRANCH_CODE }
+                val pendingCode = pendingQuoteBranchCode
+                val pendingIndex = pendingCode?.let { code ->
+                    branches.indexOfFirst { it.branchCode == code }
+                } ?: -1
+                val resolvedIndex = when {
+                    pendingIndex >= 0 -> pendingIndex
+                    currentState.flowMode == FlowMode.QUOTE && currentState.branches.isEmpty() ->
+                        if (defaultIndex >= 0) defaultIndex else safeCurrentIndex
+                    else -> safeCurrentIndex
+                }
+                val resetBillingPoint = currentState.branches.isEmpty() || resolvedIndex != currentState.selectedBranchIndex
+                updateBranchSelection(resolvedIndex, branches, resetBillingPoint)
+                if (pendingIndex >= 0 || pendingCode != null) {
+                    pendingQuoteBranchCode = null
                 }
             }.launchIn(this)
 
@@ -983,19 +1006,44 @@ class PosViewModel(
     }
 
     fun onBranchSelected(index: Int) {
-        val selectedBranch = uiState.value.branches[index]
-        val relatedPoints = selectedBranch.fiscalBillingPoints
-        updateState {
-            copy(
-                selectedBranchIndex = index,
-                billingPoints = relatedPoints,
-                selectedBillingPointIndex = 0
-            )
-        }
+        updateBranchSelection(index)
     }
 
     fun onBillingPointSelected(index: Int) {
         updateState { copy(selectedBillingPointIndex = index) }
+    }
+
+    private fun updateBranchSelection(
+        index: Int,
+        branches: List<BranchModel> = uiState.value.branches,
+        resetBillingPoint: Boolean = true
+    ) {
+        if (branches.isEmpty()) return
+        val safeIndex = index.coerceIn(0, branches.lastIndex)
+        val selectedBranch = branches[safeIndex]
+        val billingPoints = selectedBranch.fiscalBillingPoints
+        val billingPointIndex = if (resetBillingPoint) {
+            0
+        } else {
+            val currentIndex = uiState.value.selectedBillingPointIndex
+            if (billingPoints.isEmpty()) 0 else currentIndex.coerceIn(0, billingPoints.lastIndex)
+        }
+        updateState {
+            copy(
+                branches = branches,
+                selectedBranchIndex = safeIndex,
+                billingPoints = billingPoints,
+                selectedBillingPointIndex = billingPointIndex
+            )
+        }
+    }
+
+    private fun applyQuoteDefaultBranch() {
+        val branches = uiState.value.branches
+        if (branches.isEmpty()) return
+        val defaultIndex = branches.indexOfFirst { it.branchCode == DEFAULT_QUOTE_BRANCH_CODE }
+        val resolvedIndex = if (defaultIndex >= 0) defaultIndex else 0
+        updateBranchSelection(resolvedIndex, branches)
     }
 
     // TODO Convert to proper enum
@@ -1069,9 +1117,32 @@ class PosViewModel(
     }
 
     fun setFlowMode(mode: FlowMode, quoteId: Long? = null) {
-        updateState { copy(flowMode = mode, quoteId = quoteId) }
+        updateState {
+            copy(
+                flowMode = mode,
+                quoteId = quoteId,
+                quoteStyleWasEdited = if (mode == FlowMode.QUOTE && quoteId == null) false else quoteStyleWasEdited
+            )
+        }
         if (mode == FlowMode.QUOTE) {
             observeQuoteSettings()
+            applyQuoteDefaultBranch()
+            if (quoteId != null) {
+                loadQuoteForEdit(quoteId)
+            }
+        }
+    }
+
+    fun startSaleFromQuote(quoteId: Long) {
+        viewModelScope.launch {
+            try {
+                val quote = withContext(Dispatchers.IO) {
+                    quotesService.getQuote(GetQuoteRequest(quoteId = quoteId))
+                }
+                applyQuoteForSale(quote)
+            } catch (e: Exception) {
+                // Keep current state if we can't prefill.
+            }
         }
     }
 
@@ -1079,10 +1150,236 @@ class PosViewModel(
         updateState {
             copy(
                 quoteStyle = style ?: quoteStyle,
+                quoteStyleWasEdited = quoteStyleWasEdited || style != null,
                 quoteExpiryDate = expiryDate ?: quoteExpiryDate,
                 quoteAdditionalInfo = additionalInfo ?: quoteAdditionalInfo
             )
         }
+    }
+
+    private fun loadQuoteForEdit(quoteId: Long) {
+        viewModelScope.launch {
+            try {
+                val quote = withContext(Dispatchers.IO) {
+                    quotesService.getQuote(GetQuoteRequest(quoteId = quoteId))
+                }
+                applyQuoteForEdit(quote)
+            } catch (e: Exception) {
+                // Keep current state if we can't prefill.
+            }
+        }
+    }
+
+    @OptIn(ExperimentalTime::class)
+    private fun applyQuoteForEdit(quote: Quote) {
+        val current = uiState.value
+        val availableItems = if (items.isNotEmpty()) items else current.items
+        val cartLines = buildCartLinesFromQuote(quote, availableItems)
+        val finalInfo = quote.finalCustomerInfo
+        val hasCustomerId = quote.customerId != null
+        val isFinalCustomer = !hasCustomerId
+        val customerName = quote.customerName.orEmpty()
+        val customerEmail = quote.customerEmail
+        val customerPhone = quote.customerPhone
+        val customerRuc = quote.customerRuc
+
+        fun String?.nullIfBlank(): String? = this?.trim()?.takeIf { it.isNotBlank() }
+        val finalName = finalInfo?.name.nullIfBlank() ?: customerName.nullIfBlank()
+        val finalEmail = finalInfo?.email.nullIfBlank() ?: customerEmail.nullIfBlank()
+        val finalPhone = finalInfo?.phone.nullIfBlank() ?: customerPhone.nullIfBlank()
+        val finalIdType = finalInfo?.idType
+        val finalIdNumber = finalInfo?.idNumber
+        val finalCountry = finalInfo?.country
+        val (finalIdTypeIndex, resolvedFinalIdType) = resolveFinalIdType(finalIdType)
+
+        val hasTaxes = cartLines.any { line -> (line.tax?.rateBps ?: 0) > 0 }
+
+        updateState {
+            copy(
+                cart = cartLines,
+                personalizedItems = emptyMap(),
+                taxExempt = !hasTaxes,
+                quoteId = quote.id ?: current.quoteId,
+                quoteStyle = quote.quoteStyle ?: current.quoteStyle,
+                quoteExpiryDate = quote.expiryDate,
+                quoteAdditionalInfo = quote.additionalInfo,
+                finalCustomer = isFinalCustomer,
+                customer = if (isFinalCustomer || customerName.isBlank()) {
+                    null
+                } else {
+                    CustomerListItem(
+                        id = quote.customerId,
+                        name = customerName,
+                        email = customerEmail,
+                        ruc = customerRuc,
+                        status = 1,
+                        invoiceCustomer = 0,
+                        updatedAt = now().epochSeconds
+                    )
+                },
+                finalName = if (isFinalCustomer) finalName else null,
+                finalEmail = if (isFinalCustomer) finalEmail else null,
+                finalPhone = if (isFinalCustomer) finalPhone else null,
+                finalIdTypeIndex = if (isFinalCustomer) finalIdTypeIndex else 0,
+                finalIdType = if (isFinalCustomer) resolvedFinalIdType else current.finalIdType,
+                finalIdNumber = if (isFinalCustomer) finalIdNumber else null,
+                finalPassportCountry = if (isFinalCustomer) finalCountry else null,
+                globalDiscountMode = GlobalDiscountMode.NONE,
+                globalDiscountPercent = 0,
+                globalDiscountFixedCents = 0L,
+                globalShippingCents = 0L,
+                globalInsuranceCents = 0L,
+                globalOtherChargesCents = 0L
+            )
+        }
+
+        val branchCode = quote.branchCode
+        if (!branchCode.isNullOrBlank()) {
+            val branches = uiState.value.branches
+            val branchIndex = branches.indexOfFirst { it.branchCode == branchCode }
+            if (branchIndex >= 0) {
+                updateBranchSelection(branchIndex, branches)
+            } else {
+                pendingQuoteBranchCode = branchCode
+            }
+        }
+    }
+
+    @OptIn(ExperimentalTime::class)
+    private fun applyQuoteForSale(quote: Quote) {
+        val current = uiState.value
+        val availableItems = if (items.isNotEmpty()) items else current.items
+        val cartLines = buildCartLinesFromQuote(quote, availableItems)
+        val finalInfo = quote.finalCustomerInfo
+        val hasCustomerId = quote.customerId != null
+        val isFinalCustomer = !hasCustomerId
+        val customerName = quote.customerName.orEmpty()
+        val customerEmail = quote.customerEmail
+        val customerPhone = quote.customerPhone
+        val customerRuc = quote.customerRuc
+
+        fun String?.nullIfBlank(): String? = this?.trim()?.takeIf { it.isNotBlank() }
+        val finalName = finalInfo?.name.nullIfBlank() ?: customerName.nullIfBlank()
+        val finalEmail = finalInfo?.email.nullIfBlank() ?: customerEmail.nullIfBlank()
+        val finalPhone = finalInfo?.phone.nullIfBlank() ?: customerPhone.nullIfBlank()
+        val finalIdType = finalInfo?.idType
+        val finalIdNumber = finalInfo?.idNumber
+        val finalCountry = finalInfo?.country
+        val (finalIdTypeIndex, resolvedFinalIdType) = resolveFinalIdType(finalIdType)
+
+        val hasTaxes = cartLines.any { line -> (line.tax?.rateBps ?: 0) > 0 }
+
+        updateState {
+            copy(
+                flowMode = FlowMode.SALE,
+                quoteId = null,
+                cart = cartLines,
+                personalizedItems = emptyMap(),
+                taxExempt = !hasTaxes,
+                finalCustomer = isFinalCustomer,
+                customer = if (isFinalCustomer || quote.customerId == null || customerName.isBlank()) {
+                    null
+                } else {
+                    CustomerListItem(
+                        id = quote.customerId,
+                        name = customerName,
+                        email = customerEmail,
+                        ruc = customerRuc,
+                        status = 1,
+                        invoiceCustomer = 0,
+                        updatedAt = now().epochSeconds
+                    )
+                },
+                finalName = if (isFinalCustomer) finalName else null,
+                finalEmail = if (isFinalCustomer) finalEmail else null,
+                finalPhone = if (isFinalCustomer) finalPhone else null,
+                finalIdTypeIndex = if (isFinalCustomer) finalIdTypeIndex else 0,
+                finalIdType = if (isFinalCustomer) resolvedFinalIdType else current.finalIdType,
+                finalIdNumber = if (isFinalCustomer) finalIdNumber else null,
+                finalPassportCountry = if (isFinalCustomer) finalCountry else null,
+                globalDiscountMode = GlobalDiscountMode.NONE,
+                globalDiscountPercent = 0,
+                globalDiscountFixedCents = 0L,
+                globalShippingCents = 0L,
+                globalInsuranceCents = 0L,
+                globalOtherChargesCents = 0L
+            )
+        }
+
+        val branchCode = quote.branchCode
+        if (!branchCode.isNullOrBlank()) {
+            val branches = uiState.value.branches
+            val branchIndex = branches.indexOfFirst { it.branchCode == branchCode }
+            if (branchIndex >= 0) {
+                updateBranchSelection(branchIndex, branches)
+            }
+        }
+    }
+
+    private fun resolveFinalIdType(value: String?): Pair<Int, String> {
+        val keys = finalIdTypeKeys()
+        val resolvedIndex = value?.let { keys.indexOf(it) } ?: -1
+        val safeIndex = if (resolvedIndex >= 0) resolvedIndex else 0
+        return safeIndex to keys[safeIndex]
+    }
+
+    private fun buildCartLinesFromQuote(quote: Quote, products: List<Item>): List<CartLine> {
+        return quote.lines.orEmpty().map { line ->
+            val itemId = (line.itemId ?: 0L).toInt()
+            val product = products.firstOrNull { it.itemId == itemId }
+            val quantity = line.quantity?.toInt()?.coerceAtLeast(1) ?: 1
+            val unitPriceCents = line.unitPrice?.toLongCents() ?: 0L
+            val baseUnitPrice = product?.price?.toLongCents() ?: unitPriceCents
+            val overrideUnitPrice = if (product != null && unitPriceCents > 0 && unitPriceCents != baseUnitPrice) {
+                unitPriceCents
+            } else {
+                null
+            }
+            val discount = buildDiscountFromQuote(line)
+            val tax = buildTaxFromQuote(line, product)
+
+            CartLine(
+                lineId = "${itemId}-${randomUUID()}",
+                itemId = itemId,
+                name = line.itemName ?: product?.name ?: "Item",
+                baseUnitPrice = baseUnitPrice,
+                overrideUnitPrice = overrideUnitPrice,
+                quantity = quantity,
+                discount = discount,
+                tax = tax
+            )
+        }
+    }
+
+    private fun buildDiscountFromQuote(line: QuoteLine): Discount? {
+        val value = line.discountValue ?: return null
+        if (value <= 0.0) return null
+        return when (line.discountMode) {
+            1 -> {
+                val percent = if (value <= 1.0) value * 100.0 else value
+                Discount.Percent((percent * 100).roundToInt().coerceAtLeast(0))
+            }
+            2 -> Discount.Amount(value.toLongCents())
+            else -> Discount.Amount(value.toLongCents())
+        }
+    }
+
+    private fun buildTaxFromQuote(line: QuoteLine, product: Item?): Tax? {
+        val productTax = product?.taxPercent?.takeIf { it > 0 }
+        val taxPercent = productTax?.toDouble() ?: parseTaxPercent(line.taxRate) ?: return null
+        val rateBps = (taxPercent * 100).roundToInt()
+        if (rateBps <= 0) return null
+        return Tax(
+            id = rateBps,
+            name = line.taxName ?: "ITBMS",
+            rateBps = rateBps
+        )
+    }
+
+    private fun parseTaxPercent(rate: String?): Double? {
+        val raw = rate?.trim()?.toDoubleOrNull() ?: return null
+        if (raw <= 0.0) return null
+        return if (raw <= 1.0) raw * 100.0 else raw
     }
 
     fun buildQuoteRequest(): com.teco.ventago.features.quotes.domain.models.requests.CreateQuoteRequest {
@@ -1099,7 +1396,7 @@ class PosViewModel(
     suspend fun createQuote(): Quote = withContext(Dispatchers.IO) {
         val request = buildQuoteRequest().copy(quoteId = null)
         val quote = quotesService.createQuote(request)
-        updateState { copy(lastQuoteId = quote.id) }
+        updateState { copy(lastQuoteId = quote.id, lastQuoteNumber = quote.displayNumberOrQuoteNumber) }
         quote
     }
 
@@ -1119,7 +1416,7 @@ class PosViewModel(
             quoteId = createReq.quoteId ?: 0
         )
         val quote = quotesService.updateQuote(updateReq)
-        updateState { copy(lastQuoteId = quote.id) }
+        updateState { copy(lastQuoteId = quote.id, lastQuoteNumber = quote.displayNumberOrQuoteNumber) }
         quote
     }
 
@@ -1130,6 +1427,15 @@ class PosViewModel(
         val filename = "quote_${quoteId}.pdf"
         withContext(Dispatchers.Main) {
             pdfSharer.openPdf(filename, pdfBytes)
+        }
+    }
+
+    suspend fun sendQuoteEmail(quoteId: Long?, recipientEmail: String): Boolean {
+        if (quoteId == null) return false
+        return withContext(Dispatchers.IO) {
+            quotesService.sendQuoteEmail(
+                SendQuoteEmailRequest(quoteId = quoteId, recipientEmail = recipientEmail)
+            )
         }
     }
 
@@ -1630,7 +1936,16 @@ class PosViewModel(
     private fun applyQuoteSettings(settings: QuoteSettings) {
         updateState {
             copy(
-                quoteAdditionalInfo = settings.defaultAdditionalInfo,
+                quoteAdditionalInfo = if (quoteId == null) {
+                    settings.defaultAdditionalInfo
+                } else {
+                    quoteAdditionalInfo
+                },
+                quoteStyle = if (quoteId == null && !quoteStyleWasEdited) {
+                    settings.defaultQuoteStyle
+                } else {
+                    quoteStyle
+                },
                 quotesSettings = settings
             )
         }

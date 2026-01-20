@@ -26,7 +26,9 @@ import org.jetbrains.compose.resources.stringResource
 import org.koin.compose.viewmodel.koinViewModel
 import ventago.composeapp.generated.resources.Res
 import ventago.composeapp.generated.resources.pos_cart
-import ventago.composeapp.generated.resources.pos_invoicing
+import ventago.composeapp.generated.resources.pos_new_invoice
+import ventago.composeapp.generated.resources.pos_new_quote
+import ventago.composeapp.generated.resources.pos_update_quote
 
 @Composable
 fun PosProductScreenBottomBar(backStackEntry: NavBackStackEntry?, navigate: (PosScreens) -> Unit) {
@@ -38,6 +40,11 @@ fun PosProductScreenBottomBar(backStackEntry: NavBackStackEntry?, navigate: (Pos
     val isQuoteFlow = uiState.flowMode == FlowMode.QUOTE
 
     if (isTablet()) {
+        val actionLabel = when {
+            isQuoteFlow && uiState.quoteId != null -> stringResource(Res.string.pos_update_quote)
+            isQuoteFlow -> stringResource(Res.string.pos_new_quote)
+            else -> stringResource(Res.string.pos_new_invoice)
+        }
         ButtonM(
             onClick = {
                 navigate(if (isQuoteFlow) PosScreens.QuoteSummaryScreen else PosScreens.PaymentScreen)
@@ -46,7 +53,7 @@ fun PosProductScreenBottomBar(backStackEntry: NavBackStackEntry?, navigate: (Pos
             enabled = uiState.cart.isNotEmpty(),
         ) {
             Text(
-                "${stringResource(Res.string.pos_invoicing)} ${
+                "$actionLabel ${
                     formatNumberToMoney(
                         viewModel.getTotalAmount().toDecimalString()
                     )

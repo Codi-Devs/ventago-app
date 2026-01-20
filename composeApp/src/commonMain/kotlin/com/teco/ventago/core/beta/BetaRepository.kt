@@ -14,13 +14,25 @@ class BetaRepository(
     private val json: Json
 ) {
 
-    suspend fun getFeatures(): BetaFeaturesResponse {
-        val response = provider.listFeatures()
-        if (response.error.isError()) {
-            throw BadRequestException(response.toJson())
+    suspend fun getFeatures(businessId: Int): BetaFeaturesResponse {
+        try {
+            val response = provider.listFeatures(businessId)
+            if (response.error.isError()) {
+                throw BadRequestException(response.toJson())
+            }
+            val dataObj = response.data?.jsonObject
+                ?: JsonObject(emptyMap())
+            return json.decodeFromJsonElement(BetaFeaturesResponse.serializer(), dataObj)
+        } catch (e: Exception) {
+            logger.sendLog(
+                com.teco.ventago.core.logger.Log(
+                    level = com.teco.ventago.core.logger.LogLevel.ERROR,
+                    flow = "BetaRepository::getFeatures",
+                    message = "Error getting features: ${e.message ?: "Unknown"}",
+                )
+            )
+            return BetaFeaturesResponse(emptyList())
         }
-        val dataObj = response.data?.jsonObject
-            ?: JsonObject(emptyMap())
-        return json.decodeFromJsonElement(BetaFeaturesResponse.serializer(), dataObj)
+
     }
 }

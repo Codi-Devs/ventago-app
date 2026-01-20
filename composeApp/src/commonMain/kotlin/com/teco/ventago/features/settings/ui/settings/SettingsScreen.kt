@@ -533,8 +533,10 @@ fun SettingsScreen(
                 QuoteSettingsSection(
                     additionalInfo = uiState.defaultQuoteAdditionalInfo,
                     style = uiState.defaultQuoteStyle,
+                    quotePrefix = uiState.quotePrefix,
                     onAdditionalInfoChange = { viewModel.setDefaultQuoteAdditionalInfo(it) },
-                    onStyleChange = { viewModel.setDefaultQuoteStyle(it) }
+                    onStyleChange = { viewModel.setDefaultQuoteStyle(it) },
+                    onQuotePrefixChange = { viewModel.setQuotePrefix(it) }
                 )
 //            }
 
@@ -674,13 +676,15 @@ fun SettingsScreen(
 private fun rememberIsDirty(uiState: SettingsState, viewModel: SettingsViewModel, image: SharedImage?): Boolean {
     // Example validations; adapt to your uiState names
     return remember(uiState) {
+        val quoteSettingsDirty = viewModel.isQuoteSettingsDirty(uiState)
         uiState.newName != uiState.actualName ||
                 uiState.newPhone != uiState.actualPhone ||
                 uiState.newRuc != uiState.actualRuc ||
                 uiState.newEmail != uiState.actualEmail ||
                 uiState.newWeb != uiState.actualWeb ||
                 uiState.newAddress?.placeAddress != null ||
-                image != null
+                image != null ||
+                quoteSettingsDirty
     }
 }
 

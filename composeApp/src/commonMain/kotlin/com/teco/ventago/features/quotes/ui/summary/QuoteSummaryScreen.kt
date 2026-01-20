@@ -79,6 +79,7 @@ import ventago.composeapp.generated.resources.quote_total_label
 import ventago.composeapp.generated.resources.quote_style
 import ventago.composeapp.generated.resources.quote_summary
 import ventago.composeapp.generated.resources.save_default_additional_info
+import ventago.composeapp.generated.resources.update_quote
 import com.mohamedrejeb.richeditor.model.rememberRichTextState
 import com.mohamedrejeb.richeditor.ui.material3.OutlinedRichTextEditor
 
@@ -166,6 +167,19 @@ fun QuoteSummaryScreen(
         Text(text = stringResource(Res.string.quote_summary), style = MaterialTheme.typography.titleMedium)
 
         Spacer(Modifier.height(16.dp))
+
+        if (uiState.branches.size > 1) {
+            DMDropDownField(
+                label = "Sucursal",
+                items = uiState.branches.map { it.name },
+                selectedIndex = uiState.selectedBranchIndex,
+                modifier = Modifier.fillMaxWidth(),
+                onItemSelected = { idx, _ -> viewModel.onBranchSelected(idx) },
+                isError = false,
+                enabled = true
+            )
+            Spacer(Modifier.height(16.dp))
+        }
         ElevatedCard(
             modifier = Modifier.fillMaxWidth(),
             shape = RoundedCornerShape(16.dp),
@@ -272,16 +286,28 @@ fun QuoteSummaryScreen(
             modifier = Modifier.fillMaxWidth(),
             onClick = {
                 scope.launch {
-                    if (uiState.quoteId == null) {
-                        viewModel.createQuote()
-                    } else {
-                        viewModel.updateQuote()
+                    viewModel.showLoading()
+                    try {
+                        if (uiState.quoteId == null) {
+                            viewModel.createQuote()
+                        } else {
+                            viewModel.updateQuote()
+                        }
+                        navigate(PosScreens.QuoteSuccessScreen, null)
+                        viewModel.hideLoading()
+                    } catch (e: Exception) {
+                        viewModel.showError()
                     }
-                    navigate(PosScreens.QuoteSuccessScreen, null)
                 }
             }
         ) {
-            Text(text = stringResource(Res.string.generate_quote))
+            Text(
+                text = if (uiState.quoteId == null) {
+                    stringResource(Res.string.generate_quote)
+                } else {
+                    stringResource(Res.string.update_quote)
+                }
+            )
         }
     }
 

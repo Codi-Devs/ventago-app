@@ -55,8 +55,14 @@ data class SettingsState(
 
     // Quotes
     val hasQuotesAccess: Boolean = false,
+    val actualDefaultQuoteAdditionalInfo: String = "",
     val defaultQuoteAdditionalInfo: String = "",
+    val quoteAdditionalInfoWasEdited: Boolean = false,
+    val actualDefaultQuoteStyle: String = "style1",
     val defaultQuoteStyle: String = "style1",
+    val actualQuotePrefix: String = "COT",
+    val quotePrefix: String = "COT",
+    val actualDefaultQuoteIncludePaymentButton: Boolean = false,
     val defaultQuoteIncludePaymentButton: Boolean = false,
 
     // Loading state

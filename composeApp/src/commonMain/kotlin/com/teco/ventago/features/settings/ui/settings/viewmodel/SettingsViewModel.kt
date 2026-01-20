@@ -28,8 +28,6 @@ import dev.gitlive.firebase.Firebase
 import dev.gitlive.firebase.auth.auth
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.IO
-import kotlinx.coroutines.Job
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.flow.launchIn
@@ -50,11 +48,46 @@ class SettingsViewModel(
     private val betaService: BetaService,
     private val quotesService: QuotesService,
 ) : BaseViewModel<SettingsState, SettingsStateUiEvent>(SettingsState()) {
+    private fun normalizeHtmlForComparison(value: String): String {
+        val trimmed = value.trim()
+        if (trimmed.isBlank()) return ""
+        val normalizedBr = trimmed
+            .replace(Regex(">\\s+<"), "><")
+            .replace(Regex("<br\\s*/?>"), "<br/>")
+        val probe = normalizedBr.replace(Regex("\\s"), "")
+        return when (probe) {
+            "",
+            "<p></p>",
+            "<p><br></p>",
+            "<p><br/></p>" -> ""
+            else -> normalizedBr
+        }
+    }
 
-    private var saveQuoteSettingsJob: Job? = null
+    fun isQuoteSettingsDirty(state: SettingsState = uiState.value): Boolean {
+        if (!state.hasQuotesAccess) return false
+        val currentInfo = normalizeHtmlForComparison(state.defaultQuoteAdditionalInfo)
+        val actualInfo = normalizeHtmlForComparison(state.actualDefaultQuoteAdditionalInfo)
+        val infoDirty = state.quoteAdditionalInfoWasEdited && currentInfo != actualInfo
+        return infoDirty ||
+            state.defaultQuoteStyle.trim() != state.actualDefaultQuoteStyle.trim() ||
+            state.quotePrefix.trim() != state.actualQuotePrefix.trim() ||
+            state.defaultQuoteIncludePaymentButton != state.actualDefaultQuoteIncludePaymentButton
+    }
 
     init {
         observeQuoteSettings()
+        viewModelScope.launch {
+            betaService.accessFlow(BetaFeature.QUOTES).collect { hasQuotes ->
+                updateState { copy(hasQuotesAccess = hasQuotes) }
+                if (hasQuotes) {
+                    refreshQuoteSettingsInBackground()
+                }
+            }
+        }
+        viewModelScope.launch {
+            betaService.getFeatures()
+        }
         viewModelScope.launch {
             authService.getFirebaseUser()
                 .combine(authService.getUser()) { fbUser: FirebaseUserDM?, user: User? ->
@@ -120,17 +153,6 @@ class SettingsViewModel(
                             loadingPaymentMethods = false,
                             invoicingEnabled = profile.invoicingActive,
                         )
-                    }
-                }
-
-                // Beta quotes access
-                viewModelScope.launch {
-                    // TODO OScar
-//                    val hasQuotes = betaService.hasAccess(BetaFeature.QUOTES)
-                    val hasQuotes = true
-                    updateState { copy(hasQuotesAccess = hasQuotes) }
-                    if (hasQuotes) {
-                        refreshQuoteSettingsInBackground()
                     }
                 }
 
@@ -203,6 +225,15 @@ class SettingsViewModel(
     fun resetChanges() {
         resetImage()
         initialChanges()
+        updateState {
+            copy(
+                defaultQuoteAdditionalInfo = actualDefaultQuoteAdditionalInfo,
+                quoteAdditionalInfoWasEdited = false,
+                defaultQuoteStyle = actualDefaultQuoteStyle,
+                quotePrefix = actualQuotePrefix,
+                defaultQuoteIncludePaymentButton = actualDefaultQuoteIncludePaymentButton
+            )
+        }
     }
 
     fun initialChanges() {
@@ -228,13 +259,16 @@ class SettingsViewModel(
     }
 
     fun setDefaultQuoteAdditionalInfo(value: String) {
-        updateState { copy(defaultQuoteAdditionalInfo = value) }
-        scheduleQuoteSettingsSave()
+        updateState { copy(defaultQuoteAdditionalInfo = value, quoteAdditionalInfoWasEdited = true) }
     }
 
     fun setDefaultQuoteStyle(value: String) {
         updateState { copy(defaultQuoteStyle = value) }
-        scheduleQuoteSettingsSave()
+    }
+
+    fun setQuotePrefix(value: String) {
+        val normalized = value.trim().take(5)
+        updateState { copy(quotePrefix = normalized) }
     }
 
     private fun observeQuoteSettings() {
@@ -255,28 +289,53 @@ class SettingsViewModel(
 
     private fun applyQuoteSettings(settings: QuoteSettings) {
         updateState {
+            val hasUnsavedChanges = isQuoteSettingsDirty(this)
+            val nextAdditionalInfo = if (hasUnsavedChanges) defaultQuoteAdditionalInfo else settings.defaultAdditionalInfo
+            val nextStyle = if (hasUnsavedChanges) defaultQuoteStyle else settings.defaultQuoteStyle
+            val nextPrefix = if (hasUnsavedChanges) quotePrefix else settings.quotePrefix
+            val nextIncludePayment = if (hasUnsavedChanges) {
+                defaultQuoteIncludePaymentButton
+            } else {
+                settings.defaultIncludePaymentButton
+            }
             copy(
-                defaultQuoteAdditionalInfo = settings.defaultAdditionalInfo,
-                defaultQuoteStyle = settings.defaultQuoteStyle,
-                defaultQuoteIncludePaymentButton = settings.defaultIncludePaymentButton
+                actualDefaultQuoteAdditionalInfo = settings.defaultAdditionalInfo,
+                defaultQuoteAdditionalInfo = nextAdditionalInfo,
+                quoteAdditionalInfoWasEdited = if (hasUnsavedChanges) quoteAdditionalInfoWasEdited else false,
+                actualDefaultQuoteStyle = settings.defaultQuoteStyle,
+                defaultQuoteStyle = nextStyle,
+                actualQuotePrefix = settings.quotePrefix,
+                quotePrefix = nextPrefix,
+                actualDefaultQuoteIncludePaymentButton = settings.defaultIncludePaymentButton,
+                defaultQuoteIncludePaymentButton = nextIncludePayment
             )
         }
     }
 
-    private fun scheduleQuoteSettingsSave() {
-        if (!uiState.value.hasQuotesAccess) {
-            return
-        }
+    private suspend fun updateQuoteSettings(): Boolean? {
+        val state = uiState.value
+        if (!isQuoteSettingsDirty(state)) return null
+        val infoDirty = state.quoteAdditionalInfoWasEdited &&
+            normalizeHtmlForComparison(state.defaultQuoteAdditionalInfo) != normalizeHtmlForComparison(state.actualDefaultQuoteAdditionalInfo)
         val settings = QuoteSettings(
-            defaultQuoteStyle = uiState.value.defaultQuoteStyle,
-            defaultAdditionalInfo = uiState.value.defaultQuoteAdditionalInfo,
-            defaultIncludePaymentButton = uiState.value.defaultQuoteIncludePaymentButton
+            defaultQuoteStyle = state.defaultQuoteStyle,
+            defaultAdditionalInfo = if (infoDirty) state.defaultQuoteAdditionalInfo else state.actualDefaultQuoteAdditionalInfo,
+            quotePrefix = state.quotePrefix,
+            defaultIncludePaymentButton = state.defaultQuoteIncludePaymentButton
         )
-        saveQuoteSettingsJob?.cancel()
-        saveQuoteSettingsJob = viewModelScope.launch {
-            delay(700)
-            quotesService.updateQuoteSettings(settings)
+        val updated = quotesService.updateQuoteSettings(settings)
+        if (updated) {
+            updateState {
+                copy(
+                    actualDefaultQuoteAdditionalInfo = if (infoDirty) defaultQuoteAdditionalInfo else actualDefaultQuoteAdditionalInfo,
+                    actualDefaultQuoteStyle = defaultQuoteStyle,
+                    actualQuotePrefix = quotePrefix,
+                    actualDefaultQuoteIncludePaymentButton = defaultQuoteIncludePaymentButton,
+                    quoteAdditionalInfoWasEdited = false
+                )
+            }
         }
+        return updated
     }
 
     fun onNameChange(name: String) {
@@ -429,6 +488,9 @@ class SettingsViewModel(
         }
         if (uiState.value.sharedImage != null) {
             tasks.add { updateBusinessLogo() }
+        }
+        if (isQuoteSettingsDirty(uiState.value)) {
+            tasks.add { updateQuoteSettings() }
         }
         if (tasks.isEmpty()) {
             return

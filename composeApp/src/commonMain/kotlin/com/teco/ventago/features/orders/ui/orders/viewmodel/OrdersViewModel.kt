@@ -2,7 +2,8 @@ package com.teco.ventago.features.orders.ui.orders.viewmodel
 
 import androidx.lifecycle.viewModelScope
 import com.teco.ventago.core.BaseViewModel
-import com.teco.ventago.features.auth.domain.IAuthService
+import com.teco.ventago.core.beta.BetaFeature
+import com.teco.ventago.core.beta.BetaService
 import com.teco.ventago.features.business.domain.BusinessService
 import com.teco.ventago.features.business.domain.model.Business
 import com.teco.ventago.features.orders.domain.OrderService
@@ -21,7 +22,8 @@ import ventago.composeapp.generated.resources.*
 
 class OrdersViewModel(
     private val orderService: OrderService,
-    private val businessService: BusinessService
+    private val businessService: BusinessService,
+    private val betaService: BetaService,
 ) : BaseViewModel<OrdersState, OrdersUiEvent>(OrdersState()) {
 
     var businessId: Int = businessService.business.value?.businessId ?: -1
@@ -36,6 +38,14 @@ class OrdersViewModel(
         println("ASDADS: viewmodel instance: $this")
         updateState { copy(isLoadingOrders = true) }
         loadOrders()
+        viewModelScope.launch {
+            betaService.getFeatures()
+        }
+        viewModelScope.launch {
+            betaService.accessFlow(BetaFeature.QUOTES).collect { hasAccess ->
+                updateState { copy(hasQuotesAccess = hasAccess) }
+            }
+        }
         viewModelScope.launch {
             orderService.observe().onEach { orders ->
                 if (orders.isNotEmpty()) {

@@ -266,7 +266,10 @@
     <string name="pos_change">Change</string>
     <string name="pos_see_ticket">See or send invoice</string>
     <string name="pos_new_sale">New Sale</string>
+    <string name="pos_new_invoice">New Invoice</string>
     <string name="pos_new_quote">New Quote</string>
+    <string name="pos_edit_quote">Edit Quote</string>
+    <string name="pos_update_quote">Update Quote</string>
     <string name="pos_clients_tag">Tags</string>
     <string name="pos_clients_email">Email (Optional)</string>
     <string name="pos_clients_ruc">Tax identification (Optional)</string>
@@ -453,7 +456,9 @@
     <string name="customer_ruc">Customer RUC</string>
     <string name="quote_summary">Quote Summary</string>
     <string name="quote_success">Quote Created</string>
-    <string name="generate_quote">Generate Quote</string>
+    <string name="quote_updated">Quote Updated</string>
+    <string name="generate_quote">Create Quote</string>
+    <string name="update_quote">Update Quote</string>
     <string name="new_quote">New Quote</string>
     <string name="download_pdf">Download PDF</string>
     <string name="quote_style">Quote Style</string>
@@ -473,6 +478,7 @@
     <string name="quote_settings">Quote settings</string>
     <string name="default_additional_info">Default additional info</string>
     <string name="default_quote_style">Default quote style</string>
+    <string name="quote_prefix">Quote prefix</string>
     <string name="view_quotes">View quotes</string>
     <string name="quote_style_minimal">Minimalista</string>
     <string name="quote_style_corporate">Corporativo</string>
@@ -481,6 +487,7 @@
     <string name="preview_quote_styles">Preview quote styles</string>
     <string name="quote_style_preview_title">Quote style preview</string>
     <string name="use_quote_style">Use this style</string>
+    <string name="create_order">Create order</string>
     <string name="save_default_additional_info">Save as default</string>
     <string name="quote_items_label">Items</string>
     <string name="quote_subtotal_label">Subtotal</string>

@@ -1,17 +1,36 @@
 package com.teco.ventago.features.quotes.ui.details
 
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.material3.Button
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.Email
+import androidx.compose.material.icons.outlined.FileDownload
+import androidx.compose.material.icons.rounded.MoreVert
+import androidx.compose.material3.BottomSheetDefaults
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.ModalBottomSheet
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
-import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -19,18 +38,40 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
-import androidx.compose.ui.Modifier
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import androidx.navigation.NavBackStackEntry
+import com.teco.ventago.design_system.buttons.ButtonM
+import com.teco.ventago.design_system.buttons.OutlinedButtonM
+import com.teco.ventago.design_system.loaders.shimmerBrush
+import com.teco.ventago.design_system.molecules.TicketDivider
+import com.teco.ventago.design_system.theme.bodyMedium
+import com.teco.ventago.design_system.theme.bodyMediumBold
+import com.teco.ventago.design_system.theme.bodySmall
+import com.teco.ventago.design_system.theme.latoFontFamily
+import com.teco.ventago.design_system.theme.vanishedBackgroundColor
+import com.teco.ventago.features.quotes.domain.QuoteSelectionStore
 import com.teco.ventago.features.quotes.domain.models.Quote
+import com.teco.ventago.features.quotes.domain.models.QuoteLine
 import com.teco.ventago.features.quotes.domain.models.QuoteStatus
+import com.teco.ventago.utils.DateFormat
+import com.teco.ventago.utils.formatNumberToMoney
 import org.jetbrains.compose.resources.stringResource
 import ventago.composeapp.generated.resources.Res
 import ventago.composeapp.generated.resources.download_pdf
 import ventago.composeapp.generated.resources.send_by_email
 import ventago.composeapp.generated.resources.cancel_quote
 import ventago.composeapp.generated.resources.modify_quote
-import ventago.composeapp.generated.resources.quote_details
+import ventago.composeapp.generated.resources.create_order
+import ventago.composeapp.generated.resources.additional_info
 import com.teco.ventago.design_system.textfields.DMOutlinedTextField
 import ventago.composeapp.generated.resources.cancel
 import ventago.composeapp.generated.resources.email
@@ -39,171 +80,548 @@ import ventago.composeapp.generated.resources.cancel_reason_min
 import ventago.composeapp.generated.resources.customer
 import ventago.composeapp.generated.resources.invalid_email
 import ventago.composeapp.generated.resources.quote_number
-import ventago.composeapp.generated.resources.status
 import ventago.composeapp.generated.resources.total
-import ventago.composeapp.generated.resources.quote_number
 import ventago.composeapp.generated.resources.quote_status_accepted
 import ventago.composeapp.generated.resources.quote_status_cancelled
 import ventago.composeapp.generated.resources.quote_status_created
 import ventago.composeapp.generated.resources.quote_status_draft
 import ventago.composeapp.generated.resources.quote_status_rejected
-import ventago.composeapp.generated.resources.status
-import ventago.composeapp.generated.resources.total
+import ventago.composeapp.generated.resources.items
+import ventago.composeapp.generated.resources.created
+import ventago.composeapp.generated.resources.quote_subtotal_label
+import ventago.composeapp.generated.resources.quote_taxes_label
+import ventago.composeapp.generated.resources.quote_total_label
+import ventago.composeapp.generated.resources.pos_discount
+import ventago.composeapp.generated.resources.phone
+import ventago.composeapp.generated.resources.name
+import com.teco.ventago.navigation.LocalNavController
+import com.teco.ventago.navigation.PosScreens
+import org.koin.compose.viewmodel.koinViewModel
 
 @Composable
 fun QuoteDetailsScreen(
     viewModel: QuoteDetailsViewModel,
     onBack: () -> Unit,
-    onModify: () -> Unit
+    onModify: () -> Unit,
+    onCreateOrder: () -> Unit = {}
 ) {
     val uiState by viewModel.uiState.collectAsState()
+    val selectedQuote = QuoteSelectionStore.selected
 
-    LaunchedEffect(Unit) {
-        if (uiState.quote == null) {
+    LaunchedEffect(selectedQuote?.id, selectedQuote?.quoteNumber, selectedQuote?.displayNumber) {
+        if (selectedQuote != null) {
+            viewModel.loadQuote(
+                quoteId = selectedQuote.id,
+                quoteNumber = selectedQuote.displayNumber ?: selectedQuote.quoteNumber
+            )
+        } else if (uiState.quote == null) {
             viewModel.loadQuote()
         }
     }
 
     when {
         uiState.isLoading -> {
-            Column(modifier = Modifier.fillMaxSize(), horizontalAlignment = androidx.compose.ui.Alignment.CenterHorizontally, verticalArrangement = androidx.compose.foundation.layout.Arrangement.Center) {
-                CircularProgressIndicator()
-            }
+            QuoteDetailsSkeleton()
         }
         uiState.quote == null -> {
             Text("No quote loaded", modifier = Modifier.padding(16.dp))
         }
         else -> QuoteDetailsContent(
             quote = uiState.quote!!,
-            onDownload = { viewModel.downloadPdf() },
-            onSendEmail = { email -> viewModel.sendEmail(email) },
+            isCancelling = uiState.isCancelling,
+            errorMessage = uiState.error,
             onCancel = { reason -> viewModel.cancel(reason) },
-            onModify = onModify
+            onModify = onModify,
+            onCreateOrder = onCreateOrder
         )
     }
 }
 
 @Composable
+private fun QuoteDetailsSkeleton() {
+    val brush = shimmerBrush()
+    val blockShape = RoundedCornerShape(10.dp)
+    Column(
+        modifier = Modifier
+            .padding(horizontal = 8.dp)
+            .verticalScroll(rememberScrollState())
+            .fillMaxSize()
+    ) {
+        Spacer(modifier = Modifier.height(16.dp))
+        Spacer(
+            modifier = Modifier
+                .fillMaxWidth(0.55f)
+                .height(14.dp)
+                .clip(RoundedCornerShape(6.dp))
+                .background(brush)
+        )
+        Spacer(modifier = Modifier.height(12.dp))
+        Spacer(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(72.dp)
+                .clip(blockShape)
+                .background(brush)
+        )
+        Spacer(modifier = Modifier.height(16.dp))
+        Spacer(
+            modifier = Modifier
+                .fillMaxWidth(0.25f)
+                .height(12.dp)
+                .clip(RoundedCornerShape(6.dp))
+                .background(brush)
+        )
+        Spacer(modifier = Modifier.height(8.dp))
+        Spacer(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(220.dp)
+                .clip(blockShape)
+                .background(brush)
+        )
+        Spacer(modifier = Modifier.height(16.dp))
+        Spacer(
+            modifier = Modifier
+                .fillMaxWidth(0.3f)
+                .height(12.dp)
+                .clip(RoundedCornerShape(6.dp))
+                .background(brush)
+        )
+        Spacer(modifier = Modifier.height(8.dp))
+        Spacer(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(140.dp)
+                .clip(blockShape)
+                .background(brush)
+        )
+        Spacer(modifier = Modifier.height(16.dp))
+        repeat(5) {
+            Spacer(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(44.dp)
+                    .clip(RoundedCornerShape(8.dp))
+                    .background(brush)
+            )
+            Spacer(modifier = Modifier.height(8.dp))
+        }
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
 private fun QuoteDetailsContent(
     quote: Quote,
-    onDownload: () -> Unit,
-    onSendEmail: (String) -> Unit,
+    isCancelling: Boolean,
+    errorMessage: String?,
     onCancel: (String) -> Unit,
-    onModify: () -> Unit
+    onModify: () -> Unit,
+    onCreateOrder: () -> Unit
 ) {
     val statusLabel = quoteStatusLabel(quote.status)
-    val invalidEmailText = stringResource(Res.string.invalid_email)
+    val (statusTextColor, statusBgColor) = quoteStatusColors(quote.status)
     val cancelReasonMinText = stringResource(Res.string.cancel_reason_min)
-    var showEmailDialog by remember { mutableStateOf(false) }
-    var emailInput by remember { mutableStateOf(quote.customerEmail.orEmpty()) }
-    var emailError by remember { mutableStateOf<String?>(null) }
+    val additionalInfoLabel = stringResource(Res.string.additional_info)
 
-    var showCancelDialog by remember { mutableStateOf(false) }
+    var showCancelSheet by remember { mutableStateOf(false) }
     var cancelReason by remember { mutableStateOf("") }
     var cancelError by remember { mutableStateOf<String?>(null) }
+    var pendingCancel by remember { mutableStateOf(false) }
+    val cancelSheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+    val showLimitedActions = quote.status == QuoteStatus.CANCELLED || quote.status == QuoteStatus.ACCEPTED
 
-    Column(modifier = Modifier.fillMaxSize().padding(16.dp)) {
-        Text(text = stringResource(Res.string.quote_details), style = MaterialTheme.typography.titleMedium)
-        Spacer(Modifier.height(8.dp))
-        Text(text = "${stringResource(Res.string.quote_number)}: ${quote.quoteNumber.orEmpty()}")
-        Text(text = "${stringResource(Res.string.customer)}: ${quote.customerName.orEmpty()}")
-        Text(text = "${stringResource(Res.string.status)}: $statusLabel")
-        Text(text = "${stringResource(Res.string.total)}: ${quote.totals?.total ?: 0.0}")
+    val items = quote.lines.orEmpty()
+    val totals = quote.totals
+    val customerName = quote.finalCustomerInfo?.name ?: quote.customerName.orEmpty()
+    val customerEmail = quote.finalCustomerInfo?.email ?: quote.customerEmail.orEmpty()
+    val customerPhone = quote.finalCustomerInfo?.phone ?: quote.customerPhone.orEmpty()
+    val customerRuc = quote.customerRuc.orEmpty()
+    val hasCustomerInfo = listOf(customerName, customerEmail, customerPhone, customerRuc)
+        .any { it.isNotBlank() }
+    val additionalInfo = formatAdditionalInfo(quote.additionalInfo)
+    val hasAdditionalInfo = additionalInfo.isNotBlank() && !isBlankHtml(quote.additionalInfo)
 
-        Spacer(Modifier.height(16.dp))
-        Button(onClick = onDownload, modifier = Modifier.fillMaxWidth()) {
-            Text(text = stringResource(Res.string.download_pdf))
-        }
-        Spacer(Modifier.height(8.dp))
-        Button(onClick = { showEmailDialog = true }, modifier = Modifier.fillMaxWidth()) {
-            Text(text = stringResource(Res.string.send_by_email))
-        }
-        Spacer(Modifier.height(8.dp))
-        Button(onClick = { showCancelDialog = true }, modifier = Modifier.fillMaxWidth()) {
-            Text(text = stringResource(Res.string.cancel_quote))
-        }
-        Spacer(Modifier.height(8.dp))
-        Button(onClick = onModify, modifier = Modifier.fillMaxWidth()) {
-            Text(text = stringResource(Res.string.modify_quote))
+    LaunchedEffect(isCancelling, errorMessage) {
+        if (pendingCancel && !isCancelling) {
+            if (errorMessage.isNullOrBlank()) {
+                showCancelSheet = false
+                cancelReason = ""
+                cancelError = null
+            } else {
+                cancelError = errorMessage
+            }
+            pendingCancel = false
         }
     }
 
-    if (showEmailDialog) {
-        AlertDialog(
-            onDismissRequest = { showEmailDialog = false },
-            title = { Text(stringResource(Res.string.send_by_email)) },
-            text = {
-                Column {
-                    DMOutlinedTextField(
-                        label = stringResource(Res.string.email),
+    Column(
+        modifier = Modifier
+            .padding(horizontal = 8.dp)
+            .verticalScroll(rememberScrollState())
+            .fillMaxSize()
+    ) {
+        QuoteDetailsHeader(
+            quote = quote,
+            statusLabel = statusLabel,
+            statusTextColor = statusTextColor,
+            statusBackgroundColor = statusBgColor
+        )
+
+        Spacer(modifier = Modifier.height(8.dp))
+        Text(
+            modifier = Modifier.padding(start = 8.dp, bottom = 16.dp),
+            text = stringResource(Res.string.items),
+            style = TextStyle(
+                fontSize = 12.sp,
+                fontFamily = latoFontFamily(),
+                fontWeight = FontWeight(700),
+                color = Color(0xFF7C8988),
+                textAlign = TextAlign.Center,
+            )
+        )
+
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 8.dp)
+                .background(vanishedBackgroundColor(), RoundedCornerShape(10.dp)),
+            verticalArrangement = Arrangement.Center,
+        ) {
+            Spacer(modifier = Modifier.height(16.dp))
+            items.forEach { item ->
+                QuoteDetailsItem(quoteLine = item)
+            }
+            TicketDivider(color = MaterialTheme.colorScheme.outlineVariant)
+            Spacer(modifier = Modifier.height(8.dp))
+            QuoteSummaryRow(
+                label = stringResource(Res.string.quote_subtotal_label),
+                amount = formatMoney(totals?.subtotal)
+            )
+            QuoteSummaryRow(
+                label = stringResource(Res.string.pos_discount),
+                amount = formatMoney(totals?.discount)
+            )
+            QuoteSummaryRow(
+                label = stringResource(Res.string.quote_taxes_label),
+                amount = formatMoney(totals?.taxes)
+            )
+            Row(
+                modifier = Modifier.fillMaxWidth()
+                    .padding(bottom = 4.dp, start = 16.dp, end = 16.dp),
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                Text(
+                    modifier = Modifier,
+                    text = stringResource(Res.string.quote_total_label),
+                    style = bodyMediumBold()
+                )
+                Spacer(modifier = Modifier.weight(1f, fill = true))
+                Text(
+                    text = formatMoney(totals?.total),
+                    style = bodyMediumBold(color = MaterialTheme.colorScheme.primary)
+                )
+            }
+
+            if (hasCustomerInfo) {
+                TicketDivider(color = MaterialTheme.colorScheme.outlineVariant)
+                Spacer(modifier = Modifier.height(8.dp))
+                TicketSectionTitle(text = stringResource(Res.string.customer))
+                if (customerName.isNotBlank()) {
+                    QuoteDetailRow(label = stringResource(Res.string.name), value = customerName)
+                }
+                if (customerRuc.isNotBlank()) {
+                    QuoteDetailRow(label = "RUC", value = customerRuc)
+                }
+                if (customerEmail.isNotBlank()) {
+                    QuoteDetailRow(label = stringResource(Res.string.email), value = customerEmail)
+                }
+                if (customerPhone.isNotBlank()) {
+                    QuoteDetailRow(label = stringResource(Res.string.phone), value = customerPhone)
+                }
+            }
+
+            if (hasAdditionalInfo) {
+                TicketDivider(color = MaterialTheme.colorScheme.outlineVariant)
+                Spacer(modifier = Modifier.height(8.dp))
+                TicketSectionTitle(text = additionalInfoLabel)
+                Text(text = additionalInfo, style = bodySmall())
+            }
+
+            Spacer(modifier = Modifier.height(8.dp))
+        }
+
+        if (!showLimitedActions) {
+            Spacer(Modifier.height(16.dp))
+
+            ButtonM(
+                onClick = onCreateOrder,
+                containerColor = MaterialTheme.colorScheme.secondaryContainer,
+                contentColor = MaterialTheme.colorScheme.onSecondaryContainer
+            ) {
+                Text(text = stringResource(Res.string.create_order))
+            }
+            Spacer(Modifier.height(8.dp))
+            OutlinedButtonM(
+                onClick = onModify,
+                contentColor = MaterialTheme.colorScheme.secondary,
+                border = BorderStroke(1.dp, MaterialTheme.colorScheme.secondary)
+            ) {
+                Text(text = stringResource(Res.string.modify_quote))
+            }
+            Spacer(Modifier.height(8.dp))
+            OutlinedButtonM(
+                onClick = { showCancelSheet = true },
+                containerColor = MaterialTheme.colorScheme.errorContainer,
+                contentColor = MaterialTheme.colorScheme.error,
+                border = BorderStroke(1.dp, MaterialTheme.colorScheme.error)
+            ) {
+                Text(text = stringResource(Res.string.cancel_quote))
+            }
+        }
+        Spacer(Modifier.height(24.dp))
+    }
+
+    if (showCancelSheet) {
+        ModalBottomSheet(
+            onDismissRequest = { showCancelSheet = false },
+            sheetState = cancelSheetState,
+            containerColor = MaterialTheme.colorScheme.background,
+            dragHandle = { BottomSheetDefaults.DragHandle() }
+        ) {
+            Column(modifier = Modifier.padding(16.dp)) {
+                Text(
+                    text = "Por favor proporcione una razón para cancelar esta cotización (mínimo 10 caracteres).",
+                    style = bodySmall(),
+                    color = MaterialTheme.colorScheme.onSurface
+                )
+                Spacer(modifier = Modifier.height(12.dp))
+                DMOutlinedTextField(
+                    label = stringResource(Res.string.reason),
+                    modifier = Modifier.fillMaxWidth(),
+                    text = cancelReason,
+                    onChange = {
+                        cancelReason = it
+                        cancelError = null
+                    },
+                    enabled = !isCancelling,
+                    isError = cancelError != null
+                )
+                cancelError?.let { Text(it, color = MaterialTheme.colorScheme.error) }
+                Spacer(modifier = Modifier.height(16.dp))
+                ButtonM(
+                    onClick = {
+                        if (cancelReason.length < 10) {
+                            cancelError = cancelReasonMinText
+                            return@ButtonM
+                        }
+                        pendingCancel = true
+                        onCancel(cancelReason)
+                    },
+                    containerColor = MaterialTheme.colorScheme.error,
+                    contentColor = MaterialTheme.colorScheme.onError,
+                    enabled = !isCancelling
+                ) {
+                    Row(
                         modifier = Modifier.fillMaxWidth(),
-                        text = emailInput,
-                        onChange = {
-                            emailInput = it
-                            emailError = null
-                        },
-                        isError = emailError != null
-                    )
-                    emailError?.let { Text(it, color = MaterialTheme.colorScheme.error) }
-                }
-            },
-            confirmButton = {
-                Button(onClick = {
-                    if (emailInput.isBlank() || !emailInput.contains("@")) {
-                        emailError = invalidEmailText
-                        return@Button
+                        horizontalArrangement = Arrangement.Center,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        if (isCancelling) {
+                            CircularProgressIndicator(
+                                modifier = Modifier.size(18.dp),
+                                strokeWidth = 2.dp,
+                                color = MaterialTheme.colorScheme.onError
+                            )
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text("Cancelando...")
+                        } else {
+                            Text(stringResource(Res.string.cancel_quote))
+                        }
                     }
-                    onSendEmail(emailInput)
-                    showEmailDialog = false
-                }) {
-                    Text(stringResource(Res.string.send_by_email))
                 }
-            },
-            dismissButton = {
-                Button(onClick = { showEmailDialog = false }) {
+                Spacer(modifier = Modifier.height(8.dp))
+                OutlinedButtonM(
+                    onClick = { showCancelSheet = false },
+                    contentColor = MaterialTheme.colorScheme.secondary,
+                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.secondary),
+                    enabled = !isCancelling
+                ) {
                     Text(stringResource(Res.string.cancel))
                 }
+                Spacer(modifier = Modifier.height(12.dp))
+            }
+        }
+    }
+}
+
+@Composable
+private fun TicketSectionTitle(text: String) {
+    Text(
+        text = text,
+        style = MaterialTheme.typography.labelMedium.copy(
+            fontFamily = latoFontFamily(),
+            fontWeight = FontWeight(700),
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        ),
+        modifier = Modifier.padding(start = 16.dp, end = 16.dp, bottom = 8.dp)
+    )
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun QuoteDetailsActions(
+    backStackEntry: NavBackStackEntry?,
+    navigate: (PosScreens) -> Unit,
+    navigateAny: (Any) -> Unit
+) {
+    val navController = LocalNavController.current
+    val owner = remember(navController, backStackEntry) {
+        runCatching { navController.getBackStackEntry(PosScreens.Quotes.name) }.getOrNull() ?: backStackEntry
+    } ?: return
+
+    val viewModel: QuoteDetailsViewModel = koinViewModel(viewModelStoreOwner = owner)
+    val uiState by viewModel.uiState.collectAsState()
+    val quote = uiState.quote
+    val showLimitedActions = quote?.status == QuoteStatus.CANCELLED || quote?.status == QuoteStatus.ACCEPTED
+
+    var menuExpanded by remember { mutableStateOf(false) }
+    var showEmailSheet by remember { mutableStateOf(false) }
+    var emailInput by remember { mutableStateOf("") }
+    var emailError by remember { mutableStateOf<String?>(null) }
+    var pendingEmail by remember { mutableStateOf(false) }
+    val emailSheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+    val invalidEmailText = stringResource(Res.string.invalid_email)
+
+    LaunchedEffect(showEmailSheet, quote?.customerEmail, quote?.finalCustomerInfo?.email) {
+        if (showEmailSheet && emailInput.isBlank()) {
+            emailInput = (quote?.finalCustomerInfo?.email ?: quote?.customerEmail).orEmpty()
+        }
+    }
+
+    LaunchedEffect(uiState.isSendingEmail, uiState.error) {
+        if (pendingEmail && !uiState.isSendingEmail) {
+            if (uiState.error.isNullOrBlank()) {
+                showEmailSheet = false
+                emailError = null
+            } else {
+                emailError = uiState.error
+            }
+            pendingEmail = false
+        }
+    }
+
+    IconButton(
+        onClick = { menuExpanded = true },
+        enabled = quote != null
+    ) {
+        Icon(
+            imageVector = Icons.Rounded.MoreVert,
+            contentDescription = null,
+            tint = MaterialTheme.colorScheme.primary
+        )
+    }
+
+    DropdownMenu(
+        expanded = menuExpanded,
+        onDismissRequest = { menuExpanded = false }
+    ) {
+        if (!showLimitedActions) {
+            DropdownMenuItem(
+                text = { Text(stringResource(Res.string.send_by_email)) },
+                onClick = {
+                    menuExpanded = false
+                    emailError = null
+                    showEmailSheet = true
+                },
+                leadingIcon = {
+                    Icon(imageVector = Icons.Outlined.Email, contentDescription = null)
+                }
+            )
+        }
+        DropdownMenuItem(
+            text = { Text(stringResource(Res.string.download_pdf)) },
+            onClick = {
+                menuExpanded = false
+                viewModel.downloadPdf()
+            },
+            leadingIcon = {
+                Icon(imageVector = Icons.Outlined.FileDownload, contentDescription = null)
             }
         )
     }
 
-    if (showCancelDialog) {
-        AlertDialog(
-            onDismissRequest = { showCancelDialog = false },
-            title = { Text(stringResource(Res.string.cancel_quote)) },
-            text = {
-                Column {
-                    DMOutlinedTextField(
-                        label = stringResource(Res.string.reason),
+    if (showEmailSheet) {
+        ModalBottomSheet(
+            onDismissRequest = {
+                if (!uiState.isSendingEmail) {
+                    showEmailSheet = false
+                }
+            },
+            sheetState = emailSheetState,
+            containerColor = MaterialTheme.colorScheme.background,
+            dragHandle = { BottomSheetDefaults.DragHandle() }
+        ) {
+            Column(modifier = Modifier.padding(16.dp)) {
+                Text(
+                    text = stringResource(Res.string.send_by_email),
+                    style = bodyMediumBold()
+                )
+                Spacer(modifier = Modifier.height(12.dp))
+                DMOutlinedTextField(
+                    label = stringResource(Res.string.email),
+                    modifier = Modifier.fillMaxWidth(),
+                    text = emailInput,
+                    onChange = {
+                        emailInput = it
+                        emailError = null
+                    },
+                    enabled = !uiState.isSendingEmail,
+                    isError = emailError != null
+                )
+                emailError?.let { Text(it, color = MaterialTheme.colorScheme.error) }
+                Spacer(modifier = Modifier.height(16.dp))
+                ButtonM(
+                    onClick = {
+                        if (emailInput.isBlank() || !emailInput.contains("@")) {
+                            emailError = invalidEmailText
+                            return@ButtonM
+                        }
+                        pendingEmail = true
+                        viewModel.sendEmail(emailInput)
+                    },
+                    enabled = !uiState.isSendingEmail
+                ) {
+                    Row(
                         modifier = Modifier.fillMaxWidth(),
-                        text = cancelReason,
-                        onChange = {
-                            cancelReason = it
-                            cancelError = null
-                        },
-                        isError = cancelError != null
-                    )
-                    cancelError?.let { Text(it, color = MaterialTheme.colorScheme.error) }
-                }
-            },
-            confirmButton = {
-                Button(onClick = {
-                    if (cancelReason.length < 10) {
-                        cancelError = cancelReasonMinText
-                        return@Button
+                        horizontalArrangement = Arrangement.Center,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        if (uiState.isSendingEmail) {
+                            CircularProgressIndicator(
+                                modifier = Modifier.size(18.dp),
+                                strokeWidth = 2.dp,
+                                color = MaterialTheme.colorScheme.onPrimary
+                            )
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text("Enviando...")
+                        } else {
+                            Text(stringResource(Res.string.send_by_email))
+                        }
                     }
-                    onCancel(cancelReason)
-                    showCancelDialog = false
-                }) {
-                    Text(stringResource(Res.string.cancel_quote))
                 }
-            },
-            dismissButton = {
-                Button(onClick = { showCancelDialog = false }) {
+                Spacer(modifier = Modifier.height(8.dp))
+                OutlinedButtonM(
+                    onClick = { showEmailSheet = false },
+                    contentColor = MaterialTheme.colorScheme.secondary,
+                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.secondary),
+                    enabled = !uiState.isSendingEmail
+                ) {
                     Text(stringResource(Res.string.cancel))
                 }
+                Spacer(modifier = Modifier.height(12.dp))
             }
-        )
+        }
     }
 }
 
@@ -215,4 +633,204 @@ private fun quoteStatusLabel(status: Int?): String = when (status) {
     QuoteStatus.REJECTED -> stringResource(Res.string.quote_status_rejected)
     QuoteStatus.CANCELLED -> stringResource(Res.string.quote_status_cancelled)
     else -> QuoteStatus.label(status)
+}
+
+@Composable
+private fun quoteStatusColors(status: Int?): Pair<Color, Color> = when (status) {
+    QuoteStatus.DRAFT -> Color(0xFF6C757D) to Color(0xFFE9ECEF)
+    QuoteStatus.CREATED -> MaterialTheme.colorScheme.primary to MaterialTheme.colorScheme.primary.copy(alpha = 0.12f)
+    QuoteStatus.ACCEPTED -> Color(0xFF2E7D32) to Color(0xFFE8F5E9)
+    QuoteStatus.REJECTED -> Color(0xFFD32F2F) to Color(0xFFFFEBEE)
+    QuoteStatus.CANCELLED -> Color(0xFF5C6B73) to Color(0xFFE0E0E0)
+    else -> MaterialTheme.colorScheme.onSurfaceVariant to MaterialTheme.colorScheme.surfaceVariant
+}
+
+@Composable
+private fun QuoteStatusBadge(
+    label: String,
+    textColor: Color,
+    backgroundColor: Color
+) {
+    Surface(
+        color = backgroundColor,
+        shape = RoundedCornerShape(50)
+    ) {
+        Text(
+            modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
+            text = label,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+            style = TextStyle(
+                fontSize = 12.sp,
+                fontFamily = latoFontFamily(),
+                fontWeight = FontWeight(600),
+                color = textColor
+            )
+        )
+    }
+}
+
+@Composable
+private fun QuoteDetailsHeader(
+    quote: Quote,
+    statusLabel: String,
+    statusTextColor: Color,
+    statusBackgroundColor: Color
+) {
+    val createdAt = quote.createdAt?.let { DateFormat.getOrdersFormattedDate(it) }.orEmpty()
+    Column(modifier = Modifier.padding(horizontal = 8.dp, vertical = 16.dp)) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Row {
+                Column(modifier = Modifier.padding(end = 8.dp)) {
+                    QuoteHeaderLabel(text = stringResource(Res.string.quote_number))
+                    QuoteHeaderLabel(text = stringResource(Res.string.created))
+                    QuoteHeaderLabel(text = stringResource(Res.string.total))
+                }
+                Column {
+                    QuoteHeaderValue(text = quote.displayNumberOrQuoteNumber)
+                    QuoteHeaderValue(text = if (createdAt.isBlank()) "-" else createdAt)
+                    QuoteHeaderValue(text = formatMoney(quote.totals?.total))
+                }
+            }
+            QuoteStatusBadge(
+                label = statusLabel,
+                textColor = statusTextColor,
+                backgroundColor = statusBackgroundColor
+            )
+        }
+    }
+}
+
+@Composable
+private fun QuoteHeaderLabel(text: String) {
+    Text(
+        maxLines = 1,
+        text = text,
+        style = TextStyle(
+            fontSize = 12.sp,
+            fontFamily = latoFontFamily(),
+            fontWeight = FontWeight(600),
+            color = Color(0xFF7C8988),
+        )
+    )
+    Spacer(modifier = Modifier.height(8.dp))
+}
+
+@Composable
+private fun QuoteHeaderValue(text: String) {
+    Text(
+        maxLines = 1,
+        modifier = Modifier.padding(top = 8.dp),
+        text = text,
+        style = TextStyle(
+            fontSize = 12.sp,
+            fontFamily = latoFontFamily(),
+            fontWeight = FontWeight(600),
+            color = Color(0xFF1A1A1A),
+        )
+    )
+}
+
+@Composable
+private fun QuoteDetailsItem(quoteLine: QuoteLine) {
+    Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween
+        ) {
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis,
+                    text = quoteLine.itemName.orEmpty(),
+                    style = bodyMedium()
+                )
+                Text(
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    text = formatMoney(quoteLine.unitPrice),
+                    style = bodySmall()
+                )
+            }
+            Spacer(modifier = Modifier.width(8.dp))
+            Text(
+                modifier = Modifier.padding(bottom = 4.dp),
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                text = "${formatQuantity(quoteLine.quantity)}x",
+                style = bodyMediumBold()
+            )
+        }
+    }
+}
+
+@Composable
+private fun QuoteSummaryRow(label: String, amount: String) {
+    Row(
+        modifier = Modifier.fillMaxWidth()
+            .padding(bottom = 4.dp, start = 16.dp, end = 16.dp),
+        horizontalArrangement = Arrangement.SpaceBetween
+    ) {
+        Text(text = label, style = bodyMedium())
+        Spacer(modifier = Modifier.weight(1f, fill = true))
+        Text(text = amount, style = bodyMedium())
+    }
+}
+
+@Composable
+private fun QuoteDetailRow(label: String, value: String) {
+    Row(
+        modifier = Modifier.fillMaxWidth()
+            .padding(bottom = 6.dp),
+        horizontalArrangement = Arrangement.SpaceBetween
+    ) {
+        Text(text = label, style = bodyMedium())
+        Spacer(modifier = Modifier.weight(1f, fill = true))
+        Text(text = value, style = bodyMedium())
+    }
+}
+
+private fun formatMoney(value: Double?): String {
+    return formatNumberToMoney((value ?: 0.0).toString())
+}
+
+private fun formatAdditionalInfo(value: String?): String {
+    val raw = value.orEmpty().trim()
+    if (raw.isBlank()) return ""
+    return raw
+        .replace("<br>", "\n", ignoreCase = true)
+        .replace("<br/>", "\n", ignoreCase = true)
+        .replace("<br />", "\n", ignoreCase = true)
+        .replace("</p>", "\n", ignoreCase = true)
+        .replace(Regex("<[^>]*>"), "")
+        .replace("&nbsp;", " ")
+        .replace("\n\n", "\n")
+        .trim()
+}
+
+private fun normalizeHtml(value: String?): String {
+    val raw = value.orEmpty().trim()
+    if (raw.isBlank()) return ""
+    return raw.replace("\\s".toRegex(), "")
+}
+
+private fun isBlankHtml(value: String?): Boolean {
+    val normalized = normalizeHtml(value)
+    return normalized.isEmpty() ||
+        normalized == "<p></p>" ||
+        normalized == "<p><br></p>" ||
+        normalized == "<p><br/></p>"
+}
+
+private fun formatQuantity(value: Double?): String {
+    val safe = value ?: 0.0
+    return if (safe % 1.0 == 0.0) {
+        safe.toInt().toString()
+    } else {
+        safe.toString()
+    }
 }

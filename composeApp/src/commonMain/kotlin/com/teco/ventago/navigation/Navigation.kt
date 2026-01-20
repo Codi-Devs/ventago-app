@@ -54,6 +54,7 @@ import com.teco.ventago.features.orders.ui.order_invoice.OrderInvoiceContent
 import com.teco.ventago.features.orders.ui.orders.OrdersScreen
 import com.teco.ventago.features.orders.ui.orders.OrdersScreenActions
 import com.teco.ventago.features.orders.ui.order_details.OrderDetailsActions
+import com.teco.ventago.features.quotes.ui.details.QuoteDetailsActions
 import com.teco.ventago.features.orders.ui.order_details.viewModel.OrdersDetailsViewModel
 import com.teco.ventago.features.orders.ui.order_history.viewModel.OrderHistoryViewModel
 import com.teco.ventago.features.orders.ui.order_invoice.viewModel.OrderInvoiceViewModel
@@ -213,8 +214,15 @@ enum class PosScreens(
     Quotes(Res.string.quotes),
     QuoteSummaryScreen(Res.string.quote_summary),
     QuoteSuccessScreen(Res.string.quote_success, showAppBar = false, showBackButton = false),
-    QuotesListScreen(Res.string.quotes, true, showBackButton = false),
-    QuoteDetailsScreen(Res.string.quote_details),
+    QuotesListScreen(Res.string.quotes, true, showBackButton = true),
+    QuoteDetailsScreen(
+        Res.string.quote_details,
+        true,
+        showBackButton = true,
+        actions = { backStackEntry, navigate, navigateAny ->
+            QuoteDetailsActions(backStackEntry, navigate, navigateAny)
+        }
+    ),
     CustomersScreen(
         Res.string.pos_clients,
         actions = { backStackEntry, navigate, _ -> ClientListActions(backStackEntry, navigate) }),
@@ -821,9 +829,11 @@ private fun NavGraphBuilder.addQuotesNavigation(
             val viewModel: com.teco.ventago.features.quotes.ui.list.QuotesListViewModel =
                 koinViewModel(viewModelStoreOwner = quotesOwner)
             analyticsService.logScreenView("QuotesListScreen")
-            com.teco.ventago.features.quotes.ui.list.QuotesListScreen(viewModel) { route ->
-                navController.navigate(route.name)
-            }
+            com.teco.ventago.features.quotes.ui.list.QuotesListScreen(
+                viewModel = viewModel,
+                navigate = { route -> navController.navigate(route.name) },
+                onBack = { navController.navigateUp() }
+            )
         }
 
             composable(route = PosScreens.QuoteDetailsScreen.name) {
@@ -836,6 +846,12 @@ private fun NavGraphBuilder.addQuotesNavigation(
                     onBack = { navController.navigateUp() },
                     onModify = {
                         com.teco.ventago.features.quotes.domain.QuoteSelectionStore.startQuoteFlow = true
+                        com.teco.ventago.features.quotes.domain.QuoteSelectionStore.startOrderFlowFromQuote = false
+                        navController.navigate(PosScreens.POSScreen.name)
+                    },
+                    onCreateOrder = {
+                        com.teco.ventago.features.quotes.domain.QuoteSelectionStore.startQuoteFlow = false
+                        com.teco.ventago.features.quotes.domain.QuoteSelectionStore.startOrderFlowFromQuote = true
                         navController.navigate(PosScreens.POSScreen.name)
                     }
                 )
@@ -856,7 +872,10 @@ private fun NavGraphBuilder.addQuotesNavigation(
             val posOwner = rememberSafeGraphOwner(navController, PosScreens.POS.name, quotesOwner)
             val viewModel: PosViewModel = koinViewModel(viewModelStoreOwner = posOwner)
             analyticsService.logScreenView("QuoteSuccessScreen")
-            com.teco.ventago.features.quotes.ui.success.QuoteSuccessScreen(viewModel) { route, builder ->
+            com.teco.ventago.features.quotes.ui.success.QuoteSuccessScreen(
+                viewModel = viewModel,
+                navController = navController
+            ) { route, builder ->
                 navController.navigate(route, builder)
             }
         }

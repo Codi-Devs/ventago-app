@@ -417,14 +417,16 @@ internal fun appModule() = module {
             repository = BetaRepository(
                 provider = BetaProvider(
                     client = get(),
-                    authService = get()
+                    authService = get(),
                 ),
                 logger = get(),
                 json = json
             ),
             authService = get(),
+            businessService = get(),
             storage = get(),
-            json = json
+            json = json,
+            appScope = get(named("AppScope"))
         )
     }
 

@@ -12,7 +12,15 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.tween
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.material.ExperimentalMaterialApi
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Close
@@ -29,6 +37,10 @@ import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Tab
+import androidx.compose.material3.TabRow
+import androidx.compose.material3.TabRowDefaults
+import androidx.compose.material3.TabRowDefaults.tabIndicatorOffset
 import androidx.compose.material3.Text
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
@@ -37,6 +49,7 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -50,6 +63,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.navigation.NavBackStackEntry
 import androidx.navigation.NavOptionsBuilder
+import com.teco.ventago.core.LocalStorage
 import com.teco.ventago.core.camera.PermissionCallback
 import com.teco.ventago.core.camera.PermissionStatus
 import com.teco.ventago.core.camera.PermissionType
@@ -60,6 +74,8 @@ import com.teco.ventago.design_system.molecules.DMAlertDialog
 import com.teco.ventago.design_system.molecules.orders.OrderListItem
 import com.teco.ventago.design_system.organism.LoadingSheet
 import com.teco.ventago.design_system.theme.latoFontFamily
+import com.teco.ventago.features.quotes.ui.list.QuotesListScreen
+import com.teco.ventago.features.quotes.ui.list.QuotesListViewModel
 import com.teco.ventago.features.orders.ui.orders.viewmodel.OrdersUiEvent
 import com.teco.ventago.features.orders.ui.orders.viewmodel.OrdersViewModel
 import com.teco.ventago.navigation.LocalNavController
@@ -69,14 +85,20 @@ import com.teco.ventago.utils.DateFormat.getFormattedDate
 import org.jetbrains.compose.resources.painterResource
 import org.jetbrains.compose.resources.stringResource
 import org.koin.compose.viewmodel.koinViewModel
+import org.koin.compose.koinInject
 import ventago.composeapp.generated.resources.Res
 import ventago.composeapp.generated.resources.filter_all
 import ventago.composeapp.generated.resources.filter_failed
 import ventago.composeapp.generated.resources.filter_new
 import ventago.composeapp.generated.resources.filter_processing
+import ventago.composeapp.generated.resources.orders
 import ventago.composeapp.generated.resources.orders_empty
+import ventago.composeapp.generated.resources.quotes
 import ventago.composeapp.generated.resources.see_more
 import ventago.composeapp.generated.resources.tax_empty
+import kotlinx.coroutines.delay
+
+private const val KEY_ORDERS_QUOTES_TAB_HINT_SHOWN = "orders_quotes_tab_hint_shown"
 
 @Composable
 fun OrdersScreenActions(backStackEntry: NavBackStackEntry?) {
@@ -153,6 +175,41 @@ fun OrdersScreen(
     navigate: (PosScreens, (NavOptionsBuilder.() -> Unit)?) -> Unit
 ) {
     val uiState by viewModel.uiState.collectAsState()
+    val storage: LocalStorage = koinInject()
+    var selectedTabIndex by rememberSaveable { mutableStateOf(0) }
+    var showQuotesTabHint by remember { mutableStateOf(false) }
+
+    val hintPulseTransition = rememberInfiniteTransition(label = "quotes_tab_hint")
+    val hintPulse by hintPulseTransition.animateFloat(
+        initialValue = 0.25f,
+        targetValue = 0.85f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(durationMillis = 650),
+            repeatMode = RepeatMode.Reverse
+        ),
+        label = "quotes_tab_hint_pulse"
+    )
+//
+    LaunchedEffect(uiState.hasQuotesAccess) {
+        if (!uiState.hasQuotesAccess) {
+            selectedTabIndex = 0
+        }
+    }
+
+    LaunchedEffect(uiState.hasQuotesAccess) {
+        if (uiState.hasQuotesAccess) {
+            val shown = storage.bool(KEY_ORDERS_QUOTES_TAB_HINT_SHOWN) == true
+            if (!shown) {
+                showQuotesTabHint = true
+                delay(4500)
+                showQuotesTabHint = false
+                storage.set(KEY_ORDERS_QUOTES_TAB_HINT_SHOWN, true)
+            }
+        } else {
+            showQuotesTabHint = false
+        }
+    }
+
     val loadingSheetState = rememberModalBottomSheetState(confirmValueChange = { false })
     val pullRefreshState = rememberPullRefreshState(uiState.refreshingOrder, { viewModel.refreshOrders() })
     LaunchedEffect(Unit) {
@@ -191,6 +248,73 @@ fun OrdersScreen(
         modifier = Modifier
             .fillMaxSize(),
     ) {
+        if (uiState.hasQuotesAccess) {
+            TabRow(
+                selectedTabIndex = selectedTabIndex,
+                containerColor = MaterialTheme.colorScheme.background,
+                contentColor = MaterialTheme.colorScheme.secondary,
+                indicator = { tabPositions ->
+                    TabRowDefaults.SecondaryIndicator(
+                        modifier = Modifier.tabIndicatorOffset(tabPositions[selectedTabIndex]),
+                        color = MaterialTheme.colorScheme.secondary
+                    )
+                }
+            ) {
+                Tab(
+                    selected = selectedTabIndex == 0,
+                    onClick = { selectedTabIndex = 0 },
+                    selectedContentColor = MaterialTheme.colorScheme.secondary,
+                    unselectedContentColor = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.7f),
+                    text = { Text(text = stringResource(Res.string.orders)) }
+                )
+                Tab(
+                    selected = selectedTabIndex == 1,
+                    onClick = {
+                        selectedTabIndex = 1
+                        if (showQuotesTabHint) {
+                            showQuotesTabHint = false
+                            storage.set(KEY_ORDERS_QUOTES_TAB_HINT_SHOWN, true)
+                        }
+                    },
+                    selectedContentColor = MaterialTheme.colorScheme.secondary,
+                    unselectedContentColor = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.7f),
+                    text = {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = if (showQuotesTabHint) {
+                                Modifier
+                                    .clip(RoundedCornerShape(999.dp))
+                                    .background(MaterialTheme.colorScheme.secondary.copy(alpha = hintPulse * 0.18f))
+                                    .padding(horizontal = 10.dp, vertical = 6.dp)
+                            } else {
+                                Modifier
+                            }
+                        ) {
+                            Text(text = stringResource(Res.string.quotes))
+                            if (showQuotesTabHint) {
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Box(
+                                    modifier = Modifier
+                                        .size(8.dp)
+                                        .clip(CircleShape)
+                                        .background(MaterialTheme.colorScheme.secondary.copy(alpha = hintPulse))
+                                )
+                            }
+                        }
+                    }
+                )
+            }
+        }
+
+        if (uiState.hasQuotesAccess && selectedTabIndex == 1) {
+            val quotesViewModel: QuotesListViewModel = koinViewModel()
+            QuotesListScreen(
+                viewModel = quotesViewModel,
+                navigate = { route -> navigate(route, null) },
+                onBack = {}
+            )
+            return
+        }
 
         if (uiState.isLoadingOrders && uiState.orders.isEmpty()) {
             LoadingOrdersView()

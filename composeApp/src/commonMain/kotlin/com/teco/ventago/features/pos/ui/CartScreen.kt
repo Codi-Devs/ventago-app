@@ -19,7 +19,9 @@ import com.teco.ventago.utils.toDecimalString
 import org.jetbrains.compose.resources.stringResource
 import org.koin.compose.viewmodel.koinViewModel
 import ventago.composeapp.generated.resources.Res
-import ventago.composeapp.generated.resources.pos_invoicing
+import ventago.composeapp.generated.resources.pos_new_invoice
+import ventago.composeapp.generated.resources.pos_new_quote
+import ventago.composeapp.generated.resources.pos_update_quote
 
 @Composable
 fun CartScreen(viewModel: PosViewModel, navigate: (PosScreens) -> Unit) {
@@ -38,6 +40,11 @@ fun CartScreenBottomBar(backStackEntry: NavBackStackEntry?, navigate: (PosScreen
     
     // Calculate total amount directly from collected state to ensure recomposition
     val totalAmount = CartCalc.summarize(uiState).grandTotal
+    val actionLabel = when {
+        isQuoteFlow && uiState.quoteId != null -> stringResource(Res.string.pos_update_quote)
+        isQuoteFlow -> stringResource(Res.string.pos_new_quote)
+        else -> stringResource(Res.string.pos_new_invoice)
+    }
 
     ButtonM(
         onClick = {
@@ -52,6 +59,6 @@ fun CartScreenBottomBar(backStackEntry: NavBackStackEntry?, navigate: (PosScreen
         },
         modifier = Modifier.padding(start = 16.dp, end = 16.dp, bottom = 16.dp)
     ) {
-        Text("${stringResource(Res.string.pos_invoicing)} ${formatNumberToMoney(totalAmount.toDecimalString())}")
+        Text("$actionLabel ${formatNumberToMoney(totalAmount.toDecimalString())}")
     }
 }

@@ -79,9 +79,9 @@ import ventago.composeapp.generated.resources.dgi
 import ventago.composeapp.generated.resources.ic_arrow_forward_ios
 import ventago.composeapp.generated.resources.ic_paypal_onboarding
 import ventago.composeapp.generated.resources.pos
+import ventago.composeapp.generated.resources.pos_new_quote
 import ventago.composeapp.generated.resources.quotes
 import ventago.composeapp.generated.resources.sales
-import ventago.composeapp.generated.resources.view_quotes
 import ventago.composeapp.generated.resources.yappy_logo
 import ventago.composeapp.generated.resources.yappy_logo_portrait
 
@@ -156,98 +156,91 @@ fun HomeScreen(
         }
 
 
-        Card(
-            modifier = Modifier.padding(top = 16.dp, start = 16.dp, end = 16.dp).height(90.dp),
-            elevation = CardDefaults.cardElevation(4.dp),
-            colors = CardDefaults.cardColors(
-                containerColor = MaterialTheme.colorScheme.secondary
-            ),
-            onClick = {
-                navigate(PosScreens.POS)
-            }
-        ) {
+        val actionRowPadding = Modifier.padding(top = 16.dp, start = 16.dp, end = 16.dp)
+        if (uiState.hasQuotesAccess) {
             Row(
-                modifier = Modifier.fillMaxSize(),
+                modifier = actionRowPadding.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(12.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Image(
-                    modifier = Modifier.padding(start = 16.dp, end = 8.dp),
-                    painter = painterResource(Res.drawable.pos),
-                    contentDescription = "",
-                    colorFilter = androidx.compose.ui.graphics.ColorFilter.tint(MaterialTheme.colorScheme.onSecondary),
-                )
-
-                Text(
-                    text = stringResource(Res.string.pos),
-                    style = headlineLarge().copy(color = MaterialTheme.colorScheme.onSecondary)
-                )
-
-                Spacer(modifier = Modifier.weight(1f))
-
-                Image(
-                    modifier = Modifier.padding(start = 8.dp, end = 16.dp).height(40.dp),
-                    painter = painterResource(Res.drawable.ic_arrow_forward_ios),
-                    colorFilter = androidx.compose.ui.graphics.ColorFilter.tint(MaterialTheme.colorScheme.onSecondary),
-                    contentDescription = "",
-                )
-            }
-
-        }
-
-//        if (uiState.hasQuotesAccess) {
-        if (true) {
-            Card(
-                modifier = Modifier.padding(top = 12.dp, start = 16.dp, end = 16.dp).height(90.dp),
-                elevation = CardDefaults.cardElevation(4.dp),
-                colors = CardDefaults.cardColors(
-                    containerColor = MaterialTheme.colorScheme.primary
-                ),
-                onClick = {
-                    com.teco.ventago.features.quotes.domain.QuoteSelectionStore.startQuoteFlow = true
-                    navigate(PosScreens.POSScreen)
-                }
-            ) {
-                Row(
-                    modifier = Modifier.fillMaxSize(),
-                    verticalAlignment = Alignment.CenterVertically
+                Card(
+                    modifier = Modifier.weight(1f).height(90.dp),
+                    elevation = CardDefaults.cardElevation(4.dp),
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primary),
+                    onClick = {
+                        com.teco.ventago.features.quotes.domain.QuoteSelectionStore.selected = null
+                        com.teco.ventago.features.quotes.domain.QuoteSelectionStore.startQuoteFlow = true
+                        navigate(PosScreens.POSScreen)
+                    }
                 ) {
-                    Icon(
-                        imageVector = Icons.Rounded.Description,
-                        contentDescription = "",
-                        modifier = Modifier.padding(start = 16.dp, end = 8.dp),
-                        tint = MaterialTheme.colorScheme.onPrimary
-                    )
-                    Text(
-                        text = stringResource(Res.string.quotes),
-                        style = headlineLarge().copy(color = MaterialTheme.colorScheme.onPrimary)
-                    )
+                    Column(
+                        modifier = Modifier.fillMaxSize().padding(12.dp),
+                        verticalArrangement = Arrangement.Center,
+                        horizontalAlignment = Alignment.CenterHorizontally
+                    ) {
+                        Icon(
+                            imageVector = Icons.Rounded.Description,
+                            contentDescription = "",
+                            modifier = Modifier.size(28.dp),
+                            tint = MaterialTheme.colorScheme.onPrimary
+                        )
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Text(
+                            text = stringResource(Res.string.pos_new_quote),
+                            style = bodyMediumBold(color = MaterialTheme.colorScheme.onPrimary)
+                        )
+                    }
+                }
 
-                    Spacer(modifier = Modifier.weight(1f))
-
-                    Icon(
-                        imageVector = Icons.Rounded.ReceiptLong,
-                        contentDescription = "",
-                        modifier = Modifier.padding(start = 8.dp, end = 16.dp).height(40.dp),
-                        tint = MaterialTheme.colorScheme.onPrimary
-                    )
+                Card(
+                    modifier = Modifier.weight(1f).height(90.dp),
+                    elevation = CardDefaults.cardElevation(4.dp),
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.secondary),
+                    onClick = { navigate(PosScreens.POS) }
+                ) {
+                    Column(
+                        modifier = Modifier.fillMaxSize().padding(12.dp),
+                        verticalArrangement = Arrangement.Center,
+                        horizontalAlignment = Alignment.CenterHorizontally
+                    ) {
+                        Image(
+                            painter = painterResource(Res.drawable.pos),
+                            contentDescription = "",
+                            modifier = Modifier.size(28.dp),
+                            colorFilter = androidx.compose.ui.graphics.ColorFilter.tint(MaterialTheme.colorScheme.onSecondary),
+                        )
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Text(
+                            text = stringResource(Res.string.pos),
+                            style = bodyMediumBold(color = MaterialTheme.colorScheme.onSecondary)
+                        )
+                    }
                 }
             }
-            TextButton(
-                modifier = Modifier
-                    .padding(top = 6.dp, start = 16.dp, end = 16.dp)
-                    .fillMaxWidth(),
-                onClick = { navigate(PosScreens.QuotesListScreen) }
+        } else {
+            Card(
+                modifier = actionRowPadding.fillMaxWidth().height(90.dp),
+                elevation = CardDefaults.cardElevation(4.dp),
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.secondary),
+                onClick = { navigate(PosScreens.POS) }
             ) {
-                Icon(
-                    imageVector = Icons.Rounded.ReceiptLong,
-                    contentDescription = "",
-                    tint = MaterialTheme.colorScheme.primary
-                )
-                Spacer(modifier = Modifier.width(8.dp))
-                Text(
-                    text = stringResource(Res.string.view_quotes),
-                    style = bodyMediumBold(color = MaterialTheme.colorScheme.primary)
-                )
+                Column(
+                    modifier = Modifier.fillMaxSize().padding(12.dp),
+                    verticalArrangement = Arrangement.Center,
+                    horizontalAlignment = Alignment.CenterHorizontally
+                ) {
+                    Image(
+                        painter = painterResource(Res.drawable.pos),
+                        contentDescription = "",
+                        modifier = Modifier.size(28.dp),
+                        colorFilter = androidx.compose.ui.graphics.ColorFilter.tint(MaterialTheme.colorScheme.onSecondary),
+                    )
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Text(
+                        text = stringResource(Res.string.pos),
+                        style = bodyMediumBold(color = MaterialTheme.colorScheme.onSecondary)
+                    )
+                }
             }
         }
 

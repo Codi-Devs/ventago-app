@@ -12,6 +12,7 @@ data class OrdersState(
     val selectedChip: Int = 0,
     val filterSelected: Int = 0,
     val ordersEnabled: Boolean = true,
+    val hasQuotesAccess: Boolean = false,
     val showScanner: Boolean = false,
     val showPermissionRationalDialog: Boolean = false,
 

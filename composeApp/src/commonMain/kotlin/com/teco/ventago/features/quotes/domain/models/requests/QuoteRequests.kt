@@ -65,6 +65,7 @@ data class QuoteFinalCustomerInfo(
 
 @Serializable
 data class CreateQuoteRequest(
+    @SerialName("branch_code") val branchCode: String? = null,
     @SerialName("customer_id") val customerId: Long? = null,
     @SerialName("final_customer") val finalCustomer: Boolean = false,
     @SerialName("final_customer_info") val finalCustomerInfo: QuoteFinalCustomerInfo? = null,

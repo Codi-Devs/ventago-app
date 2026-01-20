@@ -17,7 +17,7 @@ import kotlinx.serialization.json.Json
 
 class BetaProvider(
     private val client: HttpClient,
-    private val authService: IAuthService
+    private val authService: IAuthService,
 ) {
     private val json = Json {
         ignoreUnknownKeys = true
@@ -25,11 +25,12 @@ class BetaProvider(
         encodeDefaults = true
     }
 
-    suspend fun listFeatures(): ApiResponse {
+    suspend fun listFeatures(businessId: Int): ApiResponse {
         val res = client.get(Configs.ordersBasePath + "/api/v1/beta/features") {
             headers {
                 append(HttpHeaders.Accept, "*/*")
                 append(HttpHeaders.Authorization, "Bearer ${authService.getJwtToken()}")
+                append("X-Business-ID", "$businessId")
                 append(HttpHeaders.ContentType, "application/json")
             }
             contentType(ContentType.Application.Json)
@@ -41,7 +42,7 @@ class BetaProvider(
         if (response.error == ApiError.AUTH_001 || res.status == HttpStatusCode.Unauthorized) {
             return try {
                 authService.refreshToken(client)
-                listFeatures()
+                listFeatures(businessId)
             } catch (e: Exception) {
                 response
             }

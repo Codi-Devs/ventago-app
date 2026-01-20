@@ -75,6 +75,8 @@ import org.koin.compose.KoinContext
 import org.koin.compose.koinInject
 import org.koin.compose.viewmodel.koinViewModel
 import ventago.composeapp.generated.resources.Res
+import ventago.composeapp.generated.resources.pos_edit_quote
+import ventago.composeapp.generated.resources.pos_new_invoice
 import ventago.composeapp.generated.resources.pos_new_quote
 
 val LocalAppChrome = staticCompositionLocalOf<AppChromeState> {
@@ -176,8 +178,9 @@ fun App(
                     val isPosTitleScreen = currentScreen == PosScreens.POSScreen ||
                         currentScreen == PosScreens.POSProductScreen ||
                         currentScreen == PosScreens.CartScreen
+                    val isQuoteSummaryScreen = currentScreen == PosScreens.QuoteSummaryScreen
                     val posBackStackEntry = remember(currentScreen) {
-                        if (isPosTitleScreen) {
+                        if (isPosTitleScreen || isQuoteSummaryScreen) {
                             runCatching { navController.getBackStackEntry(PosScreens.POS.name) }.getOrNull()
                         } else {
                             null
@@ -189,10 +192,16 @@ fun App(
                     val posUiState by posViewModel?.uiState?.collectAsState()
                         ?: remember { mutableStateOf(PosState()) }
                     val appBarTitle = if (currentScreen.showAppBar) {
-                        if (isPosTitleScreen && posUiState.flowMode == FlowMode.QUOTE) {
-                            stringResource(Res.string.pos_new_quote)
-                        } else {
-                            stringResource(currentScreen.title)
+                        when {
+                            (isPosTitleScreen || isQuoteSummaryScreen) && posUiState.flowMode == FlowMode.QUOTE -> {
+                                if (posUiState.quoteId != null) {
+                                    stringResource(Res.string.pos_edit_quote)
+                                } else {
+                                    stringResource(Res.string.pos_new_quote)
+                                }
+                            }
+                            isPosTitleScreen -> stringResource(Res.string.pos_new_invoice)
+                            else -> stringResource(currentScreen.title)
                         }
                     } else {
                         ""

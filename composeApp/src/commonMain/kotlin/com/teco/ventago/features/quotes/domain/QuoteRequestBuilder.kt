@@ -23,6 +23,7 @@ import kotlinx.serialization.json.JsonElement
  * Builds Create/Update quote requests from POS state, matching the JS buildCreateQuoteRequest logic.
  */
 object QuoteRequestBuilder {
+    private const val DEFAULT_QUOTE_BRANCH_CODE = "0000"
 
     fun build(
         state: PosState,
@@ -196,7 +197,11 @@ object QuoteRequestBuilder {
             )
         } else null
 
+        val branchCode = state.branches.getOrNull(state.selectedBranchIndex)?.branchCode
+            ?: DEFAULT_QUOTE_BRANCH_CODE
+
         return CreateQuoteRequest(
+            branchCode = branchCode,
             customerId = if (state.finalCustomer) null else state.customer?.id,
             finalCustomer = state.finalCustomer,
             finalCustomerInfo = finalCustomerInfo,
