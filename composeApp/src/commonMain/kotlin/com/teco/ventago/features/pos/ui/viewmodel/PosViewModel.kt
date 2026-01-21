@@ -238,7 +238,7 @@ class PosViewModel(
 
     private fun isGovernmentLikeCustomer(): Boolean {
         val state = uiState.value
-        if (state.finalCustomer) {
+        if (state.finalCustomer != false) {
             return false
         }
         val ruc = state.customer?.ruc?.uppercase()?.trim().orEmpty()
@@ -433,7 +433,7 @@ class PosViewModel(
                 selectedBillingPointIndex = 0,
                 selectedDocTypeIndex = 0,
                 selectedDocType = "01",
-                finalCustomer = true,
+                finalCustomer = null,
                 finalName = null,
                 finalEmail = null,
                 finalPhone = null,
@@ -547,6 +547,7 @@ class PosViewModel(
     @OptIn(ExperimentalTime::class)
     fun createOrderRequest(createPaymentLink: Boolean, saveAsDraft: Boolean): CreateOrderRequest {
         val state = uiState.value
+        val isFinalCustomer = requireNotNull(state.finalCustomer) { "Customer type not selected" }
 
         val operationDestination = if (state.selectedDocType == "03" || state.selectedDocType == "10") "2" else "1"
 
@@ -569,14 +570,14 @@ class PosViewModel(
         )
 
 
-        val customerId = if (state.finalCustomer) {
+        val customerId = if (isFinalCustomer) {
             null
         } else {
             state.customer?.id
         }
 
         var finalCustomerInfo: FinalCustomerInfo? = null
-        if (state.finalCustomer && (state.finalName != null || state.finalIdNumber != null || state.finalEmail != null)) {
+        if (isFinalCustomer && (state.finalName != null || state.finalIdNumber != null || state.finalEmail != null)) {
             var idType: String? = null
             if (state.finalIdNumber != null) {
                 idType = state.finalIdType
@@ -986,7 +987,7 @@ class PosViewModel(
             invoice = invoice,
             branch = branch,
             customerId = customerId,
-            finalCustomer = state.finalCustomer,
+            finalCustomer = isFinalCustomer,
             finalCustomerInfo = finalCustomerInfo,
             thirdParties = thirdParty,
             orderItems = orderItems,

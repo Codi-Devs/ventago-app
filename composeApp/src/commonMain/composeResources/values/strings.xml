@@ -263,6 +263,14 @@
     <string name="pos_tip">Tip</string>
     <string name="pos_tips">Tips</string>
     <string name="pos_add_tip">Add tip</string>
+    <string name="pos_customer_type_question">Who are you billing?</string>
+    <string name="pos_customer_type_final_title">Final consumer</string>
+    <string name="pos_customer_type_final_desc">People without RUC</string>
+    <string name="pos_customer_type_registered_title">Registered customer</string>
+    <string name="pos_customer_type_registered_desc">Taxpayers with RUC</string>
+    <string name="pos_customer_type_hint">Are you billing a taxpayer? Select Registered customer to use RUC.</string>
+    <string name="pos_customer_type_required_to_continue">Select a customer type to continue.</string>
+    <string name="pos_customer_required_to_continue">Select a registered customer to continue.</string>
     <string name="pos_change">Change</string>
     <string name="pos_see_ticket">See or send invoice</string>
     <string name="pos_new_sale">New Sale</string>

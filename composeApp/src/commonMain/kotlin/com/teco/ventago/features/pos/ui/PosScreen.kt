@@ -3,6 +3,7 @@ package com.teco.ventago.features.pos.ui
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.animateContentSize
 import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -13,33 +14,41 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.selection.selectable
+import androidx.compose.foundation.selection.selectableGroup
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.Business
+import androidx.compose.material.icons.outlined.Info
+import androidx.compose.material.icons.outlined.Person
 import androidx.compose.material.icons.rounded.ExpandMore
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ElevatedCard
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedCard
-import androidx.compose.material3.Tab
-import androidx.compose.material3.TabRow
-import androidx.compose.material3.TabRowDefaults
-import androidx.compose.material3.TabRowDefaults.tabIndicatorOffset
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.rotate
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import com.teco.ventago.core.LocalStorage
 import com.teco.ventago.design_system.buttons.ButtonM
 import com.teco.ventago.design_system.molecules.customer.PosCustomerSelection
 import com.teco.ventago.design_system.textfields.DMOutlinedTextField
@@ -55,6 +64,17 @@ import com.teco.ventago.features.pos.ui.viewmodel.FlowMode
 import com.teco.ventago.features.quotes.domain.QuoteSelectionStore
 import com.teco.ventago.navigation.PosScreens
 import com.teco.ventago.utils.DateFormat
+import org.jetbrains.compose.resources.stringResource
+import org.koin.compose.koinInject
+import ventago.composeapp.generated.resources.Res
+import ventago.composeapp.generated.resources.pos_customer_required_to_continue
+import ventago.composeapp.generated.resources.pos_customer_type_final_desc
+import ventago.composeapp.generated.resources.pos_customer_type_final_title
+import ventago.composeapp.generated.resources.pos_customer_type_hint
+import ventago.composeapp.generated.resources.pos_customer_type_question
+import ventago.composeapp.generated.resources.pos_customer_type_registered_desc
+import ventago.composeapp.generated.resources.pos_customer_type_registered_title
+import ventago.composeapp.generated.resources.pos_customer_type_required_to_continue
 
 @Composable
 fun PosScreen(
@@ -175,11 +195,25 @@ fun PosScreen(
 
         Spacer(modifier = Modifier.weight(1f))
 
+        val customerTypeMissing = uiState.finalCustomer == null
+        val customerMissing = uiState.finalCustomer == false && uiState.customer == null
+        val canContinue = !customerTypeMissing && !customerMissing
+
+        if (customerMissing) {
+            Text(
+                text = stringResource(Res.string.pos_customer_required_to_continue),
+                modifier = Modifier.padding(start = 16.dp, end = 16.dp, bottom = 8.dp),
+                style = bodySmall(),
+                color = MaterialTheme.colorScheme.error
+            )
+        }
+
         ButtonM(
             onClick = {
                 navigate(PosScreens.POSProductScreen)
             },
             modifier = Modifier.padding(start = 16.dp, end = 16.dp, bottom = 24.dp),
+            enabled = canContinue
         ) {
             Text(
                 "Siguiente"
@@ -219,101 +253,218 @@ private fun CustomerSelectorCard(
 ) {
     // local state only for collapsing the optional fields (persist across rotations)
     var extraOpen by rememberSaveable { mutableStateOf(false) }
+    val storage: LocalStorage = koinInject()
+
+    val initialHintShownCount = remember { storage.int(KEY_CUSTOMER_TYPE_HINT_SHOWN_COUNT) ?: 0 }
+    var hasSelectedRegisteredOnce by rememberSaveable {
+        mutableStateOf(storage.bool(KEY_HAS_SELECTED_REGISTERED_ONCE) == true)
+    }
+    val shouldShowHint = (uiState.finalCustomer == null) &&
+        (initialHintShownCount < 2) &&
+        !hasSelectedRegisteredOnce
+
+    LaunchedEffect(shouldShowHint) {
+        if (!shouldShowHint) return@LaunchedEffect
+        storage.set(KEY_CUSTOMER_TYPE_HINT_SHOWN_COUNT, initialHintShownCount + 1)
+    }
+
+    fun selectCustomerType(isFinalCustomer: Boolean) {
+        if (!uiState.enabledSelectionDocType) return
+        if (!isFinalCustomer && !hasSelectedRegisteredOnce) {
+            hasSelectedRegisteredOnce = true
+            storage.set(KEY_HAS_SELECTED_REGISTERED_ONCE, true)
+        }
+        onFinalToggle(isFinalCustomer)
+        extraOpen = false
+    }
 
     Column(Modifier.padding(16.dp)) {
-        Text("Cliente", style = MaterialTheme.typography.titleMedium)
+        Text(stringResource(Res.string.pos_customer_type_question), style = MaterialTheme.typography.titleMedium)
 
         Spacer(Modifier.height(8.dp))
 
-        // Switch between Registered vs Final Consumer
-        val selectedIndex = if (uiState.finalCustomer) 0 else 1
-        TabRow(
-            selectedTabIndex = selectedIndex,
-            modifier = Modifier,
-            indicator = { tabPositions ->
-                TabRowDefaults.SecondaryIndicator(
-                    Modifier.tabIndicatorOffset(tabPositions[selectedIndex]),
-                    color = MaterialTheme.colorScheme.secondary
-                )
-            },
-            containerColor = MaterialTheme.colorScheme.background
-        ) {
-            Tab(
-                selected = uiState.finalCustomer,
-                onClick = {
-                    onFinalToggle(true)
-                    extraOpen = false
-                },
-                text = { Text("Consumidor Final") },
-                enabled = uiState.enabledSelectionDocType
+        if (shouldShowHint) {
+            CustomerTypeHintBanner(
+                modifier = Modifier.fillMaxWidth(),
+                text = stringResource(Res.string.pos_customer_type_hint)
             )
+            Spacer(Modifier.height(12.dp))
+        }
 
-            Tab(
-                selected = !uiState.finalCustomer,
-                onClick = {
-                    extraOpen = false
-                    onFinalToggle(false)
-                },
-                text = { Text("Cliente Registrado") },
-                enabled = uiState.enabledSelectionDocType
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .selectableGroup(),
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            CustomerTypeOptionCard(
+                modifier = Modifier.weight(1f),
+                selected = uiState.finalCustomer == true,
+                enabled = uiState.enabledSelectionDocType,
+                icon = Icons.Outlined.Person,
+                title = stringResource(Res.string.pos_customer_type_final_title),
+                description = stringResource(Res.string.pos_customer_type_final_desc),
+                onClick = { selectCustomerType(true) }
+            )
+            CustomerTypeOptionCard(
+                modifier = Modifier.weight(1f),
+                selected = uiState.finalCustomer == false,
+                enabled = uiState.enabledSelectionDocType,
+                icon = Icons.Outlined.Business,
+                title = stringResource(Res.string.pos_customer_type_registered_title),
+                description = stringResource(Res.string.pos_customer_type_registered_desc),
+                onClick = { selectCustomerType(false) }
             )
         }
 
         Spacer(Modifier.height(12.dp))
 
-        if (!uiState.finalCustomer) {
-            // Registered customer flow
-            PosCustomerSelection(
-                customer = uiState.customer
-            ) { screen ->
-                if (uiState.enabledSelectionDocType) {
-                    navigate(screen)
+        when (uiState.finalCustomer) {
+            null -> Unit
+            false -> {
+                PosCustomerSelection(
+                    customer = uiState.customer
+                ) { screen ->
+                    if (uiState.enabledSelectionDocType) {
+                        navigate(screen)
+                    }
                 }
             }
+            true -> {
+                Column {
+                    Text(
+                        text = uiState.finalName?.takeIf { it.isNotBlank() }
+                            ?: stringResource(Res.string.pos_customer_type_final_title),
+                        style = MaterialTheme.typography.bodyLarge
+                    )
+                    if (!uiState.finalEmail.isNullOrBlank()) {
+                        Text(
+                            uiState.finalEmail!!,
+                            style = bodyMedium(),
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                    if (!uiState.finalPhone.isNullOrBlank()) {
+                        Text(
+                            uiState.finalPhone!!,
+                            style = bodyMedium(),
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                }
 
-        } else {
-            // Final consumer — show a compact “summary row” and a collapsible for extra data
-            // Summary (always visible)
-            Column {
-                Text(
-                    text = uiState.finalName?.takeIf { it.isNotBlank() } ?: "Consumidor Final",
-                    style = MaterialTheme.typography.bodyLarge
+                Spacer(Modifier.height(8.dp))
+
+                AdditionalInfoCollapsibleCard(
+                    expanded = extraOpen,
+                    onToggle = { extraOpen = !extraOpen },
+                    finalName = uiState.finalName,
+                    finalEmail = uiState.finalEmail,
+                    finalPhone = uiState.finalPhone,
+                    finalIdTypeIndex = uiState.finalIdTypeIndex,
+                    finalIdType = uiState.finalIdType,
+                    finalIdNumber = uiState.finalIdNumber,
+                    finalPassportCountry = uiState.finalPassportCountry,
+                    idTypeDisplayNames = viewModel.finalIdTypeDisplayNames(),
+                    onFinalName = onFinalName,
+                    onFinalEmail = onFinalEmail,
+                    onFinalPhone = onFinalPhone,
+                    onIdType = onIdType,
+                    onIdNumber = onIdNumber,
+                    onPassportCountry = onPassportCountry
                 )
-                if (!uiState.finalEmail.isNullOrBlank()) {
-                    Text(
-                        uiState.finalEmail!!,
-                        style = bodyMedium(),
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                }
-                if (!uiState.finalPhone.isNullOrBlank()) {
-                    Text(
-                        uiState.finalPhone!!,
-                        style = bodyMedium(),
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                }
             }
+        }
+    }
+}
 
-            Spacer(Modifier.height(8.dp))
+@Composable
+private fun CustomerTypeHintBanner(
+    modifier: Modifier = Modifier,
+    text: String,
+) {
+    OutlinedCard(
+        modifier = modifier,
+        colors = CardDefaults.outlinedCardColors(
+            containerColor = vanishedBackgroundColor()
+        ),
+    ) {
+        Row(
+            modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
+            verticalAlignment = Alignment.Top
+        ) {
+            Icon(
+                imageVector = Icons.Outlined.Info,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            Spacer(Modifier.width(8.dp))
+            Text(
+                text = text,
+                style = bodySmall(),
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
+    }
+}
 
-            AdditionalInfoCollapsibleCard(
-                expanded = extraOpen,
-                onToggle = { extraOpen = !extraOpen },
-                finalName = uiState.finalName,
-                finalEmail = uiState.finalEmail,
-                finalPhone = uiState.finalPhone,
-                finalIdTypeIndex = uiState.finalIdTypeIndex,
-                finalIdType = uiState.finalIdType,
-                finalIdNumber = uiState.finalIdNumber,
-                finalPassportCountry = uiState.finalPassportCountry,
-                idTypeDisplayNames = viewModel.finalIdTypeDisplayNames(),
-                onFinalName = onFinalName,
-                onFinalEmail = onFinalEmail,
-                onFinalPhone = onFinalPhone,
-                onIdType = onIdType,
-                onIdNumber = onIdNumber,
-                onPassportCountry = onPassportCountry
+@Composable
+private fun CustomerTypeOptionCard(
+    modifier: Modifier = Modifier,
+    selected: Boolean,
+    enabled: Boolean,
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    title: String,
+    description: String,
+    onClick: () -> Unit,
+) {
+    val borderColor = when {
+        !enabled -> MaterialTheme.colorScheme.outlineVariant
+        selected -> MaterialTheme.colorScheme.secondary
+        else -> MaterialTheme.colorScheme.outline
+    }
+    val containerColor = when {
+        !enabled -> MaterialTheme.colorScheme.background
+        selected -> vanishedBackgroundColor()
+        else -> MaterialTheme.colorScheme.background
+    }
+
+    OutlinedCard(
+        modifier = modifier
+            .height(118.dp)
+            .selectable(
+                selected = selected,
+                enabled = enabled,
+                role = Role.RadioButton,
+                onClick = onClick
+            ),
+        border = BorderStroke(if (selected) 2.dp else 1.dp, borderColor),
+        colors = CardDefaults.outlinedCardColors(containerColor = containerColor),
+        shape = RoundedCornerShape(16.dp),
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(horizontal = 12.dp, vertical = 12.dp),
+            verticalArrangement = Arrangement.Center,
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
+            Icon(
+                imageVector = icon,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.secondary,
+                modifier = Modifier.size(32.dp)
+            )
+            Spacer(Modifier.height(12.dp))
+            Text(title, style = bodyMedium(), modifier = Modifier.fillMaxWidth(), textAlign = TextAlign.Center)
+            Spacer(Modifier.height(6.dp))
+            Text(
+                description,
+                style = bodySmall(),
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.fillMaxWidth(),
+                textAlign = TextAlign.Center
             )
         }
     }
@@ -436,3 +587,6 @@ private fun AdditionalInfoCollapsibleCard(
         }
     }
 }
+
+private const val KEY_CUSTOMER_TYPE_HINT_SHOWN_COUNT = "pos.customer_type.hint_shown_count"
+private const val KEY_HAS_SELECTED_REGISTERED_ONCE = "pos.customer_type.has_selected_registered_once"

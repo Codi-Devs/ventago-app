@@ -59,7 +59,7 @@ data class PosState(
     val enabledOperationNature: Boolean = true,
 
     // === Customer ===
-    val finalCustomer: Boolean = true, // false = registered customer, true = consumidor final
+    val finalCustomer: Boolean? = null, // null = not selected, false = registered customer, true = consumidor final
 
     // Fields for final consumer (not saved in DB)
     val finalName: String? = null,

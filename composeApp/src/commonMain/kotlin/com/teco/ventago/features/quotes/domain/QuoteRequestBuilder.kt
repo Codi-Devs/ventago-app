@@ -186,7 +186,9 @@ object QuoteRequestBuilder {
             invoiceTotal = summary.totalBeforeTip.toDecimalString()
         )
 
-        val finalCustomerInfo = if (state.finalCustomer) {
+        val isFinalCustomer = requireNotNull(state.finalCustomer) { "Customer type not selected" }
+
+        val finalCustomerInfo = if (isFinalCustomer) {
             QuoteFinalCustomerInfo(
                 name = state.finalName,
                 email = state.finalEmail,
@@ -202,8 +204,8 @@ object QuoteRequestBuilder {
 
         return CreateQuoteRequest(
             branchCode = branchCode,
-            customerId = if (state.finalCustomer) null else state.customer?.id,
-            finalCustomer = state.finalCustomer,
+            customerId = if (isFinalCustomer) null else state.customer?.id,
+            finalCustomer = isFinalCustomer,
             finalCustomerInfo = finalCustomerInfo,
             quoteStyle = quoteStyle,
             expiryDate = expiryDate,

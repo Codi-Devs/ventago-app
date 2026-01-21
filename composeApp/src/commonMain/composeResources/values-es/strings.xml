@@ -261,6 +261,14 @@
     <string name="pos_tip">Propina</string>
     <string name="pos_tips">Propinas</string>
     <string name="pos_add_tip">Agregar propina</string>
+    <string name="pos_customer_type_question">¿A quién vas a facturar?</string>
+    <string name="pos_customer_type_final_title">Consumidor final</string>
+    <string name="pos_customer_type_final_desc">Personas sin RUC</string>
+    <string name="pos_customer_type_registered_title">Cliente registrado</string>
+    <string name="pos_customer_type_registered_desc">Contribuyentes con RUC</string>
+    <string name="pos_customer_type_hint">¿Vas a facturar a un contribuyente? Selecciona Cliente registrado para usar RUC.</string>
+    <string name="pos_customer_type_required_to_continue">Selecciona un tipo de cliente para continuar.</string>
+    <string name="pos_customer_required_to_continue">Selecciona un cliente registrado para continuar.</string>
     <string name="pos_change">Cambio</string>
     <string name="pos_see_ticket">Ver o enviar factura</string>
     <string name="pos_new_sale">Nueva venta</string>
