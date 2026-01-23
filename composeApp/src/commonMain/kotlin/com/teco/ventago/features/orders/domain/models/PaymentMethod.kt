@@ -25,7 +25,7 @@ enum class ManualPaymentMethodOption(val id: Int, val displayName: String) {
 
         fun getAllOptionsPairs(): List<Pair<Int, String>> {
             return listOf(
-                1 to "Crédito (cuentas por cobrar)",
+                1 to "Crédito (cuentas por cobrar) 2",
                 2 to "Efectivo",
                 3 to "Tarjeta crédito",
                 4 to "Tarjeta débito",

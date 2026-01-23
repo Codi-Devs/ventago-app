@@ -507,7 +507,7 @@ private fun ManualAndInstallmentsSection(
             Divider(Modifier.padding(vertical = 12.dp))
 
             // Installments
-            Text("Cuotas / Plazos", style = MaterialTheme.typography.titleMedium)
+            Text("Crédito/Plazo", style = MaterialTheme.typography.titleMedium)
             Spacer(Modifier.height(8.dp))
             ui.installments.forEachIndexed { idx, inst ->
                 ElevatedCard(

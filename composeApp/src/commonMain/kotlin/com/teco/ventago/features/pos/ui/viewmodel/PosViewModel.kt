@@ -1607,12 +1607,12 @@ class PosViewModel(
 
     private val retentionOptionsList = listOf(
         RetentionOption("", "Sin retención", null),
-        RetentionOption("1", "Estado (Profesional) 100%", "100"),
-        RetentionOption("2", "Estado (Bienes/Servicios) 50%", "50"),
-        RetentionOption("3", "No domiciliado exterior 100%", "100"),
-        RetentionOption("4", "Compra Bienes/Servicios 50%", "50"),
-        RetentionOption("7", "Comercio afiliado TCTD 50%", "50"),
-        RetentionOption("8", "Otros (disminución)", null)
+        RetentionOption("1", "Pago por servicio profesional al estado 100%", "100"),
+        RetentionOption("2", "Pago por venta de bienes/servicios al estado 50%", "50"),
+        RetentionOption("3", "Pago o acreditación a no domiciliado o empresa constituida en el exterior 100%", "100"),
+        RetentionOption("4", "Pago o acreditación por compra de bienes/servicios 50%", "50"),
+        RetentionOption("7", "Pago a comercio afiliado a sistema de TC/TD 50%", "50"),
+        RetentionOption("8", " Otros (disminución de la retención)", null)
     )
 
     fun retentionOptions(): List<Pair<String, String>> =
@@ -1734,7 +1734,6 @@ class PosViewModel(
     // ---------- Manual payments ----------
     /** Label shown to users for DGI codes. */
     fun manualMethodOptions(): List<Pair<Int, String>> = listOf(
-        1 to "Crédito (cuentas por cobrar)",
         2 to "Efectivo",
         3 to "Tarjeta crédito",
         4 to "Tarjeta débito",
