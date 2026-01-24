@@ -1,17 +1,25 @@
 package com.teco.ventago.features.quotes.ui.success
 
 import androidx.compose.foundation.Image
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.Email
+import androidx.compose.material.icons.outlined.PictureAsPdf
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ElevatedCard
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.FilledIconButton
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButtonDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Text
@@ -120,95 +128,122 @@ fun QuoteSuccessScreen(
 
     Box(modifier = Modifier.fillMaxSize().padding(24.dp)) {
         Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .align(Alignment.Center),
-            horizontalAlignment = Alignment.CenterHorizontally
+            modifier = Modifier.fillMaxSize(),
+            verticalArrangement = Arrangement.SpaceBetween
         ) {
-            Image(
-                painter = rememberLottiePainter(
-                    composition = composition,
-                    progress = { progress }
-                ),
-                modifier = Modifier.size(180.dp),
-                contentDescription = "Success animation"
-            )
-
-            Text(
-                text = if (uiState.quoteId == null) {
-                    stringResource(Res.string.quote_success)
-                } else {
-                    stringResource(Res.string.quote_updated)
-                },
-                style = MaterialTheme.typography.titleLarge
-            )
-
-            Spacer(Modifier.height(12.dp))
-            ElevatedCard(modifier = Modifier.fillMaxWidth()) {
-                Column(modifier = Modifier.padding(16.dp)) {
-                    Text(
-                        text = stringResource(Res.string.quote_number),
-                        style = MaterialTheme.typography.labelMedium
-                    )
-                    Spacer(Modifier.height(6.dp))
-                    Text(
-                        text = quoteNumber ?: "-",
-                        style = MaterialTheme.typography.titleMedium
-                    )
-                }
-            }
-        }
-
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .align(Alignment.BottomCenter)
-        ) {
-            OutlinedButtonM(
-                modifier = Modifier.fillMaxWidth(),
-                onClick = { showEmailSheet = true }
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .weight(1f),
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.Center
             ) {
-                Text(text = stringResource(Res.string.send_by_email))
-            }
-            Spacer(Modifier.height(12.dp))
-            ButtonM(
-                modifier = Modifier.fillMaxWidth(),
-                onClick = {
-                    scope.launch {
-                        viewModel.openQuotePdf(uiState.lastQuoteId)
+                Image(
+                    painter = rememberLottiePainter(
+                        composition = composition,
+                        progress = { progress }
+                    ),
+                    modifier = Modifier.size(180.dp),
+                    contentDescription = "Success animation"
+                )
+
+                Text(
+                    text = if (uiState.quoteId == null) {
+                        stringResource(Res.string.quote_success)
+                    } else {
+                        stringResource(Res.string.quote_updated)
+                    },
+                    style = MaterialTheme.typography.titleLarge
+                )
+
+                Spacer(Modifier.height(12.dp))
+                ElevatedCard(modifier = Modifier.fillMaxWidth()) {
+                    Column(modifier = Modifier.padding(16.dp)) {
+                        Text(
+                            text = stringResource(Res.string.quote_number),
+                            style = MaterialTheme.typography.labelMedium
+                        )
+                        Spacer(Modifier.height(6.dp))
+                        Text(
+                            text = quoteNumber ?: "-",
+                            style = MaterialTheme.typography.titleMedium
+                        )
                     }
                 }
-            ) {
-                Text(text = stringResource(Res.string.download_pdf))
-            }
-            Spacer(Modifier.height(12.dp))
-            OutlinedButtonM(
-                modifier = Modifier.fillMaxWidth(),
-                onClick = {
-                    navigate(PosScreens.QuotesListScreen) {
-                        popUpTo(PosScreens.HomeScreen.name) { inclusive = false }
-                        launchSingleTop = true
+
+                Spacer(Modifier.height(16.dp))
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(12.dp, Alignment.CenterHorizontally)
+                ) {
+                    FilledIconButton(
+                        onClick = { showEmailSheet = true },
+                        modifier = Modifier.size(56.dp),
+                        colors = IconButtonDefaults.filledIconButtonColors(
+                            containerColor = MaterialTheme.colorScheme.secondaryContainer,
+                            contentColor = MaterialTheme.colorScheme.onSecondaryContainer
+                        )
+                    ) {
+                        Icon(
+                            imageVector = Icons.Outlined.Email,
+                            contentDescription = stringResource(Res.string.send_by_email)
+                        )
+                    }
+
+                    FilledIconButton(
+                        onClick = {
+                            scope.launch {
+                                viewModel.openQuotePdf(uiState.lastQuoteId)
+                            }
+                        },
+                        modifier = Modifier.size(56.dp),
+                        colors = IconButtonDefaults.filledIconButtonColors(
+                            containerColor = MaterialTheme.colorScheme.primaryContainer,
+                            contentColor = MaterialTheme.colorScheme.onPrimaryContainer
+                        )
+                    ) {
+                        Icon(
+                            imageVector = Icons.Outlined.PictureAsPdf,
+                            contentDescription = stringResource(Res.string.download_pdf)
+                        )
                     }
                 }
-            ) {
-                Text(text = stringResource(Res.string.view_quotes))
             }
-            Spacer(Modifier.height(12.dp))
-            ButtonM(
-                modifier = Modifier.fillMaxWidth(),
-                onClick = {
-                    viewModel.resetForNewSale()
-                    viewModel.setFlowMode(FlowMode.QUOTE, quoteId = null)
-                    QuoteSelectionStore.selected = null
-                    QuoteSelectionStore.startQuoteFlow = true
-                    QuoteSelectionStore.startOrderFlowFromQuote = false
-                    navigate(PosScreens.POSScreen) {
-                        popUpTo(PosScreens.HomeScreen.name) { inclusive = false }
-                        launchSingleTop = true
-                    }
-                }
+
+            Column(
+                modifier = Modifier.fillMaxWidth()
             ) {
-                Text(text = stringResource(Res.string.new_quote))
+                OutlinedButtonM(
+                    modifier = Modifier.fillMaxWidth(),
+                    onClick = {
+                        navigate(PosScreens.QuotesListScreen) {
+                            popUpTo(PosScreens.HomeScreen.name) { inclusive = false }
+                            launchSingleTop = true
+                        }
+                    }
+                ) {
+                    Text(text = stringResource(Res.string.view_quotes))
+                }
+                Spacer(Modifier.height(12.dp))
+                ButtonM(
+                    modifier = Modifier.fillMaxWidth(),
+                    containerColor = MaterialTheme.colorScheme.secondary,
+                    contentColor = MaterialTheme.colorScheme.onSecondary,
+                    onClick = {
+                        viewModel.resetForNewSale()
+                        viewModel.setFlowMode(FlowMode.QUOTE, quoteId = null)
+                        QuoteSelectionStore.selected = null
+                        QuoteSelectionStore.startQuoteFlow = true
+                        QuoteSelectionStore.startOrderFlowFromQuote = false
+                        navigate(PosScreens.POSScreen) {
+                            popUpTo(PosScreens.HomeScreen.name) { inclusive = false }
+                            launchSingleTop = true
+                        }
+                    }
+                ) {
+                    Text(text = stringResource(Res.string.new_quote))
+                }
             }
         }
     }
