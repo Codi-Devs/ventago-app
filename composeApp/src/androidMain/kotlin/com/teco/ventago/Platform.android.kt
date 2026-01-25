@@ -51,6 +51,11 @@ internal class AndroidPlatformState(
     override fun openEmailIntent(email: String) {
         com.teco.ventago.utils.openEmailIntent(email, context)
     }
+
+    override fun requestNotificationPermission() {
+        val activity = context as? MainActivity
+        activity?.askNotificationPermission()
+    }
 }
 
 

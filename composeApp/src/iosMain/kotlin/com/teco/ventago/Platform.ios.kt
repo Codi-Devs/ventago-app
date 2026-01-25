@@ -45,4 +45,9 @@ internal class IOSPlatformState() : PlatformState {
         com.teco.ventago.utils.openEmailIntent(email)
     }
 
+    override fun requestNotificationPermission() {
+        // iOS notification permissions are typically requested through native code
+        // This is a no-op for now, can be implemented if needed
+    }
+
 }

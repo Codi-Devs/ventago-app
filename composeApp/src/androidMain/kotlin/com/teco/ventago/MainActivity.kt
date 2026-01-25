@@ -61,8 +61,6 @@ class MainActivity : ComponentActivity() {
             }
         }
 
-        askNotificationPermission()
-
         setContent {
             val darkTheme = isSystemInDarkTheme()
             val view = LocalView.current
@@ -83,7 +81,7 @@ class MainActivity : ComponentActivity() {
         }
     }
 
-    private fun askNotificationPermission() {
+    fun askNotificationPermission() {
         // This is only necessary for API level >= 33 (TIRAMISU)
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
             if (ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS) ==

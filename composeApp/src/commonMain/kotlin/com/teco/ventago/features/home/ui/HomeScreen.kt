@@ -50,6 +50,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -125,6 +126,11 @@ fun HomeScreen(
     val appState = appViewModel.mainState.collectAsState()
     var showQuotesWelcomeSheet by remember { mutableStateOf(false) }
     val quotesWelcomeSheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+
+    // Request notification permission when user successfully logs in and lands on home screen
+    LaunchedEffect(Unit) {
+        platformState.requestNotificationPermission()
+    }
 
     if (uiState.isLoadingData) {
         HomeLoadingScreen()

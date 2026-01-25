@@ -28,6 +28,7 @@ object AppInfo {
 interface PlatformState {
     fun launchWindow(route: String)
     fun openEmailIntent(email: String)
+    fun requestNotificationPermission()
 }
 
 @Composable
