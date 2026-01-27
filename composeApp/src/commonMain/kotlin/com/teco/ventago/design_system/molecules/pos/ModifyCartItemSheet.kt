@@ -96,6 +96,7 @@ fun ModifyCartItemSheet(
 
     // --- initial values from line ---
     var qty by remember { mutableStateOf(kotlin.math.max(1, itemToModify.quantity)) }
+    var qtyText by rememberSaveable { mutableStateOf(kotlin.math.max(1, itemToModify.quantity).toString()) }
     val initialUnitPriceCents = itemToModify.overrideUnitPrice ?: itemToModify.baseUnitPrice
     var unitPriceRaw by rememberSaveable { mutableStateOf(centsToRawText(initialUnitPriceCents)) }
     var fixedRaw by rememberSaveable { mutableStateOf("") }
@@ -240,20 +241,34 @@ fun ModifyCartItemSheet(
                     modifier = Modifier
                         .fillMaxWidth()
                         .padding(bottom = 12.dp),
-                    verticalAlignment = Alignment.CenterVertically
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
-                    Text("Cantidad", style = labelMedium())
-                    Spacer(Modifier.weight(1f))
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        IconButton(onClick = { qty = kotlin.math.max(1, qty - 1) }) {
+                    Text("Cantidad", style = labelMedium(), modifier = Modifier.weight(1f))
+                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                        IconButton(onClick = {
+                            val newQty = kotlin.math.max(1, qty - 1)
+                            qty = newQty
+                            qtyText = newQty.toString()
+                        }) {
                             Icon(Icons.Rounded.Remove, contentDescription = "Disminuir")
                         }
-                        Text(
-                            qty.toString(),
-                            style = titleMedium(),
-                            modifier = Modifier.widthIn(min = 24.dp)
+                        DMOutlinedTextField(
+                            text = qtyText,
+                            label = "",
+                            onChange = {
+                                qtyText = it.filter(Char::isDigit).take(6)
+                                qty = qtyText.toIntOrNull()?.coerceAtLeast(1) ?: 1
+                            },
+                            keyboardType = KeyboardType.Number,
+                            imeAction = ImeAction.Done,
+                            modifier = Modifier.width(80.dp),
+                            maxLines = 1
                         )
-                        IconButton(onClick = { qty += 1 }) {
+                        IconButton(onClick = {
+                            qty += 1
+                            qtyText = qty.toString()
+                        }) {
                             Icon(Icons.Rounded.Add, contentDescription = "Incrementar")
                         }
                     }

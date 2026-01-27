@@ -1,7 +1,9 @@
 package com.teco.ventago.utils
 
+import kotlin.math.absoluteValue
 import kotlin.math.pow
 import kotlin.math.roundToInt
+import kotlin.math.roundToLong
 
 fun isNumeric(toCheck: String): Boolean {
     return toCheck.toDoubleOrNull() != null
@@ -20,7 +22,7 @@ fun String.toLongCents(): Long {
 }
 
 fun Double.toLongCents(scale: Int = 2): Long {
-    return (this * 10.0.pow(scale)).toLong()
+    return (this * 10.0.pow(scale)).roundToLong()
 }
 
 fun Long.toScaledDouble(scale: Int = 2): Double {
@@ -28,11 +30,12 @@ fun Long.toScaledDouble(scale: Int = 2): Double {
 }
 
 fun Long.toDecimalString(): String {
-    val decimalValue = this / 100.0
-    return decimalValue.toString().takeIf { "." in it }?.let {
-        val parts = it.split(".")
-        "${parts[0]}.${parts[1].padEnd(2, '0').take(2)}"
-    } ?: "$decimalValue.00"
+    // Avoid floating-point precision errors by working with integers
+    val integerPart = this / 100
+    val fractionalPart = this % 100
+    // Ensure fractional part is always 2 digits (e.g., 5 becomes "05")
+    val fractionalString = fractionalPart.absoluteValue.toString().padStart(2, '0')
+    return "$integerPart.$fractionalString"
 }
 
 /**
