@@ -47,6 +47,7 @@ import com.teco.ventago.features.pos.domain.models.Money
 import com.teco.ventago.features.pos.domain.models.Tax
 import com.teco.ventago.features.product.domain.ProductService
 import com.teco.ventago.features.product.domain.model.Item
+import com.teco.ventago.features.product.domain.model.ProductType
 import com.teco.ventago.features.product.domain.model.AdditionalInfoKey
 import com.teco.ventago.features.quotes.domain.QuoteRequestBuilder
 import com.teco.ventago.features.quotes.domain.QuotesService
@@ -57,6 +58,8 @@ import com.teco.ventago.features.quotes.domain.models.requests.GetQuoteRequest
 import com.teco.ventago.features.quotes.domain.models.requests.SendQuoteEmailRequest
 import com.teco.ventago.json
 import com.teco.ventago.navigation.PosNoteRoute
+import com.teco.ventago.features.orders.domain.models.OrderLineDto
+import kotlinx.serialization.json.Json as KotlinJson
 import com.teco.ventago.utils.dbFormat
 import com.teco.ventago.utils.randomUUID
 import com.teco.ventago.utils.toDecimalString
@@ -184,7 +187,9 @@ class PosViewModel(
                 selectedDocType = args.op,
                 enabledSelectionDocType = false,
                 referencedNoteCUFE = args.cufe,
-                referencedCreatedAt = args.createdAt
+                referencedCreatedAt = args.createdAt,
+                // Force manual payment for credit/debit notes (no payment links or drafts)
+                paymentFlowMode = PaymentFlowMode.MANUAL_OR_INSTALLMENTS
             )
         }
 
@@ -205,6 +210,147 @@ class PosViewModel(
                     )
                 )
             }
+        }
+
+        // Load cart from order lines if available
+        args.orderLinesJson?.let { orderLinesJson ->
+            try {
+                val orderLines = KotlinJson.decodeFromString<List<OrderLineDto>>(orderLinesJson)
+                loadCartFromOrderLines(orderLines)
+            } catch (e: Exception) {
+                println("Error loading order lines into cart: ${e.message}")
+            }
+        }
+    }
+
+    private fun loadCartFromOrderLines(orderLines: List<OrderLineDto>) {
+        // Clear existing cart first
+        updateState { copy(cart = emptyList(), personalizedItems = mapOf()) }
+
+        var personalizedIdCounter = -1
+
+        orderLines.forEach { orderLine ->
+            // Try to find existing product in catalog
+            val existingItem = items.firstOrNull { it.itemId == orderLine.itemId }
+
+            if (existingItem != null) {
+                // Product exists in catalog - add it with the order line's data
+                val unitPrice = orderLine.overrideUnitPrice?.toDoubleOrNull()?.toLongCents()
+                    ?: orderLine.baseUnitPrice.toDoubleOrNull()?.toLongCents()
+                    ?: existingItem.price.toLongCents()
+
+                // Create tax from order line
+                val tax = createTaxFromOrderLine(orderLine)
+
+                // Create discount from order line
+                val discount = createDiscountFromOrderLine(orderLine)
+
+                val lineId = "${existingItem.itemId}-${randomUUID()}"
+                val newLine = CartLine(
+                    lineId = lineId,
+                    itemId = existingItem.itemId,
+                    name = orderLine.itemName,
+                    baseUnitPrice = orderLine.baseUnitPrice.toDoubleOrNull()?.toLongCents()
+                        ?: existingItem.price.toLongCents(),
+                    overrideUnitPrice = if (orderLine.overrideUnitPrice != null) {
+                        orderLine.overrideUnitPrice.toDoubleOrNull()?.toLongCents()
+                    } else null,
+                    quantity = orderLine.quantity.coerceAtLeast(1),
+                    tax = tax,
+                    discount = discount,
+                )
+
+                updateState { copy(cart = cart + newLine) }
+            } else {
+                // Product doesn't exist - create personalized item
+                val personalizedItemId = personalizedIdCounter--
+                val lineId = "${personalizedItemId}-${randomUUID()}"
+
+                // Parse tax percent from tax rate (e.g., "0.07" -> 7)
+                val taxPercent = orderLine.taxRate.toDoubleOrNull()?.let { rate ->
+                    (rate * 100).toInt()
+                } ?: 0
+
+                // Create personalized Item
+                val personalizedItem = Item(
+                    itemId = personalizedItemId,
+                    barcode = null,
+                    sku = null,
+                    name = orderLine.itemName,
+                    description = orderLine.itemName,
+                    img = "",
+                    price = orderLine.baseUnitPrice.toDoubleOrNull() ?: 0.0,
+                    cost = null,
+                    active = true,
+                    order = 0,
+                    taxPercent = taxPercent,
+                    productType = ProductType.GOOD,
+                    unitMeasureCode = "und",
+                    iscRate = null,
+                    otiTaxes = null,
+                    isPharma = false,
+                    additionalInfo = null
+                )
+
+                // Create tax from order line
+                val tax = createTaxFromOrderLine(orderLine)
+
+                // Create discount from order line
+                val discount = createDiscountFromOrderLine(orderLine)
+
+                val newLine = CartLine(
+                    lineId = lineId,
+                    itemId = personalizedItemId,
+                    name = orderLine.itemName,
+                    baseUnitPrice = orderLine.baseUnitPrice.toDoubleOrNull()?.toLongCents() ?: 0L,
+                    overrideUnitPrice = if (orderLine.overrideUnitPrice != null) {
+                        orderLine.overrideUnitPrice.toDoubleOrNull()?.toLongCents()
+                    } else null,
+                    quantity = orderLine.quantity.coerceAtLeast(1),
+                    tax = tax,
+                    discount = discount,
+                )
+
+                updateState {
+                    copy(
+                        cart = cart + newLine,
+                        personalizedItems = personalizedItems + (lineId to personalizedItem)
+                    )
+                }
+            }
+        }
+    }
+
+    private fun createTaxFromOrderLine(orderLine: OrderLineDto): Tax? {
+        val taxRate = orderLine.taxRate.toDoubleOrNull() ?: return null
+        if (taxRate <= 0.0) return null
+
+        // Convert rate to percentage (e.g., 0.07 -> 7.0)
+        val taxPercent = taxRate * 100.0
+        val rateBps = (taxPercent * 100).roundToInt()
+
+        return Tax(
+            id = rateBps,
+            name = orderLine.taxName,
+            rateBps = rateBps
+        )
+    }
+
+    private fun createDiscountFromOrderLine(orderLine: OrderLineDto): Discount? {
+        val discountValue = orderLine.discountValue.toDoubleOrNull() ?: return null
+        if (discountValue <= 0.0) return null
+
+        return when (orderLine.discountMode) {
+            1 -> {
+                // Percentage discount
+                val percent = if (discountValue <= 1.0) discountValue * 100.0 else discountValue
+                Discount.Percent((percent * 100).roundToInt().coerceAtLeast(0))
+            }
+            2 -> {
+                // Fixed amount discount
+                Discount.Amount(discountValue.toLongCents())
+            }
+            else -> null
         }
     }
 
@@ -433,6 +579,10 @@ class PosViewModel(
                 selectedBillingPointIndex = 0,
                 selectedDocTypeIndex = 0,
                 selectedDocType = "01",
+                enabledSelectionDocType = true,
+                selectedOperationNatureIndex = 0,
+                selectedOperationNature = "01",
+                enabledOperationNature = true,
                 finalCustomer = null,
                 finalName = null,
                 finalEmail = null,
@@ -910,10 +1060,12 @@ class PosViewModel(
 
         var references: List<References>? = null
         if (state.referencedNoteCUFE.isNotEmpty()) {
+            // Convert UTC timestamp to Panama timezone
+            val panamaIssueDatetime = convertUtcToPanamaTimezone(state.referencedCreatedAt)
             references = listOf(
                 References(
                     legalName = "", // Empty backend fills this with business name
-                    issueDatetime = state.referencedCreatedAt,
+                    issueDatetime = panamaIssueDatetime,
                     referenceNumber = ReferenceNumber(
                         type = "cufe", // For now only cufe references allowed
                         number = state.referencedNoteCUFE
@@ -1875,29 +2027,60 @@ class PosViewModel(
     }
 
     /**
+     * Converts a UTC timestamp to Panama timezone format.
+     * Example: "2026-01-27T01:56:04.304173Z" -> "2026-01-26T15:57:56"
+     */
+    private fun convertUtcToPanamaTimezone(utcTimestamp: String): String {
+        return try {
+            if (utcTimestamp.isBlank()) return utcTimestamp
+
+            // Parse the UTC timestamp to Instant
+            val instant = Instant.parse(utcTimestamp)
+
+            // Convert to Panama timezone (America/Panama is UTC-5)
+            val panamaZone = TimeZone.of("America/Panama")
+            val panamaDateTime = instant.toLocalDateTime(panamaZone)
+
+            // Format as "YYYY-MM-DDTHH:mm:ss" (without timezone suffix)
+            val yearStr = panamaDateTime.year.toString()
+            val monthStr = panamaDateTime.monthNumber.toString().padStart(2, '0')
+            val dayStr = panamaDateTime.dayOfMonth.toString().padStart(2, '0')
+            val hourStr = panamaDateTime.hour.toString().padStart(2, '0')
+            val minuteStr = panamaDateTime.minute.toString().padStart(2, '0')
+            val secondStr = panamaDateTime.second.toString().padStart(2, '0')
+
+            "$yearStr-$monthStr-${dayStr}T$hourStr:$minuteStr:$secondStr"
+        } catch (e: Exception) {
+            println("Error converting UTC to Panama timezone: ${e.message}")
+            // Return original timestamp if parsing fails
+            utcTimestamp
+        }
+    }
+
+    /**
      * Converts a date string from "YYYY-MM-DD" format to ISO 8601 format with time and timezone.
      * Example: "2025-12-06" -> "2025-12-06T00:00:00-00:00"
      */
     private fun convertDateToIso8601(dateString: String): String? {
         return try {
             if (dateString.isBlank()) return null
-            
+
             // Parse "YYYY-MM-DD" to LocalDate
             val parts = dateString.split("-")
             if (parts.size != 3) return null
-            
+
             val year = parts[0].toInt()
             val month = parts[1].toInt()
             val day = parts[2].toInt()
-            
+
             val localDate = LocalDate(year, month, day)
-            
+
             // Convert to LocalDateTime at midnight (00:00:00)
             val localDateTime = LocalDateTime(
                 date = localDate,
                 time = LocalTime(0, 0, 0)
             )
-            
+
             // Format as ISO 8601 with timezone offset: "YYYY-MM-DDTHH:mm:ss-00:00"
             val yearStr = localDateTime.year.toString()
             val monthStr = localDateTime.monthNumber.toString().padStart(2, '0')
@@ -1905,7 +2088,7 @@ class PosViewModel(
             val hourStr = localDateTime.hour.toString().padStart(2, '0')
             val minuteStr = localDateTime.minute.toString().padStart(2, '0')
             val secondStr = localDateTime.second.toString().padStart(2, '0')
-            
+
             "$yearStr-$monthStr-${dayStr}T$hourStr:$minuteStr:$secondStr-00:00"
         } catch (e: Exception) {
             null

@@ -130,6 +130,8 @@ import com.teco.ventago.utils.shareLink
 import com.teco.ventago.utils.toLongCents
 import kotlinx.datetime.Clock
 import kotlinx.datetime.Instant
+import kotlinx.serialization.encodeToString
+import kotlinx.serialization.json.Json
 import org.jetbrains.compose.resources.painterResource
 import org.jetbrains.compose.resources.stringResource
 import org.koin.compose.viewmodel.koinViewModel
@@ -256,6 +258,7 @@ fun OrderDetailsActions(backStackEntry: NavBackStackEntry?,  navigateAny: (Any) 
                                     customerRuc = order.customer?.ruc,
                                     customerStatus = order.customer?.status ?: 1,
                                     customerInvoiceID = order.customer?.customerInvoiceID,
+                                    orderLinesJson = Json.encodeToString(order.lines)
                                 )
                             )
                         }
@@ -278,6 +281,7 @@ fun OrderDetailsActions(backStackEntry: NavBackStackEntry?,  navigateAny: (Any) 
                                     customerRuc = order.customer?.ruc,
                                     customerStatus = order.customer?.status ?: 1,
                                     customerInvoiceID = order.customer?.customerInvoiceID,
+                                    orderLinesJson = Json.encodeToString(order.lines)
                                 )
                             )
                         }

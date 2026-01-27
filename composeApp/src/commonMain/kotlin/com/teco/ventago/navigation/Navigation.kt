@@ -1124,6 +1124,8 @@ data class PosNoteRoute(
     val customerRuc: String? = null,
     val customerStatus: Int = 1,
     val customerInvoiceID: Int? = null,
+    // Order lines (serialized JSON string)
+    val orderLinesJson: String? = null,
 )
 
 @Serializable

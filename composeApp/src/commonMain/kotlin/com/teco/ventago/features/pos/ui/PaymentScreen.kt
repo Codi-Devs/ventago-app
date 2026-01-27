@@ -271,32 +271,39 @@ fun PaymentScreenContent(
             }
         }
 
-        val modes = listOf(PaymentFlowMode.MANUAL_OR_INSTALLMENTS, PaymentFlowMode.PAYMENT_LINK)
-        val labels = listOf("Manual/Cuotas", "Enlace de Pago")
-        TabRow(
-            selectedTabIndex = modes.indexOf(ui.paymentFlowMode),
-            modifier = Modifier,
-            indicator = { tabPositions ->
-                TabRowDefaults.SecondaryIndicator(
-                    Modifier.tabIndicatorOffset(tabPositions[modes.indexOf(ui.paymentFlowMode)]),
-                    color = MaterialTheme.colorScheme.secondary
-                )
-            },
-            containerColor = MaterialTheme.colorScheme.background) {
-            modes.forEachIndexed { i, m ->
-                Tab(
-                    selected = (m == ui.paymentFlowMode),
-                    onClick = {
-                        viewModel.setPaymentFlow(m)
-                    },
-                    text = { Text(labels[i]) }
-                )
+        // Credit notes (04) and debit notes (05) cannot use payment links or be saved as drafts
+        val isCreditOrDebitNote = ui.selectedDocType == "04" || ui.selectedDocType == "05"
+
+        // Only show tabs if not a credit/debit note
+        if (!isCreditOrDebitNote) {
+            val modes = listOf(PaymentFlowMode.MANUAL_OR_INSTALLMENTS, PaymentFlowMode.PAYMENT_LINK)
+            val labels = listOf("Manual/Cuotas", "Enlace de Pago")
+            TabRow(
+                selectedTabIndex = modes.indexOf(ui.paymentFlowMode),
+                modifier = Modifier,
+                indicator = { tabPositions ->
+                    TabRowDefaults.SecondaryIndicator(
+                        Modifier.tabIndicatorOffset(tabPositions[modes.indexOf(ui.paymentFlowMode)]),
+                        color = MaterialTheme.colorScheme.secondary
+                    )
+                },
+                containerColor = MaterialTheme.colorScheme.background) {
+                modes.forEachIndexed { i, m ->
+                    Tab(
+                        selected = (m == ui.paymentFlowMode),
+                        onClick = {
+                            viewModel.setPaymentFlow(m)
+                        },
+                        text = { Text(labels[i]) }
+                    )
+                }
             }
         }
 
         Spacer(Modifier.height(12.dp))
 
-        if (ui.paymentFlowMode == PaymentFlowMode.MANUAL_OR_INSTALLMENTS) {
+        // For credit/debit notes, always show manual payment (no payment links or drafts)
+        if (isCreditOrDebitNote || ui.paymentFlowMode == PaymentFlowMode.MANUAL_OR_INSTALLMENTS) {
             ManualAndInstallmentsSection(
                 viewModel = viewModel,
                 legal = legal,
@@ -311,6 +318,7 @@ fun PaymentScreenContent(
                 onInstallmentAmount = viewModel::setInstallmentAmount,
                 onInstallmentDate = viewModel::setInstallmentDueDate,
                 methodOptions = viewModel.manualMethodOptions(),
+                selectedDocType = ui.selectedDocType,
                 onConfirm = {
                     requestGovernmentWarningOrProceed {
                         viewModel.createOrder(createPaymentLink = false, saveAsDraft = false)
@@ -321,7 +329,8 @@ fun PaymentScreenContent(
                         viewModel.createOrder(createPaymentLink = false, saveAsDraft = true)
                     }
                 },
-                saveDraftEnabled = hasPositiveAmount
+                // Disable save draft for credit/debit notes
+                saveDraftEnabled = hasPositiveAmount && !isCreditOrDebitNote
             )
         } else {
             PaymentLinkSection(
@@ -414,6 +423,7 @@ private fun ManualAndInstallmentsSection(
     totalToCharge: Long,
     remaining: Long,
     methodOptions: List<Pair<Int, String>>,
+    selectedDocType: String,
     onToggleMethod: (Int, Boolean) -> Unit,
     onAmountChange: (Int, Long) -> Unit,
     onOtherDesc: (String) -> Unit,
@@ -593,23 +603,35 @@ private fun ManualAndInstallmentsSection(
             }
 
             Spacer(Modifier.height(12.dp))
+
+            // Determine button text based on document type
+            val confirmButtonText = when (selectedDocType) {
+                "04" -> "Generar nota de crédito"
+                "05" -> "Generar nota de débito"
+                else -> "Confirmar cobro"
+            }
+
             ButtonM(
                 onClick = onConfirm,
                 enabled = canConfirm,
             ) {
                 Text(
-                    "Confirmar cobro",
+                    confirmButtonText,
                     style = labelLarge().copy(color = MaterialTheme.colorScheme.onPrimary)
                 )
             }
-            Spacer(Modifier.height(12.dp))
-            TextButtonM(
-                label = "Guardar sin cobrar",
-                enabled = saveDraftEnabled,
-                onClick = {
-                    onSaveDraft()
-                }
-            )
+            // Only show save draft button for regular invoices, not credit/debit notes
+            if (selectedDocType != "04" && selectedDocType != "05") {
+                Spacer(Modifier.height(12.dp))
+
+                TextButtonM(
+                    label = "Guardar sin cobrar",
+                    enabled = saveDraftEnabled,
+                    onClick = {
+                        onSaveDraft()
+                    }
+                )
+            }
         }
     }
 }
