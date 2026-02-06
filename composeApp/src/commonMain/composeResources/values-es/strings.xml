@@ -496,4 +496,20 @@
     <string name="quotes_welcome_message">Estás probando nuestra nueva función de cotizaciones. Es completamente gratis por tiempo limitado mientras está en beta.</string>
     <string name="quotes_welcome_message_small">Aprovecha esta oportunidad para crear cotizaciones profesionales y convertirlas en órdenes.</string>
     <string name="action_continue">Continuar</string>
+
+    <!-- Gastos -->
+    <string name="expenses">Gastos</string>
+    <string name="expense_details">Detalle de Gasto</string>
+    <string name="expenses_empty">Aún no tienes gastos registrados</string>
+    <string name="expenses_search_placeholder">Buscar por número de factura</string>
+    <string name="expenses_syncing">Verificando nuevos gastos...</string>
+    <string name="expenses_source_all">Todos</string>
+    <string name="expenses_source_manual">Manual</string>
+    <string name="expenses_source_crawled">Importado</string>
+    <string name="expenses_issuer_name">Nombre del emisor</string>
+    <string name="expenses_issuer_ruc">RUC del emisor</string>
+    <string name="new_expense">Nuevo Gasto</string>
+    <string name="cufe_import">Importar CUFE</string>
+    <string name="expenses_start_date">Fecha inicio (YYYY-MM-DD)</string>
+    <string name="expenses_end_date">Fecha fin (YYYY-MM-DD)</string>
 </resources>

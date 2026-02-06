@@ -1,0 +1,284 @@
+package com.teco.ventago.features.expenses.ui.cufe
+
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.CheckCircle
+import androidx.compose.material.icons.rounded.Error
+import androidx.compose.material.icons.rounded.QrCodeScanner
+import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.Icon
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Text
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.unit.dp
+import com.teco.ventago.core.camera.PermissionCallback
+import com.teco.ventago.core.camera.PermissionStatus
+import com.teco.ventago.core.camera.PermissionType
+import com.teco.ventago.core.camera.createPermissionsManager
+import com.teco.ventago.design_system.buttons.ButtonM
+import com.teco.ventago.design_system.buttons.OutlinedButtonM
+import com.teco.ventago.design_system.molecules.DMAlertDialog
+import com.teco.ventago.design_system.textfields.DMOutlinedTextField
+import com.teco.ventago.design_system.theme.bodyMedium
+import com.teco.ventago.design_system.theme.bodyMediumBold
+import com.teco.ventago.design_system.theme.cardContainerColor
+import com.teco.ventago.design_system.theme.labelSmall
+import com.teco.ventago.design_system.theme.titleMediumBold
+import com.teco.ventago.utils.BarcodeScannerScreen
+
+@Composable
+fun CufeImportScreen(
+    viewModel: CufeImportViewModel,
+    onBack: () -> Unit,
+    onExpenseImported: (Long) -> Unit
+) {
+    val uiState by viewModel.uiState.collectAsState()
+
+    var launchCamera by remember { mutableStateOf(false) }
+    var launchSetting by remember { mutableStateOf(false) }
+
+    val permissionsManager = createPermissionsManager(object : PermissionCallback {
+        override fun onPermissionStatus(
+            permissionType: PermissionType,
+            status: PermissionStatus
+        ) {
+            when (status) {
+                PermissionStatus.GRANTED -> {
+                    if (permissionType == PermissionType.CAMERA) {
+                        viewModel.showScanner(true)
+                    }
+                }
+                else -> {
+                    viewModel.showPermissionDialog(true)
+                }
+            }
+        }
+    })
+
+    if (launchCamera) {
+        if (permissionsManager.isPermissionGranted(PermissionType.CAMERA)) {
+            viewModel.showScanner(true)
+        } else {
+            permissionsManager.askPermission(PermissionType.CAMERA)
+        }
+        launchCamera = false
+    }
+
+    if (launchSetting) {
+        permissionsManager.launchSettings()
+        launchSetting = false
+    }
+
+    // Permission rational dialog
+    DMAlertDialog(
+        title = "Permiso de cámara",
+        message = "Se necesita acceso a la cámara para escanear códigos QR. Por favor habilite el permiso en la configuración.",
+        show = uiState.showPermissionDialog,
+        confirmText = "Configuración",
+        dismissText = "Cancelar",
+        onConfirm = {
+            viewModel.showPermissionDialog(false)
+            launchSetting = true
+        },
+        onDismiss = {
+            viewModel.showPermissionDialog(false)
+        }
+    )
+
+    // Full-screen scanner
+    if (uiState.showScanner) {
+        Column(modifier = Modifier.fillMaxSize()) {
+            BarcodeScannerScreen(
+                onResult = { rawValue ->
+                    viewModel.onQrScanned(rawValue)
+                },
+                onClose = { viewModel.showScanner(false) }
+            )
+        }
+        return
+    }
+
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .verticalScroll(rememberScrollState())
+            .padding(16.dp),
+        verticalArrangement = Arrangement.spacedBy(16.dp)
+    ) {
+        // Instructions card
+        Card(
+            modifier = Modifier.fillMaxWidth(),
+            elevation = CardDefaults.cardElevation(2.dp),
+            colors = CardDefaults.cardColors(containerColor = cardContainerColor())
+        ) {
+            Column(modifier = Modifier.padding(16.dp)) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(
+                        imageVector = Icons.Rounded.QrCodeScanner,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.size(24.dp)
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text("Importar por CUFE", style = titleMediumBold())
+                }
+                Spacer(modifier = Modifier.height(12.dp))
+                Text(
+                    "Escanee el código QR de la factura o ingrese el CUFE manualmente. " +
+                        "Puede pegar el CUFE directamente, una URL de la DGI, o un enlace con el código.",
+                    style = bodyMedium()
+                )
+            }
+        }
+
+        // Scan QR button
+        ButtonM(
+            onClick = { launchCamera = true },
+            enabled = !uiState.isImporting && !uiState.isPolling,
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Icon(
+                imageVector = Icons.Rounded.QrCodeScanner,
+                contentDescription = null,
+                modifier = Modifier.size(20.dp)
+            )
+            Spacer(modifier = Modifier.width(8.dp))
+            Text("Escanear Código QR")
+        }
+
+        // CUFE manual input
+        Card(
+            modifier = Modifier.fillMaxWidth(),
+            elevation = CardDefaults.cardElevation(2.dp),
+            colors = CardDefaults.cardColors(containerColor = cardContainerColor())
+        ) {
+            Column(modifier = Modifier.padding(16.dp)) {
+                Text("O ingrese manualmente", style = bodyMediumBold())
+                Spacer(modifier = Modifier.height(8.dp))
+                DMOutlinedTextField(
+                    text = uiState.cufeInput,
+                    label = "Pegue aquí el CUFE o URL",
+                    modifier = Modifier,
+                    onChange = { viewModel.setCufeInput(it) }
+                )
+                Spacer(modifier = Modifier.height(4.dp))
+                Text(
+                    "Formatos aceptados: FE..., URL con chFE=, URL con /FacturasPorCUFE/",
+                    style = labelSmall(color = MaterialTheme.colorScheme.onSurfaceVariant)
+                )
+                Spacer(modifier = Modifier.height(12.dp))
+                ButtonM(
+                    onClick = { viewModel.importCufe() },
+                    enabled = !uiState.isImporting && !uiState.isPolling && uiState.cufeInput.isNotBlank()
+                ) {
+                    if (uiState.isImporting) {
+                        CircularProgressIndicator(
+                            modifier = Modifier.size(16.dp),
+                            strokeWidth = 2.dp,
+                            color = MaterialTheme.colorScheme.onPrimary
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                    }
+                    Text("Importar Factura")
+                }
+            }
+        }
+
+        // Error
+        uiState.error?.let {
+            Text(
+                text = it,
+                color = MaterialTheme.colorScheme.error,
+                style = bodyMedium()
+            )
+        }
+
+        // Job status card
+        val job = uiState.currentJob
+        if (job != null) {
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                elevation = CardDefaults.cardElevation(2.dp),
+                colors = CardDefaults.cardColors(containerColor = cardContainerColor()),
+                shape = RoundedCornerShape(12.dp)
+            ) {
+                Column(
+                    modifier = Modifier.padding(16.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    Text("Estado de importación", style = bodyMediumBold())
+
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        when (job.status) {
+                            "pending", "processing" -> {
+                                CircularProgressIndicator(
+                                    modifier = Modifier.size(20.dp),
+                                    strokeWidth = 2.dp
+                                )
+                            }
+                            "success" -> {
+                                Icon(
+                                    imageVector = Icons.Rounded.CheckCircle,
+                                    contentDescription = null,
+                                    tint = Color(0xFF4CAF50),
+                                    modifier = Modifier.size(20.dp)
+                                )
+                            }
+                            "failed" -> {
+                                Icon(
+                                    imageVector = Icons.Rounded.Error,
+                                    contentDescription = null,
+                                    tint = MaterialTheme.colorScheme.error,
+                                    modifier = Modifier.size(20.dp)
+                                )
+                            }
+                        }
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text(
+                            text = uiState.jobStatusLabel ?: "",
+                            style = bodyMedium()
+                        )
+                    }
+
+                    if (job.status == "success" && uiState.importedExpenseId != null) {
+                        Spacer(modifier = Modifier.height(4.dp))
+                        ButtonM(onClick = { onExpenseImported(uiState.importedExpenseId!!) }) {
+                            Text("Ver Gasto Importado")
+                        }
+                    }
+
+                    if (job.status == "failed") {
+                        Spacer(modifier = Modifier.height(4.dp))
+                        OutlinedButtonM(onClick = { viewModel.reset() }) {
+                            Text("Intentar de nuevo")
+                        }
+                    }
+                }
+            }
+        }
+
+        Spacer(modifier = Modifier.height(32.dp))
+    }
+}

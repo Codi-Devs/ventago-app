@@ -508,4 +508,20 @@
     <string name="quotes_welcome_message">You’re trying our new quotes feature. It’s completely free for a limited time while it’s in beta.</string>
     <string name="quotes_welcome_message_small">Take advantage of this opportunity to create professional quotes and turn them into orders.</string>
     <string name="action_continue">Continue</string>
+
+    <!-- Expenses -->
+    <string name="expenses">Expenses</string>
+    <string name="expense_details">Expense Details</string>
+    <string name="expenses_empty">You don\'t have any expenses yet</string>
+    <string name="expenses_search_placeholder">Search by invoice number</string>
+    <string name="expenses_syncing">Checking for new expenses...</string>
+    <string name="expenses_source_all">All</string>
+    <string name="expenses_source_manual">Manual</string>
+    <string name="expenses_source_crawled">Imported</string>
+    <string name="expenses_issuer_name">Issuer name</string>
+    <string name="expenses_issuer_ruc">Issuer RUC</string>
+    <string name="new_expense">New Expense</string>
+    <string name="cufe_import">CUFE Import</string>
+    <string name="expenses_start_date">Start date (YYYY-MM-DD)</string>
+    <string name="expenses_end_date">End date (YYYY-MM-DD)</string>
 </resources>

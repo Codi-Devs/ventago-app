@@ -71,6 +71,13 @@ import com.teco.ventago.features.product.domain.ProductService
 import com.teco.ventago.features.quotes.data.provider.QuotesProvider
 import com.teco.ventago.features.quotes.data.repository.QuotesRepository
 import com.teco.ventago.features.quotes.domain.QuotesService
+import com.teco.ventago.features.expenses.data.provider.ExpensesProvider
+import com.teco.ventago.features.expenses.data.repository.ExpensesRepository
+import com.teco.ventago.features.expenses.domain.ExpensesService
+import com.teco.ventago.features.expenses.ui.create.NewExpenseViewModel
+import com.teco.ventago.features.expenses.ui.cufe.CufeImportViewModel
+import com.teco.ventago.features.expenses.ui.details.ExpenseDetailsViewModel
+import com.teco.ventago.features.expenses.ui.list.ExpensesListViewModel
 import com.teco.ventago.features.product.ui.category.add.viewmodel.AddCategoryViewModel
 import com.teco.ventago.features.product.ui.category.add.viewmodel.ModifyCategoryViewModel
 import com.teco.ventago.features.product.ui.category.edit.viewmodel.EditCategoryViewModel
@@ -184,6 +191,10 @@ internal val viewModels = module {
     viewModelOf(::PosViewModel)
     viewModelOf(::QuotesListViewModel)
     viewModelOf(::QuoteDetailsViewModel)
+    viewModelOf(::ExpensesListViewModel)
+    viewModelOf(::ExpenseDetailsViewModel)
+    viewModelOf(::NewExpenseViewModel)
+    viewModelOf(::CufeImportViewModel)
     viewModelOf(::OrdersViewModel)
     viewModelOf(::ChangeImageViewModel)
     viewModelOf(::ChangeNameViewModel)
@@ -434,6 +445,23 @@ internal fun appModule() = module {
         QuotesService(
             repository = QuotesRepository(
                 provider = QuotesProvider(
+                    client = get(),
+                    authService = get()
+                ),
+                logger = get()
+            ),
+            businessService = get(),
+            logger = get(),
+            authService = get(),
+            storage = get(),
+            json = json
+        )
+    }
+
+    single {
+        ExpensesService(
+            repository = ExpensesRepository(
+                provider = ExpensesProvider(
                     client = get(),
                     authService = get()
                 ),

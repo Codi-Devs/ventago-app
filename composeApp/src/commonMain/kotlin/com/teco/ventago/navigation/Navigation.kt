@@ -138,6 +138,10 @@ import ventago.composeapp.generated.resources.quote_details
 import ventago.composeapp.generated.resources.quote_success
 import ventago.composeapp.generated.resources.quote_summary
 import ventago.composeapp.generated.resources.quotes
+import ventago.composeapp.generated.resources.expenses
+import ventago.composeapp.generated.resources.expense_details
+import ventago.composeapp.generated.resources.new_expense
+import ventago.composeapp.generated.resources.cufe_import
 import ventago.composeapp.generated.resources.register
 import ventago.composeapp.generated.resources.register_business
 import ventago.composeapp.generated.resources.reset_password
@@ -293,7 +297,16 @@ enum class PosScreens(
             ) { routeObj -> navigate(routeObj)}
         }),
     AddBillingPointScreen(Res.string.billing_points),
-    EditBillingPointScreen(Res.string.billing_points);
+    EditBillingPointScreen(Res.string.billing_points),
+
+    // Expenses Screens
+    Expenses(Res.string.expenses),
+    ExpensesListScreen(Res.string.expenses, true, showBackButton = true),
+    ExpenseDetailsScreen(Res.string.expense_details, true, showBackButton = true),
+    NewExpenseScreen(Res.string.new_expense, true, showBackButton = true),
+    EditExpenseScreen(Res.string.expense_details, true, showBackButton = true),
+    DuplicateExpenseScreen(Res.string.new_expense, true, showBackButton = true),
+    CufeImportScreen(Res.string.cufe_import, true, showBackButton = true);
 
 
     fun isPosScreens(): Boolean {
@@ -352,6 +365,8 @@ fun Navigation(
         addInvoicingNavigation(navController, analyticsService)
 
         addBranchesNavigation(navController, analyticsService)
+
+        addExpensesNavigation(navController, analyticsService)
     }
 }
 
@@ -1057,6 +1072,93 @@ private fun NavGraphBuilder.addBranchesNavigation(
                 parameters = { parametersOf(branchCode, billingCode) }
             )
             EditBillingPointScreen(viewModel) { navController.navigateUp() }
+        }
+    }
+}
+
+private fun NavGraphBuilder.addExpensesNavigation(
+    navController: NavHostController, analyticsService: AnalyticsService
+) {
+    navigation(
+        route = PosScreens.Expenses.name, startDestination = PosScreens.ExpensesListScreen.name
+    ) {
+        composable(route = PosScreens.ExpensesListScreen.name) {
+            val expensesOwner = rememberGraphOwner(navController, PosScreens.Expenses.name)
+            val viewModel: com.teco.ventago.features.expenses.ui.list.ExpensesListViewModel =
+                koinViewModel(viewModelStoreOwner = expensesOwner)
+            analyticsService.logScreenView("ExpensesListScreen")
+            com.teco.ventago.features.expenses.ui.list.ExpensesListScreen(
+                viewModel = viewModel,
+                navigate = { route -> navController.navigate(route.name) },
+                onBack = { navController.navigateUp() }
+            )
+        }
+
+        composable(route = PosScreens.ExpenseDetailsScreen.name) {
+            val expensesOwner = rememberGraphOwner(navController, PosScreens.Expenses.name)
+            val viewModel: com.teco.ventago.features.expenses.ui.details.ExpenseDetailsViewModel =
+                koinViewModel(viewModelStoreOwner = expensesOwner)
+            analyticsService.logScreenView("ExpenseDetailsScreen")
+            com.teco.ventago.features.expenses.ui.details.ExpenseDetailsScreen(
+                viewModel = viewModel,
+                onBack = { navController.navigateUp() },
+                onEdit = { navController.navigate(PosScreens.EditExpenseScreen.name) },
+                onDuplicate = { navController.navigate(PosScreens.DuplicateExpenseScreen.name) }
+            )
+        }
+
+        composable(route = PosScreens.NewExpenseScreen.name) {
+            val expensesOwner = rememberGraphOwner(navController, PosScreens.Expenses.name)
+            val viewModel: com.teco.ventago.features.expenses.ui.create.NewExpenseViewModel =
+                koinViewModel(viewModelStoreOwner = expensesOwner)
+            analyticsService.logScreenView("NewExpenseScreen")
+            com.teco.ventago.features.expenses.ui.create.NewExpenseScreen(
+                viewModel = viewModel,
+                onBack = { navController.navigateUp() }
+            )
+        }
+
+        composable(route = PosScreens.EditExpenseScreen.name) {
+            val expensesOwner = rememberGraphOwner(navController, PosScreens.Expenses.name)
+            val viewModel: com.teco.ventago.features.expenses.ui.create.NewExpenseViewModel =
+                koinViewModel(viewModelStoreOwner = expensesOwner)
+            analyticsService.logScreenView("EditExpenseScreen")
+            com.teco.ventago.features.expenses.ui.create.NewExpenseScreen(
+                viewModel = viewModel,
+                isEditMode = true,
+                onBack = { navController.navigateUp() }
+            )
+        }
+
+        composable(route = PosScreens.DuplicateExpenseScreen.name) {
+            val expensesOwner = rememberGraphOwner(navController, PosScreens.Expenses.name)
+            val viewModel: com.teco.ventago.features.expenses.ui.create.NewExpenseViewModel =
+                koinViewModel(viewModelStoreOwner = expensesOwner)
+            analyticsService.logScreenView("DuplicateExpenseScreen")
+            com.teco.ventago.features.expenses.ui.create.NewExpenseScreen(
+                viewModel = viewModel,
+                isDuplicateMode = true,
+                onBack = { navController.navigateUp() }
+            )
+        }
+
+        composable(route = PosScreens.CufeImportScreen.name) {
+            val expensesOwner = rememberGraphOwner(navController, PosScreens.Expenses.name)
+            val viewModel: com.teco.ventago.features.expenses.ui.cufe.CufeImportViewModel =
+                koinViewModel(viewModelStoreOwner = expensesOwner)
+            analyticsService.logScreenView("CufeImportScreen")
+            com.teco.ventago.features.expenses.ui.cufe.CufeImportScreen(
+                viewModel = viewModel,
+                onBack = { navController.navigateUp() },
+                onExpenseImported = { expenseId ->
+                    // Navigate to details of the imported expense
+                    com.teco.ventago.features.expenses.domain.ExpensesSelectionStore.selected =
+                        com.teco.ventago.features.expenses.domain.models.Expense(id = expenseId)
+                    navController.navigate(PosScreens.ExpenseDetailsScreen.name) {
+                        popUpTo(PosScreens.ExpensesListScreen.name) { inclusive = false }
+                    }
+                }
+            )
         }
     }
 }
