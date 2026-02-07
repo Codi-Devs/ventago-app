@@ -317,13 +317,13 @@ fun HomeScreen(
                     Icon(
                         imageVector = Icons.Rounded.ReceiptLong,
                         contentDescription = null,
-                        tint = MaterialTheme.colorScheme.primary,
+                        tint = MaterialTheme.colorScheme.secondary,
                         modifier = Modifier.size(28.dp)
                     )
                     Spacer(modifier = Modifier.width(12.dp))
                     Text(
                         text = stringResource(Res.string.expenses),
-                        style = bodyMediumBold()
+                        style = bodyMediumBold(color = MaterialTheme.colorScheme.secondary)
                     )
                     Spacer(modifier = Modifier.weight(1f))
                     Image(

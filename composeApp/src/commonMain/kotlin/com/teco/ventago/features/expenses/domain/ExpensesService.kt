@@ -14,6 +14,9 @@ import com.teco.ventago.features.expenses.domain.models.requests.ExpenseProofFil
 import com.teco.ventago.features.expenses.domain.models.requests.ListExpensesRequest
 import com.teco.ventago.features.expenses.domain.models.requests.UpsertExpenseRequest
 import com.teco.ventago.features.expenses.domain.models.requests.UpsertExpensePaymentRequest
+import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.flow.SharedFlow
+import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.serialization.encodeToString
@@ -31,6 +34,9 @@ class ExpensesService(
     private val inFlightRequests = mutableMapOf<String, Boolean>()
     private val pendingRefreshResults = mutableMapOf<String, PagedExpenses>()
     private var cacheHydrationCompleted = false
+    private val expenseUpdates = MutableSharedFlow<Expense>(extraBufferCapacity = 64)
+
+    val expenseUpdatesFlow: SharedFlow<Expense> = expenseUpdates.asSharedFlow()
 
     private fun businessId(): Int? = businessService.business.value?.businessId
 
@@ -184,5 +190,10 @@ class ExpensesService(
         pendingRefreshResults.clear()
         inFlightRequests.clear()
         cacheHydrationCompleted = false
+    }
+
+    fun publishExpenseUpdate(expense: Expense) {
+        mergeExpensesIntoCache(listOf(expense))
+        expenseUpdates.tryEmit(expense)
     }
 }

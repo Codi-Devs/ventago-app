@@ -36,6 +36,19 @@ class ExpensesListViewModel(
                 }
                 .launchIn(this)
         }
+        viewModelScope.launch {
+            expensesService.expenseUpdatesFlow
+                .onEach { updated ->
+                    val current = _uiState.value
+                    val currentExpenses = current.expenses
+                    val index = currentExpenses.indexOfFirst { it.id != null && it.id == updated.id }
+                    if (index < 0) return@onEach
+
+                    val merged = currentExpenses.toMutableList().also { it[index] = updated }
+                    _uiState.value = current.copy(expenses = applyLocalFilters(merged, current))
+                }
+                .launchIn(this)
+        }
         loadExpenses(refresh = true)
     }
 

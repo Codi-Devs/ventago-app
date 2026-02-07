@@ -27,6 +27,8 @@ import androidx.compose.material.icons.rounded.CheckCircle
 import androidx.compose.material.icons.rounded.Collections
 import androidx.compose.material.icons.rounded.History
 import androidx.compose.material.icons.rounded.Inventory2
+import androidx.compose.material.icons.rounded.KeyboardArrowDown
+import androidx.compose.material.icons.rounded.KeyboardArrowUp
 import androidx.compose.material.icons.rounded.Notes
 import androidx.compose.material.icons.rounded.Payment
 import androidx.compose.material.icons.rounded.Receipt
@@ -87,6 +89,7 @@ import com.teco.ventago.features.expenses.domain.models.ExpenseParty
 import com.teco.ventago.features.expenses.domain.models.ExpensePayment
 import com.teco.ventago.features.expenses.domain.models.PaymentSummary
 import com.teco.ventago.features.expenses.domain.models.requests.ExpenseProofFile
+import com.teco.ventago.design_system.textfields.DMMoneyOutlinedTextField
 import com.teco.ventago.design_system.textfields.DMOutlinedTextField
 import com.teco.ventago.design_system.textfields.helpers.DMDropDownField
 import com.teco.ventago.features.expenses.domain.models.PaymentMethod
@@ -101,6 +104,7 @@ import kotlinx.datetime.TimeZone
 import kotlinx.datetime.daysUntil
 import kotlinx.datetime.plus
 import kotlinx.datetime.toLocalDateTime
+import kotlin.math.roundToLong
 import org.jetbrains.compose.resources.stringResource
 import ventago.composeapp.generated.resources.Res
 import ventago.composeapp.generated.resources.expense_details
@@ -1140,6 +1144,12 @@ private fun currentLocalDate(): LocalDate =
 private fun LocalDate.toIsoDate(): String =
     "${year.toString().padStart(4, '0')}-${monthNumber.toString().padStart(2, '0')}-${dayOfMonth.toString().padStart(2, '0')}"
 
+private fun amountToRawCents(amount: Double): String =
+    (amount * 100.0).roundToLong().coerceAtLeast(0L).toString()
+
+private fun rawCentsToAmountDouble(raw: String): Double =
+    (raw.filter(Char::isDigit).toLongOrNull() ?: 0L) / 100.0
+
 private fun dueStatusLabel(rawDueDate: String?): String? {
     val dueDate = parseLocalDatePrefix(rawDueDate) ?: return null
     val today = currentLocalDate()
@@ -1232,8 +1242,8 @@ private fun PaymentRegistrationSheet(
 
     var amount by remember {
         mutableStateOf(
-            editingPayment?.amountPaid?.let { "$it" }
-                ?: if (isMarkAsPaidMode) "$expenseTotalAmount" else ""
+            editingPayment?.amountPaid?.let { amountToRawCents(it) }
+                ?: amountToRawCents(expenseTotalAmount)
         )
     }
     var reference by remember { mutableStateOf(editingPayment?.reference ?: "") }
@@ -1251,6 +1261,9 @@ private fun PaymentRegistrationSheet(
     }
     var proofFileUrl by remember { mutableStateOf(editingPayment?.proofFileUrl) }
     var proofFile by remember { mutableStateOf<ExpenseProofFile?>(null) }
+    var proofSectionExpanded by remember(proofFileUrl, proofFile) {
+        mutableStateOf(proofFileUrl != null || proofFile != null)
+    }
 
     Column(
         modifier = Modifier
@@ -1278,18 +1291,15 @@ private fun PaymentRegistrationSheet(
             selectedItemToString = { it.label }
         )
 
-        DMOutlinedTextField(
+        DMMoneyOutlinedTextField(
             text = amount,
             label = "Monto",
             modifier = Modifier,
             readOnly = isMarkAsPaidMode,
             onChange = { newValue ->
-                val parsedAmount = newValue.toDoubleOrNull()
-                amount = if (parsedAmount != null && parsedAmount > expenseTotalAmount) {
-                    expenseTotalAmount.toString()
-                } else {
-                    newValue
-                }
+                val cents = newValue.filter(Char::isDigit).toLongOrNull() ?: 0L
+                val maxCents = (expenseTotalAmount * 100.0).roundToLong().coerceAtLeast(0L)
+                amount = cents.coerceAtMost(maxCents).toString()
             }
         )
 
@@ -1327,18 +1337,49 @@ private fun PaymentRegistrationSheet(
 
         // Proof file
         if (selectedMethod != PaymentMethod.CREDIT && hasExpensesQr) {
-            ProofFileSection(
-                proofFileUrl = proofFileUrl,
-                proofFile = proofFile,
-                onFileSelected = { selected ->
-                    proofFile = selected
-                    proofFileUrl = null
-                },
-                onRemove = {
-                    proofFileUrl = null
-                    proofFile = null
+            Card(
+                modifier = Modifier.fillMaxWidth().padding(bottom = 12.dp),
+                elevation = CardDefaults.cardElevation(1.dp),
+                colors = CardDefaults.cardColors(containerColor = cardContainerColor())
+            ) {
+                Column(modifier = Modifier.padding(12.dp)) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Text(
+                            text = "Comprobante de pago (opcional)",
+                            style = bodyMediumBold()
+                        )
+                        IconButton(
+                            onClick = { proofSectionExpanded = !proofSectionExpanded },
+                            modifier = Modifier.size(28.dp)
+                        ) {
+                            Icon(
+                                imageVector = if (proofSectionExpanded) Icons.Rounded.KeyboardArrowUp else Icons.Rounded.KeyboardArrowDown,
+                                contentDescription = if (proofSectionExpanded) "Colapsar" else "Expandir",
+                                tint = MaterialTheme.colorScheme.primary
+                            )
+                        }
+                    }
+                    if (proofSectionExpanded) {
+                        Spacer(modifier = Modifier.height(8.dp))
+                        ProofFileSection(
+                            proofFileUrl = proofFileUrl,
+                            proofFile = proofFile,
+                            onFileSelected = { selected ->
+                                proofFile = selected
+                                proofFileUrl = null
+                            },
+                            onRemove = {
+                                proofFileUrl = null
+                                proofFile = null
+                            }
+                        )
+                    }
                 }
-            )
+            }
         }
 
         error?.let {
@@ -1366,7 +1407,7 @@ private fun PaymentRegistrationSheet(
             }
             ButtonM(
                 onClick = {
-                    val amountVal = amount.toDoubleOrNull() ?: return@ButtonM
+                    val amountVal = rawCentsToAmountDouble(amount)
                     onSubmit(
                         selectedMethod.value,
                         amountVal,
@@ -1378,7 +1419,7 @@ private fun PaymentRegistrationSheet(
                         proofFile
                     )
                 },
-                enabled = !isSubmitting && amount.toDoubleOrNull() != null,
+                enabled = !isSubmitting && rawCentsToAmountDouble(amount) > 0.0,
                 modifier = Modifier.weight(1f),
                 containerColor = MaterialTheme.colorScheme.secondary,
                 contentColor = MaterialTheme.colorScheme.onSecondary
@@ -1476,11 +1517,6 @@ private fun ProofFileSection(
     }
 
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        Text(
-            text = "Comprobante de pago (opcional)",
-            style = labelSmall(color = MaterialTheme.colorScheme.onSurfaceVariant)
-        )
-
         if (proofFile != null || proofFileUrl != null) {
             Row(
                 modifier = Modifier.fillMaxWidth(),

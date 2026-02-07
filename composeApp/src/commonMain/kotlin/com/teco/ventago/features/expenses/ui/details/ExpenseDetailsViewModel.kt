@@ -379,19 +379,21 @@ class ExpenseDetailsViewModel(
             remaining <= 0.0001 -> "paid"
             else -> "partial"
         }
-
-        _uiState.value = _uiState.value.copy(
-            expense = expense.copy(
-                payments = payments,
+        val updatedExpense = expense.copy(
+            payments = payments,
+            totalPaid = paidTotal,
+            paymentStatus = status,
+            paymentSummary = PaymentSummary(
                 totalPaid = paidTotal,
-                paymentStatus = status,
-                paymentSummary = PaymentSummary(
-                    totalPaid = paidTotal,
-                    remaining = remaining,
-                    status = status
-                )
+                remaining = remaining,
+                status = status
             )
         )
+
+        _uiState.value = _uiState.value.copy(
+            expense = updatedExpense
+        )
+        expensesService.publishExpenseUpdate(updatedExpense)
     }
 
     private fun mergePaymentWithFallbacks(

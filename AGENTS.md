@@ -85,3 +85,4 @@ Used by: `OrderDetailsScreen`, `QuoteDetailsScreen`, `ExpenseDetailsScreen`
 - **Never build API JSON manually in ViewModels** (`buildJsonObject`, raw string payloads, etc.). Define `@Serializable` request models and pass typed request objects through `ViewModel -> Service -> Repository -> Provider`.
 - **Every user-triggered API action must show `LoadingSheet` feedback** with `LoadingState.LOADING` while executing and `LoadingState.SUCCESS` or `LoadingState.ERROR` when it finishes.
 - **Repository endpoint calls must be wrapped in `try/catch` with logger tracking** (`ILoggerService`, `Log`, `LogLevel.ERROR`) and rethrow errors after logging context (businessId, resourceId, action).
+- **Cross-screen state consistency is mandatory after mutations** (e.g., payments in detail screens impacting list screens). Publish updates from the service layer (shared flow/listener) and update cache so list/detail UIs stay in sync when navigating back without forcing full reloads.

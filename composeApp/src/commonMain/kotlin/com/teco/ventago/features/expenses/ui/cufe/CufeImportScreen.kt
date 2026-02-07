@@ -22,9 +22,12 @@ import androidx.compose.material.icons.rounded.QrCodeScanner
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Text
+import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.collectAsState
@@ -52,6 +55,7 @@ import com.teco.ventago.design_system.theme.labelSmall
 import com.teco.ventago.design_system.theme.titleMediumBold
 import com.teco.ventago.utils.BarcodeScannerScreen
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun CufeImportScreen(
     viewModel: CufeImportViewModel,
@@ -59,9 +63,11 @@ fun CufeImportScreen(
     onExpenseImported: (Long) -> Unit
 ) {
     val uiState by viewModel.uiState.collectAsState()
+    val job = uiState.currentJob
 
     var launchCamera by remember { mutableStateOf(false) }
     var launchSetting by remember { mutableStateOf(false) }
+    val statusSheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
 
     DisposableEffect(Unit) {
         viewModel.onScreenVisible()
@@ -253,110 +259,134 @@ fun CufeImportScreen(
             )
         }
 
-        // Job status card
-        val job = uiState.currentJob
-        if (job != null) {
-            val isInProgress = job.status == "pending" || job.status == "processing"
-            val isSuccess = job.status == "success" || job.status == "completed"
-            val isFailure = uiState.pollingTimedOut ||
-                job.status == "failed" ||
-                job.status == "error" ||
-                job.status == "cancelled" ||
-                job.status == "timeout"
+        Spacer(modifier = Modifier.height(32.dp))
+    }
 
-            Card(
-                modifier = Modifier.fillMaxWidth(),
-                elevation = CardDefaults.cardElevation(2.dp),
-                colors = CardDefaults.cardColors(containerColor = cardContainerColor()),
-                shape = RoundedCornerShape(12.dp)
-            ) {
-                Column(
-                    modifier = Modifier.padding(16.dp),
-                    verticalArrangement = Arrangement.spacedBy(8.dp)
+    if (job != null) {
+        ModalBottomSheet(
+            onDismissRequest = {
+                if (!uiState.isPolling) {
+                    viewModel.reset()
+                }
+            },
+            sheetState = statusSheetState,
+            containerColor = MaterialTheme.colorScheme.background
+        ) {
+            ImportStatusContent(
+                uiState = uiState,
+                onReset = { viewModel.reset() },
+                onOpenImportedExpense = { viewModel.openImportedExpense(onExpenseImported) }
+            )
+        }
+    }
+}
+
+@Composable
+private fun ImportStatusContent(
+    uiState: CufeImportState,
+    onReset: () -> Unit,
+    onOpenImportedExpense: () -> Unit
+) {
+    val job = uiState.currentJob ?: return
+    val isInProgress = job.status == "pending" || job.status == "processing"
+    val isSuccess = job.status == "success" || job.status == "completed"
+    val isFailure = uiState.pollingTimedOut ||
+        job.status == "failed" ||
+        job.status == "error" ||
+        job.status == "cancelled" ||
+        job.status == "timeout"
+
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp, vertical = 8.dp),
+        elevation = CardDefaults.cardElevation(2.dp),
+        colors = CardDefaults.cardColors(containerColor = cardContainerColor()),
+        shape = RoundedCornerShape(12.dp)
+    ) {
+        Column(
+            modifier = Modifier.padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            Text("Estado de importación", style = bodyMediumBold())
+
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                when {
+                    isInProgress -> CircularProgressIndicator(
+                        modifier = Modifier.size(20.dp),
+                        strokeWidth = 2.dp
+                    )
+                    isSuccess -> Icon(
+                        imageVector = Icons.Rounded.CheckCircle,
+                        contentDescription = null,
+                        tint = Color(0xFF4CAF50),
+                        modifier = Modifier.size(20.dp)
+                    )
+                    isFailure -> Icon(
+                        imageVector = Icons.Rounded.Error,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.error,
+                        modifier = Modifier.size(20.dp)
+                    )
+                    else -> Icon(
+                        imageVector = Icons.Rounded.Info,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.size(20.dp)
+                    )
+                }
+                Spacer(modifier = Modifier.width(8.dp))
+                Text(
+                    text = uiState.jobStatusLabel ?: "",
+                    style = bodyMedium()
+                )
+            }
+
+            if (uiState.isPolling || isInProgress) {
+                Row(
+                    verticalAlignment = Alignment.Top,
+                    modifier = Modifier.fillMaxWidth()
                 ) {
-                    Text("Estado de importación", style = bodyMediumBold())
+                    Icon(
+                        imageVector = Icons.Rounded.Info,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.size(18.dp)
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text(
+                        text = "La importación se está procesando. Puede salir de esta pantalla, " +
+                            "si finaliza correctamente el gasto aparecerá en su lista.",
+                        style = labelSmall(color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    )
+                }
+            }
 
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        when {
-                            isInProgress -> CircularProgressIndicator(
-                                modifier = Modifier.size(20.dp),
-                                strokeWidth = 2.dp
-                            )
-                            isSuccess -> Icon(
-                                imageVector = Icons.Rounded.CheckCircle,
-                                contentDescription = null,
-                                tint = Color(0xFF4CAF50),
-                                modifier = Modifier.size(20.dp)
-                            )
-                            isFailure -> Icon(
-                                imageVector = Icons.Rounded.Error,
-                                contentDescription = null,
-                                tint = MaterialTheme.colorScheme.error,
-                                modifier = Modifier.size(20.dp)
-                            )
-                            else -> Icon(
-                                imageVector = Icons.Rounded.Info,
-                                contentDescription = null,
-                                tint = MaterialTheme.colorScheme.primary,
-                                modifier = Modifier.size(20.dp)
-                            )
-                        }
-                        Spacer(modifier = Modifier.width(8.dp))
-                        Text(
-                            text = uiState.jobStatusLabel ?: "",
-                            style = bodyMedium()
+            if (isSuccess && uiState.importedExpenseId != null) {
+                Spacer(modifier = Modifier.height(4.dp))
+                ButtonM(
+                    onClick = onOpenImportedExpense,
+                    enabled = !uiState.isOpeningExpense
+                ) {
+                    if (uiState.isOpeningExpense) {
+                        CircularProgressIndicator(
+                            modifier = Modifier.size(16.dp),
+                            strokeWidth = 2.dp,
+                            color = MaterialTheme.colorScheme.onPrimary
                         )
+                        Spacer(modifier = Modifier.width(8.dp))
                     }
+                    Text("Ver gasto importado")
+                }
+            }
 
-                    // Informational copy while polling
-                    if (uiState.isPolling || isInProgress) {
-                        Row(
-                            verticalAlignment = Alignment.Top,
-                            modifier = Modifier.fillMaxWidth()
-                        ) {
-                            Icon(
-                                imageVector = Icons.Rounded.Info,
-                                contentDescription = null,
-                                tint = MaterialTheme.colorScheme.primary,
-                                modifier = Modifier.size(18.dp)
-                            )
-                            Spacer(modifier = Modifier.width(8.dp))
-                            Text(
-                                text = "La importación se está procesando. Puede salir de esta pantalla, " +
-                                    "si finaliza correctamente el gasto aparecerá en su lista.",
-                                style = labelSmall(color = MaterialTheme.colorScheme.onSurfaceVariant)
-                            )
-                        }
-                    }
-
-                    if (isSuccess && uiState.importedExpenseId != null) {
-                        Spacer(modifier = Modifier.height(4.dp))
-                        ButtonM(
-                            onClick = { viewModel.openImportedExpense(onExpenseImported) },
-                            enabled = !uiState.isOpeningExpense
-                        ) {
-                            if (uiState.isOpeningExpense) {
-                                CircularProgressIndicator(
-                                    modifier = Modifier.size(16.dp),
-                                    strokeWidth = 2.dp,
-                                    color = MaterialTheme.colorScheme.onPrimary
-                                )
-                                Spacer(modifier = Modifier.width(8.dp))
-                            }
-                            Text("Ver gasto importado")
-                        }
-                    }
-
-                    if (isFailure) {
-                        Spacer(modifier = Modifier.height(4.dp))
-                        OutlinedButtonM(onClick = { viewModel.reset() }) {
-                            Text("Intentar de nuevo")
-                        }
-                    }
+            if (isFailure) {
+                Spacer(modifier = Modifier.height(4.dp))
+                OutlinedButtonM(onClick = onReset) {
+                    Text("Intentar de nuevo")
                 }
             }
         }
-
-        Spacer(modifier = Modifier.height(32.dp))
     }
+    Spacer(modifier = Modifier.height(16.dp))
 }

@@ -201,6 +201,7 @@ class CufeImportViewModel(
     private fun handleTerminalStatus(job: com.teco.ventago.features.expenses.domain.models.CrawlJob) {
         val isSuccess = job.status == "success" || job.status == "completed"
         _uiState.value = _uiState.value.copy(
+            cufeInput = if (isSuccess) "" else _uiState.value.cufeInput,
             importSuccess = isSuccess,
             importedExpenseId = if (isSuccess) job.expenseId else _uiState.value.importedExpenseId
         )
