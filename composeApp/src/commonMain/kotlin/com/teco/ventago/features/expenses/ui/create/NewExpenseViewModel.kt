@@ -260,12 +260,12 @@ class NewExpenseViewModel(
             issuer = ExpensePartyRequest(
                 name = state.issuerName,
                 ruc = state.issuerRuc.takeIf { it.isNotBlank() },
-                dv = state.issuerDv.takeIf { it.isNotBlank() }
+                dv = if (state.isEditMode) state.issuerDv.takeIf { it.isNotBlank() } else ""
             ),
             receiver = ExpensePartyRequest(
                 name = state.receiverName,
                 ruc = state.receiverRuc.takeIf { it.isNotBlank() },
-                dv = state.receiverDv.takeIf { it.isNotBlank() },
+                dv = if (state.isEditMode) state.receiverDv.takeIf { it.isNotBlank() } else "",
                 type = "business"
             ),
             items = items,

@@ -234,7 +234,7 @@ class CufeImportViewModel(
     fun reset() {
         pollingJob?.cancel()
         pollingJobId = null
-        _uiState.value = CufeImportState()
+        _uiState.value = CufeImportState(hasExpensesQr = _uiState.value.hasExpensesQr)
     }
 
     override fun onCleared() {

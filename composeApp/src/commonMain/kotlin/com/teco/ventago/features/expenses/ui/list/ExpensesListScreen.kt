@@ -120,6 +120,11 @@ fun ExpensesListScreen(
         "partial" to "Parcial",
         "paid" to "Pagado"
     )
+    val visibleCrawlJobs = remember(uiState.crawlJobs) {
+        uiState.crawlJobs.filter { job ->
+            job.status in setOf("pending", "processing", "failed", "error", "cancelled", "timeout")
+        }
+    }
 
     Column(modifier = Modifier.fillMaxSize()) {
         // Search bar
@@ -202,10 +207,10 @@ fun ExpensesListScreen(
             }
         }
 
-        // Crawl jobs summary (only when expenses_qr enabled)
-        if (uiState.hasExpensesQr) {
+        // Crawl jobs summary (only when there are pending/failed jobs)
+        if (uiState.hasExpensesQr && visibleCrawlJobs.isNotEmpty()) {
             CrawlJobsSummary(
-                jobs = uiState.crawlJobs,
+                jobs = visibleCrawlJobs,
                 isLoading = uiState.isLoadingCrawlJobs
             )
         }
@@ -416,13 +421,6 @@ private fun ExpensesFilterSheet(
             label = stringResource(Res.string.expenses_issuer_ruc),
             modifier = Modifier,
             onChange = onIssuerRucChange
-        )
-
-        DMOutlinedTextField(
-            text = invoiceNumber,
-            label = "No. Factura",
-            modifier = Modifier,
-            onChange = onInvoiceNumberChange
         )
 
         Spacer(modifier = Modifier.height(8.dp))

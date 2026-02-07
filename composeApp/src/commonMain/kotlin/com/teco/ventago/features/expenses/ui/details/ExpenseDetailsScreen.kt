@@ -255,7 +255,7 @@ fun ExpenseDetailsScreen(
             onDuplicate = onDuplicate,
             onDelete = { viewModel.deleteExpense() },
             onOpenDgi = { cufe ->
-                uriHandler.openUri("https://dgi-fep.mef.gob.pa/FacturasPorCUFE/$cufe")
+                uriHandler.openUri("https://dgi-fep.mef.gob.pa/Consultas/FacturasPorCUFE/$cufe")
             },
             onDownloadFile = { url ->
                 uriHandler.openUri(url)
@@ -590,7 +590,6 @@ private fun PartiesCard(issuer: ExpenseParty?, receiver: ExpenseParty?) {
                 Spacer(modifier = Modifier.height(4.dp))
                 val rucDisplay = buildString {
                     append(party.ruc ?: "-")
-                    party.dv?.let { append("-$it") }
                 }
                 InfoRow("RUC", rucDisplay)
             } ?: Text("-", style = bodyMedium())
@@ -615,7 +614,6 @@ private fun PartiesCard(issuer: ExpenseParty?, receiver: ExpenseParty?) {
                 Spacer(modifier = Modifier.height(4.dp))
                 val rucDisplay = buildString {
                     append(party.ruc ?: "-")
-                    party.dv?.let { append("-$it") }
                 }
                 InfoRow("RUC", rucDisplay)
             } ?: Text("-", style = bodyMedium())
@@ -960,15 +958,17 @@ private fun ActionsSection(
             }
         }
 
-        // Duplicate button
-        OutlinedButtonM(onClick = onDuplicate) {
-            Icon(
-                imageVector = Icons.Rounded.ContentCopy,
-                contentDescription = null,
-                modifier = Modifier.size(18.dp)
-            )
-            Spacer(modifier = Modifier.width(8.dp))
-            Text("Duplicar Gasto")
+        // Duplicate button (manual only)
+        if (expense.isManual) {
+            OutlinedButtonM(onClick = onDuplicate) {
+                Icon(
+                    imageVector = Icons.Rounded.ContentCopy,
+                    contentDescription = null,
+                    modifier = Modifier.size(18.dp)
+                )
+                Spacer(modifier = Modifier.width(8.dp))
+                Text("Duplicar Gasto")
+            }
         }
 
         // Download original file or generate non-fiscal PDF
@@ -982,16 +982,6 @@ private fun ActionsSection(
                 )
                 Spacer(modifier = Modifier.width(8.dp))
                 Text("Descargar Archivo")
-            }
-        } else {
-            OutlinedButtonM(onClick = onGeneratePdf) {
-                Icon(
-                    imageVector = Icons.Rounded.Description,
-                    contentDescription = null,
-                    modifier = Modifier.size(18.dp)
-                )
-                Spacer(modifier = Modifier.width(8.dp))
-                Text("Generar PDF")
             }
         }
 

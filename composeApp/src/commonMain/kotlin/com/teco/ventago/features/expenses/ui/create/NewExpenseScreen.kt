@@ -1,5 +1,6 @@
 package com.teco.ventago.features.expenses.ui.create
 
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -18,6 +19,8 @@ import androidx.compose.material.icons.rounded.Add
 import androidx.compose.material.icons.rounded.AttachFile
 import androidx.compose.material.icons.rounded.CheckCircle
 import androidx.compose.material.icons.rounded.Close
+import androidx.compose.material.icons.rounded.KeyboardArrowDown
+import androidx.compose.material.icons.rounded.KeyboardArrowUp
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Checkbox
@@ -69,6 +72,14 @@ fun NewExpenseScreen(
     onBack: () -> Unit
 ) {
     val uiState by viewModel.uiState.collectAsState()
+    val isManualRegistration = !uiState.isEditMode && !isDuplicateMode
+    var invoiceInfoExpanded by remember(isManualRegistration) { mutableStateOf(true) }
+    var issuerExpanded by remember(isManualRegistration) { mutableStateOf(!isManualRegistration) }
+    var receiverExpanded by remember(isManualRegistration) { mutableStateOf(!isManualRegistration) }
+    var itemsExpanded by remember(isManualRegistration) { mutableStateOf(true) }
+    var notesExpanded by remember(isManualRegistration) { mutableStateOf(!isManualRegistration) }
+    var fileExpanded by remember(isManualRegistration) { mutableStateOf(!isManualRegistration) }
+    var initialPaymentExpanded by remember(isManualRegistration) { mutableStateOf(!isManualRegistration) }
 
     LaunchedEffect(Unit) {
         val selected = ExpensesSelectionStore.selected
@@ -91,7 +102,12 @@ fun NewExpenseScreen(
         verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
         // Invoice info
-        SectionCard(title = "Información de Factura") {
+        SectionCard(
+            title = "Información de Factura",
+            collapsible = isManualRegistration,
+            expanded = invoiceInfoExpanded,
+            onExpandedChange = { invoiceInfoExpanded = it }
+        ) {
             DMOutlinedTextField(
                 text = uiState.invoiceNumber,
                 label = "No. Factura",
@@ -120,7 +136,12 @@ fun NewExpenseScreen(
         }
 
         // Issuer
-        SectionCard(title = "Emisor") {
+        SectionCard(
+            title = "Emisor",
+            collapsible = isManualRegistration,
+            expanded = issuerExpanded,
+            onExpandedChange = { issuerExpanded = it }
+        ) {
             DMOutlinedTextField(
                 text = uiState.issuerName,
                 label = "Nombre del emisor",
@@ -128,27 +149,21 @@ fun NewExpenseScreen(
                 onChange = { viewModel.setIssuerName(it) }
             )
             Spacer(modifier = Modifier.height(8.dp))
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-                DMOutlinedTextField(
-                    text = uiState.issuerRuc,
-                    label = "RUC",
-                    modifier = Modifier.weight(1f),
-                    onChange = { viewModel.setIssuerRuc(it) }
-                )
-                DMOutlinedTextField(
-                    text = uiState.issuerDv,
-                    label = "DV",
-                    modifier = Modifier.weight(0.4f),
-                    onChange = { viewModel.setIssuerDv(it) }
-                )
-            }
+            DMOutlinedTextField(
+                text = uiState.issuerRuc,
+                label = "RUC",
+                modifier = Modifier,
+                onChange = { viewModel.setIssuerRuc(it) }
+            )
         }
 
         // Receiver
-        SectionCard(title = "Receptor") {
+        SectionCard(
+            title = "Receptor",
+            collapsible = isManualRegistration,
+            expanded = receiverExpanded,
+            onExpandedChange = { receiverExpanded = it }
+        ) {
             DMOutlinedTextField(
                 text = uiState.receiverName,
                 label = "Nombre del receptor",
@@ -156,27 +171,21 @@ fun NewExpenseScreen(
                 onChange = { viewModel.setReceiverName(it) }
             )
             Spacer(modifier = Modifier.height(8.dp))
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-                DMOutlinedTextField(
-                    text = uiState.receiverRuc,
-                    label = "RUC",
-                    modifier = Modifier.weight(1f),
-                    onChange = { viewModel.setReceiverRuc(it) }
-                )
-                DMOutlinedTextField(
-                    text = uiState.receiverDv,
-                    label = "DV",
-                    modifier = Modifier.weight(0.4f),
-                    onChange = { viewModel.setReceiverDv(it) }
-                )
-            }
+            DMOutlinedTextField(
+                text = uiState.receiverRuc,
+                label = "RUC",
+                modifier = Modifier,
+                onChange = { viewModel.setReceiverRuc(it) }
+            )
         }
 
         // Items
-        SectionCard(title = "Artículos") {
+        SectionCard(
+            title = "Artículos",
+            collapsible = isManualRegistration,
+            expanded = itemsExpanded,
+            onExpandedChange = { itemsExpanded = it }
+        ) {
             uiState.items.forEachIndexed { index, item ->
                 if (index > 0) {
                     Divider(modifier = Modifier.padding(vertical = 8.dp))
@@ -207,7 +216,12 @@ fun NewExpenseScreen(
         }
 
         // Notes
-        SectionCard(title = "Notas") {
+        SectionCard(
+            title = "Notas",
+            collapsible = isManualRegistration,
+            expanded = notesExpanded,
+            onExpandedChange = { notesExpanded = it }
+        ) {
             DMOutlinedTextField(
                 text = uiState.notes,
                 label = "Notas (opcional)",
@@ -218,17 +232,29 @@ fun NewExpenseScreen(
 
         // Invoice file upload (beta: expenses_qr)
         if (uiState.hasExpensesQr) {
-            FileUploadCard(
-                fileUrl = uiState.fileUrl,
-                isUploading = uiState.isUploadingFile,
-                onFileSelected = { viewModel.uploadFile(it) },
-                onRemove = { viewModel.removeFile() }
-            )
+            SectionCard(
+                title = "Archivo de Factura (opcional)",
+                collapsible = isManualRegistration,
+                expanded = fileExpanded,
+                onExpandedChange = { fileExpanded = it }
+            ) {
+                FileUploadCard(
+                    fileUrl = uiState.fileUrl,
+                    isUploading = uiState.isUploadingFile,
+                    onFileSelected = { viewModel.uploadFile(it) },
+                    onRemove = { viewModel.removeFile() }
+                )
+            }
         }
 
         // Initial payment (create mode only)
         if (!uiState.isEditMode) {
-            SectionCard(title = "Pago Inicial (opcional)") {
+            SectionCard(
+                title = "Pago Inicial (opcional)",
+                collapsible = isManualRegistration,
+                expanded = initialPaymentExpanded,
+                onExpandedChange = { initialPaymentExpanded = it }
+            ) {
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     verticalAlignment = Alignment.CenterVertically
@@ -308,6 +334,9 @@ fun NewExpenseScreen(
 @Composable
 private fun SectionCard(
     title: String,
+    collapsible: Boolean = false,
+    expanded: Boolean = true,
+    onExpandedChange: (Boolean) -> Unit = {},
     content: @Composable () -> Unit
 ) {
     Card(
@@ -316,9 +345,26 @@ private fun SectionCard(
         colors = CardDefaults.cardColors(containerColor = cardContainerColor())
     ) {
         Column(modifier = Modifier.padding(16.dp)) {
-            Text(text = title, style = titleMediumBold())
-            Spacer(modifier = Modifier.height(12.dp))
-            content()
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable(enabled = collapsible) { onExpandedChange(!expanded) },
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                Text(text = title, style = titleMediumBold())
+                if (collapsible) {
+                    Icon(
+                        imageVector = if (expanded) Icons.Rounded.KeyboardArrowUp else Icons.Rounded.KeyboardArrowDown,
+                        contentDescription = if (expanded) "Colapsar" else "Expandir",
+                        tint = MaterialTheme.colorScheme.primary
+                    )
+                }
+            }
+            if (!collapsible || expanded) {
+                Spacer(modifier = Modifier.height(12.dp))
+                content()
+            }
         }
     }
 }
@@ -528,79 +574,70 @@ private fun FileUploadCard(
         launchSetting = false
     }
 
-    Card(
-        modifier = Modifier.fillMaxWidth(),
-        elevation = CardDefaults.cardElevation(2.dp),
-        colors = CardDefaults.cardColors(containerColor = cardContainerColor())
-    ) {
-        Column(modifier = Modifier.padding(16.dp)) {
-            Text(text = "Archivo de Factura (opcional)", style = titleMediumBold())
-            Spacer(modifier = Modifier.height(12.dp))
-
-            if (isUploading) {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.Center
-                ) {
-                    CircularProgressIndicator(modifier = Modifier.size(20.dp), strokeWidth = 2.dp)
+    Column {
+        if (isUploading) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.Center
+            ) {
+                CircularProgressIndicator(modifier = Modifier.size(20.dp), strokeWidth = 2.dp)
+                Spacer(modifier = Modifier.width(8.dp))
+                Text("Subiendo archivo...", style = bodyMedium())
+            }
+        } else if (fileUrl != null) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(
+                        imageVector = Icons.Rounded.CheckCircle,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.size(20.dp)
+                    )
                     Spacer(modifier = Modifier.width(8.dp))
-                    Text("Subiendo archivo...", style = bodyMedium())
+                    Text("Archivo adjunto", style = bodyMedium())
                 }
-            } else if (fileUrl != null) {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.SpaceBetween
-                ) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Icon(
-                            imageVector = Icons.Rounded.CheckCircle,
-                            contentDescription = null,
-                            tint = MaterialTheme.colorScheme.primary,
-                            modifier = Modifier.size(20.dp)
-                        )
-                        Spacer(modifier = Modifier.width(8.dp))
-                        Text("Archivo adjunto", style = bodyMedium())
-                    }
-                    IconButton(onClick = onRemove, modifier = Modifier.size(28.dp)) {
-                        Icon(
-                            imageVector = Icons.Rounded.Close,
-                            contentDescription = "Eliminar",
-                            tint = MaterialTheme.colorScheme.error,
-                            modifier = Modifier.size(18.dp)
-                        )
-                    }
+                IconButton(onClick = onRemove, modifier = Modifier.size(28.dp)) {
+                    Icon(
+                        imageVector = Icons.Rounded.Close,
+                        contentDescription = "Eliminar",
+                        tint = MaterialTheme.colorScheme.error,
+                        modifier = Modifier.size(18.dp)
+                    )
                 }
-            } else {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+            }
+        } else {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                OutlinedButtonM(
+                    onClick = { launchCamera = true },
+                    modifier = Modifier.weight(1f)
                 ) {
-                    OutlinedButtonM(
-                        onClick = { launchCamera = true },
-                        modifier = Modifier.weight(1f)
-                    ) {
-                        Icon(
-                            imageVector = Icons.Rounded.AttachFile,
-                            contentDescription = null,
-                            modifier = Modifier.size(18.dp)
-                        )
-                        Spacer(modifier = Modifier.width(4.dp))
-                        Text("Cámara")
-                    }
-                    OutlinedButtonM(
-                        onClick = { launchGallery = true },
-                        modifier = Modifier.weight(1f)
-                    ) {
-                        Icon(
-                            imageVector = Icons.Rounded.AttachFile,
-                            contentDescription = null,
-                            modifier = Modifier.size(18.dp)
-                        )
-                        Spacer(modifier = Modifier.width(4.dp))
-                        Text("Galería")
-                    }
+                    Icon(
+                        imageVector = Icons.Rounded.AttachFile,
+                        contentDescription = null,
+                        modifier = Modifier.size(18.dp)
+                    )
+                    Spacer(modifier = Modifier.width(4.dp))
+                    Text("Cámara")
+                }
+                OutlinedButtonM(
+                    onClick = { launchGallery = true },
+                    modifier = Modifier.weight(1f)
+                ) {
+                    Icon(
+                        imageVector = Icons.Rounded.AttachFile,
+                        contentDescription = null,
+                        modifier = Modifier.size(18.dp)
+                    )
+                    Spacer(modifier = Modifier.width(4.dp))
+                    Text("Galería")
                 }
             }
         }

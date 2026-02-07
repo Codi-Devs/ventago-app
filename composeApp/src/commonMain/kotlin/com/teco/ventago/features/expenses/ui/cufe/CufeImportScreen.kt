@@ -67,6 +67,7 @@ fun CufeImportScreen(
         viewModel.onScreenVisible()
         onDispose {
             viewModel.onScreenHidden()
+            viewModel.reset()
         }
     }
 
@@ -188,22 +189,21 @@ fun CufeImportScreen(
                         "Puede pegar el CUFE directamente, una URL de la DGI, o un enlace con el código.",
                     style = bodyMedium()
                 )
+                Spacer(modifier = Modifier.height(12.dp))
+                ButtonM(
+                    onClick = { launchCamera = true },
+                    enabled = !uiState.isImporting && !uiState.isPolling,
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Icon(
+                        imageVector = Icons.Rounded.QrCodeScanner,
+                        contentDescription = null,
+                        modifier = Modifier.size(20.dp)
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text("Escanear Código QR")
+                }
             }
-        }
-
-        // Scan QR button
-        ButtonM(
-            onClick = { launchCamera = true },
-            enabled = !uiState.isImporting && !uiState.isPolling,
-            modifier = Modifier.fillMaxWidth()
-        ) {
-            Icon(
-                imageVector = Icons.Rounded.QrCodeScanner,
-                contentDescription = null,
-                modifier = Modifier.size(20.dp)
-            )
-            Spacer(modifier = Modifier.width(8.dp))
-            Text("Escanear Código QR")
         }
 
         // CUFE manual input
