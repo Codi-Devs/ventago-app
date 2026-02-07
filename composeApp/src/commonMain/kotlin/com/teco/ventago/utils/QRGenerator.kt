@@ -38,6 +38,7 @@ expect fun CameraPreview(modifier: Modifier = Modifier, onBarcode: (String) -> U
 @kotlin.OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun BarcodeScannerScreen(
+    format: KmpBarcodeFormat = KmpBarcodeFormat.CODE_128,
     onResult: (String) -> Unit,
     onClose: () -> Unit
 ) {
@@ -54,6 +55,11 @@ fun BarcodeScannerScreen(
     }
 
     Box(Modifier.fillMaxSize()) {
+        val (cutoutWidthFraction, cutoutAspectRatio) = when (format) {
+            KmpBarcodeFormat.QR_CODE -> 0.72f to 1f
+            KmpBarcodeFormat.CODE_128 -> 0.8f to 2.2f
+        }
+
         CameraPreview(
             modifier = Modifier.matchParentSize(),
             onBarcode = {
@@ -63,12 +69,16 @@ fun BarcodeScannerScreen(
 
         // Centered scrim + cutout
         ScannerScrimWithCutout(
-            modifier = Modifier.matchParentSize()
+            modifier = Modifier.matchParentSize(),
+            cutoutWidthFraction = cutoutWidthFraction,
+            cutoutAspectRatio = cutoutAspectRatio
         )
 
         // Corner brackets
         ScannerOverlay(
-            modifier = Modifier.matchParentSize()
+            modifier = Modifier.matchParentSize(),
+            cutoutWidthFraction = cutoutWidthFraction,
+            cutoutAspectRatio = cutoutAspectRatio
         )
     }
 }

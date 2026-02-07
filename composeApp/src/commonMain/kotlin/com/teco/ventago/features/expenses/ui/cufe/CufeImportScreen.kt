@@ -54,6 +54,7 @@ import com.teco.ventago.design_system.theme.cardContainerColor
 import com.teco.ventago.design_system.theme.labelSmall
 import com.teco.ventago.design_system.theme.titleMediumBold
 import com.teco.ventago.utils.BarcodeScannerScreen
+import com.teco.ventago.utils.KmpBarcodeFormat
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -129,6 +130,7 @@ fun CufeImportScreen(
     if (uiState.showScanner) {
         Column(modifier = Modifier.fillMaxSize()) {
             BarcodeScannerScreen(
+                format = KmpBarcodeFormat.QR_CODE,
                 onResult = { rawValue ->
                     viewModel.onQrScanned(rawValue)
                 },
