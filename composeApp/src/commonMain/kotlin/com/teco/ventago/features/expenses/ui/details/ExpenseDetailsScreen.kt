@@ -23,9 +23,13 @@ import androidx.compose.material.icons.rounded.Delete
 import androidx.compose.material.icons.rounded.Description
 import androidx.compose.material.icons.rounded.Edit
 import androidx.compose.material.icons.rounded.CheckCircle
+import androidx.compose.material.icons.rounded.History
+import androidx.compose.material.icons.rounded.Inventory2
+import androidx.compose.material.icons.rounded.Notes
 import androidx.compose.material.icons.rounded.Payment
 import androidx.compose.material.icons.rounded.Receipt
 import androidx.compose.material.icons.rounded.OpenInNew
+import androidx.compose.material.icons.rounded.QrCode
 import androidx.compose.material.icons.rounded.Warning
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Card
@@ -189,7 +193,16 @@ fun ExpenseDetailsScreen(
                 colors = CardDefaults.cardColors(containerColor = cardContainerColor())
             ) {
                 Column(modifier = Modifier.padding(16.dp)) {
-                    Text("CUFE", style = bodyMediumBold())
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Icon(
+                            imageVector = Icons.Rounded.QrCode,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier.size(20.dp)
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text("CUFE", style = bodyMediumBold())
+                    }
                     Spacer(modifier = Modifier.height(8.dp))
                     Text(
                         text = expense.cufe,
@@ -339,10 +352,19 @@ private fun ExpenseHeaderCard(expense: Expense) {
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Text(
-                    text = expense.invoiceNumber ?: "Sin número",
-                    style = titleMediumBold()
-                )
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(
+                        imageVector = Icons.Rounded.Receipt,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.size(22.dp)
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text(
+                        text = expense.invoiceNumber ?: "Sin número",
+                        style = titleMediumBold()
+                    )
+                }
                 PaymentStatusBadge(expense.paymentStatus)
             }
             Spacer(modifier = Modifier.height(12.dp))
@@ -382,7 +404,16 @@ private fun ItemsCard(items: List<ExpenseItem>) {
         colors = CardDefaults.cardColors(containerColor = cardContainerColor())
     ) {
         Column(modifier = Modifier.padding(16.dp)) {
-            Text("Artículos (${items.size})", style = bodyMediumBold())
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Icon(
+                    imageVector = Icons.Rounded.Inventory2,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.size(20.dp)
+                )
+                Spacer(modifier = Modifier.width(8.dp))
+                Text("Artículos (${items.size})", style = bodyMediumBold())
+            }
             Spacer(modifier = Modifier.height(8.dp))
             items.forEachIndexed { index, item ->
                 ExpenseItemRow(item)
@@ -440,7 +471,16 @@ private fun PartiesCard(issuer: ExpenseParty?, receiver: ExpenseParty?) {
         colors = CardDefaults.cardColors(containerColor = cardContainerColor())
     ) {
         Column(modifier = Modifier.padding(16.dp)) {
-            Text("Emisor", style = bodyMediumBold())
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Icon(
+                    imageVector = Icons.Rounded.Business,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.size(20.dp)
+                )
+                Spacer(modifier = Modifier.width(8.dp))
+                Text("Emisor", style = bodyMediumBold())
+            }
             Spacer(modifier = Modifier.height(4.dp))
             issuer?.let { party ->
                 InfoRow("Nombre", party.name ?: "-")
@@ -456,7 +496,16 @@ private fun PartiesCard(issuer: ExpenseParty?, receiver: ExpenseParty?) {
             Divider()
             Spacer(modifier = Modifier.height(12.dp))
 
-            Text("Receptor", style = bodyMediumBold())
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Icon(
+                    imageVector = Icons.Rounded.Business,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.size(20.dp)
+                )
+                Spacer(modifier = Modifier.width(8.dp))
+                Text("Receptor", style = bodyMediumBold())
+            }
             Spacer(modifier = Modifier.height(4.dp))
             receiver?.let { party ->
                 InfoRow("Nombre", party.name ?: "-")
@@ -491,7 +540,16 @@ private fun PaymentSummaryCard(
             modifier = Modifier.padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
-            Text("Resumen de Pagos", style = bodyMediumBold())
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Icon(
+                    imageVector = Icons.Rounded.Payment,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.size(20.dp)
+                )
+                Spacer(modifier = Modifier.width(8.dp))
+                Text("Resumen de Pagos", style = bodyMediumBold())
+            }
 
             Row(
                 modifier = Modifier.fillMaxWidth(),
@@ -551,10 +609,19 @@ private fun PaymentsListCard(
         colors = CardDefaults.cardColors(containerColor = cardContainerColor())
     ) {
         Column(modifier = Modifier.padding(16.dp)) {
-            Text(
-                text = "Historial de Pagos (${payments.size})",
-                style = bodyMediumBold()
-            )
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Icon(
+                    imageVector = Icons.Rounded.History,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.size(20.dp)
+                )
+                Spacer(modifier = Modifier.width(8.dp))
+                Text(
+                    text = "Historial de Pagos (${payments.size})",
+                    style = bodyMediumBold()
+                )
+            }
             Spacer(modifier = Modifier.height(8.dp))
             payments.forEachIndexed { index, payment ->
                 PaymentRow(payment, onMarkPaid, onEdit, onDelete, onDownloadProof)
@@ -574,7 +641,16 @@ private fun NotesCard(notes: String) {
         colors = CardDefaults.cardColors(containerColor = cardContainerColor())
     ) {
         Column(modifier = Modifier.padding(16.dp)) {
-            Text("Notas", style = bodyMediumBold())
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Icon(
+                    imageVector = Icons.Rounded.Notes,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.size(20.dp)
+                )
+                Spacer(modifier = Modifier.width(8.dp))
+                Text("Notas", style = bodyMediumBold())
+            }
             Spacer(modifier = Modifier.height(8.dp))
             Text(text = notes, style = bodyMedium())
         }
