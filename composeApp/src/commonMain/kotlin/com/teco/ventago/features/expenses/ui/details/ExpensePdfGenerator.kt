@@ -1,6 +1,7 @@
 package com.teco.ventago.features.expenses.ui.details
 
 import com.teco.ventago.features.expenses.domain.models.Expense
+import com.teco.ventago.features.expenses.domain.models.PaymentMethod
 import com.teco.ventago.utils.formatNumberToMoney
 
 /**
@@ -138,17 +139,7 @@ object ExpensePdfGenerator {
         return lines
     }
 
-    private fun paymentMethodLabel(method: String?): String = when (method) {
-        "cash" -> "Efectivo"
-        "bank_transfer" -> "Transferencia bancaria"
-        "credit_card" -> "Tarjeta de credito"
-        "debit_card" -> "Tarjeta de debito"
-        "credit" -> "Credito"
-        "check" -> "Cheque"
-        "yappy" -> "Yappy"
-        "paypal" -> "PayPal"
-        else -> method ?: "-"
-    }
+    private fun paymentMethodLabel(method: String?): String = PaymentMethod.getLabel(method)
 
     private data class PdfLine(
         val text: String,

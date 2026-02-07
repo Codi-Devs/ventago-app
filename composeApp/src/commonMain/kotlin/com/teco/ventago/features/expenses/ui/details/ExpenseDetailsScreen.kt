@@ -18,11 +18,13 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Business
 import androidx.compose.material.icons.rounded.CalendarToday
+import androidx.compose.material.icons.rounded.CameraAlt
 import androidx.compose.material.icons.rounded.ContentCopy
 import androidx.compose.material.icons.rounded.Delete
 import androidx.compose.material.icons.rounded.Description
 import androidx.compose.material.icons.rounded.Edit
 import androidx.compose.material.icons.rounded.CheckCircle
+import androidx.compose.material.icons.rounded.Collections
 import androidx.compose.material.icons.rounded.History
 import androidx.compose.material.icons.rounded.Inventory2
 import androidx.compose.material.icons.rounded.Notes
@@ -51,7 +53,6 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -72,23 +73,24 @@ import com.teco.ventago.core.camera.rememberGalleryManager
 import com.teco.ventago.design_system.buttons.ButtonM
 import com.teco.ventago.design_system.buttons.OutlinedButtonM
 import com.teco.ventago.design_system.loaders.shimmerBrush
+import com.teco.ventago.design_system.molecules.InstallmentDueDateFieldKmp
+import com.teco.ventago.design_system.organism.LoadingSheet
 import com.teco.ventago.design_system.theme.bodyMedium
 import com.teco.ventago.design_system.theme.bodyMediumBold
 import com.teco.ventago.design_system.theme.cardContainerColor
 import com.teco.ventago.design_system.theme.labelSmall
 import com.teco.ventago.design_system.theme.titleMediumBold
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
 import com.teco.ventago.features.expenses.domain.ExpensesSelectionStore
 import com.teco.ventago.features.expenses.domain.models.Expense
 import com.teco.ventago.features.expenses.domain.models.ExpenseItem
 import com.teco.ventago.features.expenses.domain.models.ExpenseParty
 import com.teco.ventago.features.expenses.domain.models.ExpensePayment
 import com.teco.ventago.features.expenses.domain.models.PaymentSummary
+import com.teco.ventago.features.expenses.domain.models.requests.ExpenseProofFile
 import com.teco.ventago.design_system.textfields.DMOutlinedTextField
+import com.teco.ventago.design_system.textfields.helpers.DMDropDownField
+import com.teco.ventago.features.expenses.domain.models.PaymentMethod
 import com.teco.ventago.utils.randomUUID
-import com.teco.ventago.utils.uploadImageToBunnyCdn
 import com.teco.ventago.navigation.PosScreens
 import com.teco.ventago.utils.DateFormat.getFormattedDate
 import com.teco.ventago.utils.formatNumberToMoney
@@ -105,6 +107,7 @@ fun ExpenseDetailsScreen(
     onDuplicate: () -> Unit = {}
 ) {
     val uiState by viewModel.uiState.collectAsState()
+    val loadingSheetState = rememberModalBottomSheetState(confirmValueChange = { false })
     val uriHandler = LocalUriHandler.current
     var showPaymentSheet by remember { mutableStateOf(false) }
     var showOverpaymentDialog by remember { mutableStateOf(false) }
@@ -240,23 +243,45 @@ fun ExpenseDetailsScreen(
                 showPaymentSheet = false
                 viewModel.setEditingPayment(null)
             },
-            sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+            sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
+            containerColor = MaterialTheme.colorScheme.background,
         ) {
             PaymentRegistrationSheet(
                 isSubmitting = uiState.isSubmittingPayment,
                 error = uiState.paymentError,
                 editingPayment = uiState.editingPayment,
-                onSubmit = { method, amount, reference, notes, paymentDate, dueDate, proofFileUrl ->
+                expenseTotalAmount = expense.totalAmount ?: 0.0,
+                onSubmit = { method, amount, reference, notes, paymentDate, dueDate, proofFileUrl, proofFile ->
                     // Check for overpayment
                     val totalAmount = expense.totalAmount ?: 0.0
                     val totalPaid = expense.paymentSummary?.totalPaid ?: expense.totalPaid ?: 0.0
                     val editingAmount = uiState.editingPayment?.amountPaid ?: 0.0
                     val effectivePaid = totalPaid - editingAmount + amount
                     if (effectivePaid > totalAmount) {
-                        pendingPaymentData = PaymentSubmitData(method, amount, reference, notes, paymentDate, dueDate, proofFileUrl)
+                        pendingPaymentData = PaymentSubmitData(
+                            method,
+                            amount,
+                            reference,
+                            notes,
+                            paymentDate,
+                            dueDate,
+                            proofFileUrl,
+                            proofFile
+                        )
                         showOverpaymentDialog = true
                     } else {
-                        submitPayment(viewModel, uiState.editingPayment, method, amount, reference, notes, paymentDate, dueDate, proofFileUrl)
+                        submitPayment(
+                            viewModel,
+                            uiState.editingPayment,
+                            method,
+                            amount,
+                            reference,
+                            notes,
+                            paymentDate,
+                            dueDate,
+                            proofFileUrl,
+                            proofFile
+                        )
                     }
                 },
                 onDismiss = {
@@ -278,7 +303,18 @@ fun ExpenseDetailsScreen(
                     onClick = {
                         showOverpaymentDialog = false
                         pendingPaymentData?.let { data ->
-                            submitPayment(viewModel, uiState.editingPayment, data.method, data.amount, data.reference, data.notes, data.paymentDate, data.dueDate, data.proofFileUrl)
+                            submitPayment(
+                                viewModel,
+                                uiState.editingPayment,
+                                data.method,
+                                data.amount,
+                                data.reference,
+                                data.notes,
+                                data.paymentDate,
+                                data.dueDate,
+                                data.proofFileUrl,
+                                data.proofFile
+                            )
                         }
                         pendingPaymentData = null
                     }
@@ -296,6 +332,15 @@ fun ExpenseDetailsScreen(
             }
         )
     }
+
+    if (uiState.loadingBottomSheet.isLoading()) {
+        LoadingSheet(
+            state = uiState.loadingBottomSheet,
+            sheetState = loadingSheetState
+        ) {
+            viewModel.hideLoading()
+        }
+    }
 }
 
 private data class PaymentSubmitData(
@@ -305,7 +350,8 @@ private data class PaymentSubmitData(
     val notes: String,
     val paymentDate: String?,
     val dueDate: String?,
-    val proofFileUrl: String? = null
+    val proofFileUrl: String? = null,
+    val proofFile: ExpenseProofFile? = null
 )
 
 private fun submitPayment(
@@ -317,13 +363,14 @@ private fun submitPayment(
     notes: String,
     paymentDate: String?,
     dueDate: String?,
-    proofFileUrl: String? = null
+    proofFileUrl: String? = null,
+    proofFile: ExpenseProofFile? = null
 ) {
     val editId = editingPayment?.id
     if (editId != null) {
-        viewModel.updatePayment(editId, method, amount, reference, notes, paymentDate, dueDate, proofFileUrl)
+        viewModel.updatePayment(editId, method, amount, reference, notes, paymentDate, dueDate, proofFileUrl, proofFile)
     } else {
-        viewModel.createPayment(method, amount, reference, notes, paymentDate, dueDate, proofFileUrl)
+        viewModel.createPayment(method, amount, reference, notes, paymentDate, dueDate, proofFileUrl, proofFile)
     }
 }
 
@@ -970,17 +1017,7 @@ private fun PaymentStatusBadge(status: String?) {
     )
 }
 
-private fun paymentMethodLabel(method: String?): String = when (method) {
-    "cash" -> "Efectivo"
-    "bank_transfer" -> "Transferencia bancaria"
-    "credit_card" -> "Tarjeta de crédito"
-    "debit_card" -> "Tarjeta de débito"
-    "credit" -> "Crédito"
-    "check" -> "Cheque"
-    "yappy" -> "Yappy"
-    "paypal" -> "PayPal"
-    else -> method ?: "-"
-}
+private fun paymentMethodLabel(method: String?): String = PaymentMethod.getLabel(method)
 
 @Composable
 private fun ExpenseDetailsLoading() {
@@ -1007,26 +1044,35 @@ private fun PaymentRegistrationSheet(
     isSubmitting: Boolean,
     error: String?,
     editingPayment: ExpensePayment? = null,
-    onSubmit: (method: String, amount: Double, reference: String, notes: String, paymentDate: String?, dueDate: String?, proofFileUrl: String?) -> Unit,
+    expenseTotalAmount: Double = 0.0,
+    onSubmit: (
+        method: String,
+        amount: Double,
+        reference: String,
+        notes: String,
+        paymentDate: String?,
+        dueDate: String?,
+        proofFileUrl: String?,
+        proofFile: ExpenseProofFile?
+    ) -> Unit,
     onDismiss: () -> Unit
 ) {
     val isEditMode = editingPayment != null
-    var paymentMethod by remember { mutableStateOf(editingPayment?.paymentMethod ?: "cash") }
+    val allMethods = remember { PaymentMethod.getAllMethods() }
+    var selectedMethodIndex by remember {
+        mutableStateOf(
+            allMethods.indexOfFirst { it.value == editingPayment?.paymentMethod }.takeIf { it >= 0 } ?: 0
+        )
+    }
+    val selectedMethod = allMethods[selectedMethodIndex]
+
     var amount by remember { mutableStateOf(editingPayment?.amountPaid?.let { "$it" } ?: "") }
     var reference by remember { mutableStateOf(editingPayment?.reference ?: "") }
     var notes by remember { mutableStateOf(editingPayment?.notes ?: "") }
     var paymentDate by remember { mutableStateOf(editingPayment?.paymentDate?.take(10) ?: "") }
     var dueDate by remember { mutableStateOf(editingPayment?.dueDate?.take(10) ?: "") }
     var proofFileUrl by remember { mutableStateOf(editingPayment?.proofFileUrl) }
-    var isUploadingProof by remember { mutableStateOf(false) }
-
-    val methods = listOf(
-        "cash" to "Efectivo",
-        "bank_transfer" to "Transferencia",
-        "credit_card" to "T. Crédito",
-        "credit" to "Crédito",
-        "yappy" to "Yappy"
-    )
+    var proofFile by remember { mutableStateOf<ExpenseProofFile?>(null) }
 
     Column(
         modifier = Modifier
@@ -1037,41 +1083,30 @@ private fun PaymentRegistrationSheet(
     ) {
         Text(if (isEditMode) "Editar Pago" else "Registrar Pago", style = titleMediumBold())
 
-        // Payment method chips
-        Text("Método de pago", style = labelSmall(color = MaterialTheme.colorScheme.onSurfaceVariant))
-        Row(
+        // Payment method dropdown
+        DMDropDownField(
             modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(8.dp)
-        ) {
-            methods.take(3).forEach { (value, label) ->
-                FilterChip(
-                    selected = paymentMethod == value,
-                    onClick = { paymentMethod = value },
-                    label = { Text(label, style = MaterialTheme.typography.labelSmall) },
-                    modifier = Modifier.weight(1f)
-                )
-            }
-        }
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(8.dp)
-        ) {
-            methods.drop(3).forEach { (value, label) ->
-                FilterChip(
-                    selected = paymentMethod == value,
-                    onClick = { paymentMethod = value },
-                    label = { Text(label, style = MaterialTheme.typography.labelSmall) },
-                    modifier = Modifier.weight(1f)
-                )
-            }
-            Spacer(modifier = Modifier.weight(1f))
-        }
+            label = "Método de pago",
+            items = allMethods,
+            selectedIndex = selectedMethodIndex,
+            onItemSelected = { index, _ ->
+                selectedMethodIndex = index
+            },
+            selectedItemToString = { it.label }
+        )
 
         DMOutlinedTextField(
             text = amount,
             label = "Monto",
             modifier = Modifier,
-            onChange = { amount = it }
+            onChange = { newValue ->
+                val parsedAmount = newValue.toDoubleOrNull()
+                amount = if (parsedAmount != null && parsedAmount > expenseTotalAmount) {
+                    expenseTotalAmount.toString()
+                } else {
+                    newValue
+                }
+            }
         )
 
         DMOutlinedTextField(
@@ -1088,30 +1123,35 @@ private fun PaymentRegistrationSheet(
             onChange = { notes = it }
         )
 
-        if (paymentMethod == "credit") {
-            DMOutlinedTextField(
-                text = dueDate,
-                label = "Fecha de vencimiento (YYYY-MM-DD)",
+        if (selectedMethod == PaymentMethod.CREDIT) {
+            InstallmentDueDateFieldKmp(
+                valueIso = dueDate,
+                onDatePickedIso = { dueDate = it },
                 modifier = Modifier,
-                onChange = { dueDate = it }
+                label = "Fecha de vencimiento"
             )
         } else {
-            DMOutlinedTextField(
-                text = paymentDate,
-                label = "Fecha de pago (YYYY-MM-DD)",
+            InstallmentDueDateFieldKmp(
+                valueIso = paymentDate,
+                onDatePickedIso = { paymentDate = it },
                 modifier = Modifier,
-                onChange = { paymentDate = it }
+                label = "Fecha de pago"
             )
         }
 
         // Proof file
-        if (paymentMethod != "credit") {
+        if (selectedMethod != PaymentMethod.CREDIT) {
             ProofFileSection(
                 proofFileUrl = proofFileUrl,
-                isUploading = isUploadingProof,
-                onUploading = { isUploadingProof = it },
-                onFileUploaded = { proofFileUrl = it },
-                onRemove = { proofFileUrl = null }
+                proofFile = proofFile,
+                onFileSelected = { selected ->
+                    proofFile = selected
+                    proofFileUrl = null
+                },
+                onRemove = {
+                    proofFileUrl = null
+                    proofFile = null
+                }
             )
         }
 
@@ -1129,7 +1169,12 @@ private fun PaymentRegistrationSheet(
         ) {
             OutlinedButtonM(
                 onClick = onDismiss,
-                modifier = Modifier.weight(1f)
+                modifier = Modifier.weight(1f),
+                contentColor = Color(0xFFD32F2F),
+                border = androidx.compose.foundation.BorderStroke(
+                    1.dp,
+                    Color(0xFFD32F2F)
+                )
             ) {
                 Text("Cancelar")
             }
@@ -1137,23 +1182,26 @@ private fun PaymentRegistrationSheet(
                 onClick = {
                     val amountVal = amount.toDoubleOrNull() ?: return@ButtonM
                     onSubmit(
-                        paymentMethod,
+                        selectedMethod.value,
                         amountVal,
                         reference,
                         notes,
                         paymentDate.ifBlank { null },
                         dueDate.ifBlank { null },
-                        proofFileUrl
+                        proofFileUrl,
+                        proofFile
                     )
                 },
                 enabled = !isSubmitting && amount.toDoubleOrNull() != null,
-                modifier = Modifier.weight(1f)
+                modifier = Modifier.weight(1f),
+                containerColor = MaterialTheme.colorScheme.secondary,
+                contentColor = MaterialTheme.colorScheme.onSecondary
             ) {
                 if (isSubmitting) {
                     CircularProgressIndicator(
                         modifier = Modifier.size(16.dp),
                         strokeWidth = 2.dp,
-                        color = MaterialTheme.colorScheme.onPrimary
+                        color = MaterialTheme.colorScheme.onSecondary
                     )
                     Spacer(modifier = Modifier.width(8.dp))
                 }
@@ -1166,9 +1214,8 @@ private fun PaymentRegistrationSheet(
 @Composable
 private fun ProofFileSection(
     proofFileUrl: String?,
-    isUploading: Boolean,
-    onUploading: (Boolean) -> Unit,
-    onFileUploaded: (String) -> Unit,
+    proofFile: ExpenseProofFile?,
+    onFileSelected: (ExpenseProofFile) -> Unit,
     onRemove: () -> Unit
 ) {
     var launchCamera by remember { mutableStateOf(false) }
@@ -1187,36 +1234,31 @@ private fun ProofFileSection(
         }
     })
 
-    val scope = rememberCoroutineScope()
     val cameraManager = rememberCameraManager { image ->
-        scope.launch {
-            if (image != null) {
-                onUploading(true)
-                try {
-                    val imageData = withContext(Dispatchers.Default) { image.toByteArray() }
-                    if (imageData != null) {
-                        val fileName = "proof_${randomUUID()}.jpg"
-                        val url = uploadImageToBunnyCdn(imageData, fileName, "proofs")
-                        if (url != null) onFileUploaded(url)
-                    }
-                } catch (_: Exception) {}
-                onUploading(false)
+        if (image != null) {
+            val imageData = image.toByteArray()
+            if (imageData != null) {
+                onFileSelected(
+                    ExpenseProofFile(
+                        bytes = imageData,
+                        fileName = "proof_${randomUUID()}.jpg",
+                        contentType = "image/jpeg"
+                    )
+                )
             }
         }
     }
     val galleryManager = rememberGalleryManager { image ->
-        scope.launch {
-            if (image != null) {
-                onUploading(true)
-                try {
-                    val imageData = withContext(Dispatchers.Default) { image.toByteArray() }
-                    if (imageData != null) {
-                        val fileName = "proof_${randomUUID()}.jpg"
-                        val url = uploadImageToBunnyCdn(imageData, fileName, "proofs")
-                        if (url != null) onFileUploaded(url)
-                    }
-                } catch (_: Exception) {}
-                onUploading(false)
+        if (image != null) {
+            val imageData = image.toByteArray()
+            if (imageData != null) {
+                onFileSelected(
+                    ExpenseProofFile(
+                        bytes = imageData,
+                        fileName = "proof_${randomUUID()}.jpg",
+                        contentType = "image/jpeg"
+                    )
+                )
             }
         }
     }
@@ -1248,17 +1290,7 @@ private fun ProofFileSection(
             style = labelSmall(color = MaterialTheme.colorScheme.onSurfaceVariant)
         )
 
-        if (isUploading) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.Center
-            ) {
-                CircularProgressIndicator(modifier = Modifier.size(20.dp), strokeWidth = 2.dp)
-                Spacer(modifier = Modifier.width(8.dp))
-                Text("Subiendo comprobante...", style = bodyMedium())
-            }
-        } else if (proofFileUrl != null) {
+        if (proofFile != null || proofFileUrl != null) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 verticalAlignment = Alignment.CenterVertically,
@@ -1272,7 +1304,12 @@ private fun ProofFileSection(
                         modifier = Modifier.size(20.dp)
                     )
                     Spacer(modifier = Modifier.width(8.dp))
-                    Text("Comprobante adjunto", style = bodyMedium())
+                    Text(
+                        proofFile?.fileName ?: "Comprobante adjunto",
+                        style = bodyMedium(),
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
                 }
                 IconButton(onClick = onRemove, modifier = Modifier.size(28.dp)) {
                     Icon(
@@ -1293,7 +1330,7 @@ private fun ProofFileSection(
                     modifier = Modifier.weight(1f)
                 ) {
                     Icon(
-                        imageVector = Icons.Rounded.Receipt,
+                        imageVector = Icons.Rounded.CameraAlt,
                         contentDescription = null,
                         modifier = Modifier.size(18.dp)
                     )
@@ -1305,7 +1342,7 @@ private fun ProofFileSection(
                     modifier = Modifier.weight(1f)
                 ) {
                     Icon(
-                        imageVector = Icons.Rounded.Receipt,
+                        imageVector = Icons.Rounded.Collections,
                         contentDescription = null,
                         modifier = Modifier.size(18.dp)
                     )

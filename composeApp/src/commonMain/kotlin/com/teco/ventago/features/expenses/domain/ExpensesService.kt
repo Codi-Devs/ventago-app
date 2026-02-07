@@ -10,7 +10,9 @@ import com.teco.ventago.features.expenses.domain.models.Expense
 import com.teco.ventago.features.expenses.domain.models.ExpensePayment
 import com.teco.ventago.features.expenses.domain.models.PagedCrawlJobs
 import com.teco.ventago.features.expenses.domain.models.PagedExpenses
+import com.teco.ventago.features.expenses.domain.models.requests.ExpenseProofFile
 import com.teco.ventago.features.expenses.domain.models.requests.ListExpensesRequest
+import com.teco.ventago.features.expenses.domain.models.requests.UpsertExpensePaymentRequest
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.serialization.encodeToString
@@ -129,9 +131,13 @@ class ExpensesService(
 
     // Payments
 
-    suspend fun createPayment(expenseId: Long, payload: String): ExpensePayment {
+    suspend fun createPayment(
+        expenseId: Long,
+        request: UpsertExpensePaymentRequest,
+        proofFile: ExpenseProofFile? = null
+    ): ExpensePayment {
         val businessId = businessId() ?: throw IllegalStateException("No business selected")
-        return repository.createPayment(businessId, expenseId, payload)
+        return repository.createPayment(businessId, expenseId, request, proofFile)
     }
 
     suspend fun listPayments(expenseId: Long): List<ExpensePayment> {
@@ -139,9 +145,14 @@ class ExpensesService(
         return repository.listPayments(businessId, expenseId)
     }
 
-    suspend fun updatePayment(expenseId: Long, paymentId: Long, payload: String): ExpensePayment {
+    suspend fun updatePayment(
+        expenseId: Long,
+        paymentId: Long,
+        request: UpsertExpensePaymentRequest,
+        proofFile: ExpenseProofFile? = null
+    ): ExpensePayment {
         val businessId = businessId() ?: throw IllegalStateException("No business selected")
-        return repository.updatePayment(businessId, expenseId, paymentId, payload)
+        return repository.updatePayment(businessId, expenseId, paymentId, request, proofFile)
     }
 
     suspend fun deletePayment(expenseId: Long, paymentId: Long): Boolean {

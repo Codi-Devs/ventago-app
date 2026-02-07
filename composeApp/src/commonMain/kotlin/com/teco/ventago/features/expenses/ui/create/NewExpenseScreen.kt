@@ -44,6 +44,8 @@ import com.teco.ventago.design_system.buttons.ButtonM
 import com.teco.ventago.design_system.buttons.OutlinedButtonM
 import com.teco.ventago.design_system.buttons.TextButtonS
 import com.teco.ventago.design_system.textfields.DMOutlinedTextField
+import com.teco.ventago.design_system.textfields.helpers.DMDropDownField
+import com.teco.ventago.features.expenses.domain.models.PaymentMethod
 import com.teco.ventago.design_system.theme.bodyMedium
 import com.teco.ventago.design_system.theme.bodyMediumBold
 import com.teco.ventago.design_system.theme.cardContainerColor
@@ -436,48 +438,20 @@ private fun PaymentMethodSelector(
     selected: String,
     onSelect: (String) -> Unit
 ) {
-    val methods = listOf(
-        "" to "Seleccionar método",
-        "cash" to "Efectivo",
-        "bank_transfer" to "Transferencia bancaria",
-        "credit_card" to "Tarjeta de crédito",
-        "debit_card" to "Tarjeta de débito",
-        "credit" to "Crédito",
-        "check" to "Cheque",
-        "yappy" to "Yappy"
-    )
+    val allMethods = remember { PaymentMethod.getAllMethods() }
+    val selectedIndex = allMethods.indexOfFirst { it.value == selected }.takeIf { it >= 0 } ?: -1
 
-    Column {
-        Text("Método de pago", style = labelSmall(color = MaterialTheme.colorScheme.onSurfaceVariant))
-        Spacer(modifier = Modifier.height(4.dp))
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(8.dp)
-        ) {
-            methods.filter { it.first.isNotEmpty() }.take(4).forEach { (value, label) ->
-                androidx.compose.material3.FilterChip(
-                    selected = selected == value,
-                    onClick = { onSelect(if (selected == value) "" else value) },
-                    label = { Text(label, style = MaterialTheme.typography.labelSmall) },
-                    modifier = Modifier.weight(1f)
-                )
-            }
-        }
-        Spacer(modifier = Modifier.height(4.dp))
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(8.dp)
-        ) {
-            methods.filter { it.first.isNotEmpty() }.drop(4).forEach { (value, label) ->
-                androidx.compose.material3.FilterChip(
-                    selected = selected == value,
-                    onClick = { onSelect(if (selected == value) "" else value) },
-                    label = { Text(label, style = MaterialTheme.typography.labelSmall) },
-                    modifier = Modifier.weight(1f)
-                )
-            }
-        }
-    }
+    DMDropDownField(
+        modifier = Modifier.fillMaxWidth(),
+        label = "Método de pago",
+        notSetLabel = "Seleccionar método",
+        items = allMethods,
+        selectedIndex = selectedIndex,
+        onItemSelected = { _, item ->
+            onSelect(item.value)
+        },
+        selectedItemToString = { it.label }
+    )
 }
 
 @Composable
@@ -485,45 +459,19 @@ private fun InitialPaymentMethodSelector(
     selected: String,
     onSelect: (String) -> Unit
 ) {
-    val methods = listOf(
-        "cash" to "Efectivo",
-        "bank_transfer" to "Transferencia",
-        "credit_card" to "Tarjeta crédito",
-        "credit" to "Crédito",
-        "yappy" to "Yappy"
-    )
+    val allMethods = remember { PaymentMethod.getAllMethods() }
+    val selectedIndex = allMethods.indexOfFirst { it.value == selected }.takeIf { it >= 0 } ?: 0
 
-    Column {
-        Text("Método de pago", style = labelSmall(color = MaterialTheme.colorScheme.onSurfaceVariant))
-        Spacer(modifier = Modifier.height(4.dp))
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(8.dp)
-        ) {
-            methods.take(3).forEach { (value, label) ->
-                FilterChip(
-                    selected = selected == value,
-                    onClick = { onSelect(value) },
-                    label = { Text(label, style = MaterialTheme.typography.labelSmall) },
-                    modifier = Modifier.weight(1f)
-                )
-            }
-        }
-        Spacer(modifier = Modifier.height(4.dp))
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(8.dp)
-        ) {
-            methods.drop(3).forEach { (value, label) ->
-                FilterChip(
-                    selected = selected == value,
-                    onClick = { onSelect(value) },
-                    label = { Text(label, style = MaterialTheme.typography.labelSmall) },
-                    modifier = Modifier.weight(1f)
-                )
-            }
-        }
-    }
+    DMDropDownField(
+        modifier = Modifier.fillMaxWidth(),
+        label = "Método de pago",
+        items = allMethods,
+        selectedIndex = selectedIndex,
+        onItemSelected = { _, item ->
+            onSelect(item.value)
+        },
+        selectedItemToString = { it.label }
+    )
 }
 
 @Composable

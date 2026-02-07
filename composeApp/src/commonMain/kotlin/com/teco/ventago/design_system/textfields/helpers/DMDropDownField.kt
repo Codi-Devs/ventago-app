@@ -117,7 +117,7 @@ fun <T> DMDropDownField(
     isError: Boolean = false,
     drawItem: @Composable (T, Boolean, Boolean, () -> Unit) -> Unit = { item, selected, itemEnabled, onClick ->
         LargeDropdownMenuItem(
-            text = item.toString(),
+            text = selectedItemToString(item),
             selected = selected,
             enabled = itemEnabled,
             onClick = onClick,

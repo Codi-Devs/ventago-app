@@ -3,18 +3,23 @@ package com.teco.ventago.features.expenses.ui.details
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.teco.ventago.core.PdfSharer
+import com.teco.ventago.design_system.organism.LoadingBottomSheetState
+import com.teco.ventago.design_system.organism.LoadingState
 import com.teco.ventago.features.expenses.domain.ExpensesSelectionStore
 import com.teco.ventago.features.expenses.domain.ExpensesService
+import com.teco.ventago.features.expenses.domain.models.Expense
 import com.teco.ventago.features.expenses.domain.models.ExpensePayment
+import com.teco.ventago.features.expenses.domain.models.PaymentSummary
+import com.teco.ventago.features.expenses.domain.models.requests.ExpenseProofFile
+import com.teco.ventago.features.expenses.domain.models.requests.UpsertExpensePaymentRequest
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.IO
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
-import kotlinx.serialization.json.buildJsonObject
-import kotlinx.serialization.json.put
 
 class ExpenseDetailsViewModel(
     private val expensesService: ExpensesService,
@@ -45,12 +50,16 @@ class ExpenseDetailsViewModel(
         val expenseId = _uiState.value.expense?.id ?: return
         viewModelScope.launch {
             _uiState.value = _uiState.value.copy(isDeleting = true, error = null)
+            showLoading("Eliminando gasto...")
             try {
                 withContext(Dispatchers.IO) {
                     expensesService.deleteExpense(expenseId)
                 }
+                showSuccess("Gasto eliminado correctamente")
+                delay(1200)
                 _uiState.value = _uiState.value.copy(isDeleting = false, isDeleted = true)
             } catch (e: Exception) {
+                showError("No se pudo eliminar el gasto")
                 _uiState.value = _uiState.value.copy(isDeleting = false, error = e.message)
             }
         }
@@ -65,29 +74,38 @@ class ExpenseDetailsViewModel(
         notes: String,
         paymentDate: String?,
         dueDate: String?,
-        proofFileUrl: String? = null
+        proofFileUrl: String? = null,
+        proofFile: ExpenseProofFile? = null
     ) {
         val expenseId = _uiState.value.expense?.id ?: return
         viewModelScope.launch {
             _uiState.value = _uiState.value.copy(isSubmittingPayment = true, paymentError = null)
             try {
-                val payload = buildJsonObject {
-                    put("payment_method", paymentMethod)
-                    put("amount_paid", amountPaid)
-                    if (reference.isNotBlank()) put("reference", reference)
-                    if (notes.isNotBlank()) put("notes", notes)
-                    if (paymentDate != null) put("payment_date", "${paymentDate}T00:00:00-05:00")
-                    if (dueDate != null) put("due_date", "${dueDate}T23:59:59-05:00")
-                    if (proofFileUrl != null) put("proof_file_url", proofFileUrl)
-                }.toString()
-
-                withContext(Dispatchers.IO) {
-                    expensesService.createPayment(expenseId, payload)
+                val requestResult = buildPaymentRequest(
+                    paymentMethod = paymentMethod,
+                    amountPaid = amountPaid,
+                    reference = reference,
+                    notes = notes,
+                    paymentDate = paymentDate,
+                    dueDate = dueDate,
+                    proofFileUrl = proofFileUrl
+                )
+                if (requestResult.request == null) {
+                    _uiState.value = _uiState.value.copy(
+                        isSubmittingPayment = false,
+                        paymentError = requestResult.error ?: "Formato de fecha inválido."
+                    )
+                    return@launch
                 }
+                showLoading("Registrando pago...")
+                val createdPayment = withContext(Dispatchers.IO) {
+                    expensesService.createPayment(expenseId, requestResult.request, proofFile)
+                }
+                applyCreatedPaymentLocally(createdPayment)
+                showSuccess("Pago registrado correctamente")
                 _uiState.value = _uiState.value.copy(isSubmittingPayment = false, paymentSuccess = true)
-                // Reload expense to get updated payment summary
-                loadExpense(expenseId)
             } catch (e: Exception) {
+                showError("No se pudo registrar el pago")
                 _uiState.value = _uiState.value.copy(isSubmittingPayment = false, paymentError = e.message)
             }
         }
@@ -97,11 +115,14 @@ class ExpenseDetailsViewModel(
         val expenseId = _uiState.value.expense?.id ?: return
         viewModelScope.launch {
             try {
+                showLoading("Eliminando pago...")
                 withContext(Dispatchers.IO) {
                     expensesService.deletePayment(expenseId, paymentId)
                 }
-                loadExpense(expenseId)
+                applyDeletedPaymentLocally(paymentId)
+                showSuccess("Pago eliminado correctamente")
             } catch (e: Exception) {
+                showError("No se pudo eliminar el pago")
                 _uiState.value = _uiState.value.copy(error = e.message)
             }
         }
@@ -112,16 +133,25 @@ class ExpenseDetailsViewModel(
         val paymentId = payment.id ?: return
         viewModelScope.launch {
             try {
-                val payload = buildJsonObject {
-                    put("payment_status", "paid")
-                    put("payment_method", payment.paymentMethod ?: "cash")
-                    put("amount_paid", payment.amountPaid ?: 0.0)
-                }.toString()
-                withContext(Dispatchers.IO) {
-                    expensesService.updatePayment(expenseId, paymentId, payload)
+                val request = UpsertExpensePaymentRequest(
+                    paymentStatus = "paid",
+                    paymentMethod = payment.paymentMethod ?: "cash",
+                    amountPaid = payment.amountPaid ?: 0.0
+                )
+                showLoading("Actualizando pago...")
+                val updatedPayment = withContext(Dispatchers.IO) {
+                    expensesService.updatePayment(expenseId, paymentId, request)
                 }
-                loadExpense(expenseId)
+                val optimisticPayment = mergePaymentWithFallbacks(
+                    paymentId = paymentId,
+                    backend = updatedPayment,
+                    request = request,
+                    fallback = payment
+                )
+                applyUpsertedPaymentLocally(optimisticPayment)
+                showSuccess("Pago actualizado correctamente")
             } catch (e: Exception) {
+                showError("No se pudo actualizar el pago")
                 _uiState.value = _uiState.value.copy(error = e.message)
             }
         }
@@ -139,32 +169,50 @@ class ExpenseDetailsViewModel(
         notes: String,
         paymentDate: String?,
         dueDate: String?,
-        proofFileUrl: String? = null
+        proofFileUrl: String? = null,
+        proofFile: ExpenseProofFile? = null
     ) {
         val expenseId = _uiState.value.expense?.id ?: return
         viewModelScope.launch {
             _uiState.value = _uiState.value.copy(isSubmittingPayment = true, paymentError = null)
             try {
-                val payload = buildJsonObject {
-                    put("payment_method", paymentMethod)
-                    put("amount_paid", amountPaid)
-                    if (reference.isNotBlank()) put("reference", reference)
-                    if (notes.isNotBlank()) put("notes", notes)
-                    if (paymentDate != null) put("payment_date", "${paymentDate}T00:00:00-05:00")
-                    if (dueDate != null) put("due_date", "${dueDate}T23:59:59-05:00")
-                    if (proofFileUrl != null) put("proof_file_url", proofFileUrl)
-                }.toString()
-
-                withContext(Dispatchers.IO) {
-                    expensesService.updatePayment(expenseId, paymentId, payload)
+                val requestResult = buildPaymentRequest(
+                    paymentMethod = paymentMethod,
+                    amountPaid = amountPaid,
+                    reference = reference,
+                    notes = notes,
+                    paymentDate = paymentDate,
+                    dueDate = dueDate,
+                    proofFileUrl = proofFileUrl
+                )
+                if (requestResult.request == null) {
+                    _uiState.value = _uiState.value.copy(
+                        isSubmittingPayment = false,
+                        paymentError = requestResult.error ?: "Formato de fecha inválido."
+                    )
+                    return@launch
                 }
+                showLoading("Actualizando pago...")
+                val updatedPayment = withContext(Dispatchers.IO) {
+                    expensesService.updatePayment(expenseId, paymentId, requestResult.request, proofFile)
+                }
+                val fallback = _uiState.value.expense?.payments
+                    ?.firstOrNull { it.id == paymentId }
+                val optimisticPayment = mergePaymentWithFallbacks(
+                    paymentId = paymentId,
+                    backend = updatedPayment,
+                    request = requestResult.request,
+                    fallback = fallback
+                )
+                applyUpsertedPaymentLocally(optimisticPayment)
+                showSuccess("Pago actualizado correctamente")
                 _uiState.value = _uiState.value.copy(
                     isSubmittingPayment = false,
                     paymentSuccess = true,
                     editingPayment = null
                 )
-                loadExpense(expenseId)
             } catch (e: Exception) {
+                showError("No se pudo actualizar el pago")
                 _uiState.value = _uiState.value.copy(isSubmittingPayment = false, paymentError = e.message)
             }
         }
@@ -172,6 +220,12 @@ class ExpenseDetailsViewModel(
 
     fun resetPaymentState() {
         _uiState.value = _uiState.value.copy(paymentSuccess = false, paymentError = null, editingPayment = null)
+    }
+
+    fun hideLoading() {
+        _uiState.value = _uiState.value.copy(
+            loadingBottomSheet = LoadingBottomSheetState(LoadingState.HIDDEN)
+        )
     }
 
     /**
@@ -199,5 +253,149 @@ class ExpenseDetailsViewModel(
                 pdfSharer.openPdf(filename, pdfBytes)
             } catch (_: Exception) {}
         }
+    }
+
+    private fun normalizeDateForApi(rawDate: String?): String? {
+        if (rawDate == null) return null
+        val datePart = rawDate.trim().substringBefore("T")
+        val parts = datePart.split("-")
+        if (parts.size != 3) return null
+
+        val year = parts[0].toIntOrNull() ?: return null
+        val month = parts[1].toIntOrNull() ?: return null
+        val day = parts[2].toIntOrNull() ?: return null
+        if (month !in 1..12 || day !in 1..31) return null
+
+        return "${year.toString().padStart(4, '0')}-${month.toString().padStart(2, '0')}-${day.toString().padStart(2, '0')}"
+    }
+
+    private fun buildPaymentRequest(
+        paymentMethod: String,
+        amountPaid: Double,
+        reference: String,
+        notes: String,
+        paymentDate: String?,
+        dueDate: String?,
+        proofFileUrl: String?
+    ): PaymentRequestResult {
+        val normalizedPaymentDate = normalizeDateForApi(paymentDate)
+        if (paymentDate != null && normalizedPaymentDate == null) {
+            return PaymentRequestResult(error = "Formato de fecha de pago inválido.")
+        }
+        val normalizedDueDate = normalizeDateForApi(dueDate)
+        if (dueDate != null && normalizedDueDate == null) {
+            return PaymentRequestResult(error = "Formato de fecha de vencimiento inválido.")
+        }
+
+        return PaymentRequestResult(
+            request = UpsertExpensePaymentRequest(
+                paymentMethod = paymentMethod,
+                amountPaid = amountPaid,
+                reference = reference.ifBlank { null },
+                notes = notes.ifBlank { null },
+                paymentDate = normalizedPaymentDate?.let { "${it}T00:00:00-05:00" },
+                dueDate = normalizedDueDate?.let { "${it}T23:59:59-05:00" },
+                proofFileUrl = proofFileUrl
+            )
+        )
+    }
+
+    private fun showLoading(title: String) {
+        _uiState.value = _uiState.value.copy(
+            loadingBottomSheet = LoadingBottomSheetState(LoadingState.LOADING, title)
+        )
+    }
+
+    private fun showSuccess(title: String) {
+        _uiState.value = _uiState.value.copy(
+            loadingBottomSheet = LoadingBottomSheetState(LoadingState.SUCCESS, title)
+        )
+    }
+
+    private fun showError(title: String) {
+        _uiState.value = _uiState.value.copy(
+            loadingBottomSheet = LoadingBottomSheetState(LoadingState.ERROR, title)
+        )
+    }
+
+    private data class PaymentRequestResult(
+        val request: UpsertExpensePaymentRequest? = null,
+        val error: String? = null
+    )
+
+    private fun applyCreatedPaymentLocally(createdPayment: ExpensePayment) {
+        applyUpsertedPaymentLocally(createdPayment)
+    }
+
+    private fun applyUpsertedPaymentLocally(updatedPayment: ExpensePayment) {
+        val currentExpense = _uiState.value.expense ?: return
+        val payments = currentExpense.payments.orEmpty().toMutableList()
+        val updateIndex = updatedPayment.id?.let { id ->
+            payments.indexOfFirst { it.id == id }
+        } ?: -1
+        if (updateIndex >= 0) {
+            payments[updateIndex] = updatedPayment
+        } else {
+            payments.add(updatedPayment)
+        }
+        updateExpensePaymentSummary(currentExpense, payments)
+    }
+
+    private fun applyDeletedPaymentLocally(paymentId: Long) {
+        val currentExpense = _uiState.value.expense ?: return
+        val updatedPayments = currentExpense.payments.orEmpty().filterNot { it.id == paymentId }
+        updateExpensePaymentSummary(currentExpense, updatedPayments)
+    }
+
+    private fun updateExpensePaymentSummary(expense: Expense, payments: List<ExpensePayment>) {
+        val paidTotal = payments
+            .filter { it.paymentStatus == "paid" }
+            .sumOf { it.amountPaid ?: 0.0 }
+        val totalAmount = expense.totalAmount ?: 0.0
+        val remaining = (totalAmount - paidTotal).coerceAtLeast(0.0)
+        val status = when {
+            paidTotal <= 0.0 -> "not_paid"
+            remaining <= 0.0001 -> "paid"
+            else -> "partial"
+        }
+
+        _uiState.value = _uiState.value.copy(
+            expense = expense.copy(
+                payments = payments,
+                totalPaid = paidTotal,
+                paymentStatus = status,
+                paymentSummary = PaymentSummary(
+                    totalPaid = paidTotal,
+                    remaining = remaining,
+                    status = status
+                )
+            )
+        )
+    }
+
+    private fun mergePaymentWithFallbacks(
+        paymentId: Long,
+        backend: ExpensePayment?,
+        request: UpsertExpensePaymentRequest,
+        fallback: ExpensePayment?
+    ): ExpensePayment {
+        val currentExpenseId = _uiState.value.expense?.id
+        return ExpensePayment(
+            id = paymentId,
+            expenseId = backend?.expenseId ?: fallback?.expenseId ?: currentExpenseId,
+            paymentMethod = backend?.paymentMethod ?: request.paymentMethod.ifBlank { fallback?.paymentMethod ?: "cash" },
+            paymentStatus = backend?.paymentStatus ?: request.paymentStatus ?: fallback?.paymentStatus,
+            amountPaid = backend?.amountPaid ?: request.amountPaid,
+            reference = backend?.reference ?: request.reference ?: fallback?.reference,
+            proofFileUrl = backend?.proofFileUrl ?: request.proofFileUrl ?: fallback?.proofFileUrl,
+            proofFileName = backend?.proofFileName ?: fallback?.proofFileName,
+            notes = backend?.notes ?: request.notes ?: fallback?.notes,
+            paymentDate = backend?.paymentDate ?: request.paymentDate ?: fallback?.paymentDate,
+            dueDate = backend?.dueDate ?: request.dueDate ?: fallback?.dueDate,
+            isOverdue = backend?.isOverdue ?: fallback?.isOverdue,
+            daysOverdue = backend?.daysOverdue ?: fallback?.daysOverdue,
+            createdAt = backend?.createdAt ?: fallback?.createdAt,
+            updatedAt = backend?.updatedAt ?: fallback?.updatedAt
+        )
     }
 }

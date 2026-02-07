@@ -4,7 +4,6 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.teco.ventago.features.expenses.domain.ExpensesService
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.IO
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -16,11 +15,17 @@ import kotlinx.coroutines.withContext
 class CufeImportViewModel(
     private val expensesService: ExpensesService
 ) : ViewModel() {
+    companion object {
+        private const val POLL_INTERVAL_MS = 5_000L
+        private const val MAX_POLL_ATTEMPTS = 12 // 1 minute max
+    }
 
     private val _uiState = MutableStateFlow(CufeImportState())
     val uiState: StateFlow<CufeImportState> = _uiState.asStateFlow()
 
     private var pollingJob: Job? = null
+    private var pollingJobId: Long? = null
+    private var isScreenVisible: Boolean = false
 
     fun setCufeInput(value: String) {
         _uiState.value = _uiState.value.copy(cufeInput = value, error = null)
@@ -60,7 +65,14 @@ class CufeImportViewModel(
         }
 
         viewModelScope.launch {
-            _uiState.value = _uiState.value.copy(isImporting = true, error = null, importSuccess = false)
+            _uiState.value = _uiState.value.copy(
+                isImporting = true,
+                isPolling = false,
+                pollingTimedOut = false,
+                error = null,
+                importSuccess = false,
+                importedExpenseId = null
+            )
             try {
                 val job = withContext(Dispatchers.IO) {
                     expensesService.crawlExpense(cufe)
@@ -69,14 +81,11 @@ class CufeImportViewModel(
                     isImporting = false,
                     currentJob = job
                 )
-                // Start polling
-                if (job.id != null && !job.isTerminal) {
-                    startPolling(job.id)
-                } else if (job.status == "success") {
-                    _uiState.value = _uiState.value.copy(
-                        importSuccess = true,
-                        importedExpenseId = job.expenseId
-                    )
+
+                if (job.isTerminal) {
+                    handleTerminalStatus(job)
+                } else if (isScreenVisible) {
+                    job.resolvedId?.let { startPolling(it) }
                 }
             } catch (e: Exception) {
                 _uiState.value = _uiState.value.copy(
@@ -87,30 +96,73 @@ class CufeImportViewModel(
         }
     }
 
+    fun onScreenVisible() {
+        isScreenVisible = true
+        val state = _uiState.value
+        val job = state.currentJob ?: return
+        val jobId = job.resolvedId ?: return
+        if (!job.isTerminal && !state.isPolling) {
+            startPolling(jobId)
+        }
+    }
+
+    fun onScreenHidden() {
+        isScreenVisible = false
+        pollingJob?.cancel()
+        pollingJob = null
+        pollingJobId = null
+        if (_uiState.value.isPolling) {
+            _uiState.value = _uiState.value.copy(isPolling = false)
+        }
+    }
+
+    fun openImportedExpense(onExpenseImported: (Long) -> Unit) {
+        val expenseId = _uiState.value.importedExpenseId ?: return
+        viewModelScope.launch {
+            _uiState.value = _uiState.value.copy(isOpeningExpense = true, error = null)
+            try {
+                withContext(Dispatchers.IO) {
+                    expensesService.getExpense(expenseId)
+                }
+                _uiState.value = _uiState.value.copy(isOpeningExpense = false)
+                onExpenseImported(expenseId)
+            } catch (e: Exception) {
+                _uiState.value = _uiState.value.copy(
+                    isOpeningExpense = false,
+                    error = e.message ?: "No se pudo abrir el gasto importado."
+                )
+            }
+        }
+    }
+
     private fun startPolling(jobId: Long) {
+        if (pollingJobId == jobId && pollingJob?.isActive == true) return
+
         pollingJob?.cancel()
         pollingJob = viewModelScope.launch {
-            _uiState.value = _uiState.value.copy(isPolling = true)
+            pollingJobId = jobId
+            _uiState.value = _uiState.value.copy(
+                isPolling = true,
+                pollingTimedOut = false,
+                error = null
+            )
             var attempts = 0
-            val maxAttempts = 30 // 60 seconds max
 
-            while (attempts < maxAttempts) {
-                delay(2000)
+            while (attempts < MAX_POLL_ATTEMPTS && isScreenVisible) {
+                delay(POLL_INTERVAL_MS)
                 attempts++
                 try {
                     val status = withContext(Dispatchers.IO) {
                         expensesService.getCrawlJobStatus(jobId)
                     }
-                    _uiState.value = _uiState.value.copy(currentJob = status)
+                    _uiState.value = _uiState.value.copy(
+                        currentJob = status,
+                        importedExpenseId = status.expenseId ?: _uiState.value.importedExpenseId
+                    )
 
                     if (status.isTerminal) {
-                        _uiState.value = _uiState.value.copy(isPolling = false)
-                        if (status.status == "success") {
-                            _uiState.value = _uiState.value.copy(
-                                importSuccess = true,
-                                importedExpenseId = status.expenseId
-                            )
-                        }
+                        _uiState.value = _uiState.value.copy(isPolling = false, pollingTimedOut = false)
+                        handleTerminalStatus(status)
                         return@launch
                     }
                 } catch (e: Exception) {
@@ -118,12 +170,25 @@ class CufeImportViewModel(
                 }
             }
 
-            // Timeout
-            _uiState.value = _uiState.value.copy(
-                isPolling = false,
-                error = "Tiempo de espera agotado. La importación sigue en proceso."
-            )
+            pollingJobId = null
+            if (isScreenVisible && attempts >= MAX_POLL_ATTEMPTS) {
+                _uiState.value = _uiState.value.copy(
+                    isPolling = false,
+                    pollingTimedOut = true,
+                    error = "No se pudo confirmar la importación en 1 minuto. Intente nuevamente."
+                )
+            } else {
+                _uiState.value = _uiState.value.copy(isPolling = false)
+            }
         }
+    }
+
+    private fun handleTerminalStatus(job: com.teco.ventago.features.expenses.domain.models.CrawlJob) {
+        val isSuccess = job.status == "success" || job.status == "completed"
+        _uiState.value = _uiState.value.copy(
+            importSuccess = isSuccess,
+            importedExpenseId = if (isSuccess) job.expenseId else _uiState.value.importedExpenseId
+        )
     }
 
     fun showScanner(show: Boolean) {
@@ -153,11 +218,13 @@ class CufeImportViewModel(
 
     fun reset() {
         pollingJob?.cancel()
+        pollingJobId = null
         _uiState.value = CufeImportState()
     }
 
     override fun onCleared() {
         pollingJob?.cancel()
+        pollingJobId = null
         super.onCleared()
     }
 }

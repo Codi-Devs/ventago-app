@@ -6,6 +6,7 @@ import kotlinx.serialization.Serializable
 @Serializable
 data class CrawlJob(
     val id: Long? = null,
+    @SerialName("job_id") val jobId: Long? = null,
     val cufe: String? = null,
     val status: String? = null,
     @SerialName("expense_id") val expenseId: Long? = null,
@@ -17,8 +18,14 @@ data class CrawlJob(
     val message: String? = null,
     @SerialName("created_at") val createdAt: String? = null
 ) {
+    val resolvedId: Long?
+        get() = jobId ?: id
+
     val isTerminal: Boolean
-        get() = status == "success" || status == "failed"
+        get() = when (status) {
+            "success", "completed", "failed", "error", "cancelled", "timeout" -> true
+            else -> false
+        }
 }
 
 @Serializable

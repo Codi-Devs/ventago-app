@@ -1,6 +1,8 @@
 package com.teco.ventago.features.expenses.data.provider
 
 import com.teco.ventago.features.expenses.domain.models.requests.ListExpensesRequest
+import com.teco.ventago.features.expenses.domain.models.requests.ExpenseProofFile
+import com.teco.ventago.features.expenses.domain.models.requests.UpsertExpensePaymentRequest
 import com.teco.ventago.utils.ApiResponse
 
 interface IExpensesProvider {
@@ -11,9 +13,20 @@ interface IExpensesProvider {
     suspend fun deleteExpense(businessId: Int, expenseId: Long): ApiResponse
 
     // Payments
-    suspend fun createPayment(businessId: Int, expenseId: Long, payload: String): ApiResponse
+    suspend fun createPayment(
+        businessId: Int,
+        expenseId: Long,
+        request: UpsertExpensePaymentRequest,
+        proofFile: ExpenseProofFile? = null
+    ): ApiResponse
     suspend fun listPayments(businessId: Int, expenseId: Long): ApiResponse
-    suspend fun updatePayment(businessId: Int, expenseId: Long, paymentId: Long, payload: String): ApiResponse
+    suspend fun updatePayment(
+        businessId: Int,
+        expenseId: Long,
+        paymentId: Long,
+        request: UpsertExpensePaymentRequest,
+        proofFile: ExpenseProofFile? = null
+    ): ApiResponse
     suspend fun deletePayment(businessId: Int, expenseId: Long, paymentId: Long): ApiResponse
 
     // Crawl jobs (CUFE import)

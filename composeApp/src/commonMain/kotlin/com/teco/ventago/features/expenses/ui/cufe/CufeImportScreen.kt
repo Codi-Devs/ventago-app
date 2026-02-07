@@ -16,6 +16,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.CheckCircle
 import androidx.compose.material.icons.rounded.Error
+import androidx.compose.material.icons.rounded.Info
 import androidx.compose.material.icons.rounded.QrCodeScanner
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -24,6 +25,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -58,6 +60,13 @@ fun CufeImportScreen(
 
     var launchCamera by remember { mutableStateOf(false) }
     var launchSetting by remember { mutableStateOf(false) }
+
+    DisposableEffect(Unit) {
+        viewModel.onScreenVisible()
+        onDispose {
+            viewModel.onScreenHidden()
+        }
+    }
 
     val permissionsManager = createPermissionsManager(object : PermissionCallback {
         override fun onPermissionStatus(
@@ -218,6 +227,14 @@ fun CufeImportScreen(
         // Job status card
         val job = uiState.currentJob
         if (job != null) {
+            val isInProgress = job.status == "pending" || job.status == "processing"
+            val isSuccess = job.status == "success" || job.status == "completed"
+            val isFailure = uiState.pollingTimedOut ||
+                job.status == "failed" ||
+                job.status == "error" ||
+                job.status == "cancelled" ||
+                job.status == "timeout"
+
             Card(
                 modifier = Modifier.fillMaxWidth(),
                 elevation = CardDefaults.cardElevation(2.dp),
@@ -231,29 +248,29 @@ fun CufeImportScreen(
                     Text("Estado de importación", style = bodyMediumBold())
 
                     Row(verticalAlignment = Alignment.CenterVertically) {
-                        when (job.status) {
-                            "pending", "processing" -> {
-                                CircularProgressIndicator(
-                                    modifier = Modifier.size(20.dp),
-                                    strokeWidth = 2.dp
-                                )
-                            }
-                            "success" -> {
-                                Icon(
-                                    imageVector = Icons.Rounded.CheckCircle,
-                                    contentDescription = null,
-                                    tint = Color(0xFF4CAF50),
-                                    modifier = Modifier.size(20.dp)
-                                )
-                            }
-                            "failed" -> {
-                                Icon(
-                                    imageVector = Icons.Rounded.Error,
-                                    contentDescription = null,
-                                    tint = MaterialTheme.colorScheme.error,
-                                    modifier = Modifier.size(20.dp)
-                                )
-                            }
+                        when {
+                            isInProgress -> CircularProgressIndicator(
+                                modifier = Modifier.size(20.dp),
+                                strokeWidth = 2.dp
+                            )
+                            isSuccess -> Icon(
+                                imageVector = Icons.Rounded.CheckCircle,
+                                contentDescription = null,
+                                tint = Color(0xFF4CAF50),
+                                modifier = Modifier.size(20.dp)
+                            )
+                            isFailure -> Icon(
+                                imageVector = Icons.Rounded.Error,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.error,
+                                modifier = Modifier.size(20.dp)
+                            )
+                            else -> Icon(
+                                imageVector = Icons.Rounded.Info,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.primary,
+                                modifier = Modifier.size(20.dp)
+                            )
                         }
                         Spacer(modifier = Modifier.width(8.dp))
                         Text(
@@ -262,14 +279,46 @@ fun CufeImportScreen(
                         )
                     }
 
-                    if (job.status == "success" && uiState.importedExpenseId != null) {
-                        Spacer(modifier = Modifier.height(4.dp))
-                        ButtonM(onClick = { onExpenseImported(uiState.importedExpenseId!!) }) {
-                            Text("Ver Gasto Importado")
+                    // Informational copy while polling
+                    if (uiState.isPolling || isInProgress) {
+                        Row(
+                            verticalAlignment = Alignment.Top,
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Icon(
+                                imageVector = Icons.Rounded.Info,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.primary,
+                                modifier = Modifier.size(18.dp)
+                            )
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text(
+                                text = "La importación se está procesando. Puede salir de esta pantalla, " +
+                                    "si finaliza correctamente el gasto aparecerá en su lista.",
+                                style = labelSmall(color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            )
                         }
                     }
 
-                    if (job.status == "failed") {
+                    if (isSuccess && uiState.importedExpenseId != null) {
+                        Spacer(modifier = Modifier.height(4.dp))
+                        ButtonM(
+                            onClick = { viewModel.openImportedExpense(onExpenseImported) },
+                            enabled = !uiState.isOpeningExpense
+                        ) {
+                            if (uiState.isOpeningExpense) {
+                                CircularProgressIndicator(
+                                    modifier = Modifier.size(16.dp),
+                                    strokeWidth = 2.dp,
+                                    color = MaterialTheme.colorScheme.onPrimary
+                                )
+                                Spacer(modifier = Modifier.width(8.dp))
+                            }
+                            Text("Ver gasto importado")
+                        }
+                    }
+
+                    if (isFailure) {
                         Spacer(modifier = Modifier.height(4.dp))
                         OutlinedButtonM(onClick = { viewModel.reset() }) {
                             Text("Intentar de nuevo")

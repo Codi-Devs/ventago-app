@@ -2,7 +2,9 @@ package com.teco.ventago.features.expenses.data.provider
 
 import com.teco.ventago.Configs
 import com.teco.ventago.features.auth.domain.IAuthService
+import com.teco.ventago.features.expenses.domain.models.requests.ExpenseProofFile
 import com.teco.ventago.features.expenses.domain.models.requests.ListExpensesRequest
+import com.teco.ventago.features.expenses.domain.models.requests.UpsertExpensePaymentRequest
 import com.teco.ventago.json
 import com.teco.ventago.utils.ApiError
 import com.teco.ventago.utils.ApiResponse
@@ -14,9 +16,12 @@ import io.ktor.client.request.headers
 import io.ktor.client.request.post
 import io.ktor.client.request.put
 import io.ktor.client.request.setBody
+import io.ktor.client.request.forms.MultiPartFormDataContent
+import io.ktor.client.request.forms.formData
 import io.ktor.http.ContentType
 import io.ktor.http.HttpHeaders
 import io.ktor.http.HttpStatusCode
+import io.ktor.http.Headers
 import io.ktor.http.contentType
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.JsonObject
@@ -129,20 +134,44 @@ class ExpensesProvider(
 
     // Payments
 
-    override suspend fun createPayment(businessId: Int, expenseId: Long, payload: String): ApiResponse {
+    override suspend fun createPayment(
+        businessId: Int,
+        expenseId: Long,
+        request: UpsertExpensePaymentRequest,
+        proofFile: ExpenseProofFile?
+    ): ApiResponse {
         val res = client.post(Configs.ordersBasePath + "/api/v1/expenses/$expenseId/payments") {
             headers {
                 append(HttpHeaders.Accept, "*/*")
                 append(HttpHeaders.Authorization, "Bearer ${authService.getJwtToken()}")
-                append(HttpHeaders.ContentType, "application/json")
                 append("X-Business-ID", "$businessId")
             }
-            contentType(ContentType.Application.Json)
-            setBody(payload)
+            if (proofFile != null) {
+                // Remove default app-wide JSON content type so multipart can set boundary correctly.
+                headers { remove(HttpHeaders.ContentType) }
+                setBody(
+                    MultiPartFormDataContent(
+                        formData {
+                            append("payload", json.encodeToString(request))
+                            append(
+                                key = "proof_file",
+                                value = proofFile.bytes,
+                                headers = Headers.build {
+                                    append(HttpHeaders.ContentDisposition, "filename=\"${proofFile.fileName}\"")
+                                    append(HttpHeaders.ContentType, proofFile.contentType)
+                                }
+                            )
+                        }
+                    )
+                )
+            } else {
+                contentType(ContentType.Application.Json)
+                setBody(request)
+            }
         }
         val body = res.body<JsonObject>()
         val response = ApiResponse.fromJson(body)
-        return handleAuth(response, res.status) { createPayment(businessId, expenseId, payload) }
+        return handleAuth(response, res.status) { createPayment(businessId, expenseId, request, proofFile) }
     }
 
     override suspend fun listPayments(businessId: Int, expenseId: Long): ApiResponse {
@@ -160,20 +189,45 @@ class ExpensesProvider(
         return handleAuth(response, res.status) { listPayments(businessId, expenseId) }
     }
 
-    override suspend fun updatePayment(businessId: Int, expenseId: Long, paymentId: Long, payload: String): ApiResponse {
+    override suspend fun updatePayment(
+        businessId: Int,
+        expenseId: Long,
+        paymentId: Long,
+        request: UpsertExpensePaymentRequest,
+        proofFile: ExpenseProofFile?
+    ): ApiResponse {
         val res = client.put(Configs.ordersBasePath + "/api/v1/expenses/$expenseId/payments/$paymentId") {
             headers {
                 append(HttpHeaders.Accept, "*/*")
                 append(HttpHeaders.Authorization, "Bearer ${authService.getJwtToken()}")
-                append(HttpHeaders.ContentType, "application/json")
                 append("X-Business-ID", "$businessId")
             }
-            contentType(ContentType.Application.Json)
-            setBody(payload)
+            if (proofFile != null) {
+                // Remove default app-wide JSON content type so multipart can set boundary correctly.
+                headers { remove(HttpHeaders.ContentType) }
+                setBody(
+                    MultiPartFormDataContent(
+                        formData {
+                            append("payload", json.encodeToString(request))
+                            append(
+                                key = "proof_file",
+                                value = proofFile.bytes,
+                                headers = Headers.build {
+                                    append(HttpHeaders.ContentDisposition, "filename=\"${proofFile.fileName}\"")
+                                    append(HttpHeaders.ContentType, proofFile.contentType)
+                                }
+                            )
+                        }
+                    )
+                )
+            } else {
+                contentType(ContentType.Application.Json)
+                setBody(request)
+            }
         }
         val body = res.body<JsonObject>()
         val response = ApiResponse.fromJson(body)
-        return handleAuth(response, res.status) { updatePayment(businessId, expenseId, paymentId, payload) }
+        return handleAuth(response, res.status) { updatePayment(businessId, expenseId, paymentId, request, proofFile) }
     }
 
     override suspend fun deletePayment(businessId: Int, expenseId: Long, paymentId: Long): ApiResponse {

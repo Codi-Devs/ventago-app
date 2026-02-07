@@ -19,9 +19,16 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Email
 import androidx.compose.material.icons.outlined.FileDownload
+import androidx.compose.material.icons.rounded.Business
+import androidx.compose.material.icons.rounded.Inventory2
 import androidx.compose.material.icons.rounded.MoreVert
+import androidx.compose.material.icons.rounded.Notes
+import androidx.compose.material.icons.rounded.Receipt
 import androidx.compose.material3.BottomSheetDefaults
+import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.Divider
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
@@ -53,12 +60,12 @@ import androidx.navigation.NavBackStackEntry
 import com.teco.ventago.design_system.buttons.ButtonM
 import com.teco.ventago.design_system.buttons.OutlinedButtonM
 import com.teco.ventago.design_system.loaders.shimmerBrush
-import com.teco.ventago.design_system.molecules.TicketDivider
 import com.teco.ventago.design_system.theme.bodyMedium
 import com.teco.ventago.design_system.theme.bodyMediumBold
 import com.teco.ventago.design_system.theme.bodySmall
-import com.teco.ventago.design_system.theme.latoFontFamily
-import com.teco.ventago.design_system.theme.vanishedBackgroundColor
+import com.teco.ventago.design_system.theme.cardContainerColor
+import com.teco.ventago.design_system.theme.labelSmall
+import com.teco.ventago.design_system.theme.titleMediumBold
 import com.teco.ventago.features.quotes.domain.QuoteSelectionStore
 import com.teco.ventago.features.quotes.domain.models.Quote
 import com.teco.ventago.features.quotes.domain.models.QuoteLine
@@ -153,72 +160,20 @@ fun QuoteDetailsScreen(
 
 @Composable
 private fun QuoteDetailsSkeleton() {
-    val brush = shimmerBrush()
-    val blockShape = RoundedCornerShape(10.dp)
     Column(
         modifier = Modifier
-            .padding(horizontal = 8.dp)
-            .verticalScroll(rememberScrollState())
             .fillMaxSize()
+            .padding(16.dp),
+        verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
-        Spacer(modifier = Modifier.height(16.dp))
-        Spacer(
-            modifier = Modifier
-                .fillMaxWidth(0.55f)
-                .height(14.dp)
-                .clip(RoundedCornerShape(6.dp))
-                .background(brush)
-        )
-        Spacer(modifier = Modifier.height(12.dp))
-        Spacer(
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(72.dp)
-                .clip(blockShape)
-                .background(brush)
-        )
-        Spacer(modifier = Modifier.height(16.dp))
-        Spacer(
-            modifier = Modifier
-                .fillMaxWidth(0.25f)
-                .height(12.dp)
-                .clip(RoundedCornerShape(6.dp))
-                .background(brush)
-        )
-        Spacer(modifier = Modifier.height(8.dp))
-        Spacer(
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(220.dp)
-                .clip(blockShape)
-                .background(brush)
-        )
-        Spacer(modifier = Modifier.height(16.dp))
-        Spacer(
-            modifier = Modifier
-                .fillMaxWidth(0.3f)
-                .height(12.dp)
-                .clip(RoundedCornerShape(6.dp))
-                .background(brush)
-        )
-        Spacer(modifier = Modifier.height(8.dp))
-        Spacer(
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(140.dp)
-                .clip(blockShape)
-                .background(brush)
-        )
-        Spacer(modifier = Modifier.height(16.dp))
-        repeat(5) {
-            Spacer(
+        repeat(4) {
+            Box(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(44.dp)
-                    .clip(RoundedCornerShape(8.dp))
-                    .background(brush)
+                    .height(if (it == 0) 200.dp else 120.dp)
+                    .clip(RoundedCornerShape(12.dp))
+                    .background(shimmerBrush())
             )
-            Spacer(modifier = Modifier.height(8.dp))
         }
     }
 }
@@ -271,110 +226,45 @@ private fun QuoteDetailsContent(
 
     Column(
         modifier = Modifier
-            .padding(horizontal = 8.dp)
-            .verticalScroll(rememberScrollState())
             .fillMaxSize()
+            .verticalScroll(rememberScrollState())
+            .padding(16.dp),
+        verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
-        QuoteDetailsHeader(
+        // Header card
+        QuoteHeaderCard(
             quote = quote,
             statusLabel = statusLabel,
             statusTextColor = statusTextColor,
-            statusBackgroundColor = statusBgColor
+            statusBackgroundColor = statusBgColor,
+            totals = totals
         )
 
-        Spacer(modifier = Modifier.height(8.dp))
-        Text(
-            modifier = Modifier.padding(start = 8.dp, bottom = 16.dp),
-            text = stringResource(Res.string.items),
-            style = TextStyle(
-                fontSize = 12.sp,
-                fontFamily = latoFontFamily(),
-                fontWeight = FontWeight(700),
-                color = Color(0xFF7C8988),
-                textAlign = TextAlign.Center,
-            )
-        )
-
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 8.dp)
-                .background(vanishedBackgroundColor(), RoundedCornerShape(10.dp)),
-            verticalArrangement = Arrangement.Center,
-        ) {
-            Spacer(modifier = Modifier.height(16.dp))
-            items.forEach { item ->
-                QuoteDetailsItem(quoteLine = item)
-            }
-            TicketDivider(color = MaterialTheme.colorScheme.outlineVariant)
-            Spacer(modifier = Modifier.height(8.dp))
-            QuoteSummaryRow(
-                label = stringResource(Res.string.quote_subtotal_label),
-                amount = formatMoney(totals?.subtotal)
-            )
-            QuoteSummaryRow(
-                label = stringResource(Res.string.pos_discount),
-                amount = formatMoney(totals?.discount)
-            )
-            QuoteSummaryRow(
-                label = stringResource(Res.string.quote_taxes_label),
-                amount = formatMoney(totals?.taxes)
-            )
-            Row(
-                modifier = Modifier.fillMaxWidth()
-                    .padding(bottom = 4.dp, start = 16.dp, end = 16.dp),
-                horizontalArrangement = Arrangement.SpaceBetween
-            ) {
-                Text(
-                    modifier = Modifier,
-                    text = stringResource(Res.string.quote_total_label),
-                    style = bodyMediumBold()
-                )
-                Spacer(modifier = Modifier.weight(1f, fill = true))
-                Text(
-                    text = formatMoney(totals?.total),
-                    style = bodyMediumBold(color = MaterialTheme.colorScheme.primary)
-                )
-            }
-
-            if (hasCustomerInfo) {
-                TicketDivider(color = MaterialTheme.colorScheme.outlineVariant)
-                Spacer(modifier = Modifier.height(8.dp))
-                TicketSectionTitle(text = stringResource(Res.string.customer))
-                if (customerName.isNotBlank()) {
-                    QuoteDetailRow(label = stringResource(Res.string.name), value = customerName)
-                }
-                if (customerRuc.isNotBlank()) {
-                    QuoteDetailRow(label = "RUC", value = customerRuc)
-                }
-                if (customerEmail.isNotBlank()) {
-                    QuoteDetailRow(label = stringResource(Res.string.email), value = customerEmail)
-                }
-                if (customerPhone.isNotBlank()) {
-                    QuoteDetailRow(label = stringResource(Res.string.phone), value = customerPhone)
-                }
-            }
-
-            if (hasAdditionalInfo) {
-                TicketDivider(color = MaterialTheme.colorScheme.outlineVariant)
-                Spacer(modifier = Modifier.height(8.dp))
-                TicketSectionTitle(text = additionalInfoLabel)
-                Row(
-                    modifier = Modifier.fillMaxWidth()
-                        .padding(bottom = 6.dp, start = 16.dp, end = 16.dp),
-                    horizontalArrangement = Arrangement.SpaceBetween
-                ) {
-                    Text(text = additionalInfo, style = bodySmall())
-                }
-
-            }
-
-            Spacer(modifier = Modifier.height(8.dp))
+        // Items card
+        if (items.isNotEmpty()) {
+            QuoteItemsCard(items = items)
         }
 
-        if (!showLimitedActions) {
-            Spacer(Modifier.height(16.dp))
+        // Customer card
+        if (hasCustomerInfo) {
+            QuoteCustomerCard(
+                customerName = customerName,
+                customerRuc = customerRuc,
+                customerEmail = customerEmail,
+                customerPhone = customerPhone
+            )
+        }
 
+        // Additional info card
+        if (hasAdditionalInfo) {
+            QuoteAdditionalInfoCard(
+                label = additionalInfoLabel,
+                info = additionalInfo
+            )
+        }
+
+        // Action buttons
+        if (!showLimitedActions) {
             ButtonM(
                 onClick = onCreateOrder,
                 containerColor = MaterialTheme.colorScheme.secondaryContainer,
@@ -382,7 +272,6 @@ private fun QuoteDetailsContent(
             ) {
                 Text(text = stringResource(Res.string.create_order))
             }
-            Spacer(Modifier.height(8.dp))
             OutlinedButtonM(
                 onClick = onModify,
                 contentColor = MaterialTheme.colorScheme.secondary,
@@ -390,7 +279,6 @@ private fun QuoteDetailsContent(
             ) {
                 Text(text = stringResource(Res.string.modify_quote))
             }
-            Spacer(Modifier.height(8.dp))
             OutlinedButtonM(
                 onClick = { showCancelSheet = true },
                 containerColor = MaterialTheme.colorScheme.errorContainer,
@@ -400,7 +288,8 @@ private fun QuoteDetailsContent(
                 Text(text = stringResource(Res.string.cancel_quote))
             }
         }
-        Spacer(Modifier.height(24.dp))
+
+        Spacer(modifier = Modifier.height(8.dp))
     }
 
     if (showCancelSheet) {
@@ -477,16 +366,173 @@ private fun QuoteDetailsContent(
 }
 
 @Composable
-private fun TicketSectionTitle(text: String) {
-    Text(
-        text = text,
-        style = MaterialTheme.typography.labelMedium.copy(
-            fontFamily = latoFontFamily(),
-            fontWeight = FontWeight(700),
-            color = MaterialTheme.colorScheme.onSurfaceVariant
-        ),
-        modifier = Modifier.padding(start = 16.dp, end = 16.dp, bottom = 8.dp)
-    )
+private fun QuoteHeaderCard(
+    quote: Quote,
+    statusLabel: String,
+    statusTextColor: Color,
+    statusBackgroundColor: Color,
+    totals: com.teco.ventago.features.quotes.domain.models.QuoteTotals?
+) {
+    val createdAt = quote.createdAt?.let { DateFormat.getOrdersFormattedDate(it) }.orEmpty()
+
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        elevation = CardDefaults.cardElevation(2.dp),
+        colors = CardDefaults.cardColors(containerColor = cardContainerColor())
+    ) {
+        Column(modifier = Modifier.padding(16.dp)) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(
+                        imageVector = Icons.Rounded.Receipt,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.size(22.dp)
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text(
+                        text = quote.displayNumberOrQuoteNumber,
+                        style = titleMediumBold()
+                    )
+                }
+                QuoteStatusBadge(
+                    label = statusLabel,
+                    textColor = statusTextColor,
+                    backgroundColor = statusBackgroundColor
+                )
+            }
+            Spacer(modifier = Modifier.height(12.dp))
+            InfoRow(stringResource(Res.string.created), if (createdAt.isBlank()) "-" else createdAt)
+            Spacer(modifier = Modifier.height(8.dp))
+            Divider()
+            Spacer(modifier = Modifier.height(8.dp))
+            InfoRow(stringResource(Res.string.quote_subtotal_label), formatMoney(totals?.subtotal))
+            Spacer(modifier = Modifier.height(4.dp))
+            InfoRow(stringResource(Res.string.pos_discount), formatMoney(totals?.discount))
+            Spacer(modifier = Modifier.height(4.dp))
+            InfoRow(stringResource(Res.string.quote_taxes_label), formatMoney(totals?.taxes))
+            Spacer(modifier = Modifier.height(4.dp))
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                Text(
+                    text = stringResource(Res.string.quote_total_label),
+                    style = bodyMediumBold()
+                )
+                Text(
+                    text = formatMoney(totals?.total),
+                    style = bodyMediumBold(color = MaterialTheme.colorScheme.primary)
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun QuoteItemsCard(items: List<QuoteLine>) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        elevation = CardDefaults.cardElevation(2.dp),
+        colors = CardDefaults.cardColors(containerColor = cardContainerColor())
+    ) {
+        Column(modifier = Modifier.padding(16.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Icon(
+                    imageVector = Icons.Rounded.Inventory2,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.size(20.dp)
+                )
+                Spacer(modifier = Modifier.width(8.dp))
+                Text(
+                    text = stringResource(Res.string.items) + " (${items.size})",
+                    style = bodyMediumBold()
+                )
+            }
+            Spacer(modifier = Modifier.height(8.dp))
+            items.forEachIndexed { index, item ->
+                QuoteDetailsItem(quoteLine = item)
+                if (index < items.lastIndex) {
+                    Divider(modifier = Modifier.padding(vertical = 4.dp))
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun QuoteCustomerCard(
+    customerName: String,
+    customerRuc: String,
+    customerEmail: String,
+    customerPhone: String
+) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        elevation = CardDefaults.cardElevation(2.dp),
+        colors = CardDefaults.cardColors(containerColor = cardContainerColor())
+    ) {
+        Column(modifier = Modifier.padding(16.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Icon(
+                    imageVector = Icons.Rounded.Business,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.size(20.dp)
+                )
+                Spacer(modifier = Modifier.width(8.dp))
+                Text(
+                    text = stringResource(Res.string.customer),
+                    style = bodyMediumBold()
+                )
+            }
+            Spacer(modifier = Modifier.height(8.dp))
+            if (customerName.isNotBlank()) {
+                InfoRow(stringResource(Res.string.name), customerName)
+                Spacer(modifier = Modifier.height(4.dp))
+            }
+            if (customerRuc.isNotBlank()) {
+                InfoRow("RUC", customerRuc)
+                Spacer(modifier = Modifier.height(4.dp))
+            }
+            if (customerEmail.isNotBlank()) {
+                InfoRow(stringResource(Res.string.email), customerEmail)
+                Spacer(modifier = Modifier.height(4.dp))
+            }
+            if (customerPhone.isNotBlank()) {
+                InfoRow(stringResource(Res.string.phone), customerPhone)
+            }
+        }
+    }
+}
+
+@Composable
+private fun QuoteAdditionalInfoCard(label: String, info: String) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        elevation = CardDefaults.cardElevation(2.dp),
+        colors = CardDefaults.cardColors(containerColor = cardContainerColor())
+    ) {
+        Column(modifier = Modifier.padding(16.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Icon(
+                    imageVector = Icons.Rounded.Notes,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.size(20.dp)
+                )
+                Spacer(modifier = Modifier.width(8.dp))
+                Text(text = label, style = bodyMediumBold())
+            }
+            Spacer(modifier = Modifier.height(8.dp))
+            Text(text = info, style = bodySmall())
+        }
+    }
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -692,7 +738,6 @@ private fun QuoteStatusBadge(
             overflow = TextOverflow.Ellipsis,
             style = TextStyle(
                 fontSize = 12.sp,
-                fontFamily = latoFontFamily(),
                 fontWeight = FontWeight(600),
                 color = textColor
             )
@@ -701,128 +746,54 @@ private fun QuoteStatusBadge(
 }
 
 @Composable
-private fun QuoteDetailsHeader(
-    quote: Quote,
-    statusLabel: String,
-    statusTextColor: Color,
-    statusBackgroundColor: Color
-) {
-    val createdAt = quote.createdAt?.let { DateFormat.getOrdersFormattedDate(it) }.orEmpty()
-    Column(modifier = Modifier.padding(horizontal = 8.dp, vertical = 16.dp)) {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Row {
-                Column(modifier = Modifier.padding(end = 8.dp)) {
-                    QuoteHeaderLabel(text = stringResource(Res.string.quote_number))
-                    QuoteHeaderLabel(text = stringResource(Res.string.created))
-                    QuoteHeaderLabel(text = stringResource(Res.string.total))
-                }
-                Column {
-                    QuoteHeaderValue(text = quote.displayNumberOrQuoteNumber)
-                    QuoteHeaderValue(text = if (createdAt.isBlank()) "-" else createdAt)
-                    QuoteHeaderValue(text = formatMoney(quote.totals?.total))
-                }
-
-            }
-
-        }
-        QuoteStatusBadge(
-            label = statusLabel,
-            textColor = statusTextColor,
-            backgroundColor = statusBackgroundColor
+private fun InfoRow(label: String, value: String, maxLines: Int = 1) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.SpaceBetween
+    ) {
+        Text(
+            text = label,
+            style = labelSmall(color = MaterialTheme.colorScheme.onSurfaceVariant),
+            modifier = Modifier.weight(0.4f)
+        )
+        Text(
+            text = value,
+            style = bodyMedium(),
+            textAlign = TextAlign.End,
+            maxLines = maxLines,
+            overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.weight(0.6f)
         )
     }
-}
-
-@Composable
-private fun QuoteHeaderLabel(text: String) {
-    Text(
-        maxLines = 1,
-        text = text,
-        style = TextStyle(
-            fontSize = 12.sp,
-            fontFamily = latoFontFamily(),
-            fontWeight = FontWeight(600),
-            color = Color(0xFF7C8988),
-        )
-    )
-    Spacer(modifier = Modifier.height(8.dp))
-}
-
-@Composable
-private fun QuoteHeaderValue(text: String) {
-    Text(
-        maxLines = 1,
-        modifier = Modifier.padding(top = 8.dp),
-        text = text,
-        style = TextStyle(
-            fontSize = 12.sp,
-            fontFamily = latoFontFamily(),
-            fontWeight = FontWeight(600),
-            color = Color(0xFF1A1A1A),
-        )
-    )
 }
 
 @Composable
 private fun QuoteDetailsItem(quoteLine: QuoteLine) {
-    Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)) {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween
-        ) {
-            Column(modifier = Modifier.weight(1f)) {
-                Text(
-                    maxLines = 2,
-                    overflow = TextOverflow.Ellipsis,
-                    text = quoteLine.itemName.orEmpty(),
-                    style = bodyMedium()
-                )
-                Text(
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                    text = formatMoney(quoteLine.unitPrice),
-                    style = bodySmall()
-                )
-            }
-            Spacer(modifier = Modifier.width(8.dp))
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.SpaceBetween
+    ) {
+        Column(modifier = Modifier.weight(1f)) {
             Text(
-                modifier = Modifier.padding(bottom = 4.dp),
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis,
+                text = quoteLine.itemName.orEmpty(),
+                style = bodyMedium()
+            )
+            Text(
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
-                text = "${formatQuantity(quoteLine.quantity)}x",
-                style = bodyMediumBold()
+                text = formatMoney(quoteLine.unitPrice),
+                style = labelSmall(color = MaterialTheme.colorScheme.onSurfaceVariant)
             )
         }
-    }
-}
-
-@Composable
-private fun QuoteSummaryRow(label: String, amount: String) {
-    Row(
-        modifier = Modifier.fillMaxWidth()
-            .padding(bottom = 4.dp, start = 16.dp, end = 16.dp),
-        horizontalArrangement = Arrangement.SpaceBetween
-    ) {
-        Text(text = label, style = bodyMedium())
-        Spacer(modifier = Modifier.weight(1f, fill = true))
-        Text(text = amount, style = bodyMedium())
-    }
-}
-
-@Composable
-private fun QuoteDetailRow(label: String, value: String) {
-    Row(
-        modifier = Modifier.fillMaxWidth()
-            .padding(bottom = 6.dp, start = 16.dp, end = 16.dp),
-        horizontalArrangement = Arrangement.SpaceBetween
-    ) {
-        Text(text = label, style = bodyMedium())
-        Spacer(modifier = Modifier.weight(1f, fill = true))
-        Text(text = value, style = bodyMedium())
+        Spacer(modifier = Modifier.width(8.dp))
+        Text(
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+            text = "${formatQuantity(quoteLine.quantity)}x",
+            style = bodyMediumBold()
+        )
     }
 }
 
