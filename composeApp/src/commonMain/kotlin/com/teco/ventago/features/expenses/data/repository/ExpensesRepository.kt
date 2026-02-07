@@ -38,7 +38,12 @@ class ExpensesRepository(
             if (response.error.isError()) {
                 throw BadRequestException(response.toJson())
             }
-            val dataObj = response.data?.jsonObject ?: JsonObject(emptyMap())
+            val dataObj = response.data as? JsonObject ?: return PagedExpenses(
+                expenses = emptyList(),
+                total = 0L,
+                page = request.page,
+                size = request.pageSize
+            )
             val expensesArray = dataObj["expenses"]?.jsonArray
             val expenses = expensesArray?.map { item ->
                 json.decodeFromJsonElement<Expense>(item)
@@ -73,9 +78,14 @@ class ExpensesRepository(
         }
     }
 
-    override suspend fun createExpense(businessId: Int, request: UpsertExpenseRequest): Expense {
+    override suspend fun createExpense(
+        businessId: Int,
+        request: UpsertExpenseRequest,
+        file: ExpenseProofFile?,
+        paymentProofFiles: List<ExpenseProofFile>
+    ): Expense {
         return try {
-            val response = provider.createExpense(businessId, request)
+            val response = provider.createExpense(businessId, request, file, paymentProofFiles)
             if (response.error.isError()) {
                 throw BadRequestException(response.toJson())
             }

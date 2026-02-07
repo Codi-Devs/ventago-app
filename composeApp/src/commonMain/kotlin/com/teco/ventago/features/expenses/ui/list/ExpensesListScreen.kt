@@ -196,9 +196,8 @@ fun ExpensesListScreen(
                 FilterChip(
                     selected = value in uiState.paymentStatuses,
                     onClick = {
-                        val current = uiState.paymentStatuses.toMutableList()
-                        if (value in current) current.remove(value) else current.add(value)
-                        viewModel.setPaymentStatuses(current)
+                        val isSelected = value in uiState.paymentStatuses
+                        viewModel.setPaymentStatuses(if (isSelected) emptyList() else listOf(value))
                         viewModel.applyFilters()
                     },
                     label = { Text(label) },

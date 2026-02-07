@@ -45,22 +45,18 @@ import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.teco.ventago.design_system.buttons.ButtonM
-import com.teco.ventago.design_system.buttons.SocialButton
 import com.teco.ventago.design_system.buttons.TextButtonS
-import com.teco.ventago.design_system.molecules.DMDivider
 import com.teco.ventago.design_system.organism.LoadingSheet
 import com.teco.ventago.design_system.textfields.DMOutlinedTextField
 import com.teco.ventago.design_system.theme.latoFontFamily
 import com.teco.ventago.features.auth.ui.login.viewmodel.LoginUiEvent
 import com.teco.ventago.features.auth.ui.login.viewmodel.LoginViewModel
 import com.teco.ventago.navigation.PosScreens
-import org.jetbrains.compose.resources.painterResource
 import org.jetbrains.compose.resources.stringResource
 import org.koin.compose.viewmodel.koinViewModel
 import ventago.composeapp.generated.resources.Forgot_password_ask
 import ventago.composeapp.generated.resources.Res
 import ventago.composeapp.generated.resources.cancel
-import ventago.composeapp.generated.resources.cancelled_google_login
 import ventago.composeapp.generated.resources.dont_have_account_ask
 import ventago.composeapp.generated.resources.email
 import ventago.composeapp.generated.resources.email_invalid
@@ -68,11 +64,8 @@ import ventago.composeapp.generated.resources.email_not_found
 import ventago.composeapp.generated.resources.error_no_internet
 import ventago.composeapp.generated.resources.error_try_later
 import ventago.composeapp.generated.resources.go_register
-import ventago.composeapp.generated.resources.google
-import ventago.composeapp.generated.resources.google_social_media
 import ventago.composeapp.generated.resources.invalid_sign_in
 import ventago.composeapp.generated.resources.login
-import ventago.composeapp.generated.resources.or
 import ventago.composeapp.generated.resources.password_too_short_login
 import ventago.composeapp.generated.resources.prompt_password
 import ventago.composeapp.generated.resources.register
@@ -92,7 +85,6 @@ fun LoginScreen(navigate: (PosScreens) -> Unit) {
 
     val showRegisterDialog = mutableStateOf(false)
 
-    val cancelledGoogleLoginMsg = stringResource(Res.string.cancelled_google_login)
     val invalidSignInMsg = stringResource(Res.string.invalid_sign_in)
     val genericErrorMsg = stringResource(Res.string.error_no_internet)
     val tryLaterMsg = stringResource(Res.string.error_try_later)
@@ -100,7 +92,7 @@ fun LoginScreen(navigate: (PosScreens) -> Unit) {
 
         viewModel.events.collect { event ->
             when (event) {
-                LoginUiEvent.CanceledGoogleLogin -> snackbarHostState.showSnackbar(cancelledGoogleLoginMsg)
+                LoginUiEvent.CanceledGoogleLogin -> Unit
                 LoginUiEvent.GenericError -> snackbarHostState.showSnackbar(genericErrorMsg)
                 LoginUiEvent.MakingLoginError -> snackbarHostState.showSnackbar(invalidSignInMsg)
                 LoginUiEvent.TryLater -> snackbarHostState.showSnackbar(tryLaterMsg)
@@ -183,19 +175,7 @@ fun LoginScreen(navigate: (PosScreens) -> Unit) {
 
             Spacer(modifier = Modifier.height(48.dp))
 
-            SocialButton(
-                stringResource(Res.string.google),
-                icon = painterResource(Res.drawable.google_social_media),
-                onClick = { viewModel.launchGoogleLogin() },
-            )
-
-            Spacer(modifier = Modifier.height(32.dp))
-
-            DMDivider(
-                label = stringResource(Res.string.or)
-            )
-
-            Spacer(modifier = Modifier.height(32.dp))
+            Spacer(modifier = Modifier.height(16.dp))
 
             DMOutlinedTextField(
                 text = uiState.email,
@@ -317,4 +297,3 @@ fun LoginScreen(navigate: (PosScreens) -> Unit) {
     }
 
 }
-

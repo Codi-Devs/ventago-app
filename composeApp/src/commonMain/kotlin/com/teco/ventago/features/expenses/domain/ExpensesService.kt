@@ -116,9 +116,13 @@ class ExpensesService(
         return repository.getExpense(businessId, expenseId)
     }
 
-    suspend fun createExpense(request: UpsertExpenseRequest): Expense {
+    suspend fun createExpense(
+        request: UpsertExpenseRequest,
+        file: ExpenseProofFile? = null,
+        paymentProofFiles: List<ExpenseProofFile> = emptyList()
+    ): Expense {
         val businessId = businessId() ?: throw IllegalStateException("No business selected")
-        return repository.createExpense(businessId, request)
+        return repository.createExpense(businessId, request, file, paymentProofFiles)
     }
 
     suspend fun updateExpense(expenseId: Long, request: UpsertExpenseRequest): Expense {

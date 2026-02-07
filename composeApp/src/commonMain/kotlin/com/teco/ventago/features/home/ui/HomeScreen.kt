@@ -310,9 +310,12 @@ fun HomeScreen(
             onClick = { navigate(PosScreens.Expenses) }
         ) {
             Box(modifier = Modifier.fillMaxSize()) {
-                Row(
-                    modifier = Modifier.fillMaxSize().padding(horizontal = 16.dp),
-                    verticalAlignment = Alignment.CenterVertically
+                Column(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(12.dp),
+                    verticalArrangement = Arrangement.Center,
+                    horizontalAlignment = Alignment.CenterHorizontally
                 ) {
                     Icon(
                         imageVector = Icons.Rounded.ReceiptLong,
@@ -320,16 +323,10 @@ fun HomeScreen(
                         tint = MaterialTheme.colorScheme.secondary,
                         modifier = Modifier.size(28.dp)
                     )
-                    Spacer(modifier = Modifier.width(12.dp))
+                    Spacer(modifier = Modifier.height(8.dp))
                     Text(
                         text = stringResource(Res.string.expenses),
                         style = bodyMediumBold(color = MaterialTheme.colorScheme.secondary)
-                    )
-                    Spacer(modifier = Modifier.weight(1f))
-                    Image(
-                        painter = painterResource(Res.drawable.ic_arrow_forward_ios),
-                        contentDescription = null,
-                        modifier = Modifier.size(16.dp)
                     )
                 }
 

@@ -3,11 +3,13 @@ package com.teco.ventago.features.expenses.ui.create
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.teco.ventago.core.camera.SharedImage
+import com.teco.ventago.core.file.SharedFile
 import com.teco.ventago.core.beta.BetaFeature
 import com.teco.ventago.core.beta.BetaService
 import com.teco.ventago.features.expenses.domain.ExpensesSelectionStore
 import com.teco.ventago.features.expenses.domain.ExpensesService
 import com.teco.ventago.features.expenses.domain.models.Expense
+import com.teco.ventago.features.expenses.domain.models.requests.ExpenseProofFile
 import com.teco.ventago.features.expenses.domain.models.requests.ExpenseItemRequest
 import com.teco.ventago.features.expenses.domain.models.requests.ExpensePartyRequest
 import com.teco.ventago.features.expenses.domain.models.requests.InitialExpensePaymentRequest
@@ -23,6 +25,7 @@ import kotlinx.coroutines.flow.launchIn
 import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import kotlin.math.abs
 
 class NewExpenseViewModel(
     private val expensesService: ExpensesService,
@@ -31,6 +34,8 @@ class NewExpenseViewModel(
 
     private val _uiState = MutableStateFlow(NewExpenseState())
     val uiState: StateFlow<NewExpenseState> = _uiState.asStateFlow()
+    private var localExpenseFile: ExpenseProofFile? = null
+    private var localInitialPaymentProofFile: ExpenseProofFile? = null
 
     init {
         viewModelScope.launch {
@@ -43,6 +48,7 @@ class NewExpenseViewModel(
     }
 
     fun initForCreate() {
+        clearTransientFiles()
         val businessName = expensesService.getBusinessName() ?: ""
         val businessRuc = expensesService.getBusinessRuc() ?: ""
         _uiState.value = NewExpenseState(
@@ -53,6 +59,7 @@ class NewExpenseViewModel(
     }
 
     fun initForEdit(expense: Expense) {
+        clearTransientFiles()
         val items = expense.items?.mapIndexed { _, item ->
             EditableExpenseItem(
                 description = item.description ?: "",
@@ -85,6 +92,7 @@ class NewExpenseViewModel(
     }
 
     fun initForDuplicate(expense: Expense) {
+        clearTransientFiles()
         val items = expense.items?.mapIndexed { _, item ->
             EditableExpenseItem(
                 description = item.description ?: "",
@@ -129,36 +137,127 @@ class NewExpenseViewModel(
 
     // File upload
     fun uploadFile(image: SharedImage) {
+        val imageData = image.toByteArray()
+        if (imageData == null) {
+            _uiState.value = _uiState.value.copy(hasSelectedFile = false)
+            return
+        }
+        uploadFile(
+            SharedFile(
+                bytes = imageData,
+                fileName = "expense_${randomUUID()}.jpg",
+                contentType = "image/jpeg"
+            )
+        )
+    }
+
+    fun uploadFile(file: SharedFile) {
+        val state = _uiState.value
+        if (!state.isEditMode) {
+            localExpenseFile = ExpenseProofFile(
+                bytes = file.bytes,
+                fileName = normalizeUploadName(file.fileName, file.contentType),
+                contentType = file.contentType
+            )
+            _uiState.value = state.copy(
+                localFileName = localExpenseFile?.fileName,
+                fileUrl = null,
+                hasSelectedFile = true,
+                isUploadingFile = false
+            )
+            return
+        }
+
         val businessId = expensesService.getBusinessId() ?: return
         viewModelScope.launch {
-            _uiState.value = _uiState.value.copy(isUploadingFile = true, hasSelectedFile = true)
+            _uiState.value = _uiState.value.copy(
+                isUploadingFile = true,
+                hasSelectedFile = true,
+                localFileName = file.fileName
+            )
             try {
-                val imageData = withContext(Dispatchers.Default) { image.toByteArray() }
-                if (imageData != null) {
-                    val fileName = "expense_${randomUUID()}.jpg"
-                    val url = withContext(Dispatchers.IO) {
-                        uploadImageToBunnyCdn(imageData, fileName, businessId.toString())
-                    }
-                    _uiState.value = _uiState.value.copy(fileUrl = url, isUploadingFile = false)
-                } else {
-                    _uiState.value = _uiState.value.copy(isUploadingFile = false, hasSelectedFile = false)
+                val safeFileName = normalizeUploadName(file.fileName, file.contentType)
+                val url = withContext(Dispatchers.IO) {
+                    uploadImageToBunnyCdn(file.bytes, safeFileName, businessId.toString())
                 }
+                _uiState.value = _uiState.value.copy(fileUrl = url, isUploadingFile = false, localFileName = null)
             } catch (e: Exception) {
-                _uiState.value = _uiState.value.copy(isUploadingFile = false, hasSelectedFile = false, error = e.message)
+                _uiState.value = _uiState.value.copy(
+                    isUploadingFile = false,
+                    hasSelectedFile = false,
+                    localFileName = null,
+                    error = e.message
+                )
             }
         }
     }
 
+    private fun normalizeUploadName(fileName: String, contentType: String): String {
+        val cleaned = fileName.substringAfterLast('/').substringAfterLast('\\').ifBlank {
+            "expense_${randomUUID()}"
+        }
+        if ('.' in cleaned) return cleaned
+        val extension = when (contentType.lowercase()) {
+            "application/pdf" -> "pdf"
+            "image/png" -> "png"
+            "image/webp" -> "webp"
+            else -> "jpg"
+        }
+        return "$cleaned.$extension"
+    }
+
     fun removeFile() {
-        _uiState.value = _uiState.value.copy(fileUrl = null, hasSelectedFile = false)
+        localExpenseFile = null
+        _uiState.value = _uiState.value.copy(
+            fileUrl = null,
+            localFileName = null,
+            hasSelectedFile = false
+        )
     }
 
     // Payment field setters
-    fun setIncludePayment(value: Boolean) { _uiState.value = _uiState.value.copy(includePayment = value) }
+    fun setIncludePayment(value: Boolean) {
+        if (!value) {
+            localInitialPaymentProofFile = null
+            _uiState.value = _uiState.value.copy(
+                includePayment = false,
+                initialPaymentProofName = null,
+                paymentAmount = "",
+                paymentDate = "",
+                paymentDueDate = ""
+            )
+            return
+        }
+        val totalAmount = getTotalAmount()
+        _uiState.value = _uiState.value.copy(
+            includePayment = true,
+            paymentAmount = formatAmountForInput(totalAmount).takeIf { totalAmount > 0.0 } ?: ""
+        )
+    }
     fun setPaymentAmount(value: String) { _uiState.value = _uiState.value.copy(paymentAmount = value) }
-    fun setPaymentMethodForPayment(value: String) { _uiState.value = _uiState.value.copy(paymentMethodForPayment = value) }
+    fun setPaymentMethodForPayment(value: String) {
+        if (value == "credit") {
+            localInitialPaymentProofFile = null
+            _uiState.value = _uiState.value.copy(paymentMethodForPayment = value, initialPaymentProofName = null)
+            return
+        }
+        _uiState.value = _uiState.value.copy(paymentMethodForPayment = value)
+    }
     fun setPaymentDate(value: String) { _uiState.value = _uiState.value.copy(paymentDate = value) }
     fun setPaymentDueDate(value: String) { _uiState.value = _uiState.value.copy(paymentDueDate = value) }
+    fun uploadInitialPaymentProof(file: SharedFile) {
+        localInitialPaymentProofFile = ExpenseProofFile(
+            bytes = file.bytes,
+            fileName = normalizeUploadName(file.fileName, file.contentType),
+            contentType = file.contentType
+        )
+        _uiState.value = _uiState.value.copy(initialPaymentProofName = localInitialPaymentProofFile?.fileName)
+    }
+
+    fun removeInitialPaymentProof() {
+        localInitialPaymentProofFile = null
+        _uiState.value = _uiState.value.copy(initialPaymentProofName = null)
+    }
 
     // Item management
     fun updateItem(index: Int, item: EditableExpenseItem) {
@@ -183,13 +282,28 @@ class NewExpenseViewModel(
     }
 
     // Computed totals
-    fun getSubtotal(): Double = _uiState.value.items.sumOf { it.subtotalValue }
-    fun getItbmsTotal(): Double = _uiState.value.items.sumOf { it.itbmsAmount.toDoubleOrNull() ?: 0.0 }
-    fun getTotalAmount(): Double = _uiState.value.items.sumOf { it.totalValue }
+    fun getSubtotal(): Double = _uiState.value.items.sumOf { item ->
+        val qty = parseDecimal(item.quantity) ?: 0.0
+        val unitPrice = parseDecimal(item.unitPrice) ?: 0.0
+        val discount = parseDecimal(item.discountAmount) ?: 0.0
+        (qty * unitPrice) - discount
+    }
+
+    fun getItbmsTotal(): Double = _uiState.value.items.sumOf { item ->
+        parseDecimal(item.itbmsAmount) ?: 0.0
+    }
+
+    fun getTotalAmount(): Double = getSubtotal() + getItbmsTotal()
 
     fun submit() {
         val state = _uiState.value
         val businessId = expensesService.getBusinessId() ?: return
+
+        val validationError = validateBeforeSubmit(state)
+        if (validationError != null) {
+            _uiState.value = state.copy(error = validationError)
+            return
+        }
 
         viewModelScope.launch {
             _uiState.value = state.copy(isSubmitting = true, error = null)
@@ -199,7 +313,16 @@ class NewExpenseViewModel(
                     if (state.isEditMode && state.editingExpenseId != null) {
                         expensesService.updateExpense(state.editingExpenseId, request)
                     } else {
-                        expensesService.createExpense(request)
+                        val initialProofs = if (state.includePayment && state.paymentMethodForPayment != "credit") {
+                            localInitialPaymentProofFile?.let(::listOf).orEmpty()
+                        } else {
+                            emptyList()
+                        }
+                        expensesService.createExpense(
+                            request = request,
+                            file = localExpenseFile,
+                            paymentProofFiles = initialProofs
+                        )
                     }
                 }
                 _uiState.value = _uiState.value.copy(isSubmitting = false, isSuccess = true)
@@ -215,20 +338,26 @@ class NewExpenseViewModel(
         } else null
 
         val items = state.items.mapIndexed { index, item ->
+            val quantity = parseDecimal(item.quantity) ?: 0.0
+            val unitPrice = parseDecimal(item.unitPrice) ?: 0.0
+            val discountAmount = parseDecimal(item.discountAmount) ?: 0.0
+            val itbmsAmount = parseDecimal(item.itbmsAmount) ?: 0.0
+            val subtotal = (quantity * unitPrice) - discountAmount
+            val total = subtotal + itbmsAmount
             ExpenseItemRequest(
                 lineNumber = index + 1,
                 description = item.description,
-                quantity = item.quantity.toDoubleOrNull() ?: 0.0,
-                unitPrice = item.unitPrice.toDoubleOrNull() ?: 0.0,
-                discountAmount = item.discountAmount.toDoubleOrNull() ?: 0.0,
-                subtotal = item.subtotalValue,
-                itbmsAmount = item.itbmsAmount.toDoubleOrNull() ?: 0.0,
-                total = item.totalValue
+                quantity = quantity,
+                unitPrice = unitPrice,
+                discountAmount = discountAmount,
+                subtotal = subtotal,
+                itbmsAmount = itbmsAmount,
+                total = total
             )
         }
 
         val payment = if (!state.isEditMode && state.includePayment) {
-            val payAmount = state.paymentAmount.toDoubleOrNull()
+            val payAmount = parseDecimal(state.paymentAmount)
             if (payAmount != null && payAmount > 0) {
                 InitialExpensePaymentRequest(
                     paymentMethod = state.paymentMethodForPayment,
@@ -256,7 +385,11 @@ class NewExpenseViewModel(
             invoiceNumber = state.invoiceNumber.takeIf { it.isNotBlank() },
             cufe = state.cufe.takeIf { it.isNotBlank() },
             emissionDate = emissionDateApi,
-            paymentMethod = state.paymentMethod.takeIf { it.isNotBlank() },
+            paymentMethod = when {
+                state.isEditMode -> state.paymentMethod.takeIf { it.isNotBlank() }
+                state.includePayment -> state.paymentMethodForPayment.takeIf { it.isNotBlank() }
+                else -> null
+            },
             issuer = ExpensePartyRequest(
                 name = state.issuerName,
                 ruc = state.issuerRuc.takeIf { it.isNotBlank() },
@@ -273,9 +406,92 @@ class NewExpenseViewModel(
             itbmsTotal = getItbmsTotal(),
             totalAmount = getTotalAmount(),
             notes = state.notes.takeIf { it.isNotBlank() },
-            fileUrl = state.fileUrl,
+            fileUrl = if (state.isEditMode) state.fileUrl else null,
             removeFile = if (state.isEditMode && state.originalFileUrl != null && state.fileUrl == null) true else null,
             payment = payment
         )
+    }
+
+    private fun clearTransientFiles() {
+        localExpenseFile = null
+        localInitialPaymentProofFile = null
+    }
+
+    private fun validateBeforeSubmit(state: NewExpenseState): String? {
+        if (state.issuerName.isBlank()) {
+            return "El nombre del emisor es requerido"
+        }
+
+        if (state.items.isEmpty()) {
+            return "Debe agregar al menos un artículo"
+        }
+
+        state.items.forEachIndexed { index, item ->
+            val label = "artículo ${index + 1}"
+            if (item.description.isBlank()) {
+                return "La descripción del $label es requerida"
+            }
+
+            val quantity = parseDecimal(item.quantity)
+            if (quantity == null || quantity <= 0.0) {
+                return "La cantidad del $label debe ser un número mayor a 0"
+            }
+
+            val unitPrice = parseDecimal(item.unitPrice)
+            if (unitPrice == null || unitPrice < 0.0) {
+                return "El precio unitario del $label debe ser un número válido"
+            }
+
+            val discount = parseDecimal(item.discountAmount)
+            if (discount == null || discount < 0.0) {
+                return "El descuento del $label debe ser un número válido"
+            }
+
+            val itbms = parseDecimal(item.itbmsAmount)
+            if (itbms == null || itbms < 0.0) {
+                return "El ITBMS del $label debe ser un número válido"
+            }
+        }
+
+        val totalAmount = getTotalAmount()
+        if (totalAmount <= 0.0) {
+            return "El total del gasto debe ser mayor a 0"
+        }
+
+        if (!state.isEditMode && state.includePayment) {
+            val amount = parseDecimal(state.paymentAmount)
+            if (amount == null || amount <= 0.0) {
+                return "El monto del pago inicial debe ser un número válido"
+            }
+            if (amount - totalAmount > 0.0001) {
+                return "El monto del pago inicial no puede exceder el total del gasto"
+            }
+
+            if (state.paymentMethodForPayment == "credit") {
+                if (state.paymentDueDate.isBlank()) {
+                    return "La fecha de vencimiento es requerida para pagos a crédito"
+                }
+            } else {
+                if (state.paymentDate.isBlank()) {
+                    return "La fecha de pago es requerida para el pago inicial"
+                }
+            }
+        }
+
+        return null
+    }
+
+    private fun parseDecimal(value: String): Double? {
+        val normalized = value.trim().replace(",", ".")
+        return normalized.toDoubleOrNull()
+    }
+
+    private fun formatAmountForInput(value: Double): String {
+        val rounded = kotlin.math.round(value * 100.0) / 100.0
+        return if (abs(rounded % 1.0) < 0.000001) {
+            rounded.toInt().toString()
+        } else {
+            rounded.toString()
+        }
     }
 }

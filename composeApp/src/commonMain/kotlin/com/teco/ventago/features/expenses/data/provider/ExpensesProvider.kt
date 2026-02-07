@@ -86,20 +86,61 @@ class ExpensesProvider(
         return handleAuth(response, res.status) { getExpense(businessId, expenseId) }
     }
 
-    override suspend fun createExpense(businessId: Int, request: UpsertExpenseRequest): ApiResponse {
+    override suspend fun createExpense(
+        businessId: Int,
+        request: UpsertExpenseRequest,
+        file: ExpenseProofFile?,
+        paymentProofFiles: List<ExpenseProofFile>
+    ): ApiResponse {
         val res = client.post(Configs.ordersBasePath + "/api/v1/expenses/create") {
             headers {
                 append(HttpHeaders.Accept, "*/*")
                 append(HttpHeaders.Authorization, "Bearer ${authService.getJwtToken()}")
-                append(HttpHeaders.ContentType, "application/json")
                 append("X-Business-ID", "$businessId")
             }
-            contentType(ContentType.Application.Json)
-            setBody(request)
+
+            val hasMultipartFiles = file != null || paymentProofFiles.isNotEmpty()
+            if (hasMultipartFiles) {
+                // Remove default app-wide JSON content type so multipart can set boundary correctly.
+                headers { remove(HttpHeaders.ContentType) }
+                setBody(
+                    MultiPartFormDataContent(
+                        formData {
+                            append("payload", json.encodeToString(request))
+                            if (file != null) {
+                                append(
+                                    key = "file",
+                                    value = file.bytes,
+                                    headers = Headers.build {
+                                        append(HttpHeaders.ContentDisposition, "filename=\"${file.fileName}\"")
+                                        append(HttpHeaders.ContentType, file.contentType)
+                                    }
+                                )
+                            }
+                            paymentProofFiles.forEachIndexed { index, proof ->
+                                append(
+                                    key = "proof_file_$index",
+                                    value = proof.bytes,
+                                    headers = Headers.build {
+                                        append(HttpHeaders.ContentDisposition, "filename=\"${proof.fileName}\"")
+                                        append(HttpHeaders.ContentType, proof.contentType)
+                                    }
+                                )
+                            }
+                        }
+                    )
+                )
+            } else {
+                headers {
+                    append(HttpHeaders.ContentType, "application/json")
+                }
+                contentType(ContentType.Application.Json)
+                setBody(request)
+            }
         }
         val body = res.body<JsonObject>()
         val response = ApiResponse.fromJson(body)
-        return handleAuth(response, res.status) { createExpense(businessId, request) }
+        return handleAuth(response, res.status) { createExpense(businessId, request, file, paymentProofFiles) }
     }
 
     override suspend fun updateExpense(businessId: Int, expenseId: Long, request: UpsertExpenseRequest): ApiResponse {

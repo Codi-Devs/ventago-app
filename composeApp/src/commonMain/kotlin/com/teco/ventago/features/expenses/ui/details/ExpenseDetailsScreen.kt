@@ -72,6 +72,7 @@ import com.teco.ventago.core.camera.PermissionType
 import com.teco.ventago.core.camera.createPermissionsManager
 import com.teco.ventago.core.camera.rememberCameraManager
 import com.teco.ventago.core.camera.rememberGalleryManager
+import com.teco.ventago.core.file.rememberDocumentPickerManager
 import com.teco.ventago.design_system.buttons.ButtonM
 import com.teco.ventago.design_system.buttons.OutlinedButtonM
 import com.teco.ventago.design_system.loaders.shimmerBrush
@@ -812,13 +813,9 @@ private fun PaymentRow(
     onDownloadProof: (String) -> Unit
 ) {
     val dateDisplay = payment.paymentDate?.let {
-        runCatching {
-            getFormattedDate(it, "yyyy-MM-dd'T'HH:mm:ss", "dd/MM/yyyy HH:mm")
-        }.getOrDefault(it.take(10))
+        formatPaymentDateTime(it)
     } ?: payment.dueDate?.let {
-        runCatching {
-            "Vence: ${getFormattedDate(it, "yyyy-MM-dd'T'HH:mm:ss", "dd/MM/yyyy HH:mm")}"
-        }.getOrDefault("Vence: ${it.take(10)}")
+        "Vence: ${formatPaymentDateTime(it)}"
     } ?: ""
 
     val statusColor = when (payment.paymentStatus) {
@@ -929,6 +926,32 @@ private fun PaymentRow(
                 }
             }
         }
+    }
+}
+
+private fun formatPaymentDateTime(raw: String): String {
+    val normalized = raw.trim()
+    val inputFormats = listOf(
+        "yyyy-MM-dd'T'HH:mm:ss.SSSSSSXXX",
+        "yyyy-MM-dd'T'HH:mm:ss.SSSXXX",
+        "yyyy-MM-dd'T'HH:mm:ssXXX",
+        "yyyy-MM-dd'T'HH:mm:ss.SSSSSS'Z'",
+        "yyyy-MM-dd'T'HH:mm:ss.SSS'Z'",
+        "yyyy-MM-dd'T'HH:mm:ss'Z'",
+        "yyyy-MM-dd'T'HH:mm:ss"
+    )
+
+    inputFormats.forEach { format ->
+        val formatted = runCatching {
+            getFormattedDate(normalized, format, "dd/MM/yyyy HH:mm")
+        }.getOrNull()
+        if (formatted != null) return formatted
+    }
+
+    return when {
+        normalized.length >= 16 -> normalized.take(16).replace('T', ' ')
+        normalized.length >= 10 -> normalized.take(10)
+        else -> normalized
     }
 }
 
@@ -1452,6 +1475,7 @@ private fun ProofFileSection(
 ) {
     var launchCamera by remember { mutableStateOf(false) }
     var launchGallery by remember { mutableStateOf(false) }
+    var launchDocument by remember { mutableStateOf(false) }
     var launchSetting by remember { mutableStateOf(false) }
 
     val permissionsManager = createPermissionsManager(object : PermissionCallback {
@@ -1494,6 +1518,19 @@ private fun ProofFileSection(
             }
         }
     }
+    val documentManager = rememberDocumentPickerManager(
+        acceptedMimeTypes = listOf("application/pdf")
+    ) { file ->
+        if (file != null) {
+            onFileSelected(
+                ExpenseProofFile(
+                    bytes = file.bytes,
+                    fileName = file.fileName,
+                    contentType = file.contentType
+                )
+            )
+        }
+    }
 
     if (launchGallery) {
         if (permissionsManager.isPermissionGranted(PermissionType.GALLERY)) {
@@ -1514,6 +1551,10 @@ private fun ProofFileSection(
     if (launchSetting) {
         permissionsManager.launchSettings()
         launchSetting = false
+    }
+    if (launchDocument) {
+        documentManager.launch()
+        launchDocument = false
     }
 
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -1575,6 +1616,18 @@ private fun ProofFileSection(
                     )
                     Spacer(modifier = Modifier.width(4.dp))
                     Text("Galería")
+                }
+                OutlinedButtonM(
+                    onClick = { launchDocument = true },
+                    modifier = Modifier.weight(1f)
+                ) {
+                    Icon(
+                        imageVector = Icons.Rounded.Description,
+                        contentDescription = null,
+                        modifier = Modifier.size(18.dp)
+                    )
+                    Spacer(modifier = Modifier.width(4.dp))
+                    Text("PDF")
                 }
             }
         }

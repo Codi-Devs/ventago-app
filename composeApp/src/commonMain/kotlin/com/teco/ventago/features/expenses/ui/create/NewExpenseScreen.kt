@@ -1,5 +1,6 @@
 package com.teco.ventago.features.expenses.ui.create
 
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -16,9 +17,11 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Add
-import androidx.compose.material.icons.rounded.AttachFile
+import androidx.compose.material.icons.rounded.CameraAlt
 import androidx.compose.material.icons.rounded.CheckCircle
 import androidx.compose.material.icons.rounded.Close
+import androidx.compose.material.icons.rounded.Collections
+import androidx.compose.material.icons.rounded.Description
 import androidx.compose.material.icons.rounded.KeyboardArrowDown
 import androidx.compose.material.icons.rounded.KeyboardArrowUp
 import androidx.compose.material3.Card
@@ -41,13 +44,18 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.teco.ventago.design_system.buttons.ButtonM
 import com.teco.ventago.design_system.buttons.OutlinedButtonM
 import com.teco.ventago.design_system.buttons.TextButtonS
+import com.teco.ventago.design_system.molecules.InstallmentDueDateFieldKmp
 import com.teco.ventago.design_system.textfields.DMOutlinedTextField
 import com.teco.ventago.design_system.textfields.helpers.DMDropDownField
+import com.teco.ventago.core.file.SharedFile
+import com.teco.ventago.core.file.rememberDocumentPickerManager
 import com.teco.ventago.features.expenses.domain.models.PaymentMethod
 import com.teco.ventago.design_system.theme.bodyMedium
 import com.teco.ventago.design_system.theme.bodyMediumBold
@@ -63,6 +71,12 @@ import com.teco.ventago.core.camera.rememberGalleryManager
 import com.teco.ventago.features.expenses.domain.ExpensesSelectionStore
 import com.teco.ventago.utils.formatNumberToMoney
 import kotlinx.coroutines.launch
+import kotlinx.datetime.Clock
+import kotlinx.datetime.DatePeriod
+import kotlinx.datetime.LocalDate
+import kotlinx.datetime.TimeZone
+import kotlinx.datetime.plus
+import kotlinx.datetime.toLocalDateTime
 
 @Composable
 fun NewExpenseScreen(
@@ -72,6 +86,8 @@ fun NewExpenseScreen(
     onBack: () -> Unit
 ) {
     val uiState by viewModel.uiState.collectAsState()
+    val today = remember { currentLocalDate() }
+    val tomorrow = remember(today) { today.plus(DatePeriod(days = 1)) }
     val isManualRegistration = !uiState.isEditMode && !isDuplicateMode
     var invoiceInfoExpanded by remember(isManualRegistration) { mutableStateOf(true) }
     var issuerExpanded by remember(isManualRegistration) { mutableStateOf(!isManualRegistration) }
@@ -122,16 +138,12 @@ fun NewExpenseScreen(
                 onChange = { viewModel.setCufe(it) }
             )
             Spacer(modifier = Modifier.height(8.dp))
-            DMOutlinedTextField(
-                text = uiState.emissionDate,
-                label = "Fecha de emisión (YYYY-MM-DD)",
+            InstallmentDueDateFieldKmp(
+                valueIso = uiState.emissionDate,
+                onDatePickedIso = { viewModel.setEmissionDate(it) },
+                label = "Fecha de emisión",
                 modifier = Modifier,
-                onChange = { viewModel.setEmissionDate(it) }
-            )
-            Spacer(modifier = Modifier.height(8.dp))
-            PaymentMethodSelector(
-                selected = uiState.paymentMethod,
-                onSelect = { viewModel.setPaymentMethod(it) }
+                maxSelectableDate = today
             )
         }
 
@@ -238,8 +250,26 @@ fun NewExpenseScreen(
                 expanded = fileExpanded,
                 onExpandedChange = { fileExpanded = it }
             ) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(bottom = 8.dp),
+                    horizontalArrangement = Arrangement.Start
+                ) {
+                    Text(
+                        text = "Gratis por tiempo limitado",
+                        style = labelSmall(color = MaterialTheme.colorScheme.secondary),
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(50))
+                            .background(MaterialTheme.colorScheme.secondaryContainer)
+                            .padding(horizontal = 10.dp, vertical = 4.dp),
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                }
                 FileUploadCard(
                     fileUrl = uiState.fileUrl,
+                    selectedLocalFileName = uiState.localFileName,
                     isUploading = uiState.isUploadingFile,
                     onFileSelected = { viewModel.uploadFile(it) },
                     onRemove = { viewModel.removeFile() }
@@ -282,19 +312,36 @@ fun NewExpenseScreen(
                     )
                     Spacer(modifier = Modifier.height(8.dp))
                     if (uiState.paymentMethodForPayment == "credit") {
-                        DMOutlinedTextField(
-                            text = uiState.paymentDueDate,
-                            label = "Fecha de vencimiento (YYYY-MM-DD)",
+                        InstallmentDueDateFieldKmp(
+                            valueIso = uiState.paymentDueDate,
+                            onDatePickedIso = { viewModel.setPaymentDueDate(it) },
+                            label = "Fecha de vencimiento",
                             modifier = Modifier,
-                            onChange = { viewModel.setPaymentDueDate(it) }
+                            minSelectableDate = tomorrow
                         )
                     } else {
-                        DMOutlinedTextField(
-                            text = uiState.paymentDate,
-                            label = "Fecha de pago (YYYY-MM-DD)",
+                        InstallmentDueDateFieldKmp(
+                            valueIso = uiState.paymentDate,
+                            onDatePickedIso = { viewModel.setPaymentDate(it) },
+                            label = "Fecha de pago",
                             modifier = Modifier,
-                            onChange = { viewModel.setPaymentDate(it) }
+                            maxSelectableDate = today
                         )
+                        if (uiState.hasExpensesQr) {
+                            Spacer(modifier = Modifier.height(8.dp))
+                            Text(
+                                text = "Comprobante de pago (opcional)",
+                                style = labelSmall(color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            )
+                            Spacer(modifier = Modifier.height(6.dp))
+                            FileUploadCard(
+                                fileUrl = null,
+                                selectedLocalFileName = uiState.initialPaymentProofName,
+                                isUploading = false,
+                                onFileSelected = { viewModel.uploadInitialPaymentProof(it) },
+                                onRemove = { viewModel.removeInitialPaymentProof() }
+                            )
+                        }
                     }
                 }
             }
@@ -482,27 +529,6 @@ private fun TotalsRow(label: String, value: String, bold: Boolean = false) {
 }
 
 @Composable
-private fun PaymentMethodSelector(
-    selected: String,
-    onSelect: (String) -> Unit
-) {
-    val allMethods = remember { PaymentMethod.getAllMethods() }
-    val selectedIndex = allMethods.indexOfFirst { it.value == selected }.takeIf { it >= 0 } ?: -1
-
-    DMDropDownField(
-        modifier = Modifier.fillMaxWidth(),
-        label = "Método de pago",
-        notSetLabel = "Seleccionar método",
-        items = allMethods,
-        selectedIndex = selectedIndex,
-        onItemSelected = { _, item ->
-            onSelect(item.value)
-        },
-        selectedItemToString = { it.label }
-    )
-}
-
-@Composable
 private fun InitialPaymentMethodSelector(
     selected: String,
     onSelect: (String) -> Unit
@@ -525,12 +551,14 @@ private fun InitialPaymentMethodSelector(
 @Composable
 private fun FileUploadCard(
     fileUrl: String?,
+    selectedLocalFileName: String?,
     isUploading: Boolean,
-    onFileSelected: (com.teco.ventago.core.camera.SharedImage) -> Unit,
+    onFileSelected: (SharedFile) -> Unit,
     onRemove: () -> Unit
 ) {
     var launchCamera by remember { mutableStateOf(false) }
     var launchGallery by remember { mutableStateOf(false) }
+    var launchDocument by remember { mutableStateOf(false) }
     var launchSetting by remember { mutableStateOf(false) }
 
     val permissionsManager = createPermissionsManager(object : PermissionCallback {
@@ -547,10 +575,41 @@ private fun FileUploadCard(
 
     val scope = rememberCoroutineScope()
     val cameraManager = rememberCameraManager { image ->
-        scope.launch { if (image != null) onFileSelected(image) }
+        scope.launch {
+            val bytes = image?.toByteArray()
+            if (bytes != null) {
+                onFileSelected(
+                    SharedFile(
+                        bytes = bytes,
+                        fileName = "expense_${com.teco.ventago.utils.randomUUID()}.jpg",
+                        contentType = "image/jpeg"
+                    )
+                )
+            }
+        }
     }
     val galleryManager = rememberGalleryManager { image ->
-        scope.launch { if (image != null) onFileSelected(image) }
+        scope.launch {
+            val bytes = image?.toByteArray()
+            if (bytes != null) {
+                onFileSelected(
+                    SharedFile(
+                        bytes = bytes,
+                        fileName = "expense_${com.teco.ventago.utils.randomUUID()}.jpg",
+                        contentType = "image/jpeg"
+                    )
+                )
+            }
+        }
+    }
+    val documentManager = rememberDocumentPickerManager(
+        acceptedMimeTypes = listOf("application/pdf")
+    ) { file ->
+        scope.launch {
+            if (file != null) {
+                onFileSelected(file)
+            }
+        }
     }
 
     if (launchGallery) {
@@ -573,6 +632,10 @@ private fun FileUploadCard(
         permissionsManager.launchSettings()
         launchSetting = false
     }
+    if (launchDocument) {
+        documentManager.launch()
+        launchDocument = false
+    }
 
     Column {
         if (isUploading) {
@@ -585,7 +648,7 @@ private fun FileUploadCard(
                 Spacer(modifier = Modifier.width(8.dp))
                 Text("Subiendo archivo...", style = bodyMedium())
             }
-        } else if (fileUrl != null) {
+        } else if (fileUrl != null || selectedLocalFileName != null) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 verticalAlignment = Alignment.CenterVertically,
@@ -599,7 +662,7 @@ private fun FileUploadCard(
                         modifier = Modifier.size(20.dp)
                     )
                     Spacer(modifier = Modifier.width(8.dp))
-                    Text("Archivo adjunto", style = bodyMedium())
+                    Text(selectedLocalFileName ?: "Archivo adjunto", style = bodyMedium())
                 }
                 IconButton(onClick = onRemove, modifier = Modifier.size(28.dp)) {
                     Icon(
@@ -620,7 +683,7 @@ private fun FileUploadCard(
                     modifier = Modifier.weight(1f)
                 ) {
                     Icon(
-                        imageVector = Icons.Rounded.AttachFile,
+                        imageVector = Icons.Rounded.CameraAlt,
                         contentDescription = null,
                         modifier = Modifier.size(18.dp)
                     )
@@ -632,14 +695,29 @@ private fun FileUploadCard(
                     modifier = Modifier.weight(1f)
                 ) {
                     Icon(
-                        imageVector = Icons.Rounded.AttachFile,
+                        imageVector = Icons.Rounded.Collections,
                         contentDescription = null,
                         modifier = Modifier.size(18.dp)
                     )
                     Spacer(modifier = Modifier.width(4.dp))
                     Text("Galería")
                 }
+                OutlinedButtonM(
+                    onClick = { launchDocument = true },
+                    modifier = Modifier.weight(1f)
+                ) {
+                    Icon(
+                        imageVector = Icons.Rounded.Description,
+                        contentDescription = null,
+                        modifier = Modifier.size(18.dp)
+                    )
+                    Spacer(modifier = Modifier.width(4.dp))
+                    Text("PDF")
+                }
             }
         }
     }
 }
+
+private fun currentLocalDate(): LocalDate =
+    Clock.System.now().toLocalDateTime(TimeZone.currentSystemDefault()).date

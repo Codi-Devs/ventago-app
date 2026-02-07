@@ -13,7 +13,12 @@ import com.teco.ventago.features.expenses.domain.models.requests.UpsertExpensePa
 interface IExpensesRepository {
     suspend fun listExpenses(businessId: Int, request: ListExpensesRequest): PagedExpenses
     suspend fun getExpense(businessId: Int, expenseId: Long): Expense
-    suspend fun createExpense(businessId: Int, request: UpsertExpenseRequest): Expense
+    suspend fun createExpense(
+        businessId: Int,
+        request: UpsertExpenseRequest,
+        file: ExpenseProofFile? = null,
+        paymentProofFiles: List<ExpenseProofFile> = emptyList()
+    ): Expense
     suspend fun updateExpense(businessId: Int, expenseId: Long, request: UpsertExpenseRequest): Expense
     suspend fun deleteExpense(businessId: Int, expenseId: Long): Boolean
 

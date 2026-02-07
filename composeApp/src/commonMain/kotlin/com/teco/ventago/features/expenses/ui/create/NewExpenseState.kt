@@ -37,9 +37,11 @@ data class NewExpenseState(
 
     // Invoice file
     val fileUrl: String? = null,
+    val localFileName: String? = null,
     val originalFileUrl: String? = null,
     val isUploadingFile: Boolean = false,
     val hasSelectedFile: Boolean = false,
+    val initialPaymentProofName: String? = null,
 
     // Submission
     val isSubmitting: Boolean = false,

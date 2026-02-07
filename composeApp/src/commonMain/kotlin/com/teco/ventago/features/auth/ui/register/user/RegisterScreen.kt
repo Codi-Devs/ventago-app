@@ -39,36 +39,25 @@ import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.navigation.NavOptions
 import com.teco.ventago.core.SnackbarService
 import com.teco.ventago.design_system.buttons.ButtonM
-import com.teco.ventago.design_system.buttons.SocialButton
-import com.teco.ventago.design_system.molecules.DMDivider
-import com.teco.ventago.design_system.organism.LoadingBottomSheet
 import com.teco.ventago.design_system.organism.LoadingSheet
 import com.teco.ventago.design_system.textfields.DMOutlinedTextField
 import com.teco.ventago.design_system.theme.latoFontFamily
-import com.teco.ventago.features.auth.ui.login.viewmodel.LoginUiEvent
-import com.teco.ventago.features.auth.ui.login.viewmodel.LoginViewModel
 import com.teco.ventago.features.auth.ui.register.user.viewmodel.RegisterUiEvent
 import com.teco.ventago.features.auth.ui.register.user.viewmodel.RegisterViewModel
 import com.teco.ventago.navigation.PosScreens
-import org.jetbrains.compose.resources.painterResource
 import org.jetbrains.compose.resources.stringResource
 import org.koin.compose.koinInject
 import org.koin.compose.viewmodel.koinViewModel
 import ventago.composeapp.generated.resources.Res
 import ventago.composeapp.generated.resources.already_have_account
-import ventago.composeapp.generated.resources.cancelled_google_login
 import ventago.composeapp.generated.resources.email
 import ventago.composeapp.generated.resources.email_invalid
 import ventago.composeapp.generated.resources.error_no_internet
 import ventago.composeapp.generated.resources.error_try_later
-import ventago.composeapp.generated.resources.google
-import ventago.composeapp.generated.resources.google_social_media
 import ventago.composeapp.generated.resources.login
 import ventago.composeapp.generated.resources.name
-import ventago.composeapp.generated.resources.or
 import ventago.composeapp.generated.resources.password_too_short_login
 import ventago.composeapp.generated.resources.prompt_password
 import ventago.composeapp.generated.resources.register
@@ -173,14 +162,13 @@ fun RegisterScreen(
         }
         pop()
     }
-    val cancelledGoogleLoginMsg = stringResource(Res.string.cancelled_google_login)
     val genericErrorMsg = stringResource(Res.string.error_no_internet)
     val tryLaterMsg = stringResource(Res.string.error_try_later)
 
     LaunchedEffect(Unit) {
         viewModel.events.collect { event ->
             when (event) {
-                RegisterUiEvent.CanceledGoogleLogin -> snackbarService.show(cancelledGoogleLoginMsg)
+                RegisterUiEvent.CanceledGoogleLogin -> Unit
                 RegisterUiEvent.GenericError -> snackbarService.show(genericErrorMsg)
                 RegisterUiEvent.MakingLoginError -> snackbarService.show(tryLaterMsg)
                 RegisterUiEvent.TryLater -> snackbarService.show(tryLaterMsg)
@@ -226,19 +214,7 @@ fun RegisterScreen(
             )
         )
 
-        SocialButton(
-            stringResource(Res.string.google),
-            modifier = Modifier.padding(bottom = 26.dp),
-            icon = painterResource(Res.drawable.google_social_media),
-            onClick = {
-                viewModel.launchGoogleLogin()
-            },
-        )
-
-        DMDivider(
-            modifier = Modifier.padding(bottom = 24.dp),
-            label = stringResource(Res.string.or)
-        )
+        Spacer(modifier = Modifier.height(8.dp))
 
         DMOutlinedTextField(
             text = uiState.name,

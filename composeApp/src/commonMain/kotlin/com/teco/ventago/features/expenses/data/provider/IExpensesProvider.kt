@@ -9,7 +9,12 @@ import com.teco.ventago.utils.ApiResponse
 interface IExpensesProvider {
     suspend fun listExpenses(businessId: Int, request: ListExpensesRequest): ApiResponse
     suspend fun getExpense(businessId: Int, expenseId: Long): ApiResponse
-    suspend fun createExpense(businessId: Int, request: UpsertExpenseRequest): ApiResponse
+    suspend fun createExpense(
+        businessId: Int,
+        request: UpsertExpenseRequest,
+        file: ExpenseProofFile? = null,
+        paymentProofFiles: List<ExpenseProofFile> = emptyList()
+    ): ApiResponse
     suspend fun updateExpense(businessId: Int, expenseId: Long, request: UpsertExpenseRequest): ApiResponse
     suspend fun deleteExpense(businessId: Int, expenseId: Long): ApiResponse
 
