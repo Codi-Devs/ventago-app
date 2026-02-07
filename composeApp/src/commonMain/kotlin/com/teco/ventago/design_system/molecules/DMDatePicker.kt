@@ -3,15 +3,12 @@ package com.teco.ventago.design_system.molecules
 import androidx.compose.foundation.clickable
 import com.teco.ventago.design_system.textfields.DMOutlinedTextField
 
-import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.CalendarMonth
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
@@ -20,14 +17,13 @@ import kotlinx.datetime.Clock
 import kotlinx.datetime.LocalDate
 import kotlinx.datetime.TimeZone
 import kotlinx.datetime.toLocalDateTime
-import kotlin.math.max
 
 // --- tiny helpers ---
 private fun todayLocalDate(): LocalDate =
     Clock.System.now().toLocalDateTime(TimeZone.currentSystemDefault()).date
 
 private fun LocalDate.toIso(): String =
-    "$year-$monthNumber-$dayOfMonth"
+    "${year.toString().padStart(4, '0')}-${monthNumber.toString().padStart(2, '0')}-${dayOfMonth.toString().padStart(2, '0')}"
 
 private fun parseIsoDateOrNull(value: String?): LocalDate? = try {
     if (value.isNullOrBlank()) null
@@ -92,7 +88,9 @@ fun InstallmentDueDateFieldKmp(
     valueIso: String,                             // current value, "" if none
     onDatePickedIso: (String) -> Unit,
     modifier: Modifier = Modifier,
-    label: String = "Fecha de vencimiento"
+    label: String = "Fecha de vencimiento",
+    minSelectableDate: LocalDate? = null,
+    maxSelectableDate: LocalDate? = null
 ) {
     var open by remember { mutableStateOf(false) }
 
@@ -130,20 +128,62 @@ fun InstallmentDueDateFieldKmp(
     if (open) {
         val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
 
-        // Preselect: current value or today
-        val initial = parseIsoDateOrNull(valueIso) ?: todayLocalDate()
+        val today = todayLocalDate()
+        val lowerBound = minSelectableDate
+        val upperBound = maxSelectableDate
+        val initial = remember(valueIso, lowerBound, upperBound) {
+            val parsed = parseIsoDateOrNull(valueIso) ?: today
+            when {
+                lowerBound != null && parsed < lowerBound -> lowerBound
+                upperBound != null && parsed > upperBound -> upperBound
+                else -> parsed
+            }
+        }
+
         var year by remember(initial) { mutableStateOf(initial.year) }
         var month by remember(initial) { mutableStateOf(initial.monthNumber) }
         var day by remember(initial) { mutableStateOf(initial.dayOfMonth) }
 
-        val yearOptions = remember { (todayLocalDate().year - 10 .. todayLocalDate().year + 10).toList() }
-        val monthOptions = remember { (1..12).toList() }
-        val dayOptions by remember(year, month) {
-            mutableStateOf((1..daysInMonth(year, month)).toList())
+        val fallbackMinYear = today.year - 10
+        val fallbackMaxYear = today.year + 10
+        val yearOptions = remember(lowerBound, upperBound, fallbackMinYear, fallbackMaxYear) {
+            val startYear = lowerBound?.year ?: fallbackMinYear
+            val endYear = upperBound?.year ?: fallbackMaxYear
+            (startYear..endYear).toList()
         }
-        // Clamp the day if month/year changed
-        LaunchedEffect(year, month) {
-            day = minOf(day, daysInMonth(year, month))
+
+        val monthOptions = remember(year, lowerBound, upperBound) {
+            (1..12).filter { monthCandidate ->
+                val monthStart = LocalDate(year, monthCandidate, 1)
+                val monthEnd = LocalDate(year, monthCandidate, daysInMonth(year, monthCandidate))
+                (lowerBound == null || monthEnd >= lowerBound) &&
+                    (upperBound == null || monthStart <= upperBound)
+            }
+        }
+
+        val dayOptions = remember(year, month, lowerBound, upperBound) {
+            val totalDays = daysInMonth(year, month)
+            (1..totalDays).filter { dayCandidate ->
+                val candidate = LocalDate(year, month, dayCandidate)
+                (lowerBound == null || candidate >= lowerBound) &&
+                    (upperBound == null || candidate <= upperBound)
+            }
+        }
+
+        LaunchedEffect(yearOptions, year) {
+            if (yearOptions.isNotEmpty() && year !in yearOptions) {
+                year = yearOptions.first()
+            }
+        }
+        LaunchedEffect(monthOptions, month) {
+            if (monthOptions.isNotEmpty() && month !in monthOptions) {
+                month = monthOptions.first()
+            }
+        }
+        LaunchedEffect(dayOptions, day) {
+            if (dayOptions.isNotEmpty() && day !in dayOptions) {
+                day = dayOptions.first()
+            }
         }
 
         ModalBottomSheet(
@@ -178,14 +218,15 @@ fun InstallmentDueDateFieldKmp(
                 IntDropDown(
                     label = "Día",
                     options = dayOptions,
-                    selected = day.coerceIn(dayOptions.first(), dayOptions.last()),
+                    selected = if (dayOptions.isEmpty()) 1 else day.coerceIn(dayOptions.first(), dayOptions.last()),
                     onSelected = { day = it }
                 )
 
                 Spacer(Modifier.height(16.dp))
 
-                val pickedIso = remember(year, month, day) {
-                    LocalDate(year, month, day).toIso()
+                val pickedIso = remember(year, month, day, dayOptions) {
+                    val safeDay = if (dayOptions.isEmpty()) 1 else day.coerceIn(dayOptions.first(), dayOptions.last())
+                    LocalDate(year, month, safeDay).toIso()
                 }
 
                 // Preview

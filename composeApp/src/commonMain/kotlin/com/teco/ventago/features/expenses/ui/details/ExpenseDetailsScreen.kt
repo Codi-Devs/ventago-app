@@ -94,6 +94,13 @@ import com.teco.ventago.utils.randomUUID
 import com.teco.ventago.navigation.PosScreens
 import com.teco.ventago.utils.DateFormat.getFormattedDate
 import com.teco.ventago.utils.formatNumberToMoney
+import kotlinx.datetime.Clock
+import kotlinx.datetime.DatePeriod
+import kotlinx.datetime.LocalDate
+import kotlinx.datetime.TimeZone
+import kotlinx.datetime.daysUntil
+import kotlinx.datetime.plus
+import kotlinx.datetime.toLocalDateTime
 import org.jetbrains.compose.resources.stringResource
 import ventago.composeapp.generated.resources.Res
 import ventago.composeapp.generated.resources.expense_details
@@ -110,6 +117,7 @@ fun ExpenseDetailsScreen(
     val loadingSheetState = rememberModalBottomSheetState(confirmValueChange = { false })
     val uriHandler = LocalUriHandler.current
     var showPaymentSheet by remember { mutableStateOf(false) }
+    var paymentSheetMode by remember { mutableStateOf(PaymentSheetMode.REGISTER) }
     var showOverpaymentDialog by remember { mutableStateOf(false) }
     var pendingPaymentData by remember { mutableStateOf<PaymentSubmitData?>(null) }
 
@@ -125,6 +133,7 @@ fun ExpenseDetailsScreen(
     LaunchedEffect(uiState.paymentSuccess) {
         if (uiState.paymentSuccess) {
             showPaymentSheet = false
+            paymentSheetMode = PaymentSheetMode.REGISTER
             viewModel.resetPaymentState()
         }
     }
@@ -142,6 +151,7 @@ fun ExpenseDetailsScreen(
     }
 
     val expense = uiState.expense ?: return
+    val creditLockPayment = viewModel.getCreditLockPayment()
 
     Column(
         modifier = Modifier
@@ -165,16 +175,36 @@ fun ExpenseDetailsScreen(
         PaymentSummaryCard(
             expense = expense,
             isPaid = expense.paymentStatus == "paid",
-            hasCreditLock = viewModel.hasCreditLock(),
-            onRegisterPayment = { showPaymentSheet = true }
+            hasCreditLock = creditLockPayment != null,
+            onRegisterPayment = {
+                paymentSheetMode = PaymentSheetMode.REGISTER
+                viewModel.setEditingPayment(null)
+                showPaymentSheet = true
+            },
+            onMarkCreditAsPaid = {
+                if (creditLockPayment != null) {
+                    paymentSheetMode = PaymentSheetMode.MARK_AS_PAID
+                    viewModel.setEditingPayment(creditLockPayment)
+                    showPaymentSheet = true
+                }
+            }
         )
 
         // Payments list card
         if (!expense.payments.isNullOrEmpty()) {
             PaymentsListCard(
                 payments = expense.payments,
-                onMarkPaid = { viewModel.markPaymentAsPaid(it) },
+                onMarkPaid = { payment ->
+                    if (payment.paymentMethod == PaymentMethod.CREDIT.value && payment.paymentStatus != "paid") {
+                        paymentSheetMode = PaymentSheetMode.MARK_AS_PAID
+                        viewModel.setEditingPayment(payment)
+                        showPaymentSheet = true
+                    } else {
+                        viewModel.markPaymentAsPaid(payment)
+                    }
+                },
                 onEdit = { p ->
+                    paymentSheetMode = PaymentSheetMode.EDIT
                     viewModel.setEditingPayment(p)
                     showPaymentSheet = true
                 },
@@ -241,23 +271,26 @@ fun ExpenseDetailsScreen(
         ModalBottomSheet(
             onDismissRequest = {
                 showPaymentSheet = false
+                paymentSheetMode = PaymentSheetMode.REGISTER
                 viewModel.setEditingPayment(null)
             },
             sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
             containerColor = MaterialTheme.colorScheme.background,
         ) {
             PaymentRegistrationSheet(
+                mode = paymentSheetMode,
                 isSubmitting = uiState.isSubmittingPayment,
                 error = uiState.paymentError,
                 editingPayment = uiState.editingPayment,
                 expenseTotalAmount = expense.totalAmount ?: 0.0,
+                hasExpensesQr = uiState.hasExpensesQr,
                 onSubmit = { method, amount, reference, notes, paymentDate, dueDate, proofFileUrl, proofFile ->
                     // Check for overpayment
                     val totalAmount = expense.totalAmount ?: 0.0
                     val totalPaid = expense.paymentSummary?.totalPaid ?: expense.totalPaid ?: 0.0
                     val editingAmount = uiState.editingPayment?.amountPaid ?: 0.0
                     val effectivePaid = totalPaid - editingAmount + amount
-                    if (effectivePaid > totalAmount) {
+                    if (paymentSheetMode != PaymentSheetMode.MARK_AS_PAID && effectivePaid > totalAmount) {
                         pendingPaymentData = PaymentSubmitData(
                             method,
                             amount,
@@ -265,6 +298,7 @@ fun ExpenseDetailsScreen(
                             notes,
                             paymentDate,
                             dueDate,
+                            paymentSheetMode,
                             proofFileUrl,
                             proofFile
                         )
@@ -273,6 +307,7 @@ fun ExpenseDetailsScreen(
                         submitPayment(
                             viewModel,
                             uiState.editingPayment,
+                            paymentSheetMode,
                             method,
                             amount,
                             reference,
@@ -286,6 +321,7 @@ fun ExpenseDetailsScreen(
                 },
                 onDismiss = {
                     showPaymentSheet = false
+                    paymentSheetMode = PaymentSheetMode.REGISTER
                     viewModel.setEditingPayment(null)
                 }
             )
@@ -306,6 +342,7 @@ fun ExpenseDetailsScreen(
                             submitPayment(
                                 viewModel,
                                 uiState.editingPayment,
+                                data.mode,
                                 data.method,
                                 data.amount,
                                 data.reference,
@@ -350,13 +387,21 @@ private data class PaymentSubmitData(
     val notes: String,
     val paymentDate: String?,
     val dueDate: String?,
+    val mode: PaymentSheetMode = PaymentSheetMode.REGISTER,
     val proofFileUrl: String? = null,
     val proofFile: ExpenseProofFile? = null
 )
 
+private enum class PaymentSheetMode {
+    REGISTER,
+    EDIT,
+    MARK_AS_PAID
+}
+
 private fun submitPayment(
     viewModel: ExpenseDetailsViewModel,
     editingPayment: ExpensePayment?,
+    mode: PaymentSheetMode,
     method: String,
     amount: Double,
     reference: String,
@@ -367,10 +412,21 @@ private fun submitPayment(
     proofFile: ExpenseProofFile? = null
 ) {
     val editId = editingPayment?.id
-    if (editId != null) {
-        viewModel.updatePayment(editId, method, amount, reference, notes, paymentDate, dueDate, proofFileUrl, proofFile)
-    } else {
+    if (mode == PaymentSheetMode.REGISTER || editId == null) {
         viewModel.createPayment(method, amount, reference, notes, paymentDate, dueDate, proofFileUrl, proofFile)
+    } else {
+        viewModel.updatePayment(
+            paymentId = editId,
+            paymentMethod = method,
+            amountPaid = amount,
+            reference = reference,
+            notes = notes,
+            paymentDate = paymentDate,
+            dueDate = if (mode == PaymentSheetMode.MARK_AS_PAID) null else dueDate,
+            paymentStatus = if (mode == PaymentSheetMode.MARK_AS_PAID) "paid" else null,
+            proofFileUrl = proofFileUrl,
+            proofFile = proofFile
+        )
     }
 }
 
@@ -572,11 +628,13 @@ private fun PaymentSummaryCard(
     expense: Expense,
     isPaid: Boolean,
     hasCreditLock: Boolean,
-    onRegisterPayment: () -> Unit
+    onRegisterPayment: () -> Unit,
+    onMarkCreditAsPaid: () -> Unit
 ) {
     val totalAmount = expense.totalAmount ?: 0.0
     val totalPaid = expense.paymentSummary?.totalPaid ?: expense.totalPaid ?: 0.0
     val remaining = expense.paymentSummary?.remaining ?: (totalAmount - totalPaid)
+    val creditBadge = remember(expense) { buildCreditDueBadge(expense) }
 
     Card(
         modifier = Modifier.fillMaxWidth(),
@@ -619,13 +677,37 @@ private fun PaymentSummaryCard(
                 )
             }
 
+            creditBadge?.let { badge ->
+                Text(
+                    text = badge.text,
+                    style = labelSmall(color = badge.textColor),
+                    modifier = Modifier
+                        .padding(top = 2.dp)
+                        .background(badge.containerColor, RoundedCornerShape(4.dp))
+                        .padding(horizontal = 8.dp, vertical = 4.dp)
+                )
+            }
+
             if (!isPaid) {
                 if (hasCreditLock) {
                     Text(
-                        text = "Existe un crédito pendiente por el total. Márquelo como pagado o elimínelo para registrar un nuevo pago.",
-                        style = labelSmall(color = MaterialTheme.colorScheme.error),
+                        text = "Existe un crédito pendiente por el total. Debe marcarlo como pagado para cerrar el gasto.",
+                        style = labelSmall(color = MaterialTheme.colorScheme.onSurfaceVariant),
                         modifier = Modifier.padding(top = 4.dp)
                     )
+                    ButtonM(
+                        onClick = onMarkCreditAsPaid,
+                        containerColor = MaterialTheme.colorScheme.secondary,
+                        contentColor = MaterialTheme.colorScheme.onSecondary
+                    ) {
+                        Icon(
+                            imageVector = Icons.Rounded.CheckCircle,
+                            contentDescription = null,
+                            modifier = Modifier.size(18.dp)
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text("Marcar como pagado")
+                    }
                 } else {
                     ButtonM(onClick = onRegisterPayment) {
                         Icon(
@@ -739,12 +821,15 @@ private fun PaymentRow(
 
     val statusColor = when (payment.paymentStatus) {
         "paid" -> Color(0xFF4CAF50)
+        "not_paid" -> if (payment.isOverdue == true) Color(0xFFF44336) else Color(0xFFFF9800)
         "pending" -> Color(0xFFFF9800)
         else -> Color(0xFFF44336)
     }
+    val dueLabel = dueStatusLabel(payment.dueDate)
     val statusLabel = when (payment.paymentStatus) {
         "paid" -> "Pagado"
-        "pending" -> "Pendiente"
+        "pending" -> dueLabel ?: "Pendiente"
+        "not_paid" -> dueLabel ?: "No pagado"
         else -> payment.paymentStatus ?: ""
     }
 
@@ -814,7 +899,7 @@ private fun PaymentRow(
                         )
                     }
                 }
-                if (payment.paymentStatus == "pending") {
+                if (payment.paymentStatus != "paid") {
                     IconButton(onClick = { onMarkPaid(payment) }, modifier = Modifier.size(28.dp)) {
                         Icon(
                             imageVector = Icons.Rounded.CheckCircle,
@@ -1019,6 +1104,79 @@ private fun PaymentStatusBadge(status: String?) {
 
 private fun paymentMethodLabel(method: String?): String = PaymentMethod.getLabel(method)
 
+private data class CreditDueBadge(
+    val text: String,
+    val containerColor: Color,
+    val textColor: Color
+)
+
+private fun buildCreditDueBadge(expense: Expense): CreditDueBadge? {
+    val creditPayment = expense.payments
+        .orEmpty()
+        .firstOrNull { it.paymentMethod == PaymentMethod.CREDIT.value && it.paymentStatus != "paid" }
+        ?: expense.payments
+            .orEmpty()
+            .firstOrNull { it.paymentMethod == PaymentMethod.CREDIT.value }
+        ?: return null
+
+    val dueDate = parseLocalDatePrefix(creditPayment.dueDate) ?: return null
+    val today = currentLocalDate()
+    val days = today.daysUntil(dueDate)
+    val label = when {
+        days < 0 -> "Vencido"
+        days == 0 -> "Vence hoy"
+        days == 1 -> "Vence en 1 día"
+        else -> "Vence en $days días"
+    }
+
+    return if (days < 0) {
+        CreditDueBadge(
+            text = label,
+            containerColor = Color(0xFFFFEBEE),
+            textColor = Color(0xFFD32F2F)
+        )
+    } else {
+        CreditDueBadge(
+            text = label,
+            containerColor = Color(0xFFFFF8E1),
+            textColor = Color(0xFFFF8F00)
+        )
+    }
+}
+
+private fun currentLocalDate(): LocalDate =
+    Clock.System.now().toLocalDateTime(TimeZone.currentSystemDefault()).date
+
+private fun LocalDate.toIsoDate(): String =
+    "${year.toString().padStart(4, '0')}-${monthNumber.toString().padStart(2, '0')}-${dayOfMonth.toString().padStart(2, '0')}"
+
+private fun dueStatusLabel(rawDueDate: String?): String? {
+    val dueDate = parseLocalDatePrefix(rawDueDate) ?: return null
+    val today = currentLocalDate()
+    val days = today.daysUntil(dueDate)
+    return when {
+        days < 0 -> "Vencido"
+        days == 0 -> "Vence hoy"
+        days == 1 -> "Vence en 1 día"
+        else -> "Vence en $days días"
+    }
+}
+
+private fun parseLocalDatePrefix(value: String?): LocalDate? {
+    if (value.isNullOrBlank()) return null
+    return try {
+        val date = value.take(10)
+        val parts = date.split("-")
+        if (parts.size != 3) return null
+        val year = parts[0].toInt()
+        val month = parts[1].toInt()
+        val day = parts[2].toInt()
+        LocalDate(year, month, day)
+    } catch (_: Exception) {
+        null
+    }
+}
+
 @Composable
 private fun ExpenseDetailsLoading() {
     Column(
@@ -1041,10 +1199,12 @@ private fun ExpenseDetailsLoading() {
 
 @Composable
 private fun PaymentRegistrationSheet(
+    mode: PaymentSheetMode,
     isSubmitting: Boolean,
     error: String?,
     editingPayment: ExpensePayment? = null,
     expenseTotalAmount: Double = 0.0,
+    hasExpensesQr: Boolean = false,
     onSubmit: (
         method: String,
         amount: Double,
@@ -1057,20 +1217,48 @@ private fun PaymentRegistrationSheet(
     ) -> Unit,
     onDismiss: () -> Unit
 ) {
-    val isEditMode = editingPayment != null
-    val allMethods = remember { PaymentMethod.getAllMethods() }
+    val isEditMode = mode == PaymentSheetMode.EDIT
+    val isMarkAsPaidMode = mode == PaymentSheetMode.MARK_AS_PAID
+    val allMethods = remember(mode) {
+        if (isMarkAsPaidMode) {
+            PaymentMethod.getAllMethods().filter { it != PaymentMethod.CREDIT }
+        } else {
+            PaymentMethod.getAllMethods()
+        }
+    }
+    val initialMethodValue = when {
+        isMarkAsPaidMode && editingPayment?.paymentMethod == PaymentMethod.CREDIT.value -> PaymentMethod.CASH.value
+        else -> editingPayment?.paymentMethod
+    }
     var selectedMethodIndex by remember {
         mutableStateOf(
-            allMethods.indexOfFirst { it.value == editingPayment?.paymentMethod }.takeIf { it >= 0 } ?: 0
+            allMethods.indexOfFirst { it.value == initialMethodValue }.takeIf { it >= 0 } ?: 0
         )
     }
-    val selectedMethod = allMethods[selectedMethodIndex]
+    val selectedMethod = allMethods.getOrElse(selectedMethodIndex) { PaymentMethod.CASH }
+    val today = remember { currentLocalDate() }
+    val todayIso = remember(today) { today.toIsoDate() }
+    val tomorrow = remember(today) { today.plus(DatePeriod(days = 1)) }
 
-    var amount by remember { mutableStateOf(editingPayment?.amountPaid?.let { "$it" } ?: "") }
+    var amount by remember {
+        mutableStateOf(
+            editingPayment?.amountPaid?.let { "$it" }
+                ?: if (isMarkAsPaidMode) "$expenseTotalAmount" else ""
+        )
+    }
     var reference by remember { mutableStateOf(editingPayment?.reference ?: "") }
     var notes by remember { mutableStateOf(editingPayment?.notes ?: "") }
-    var paymentDate by remember { mutableStateOf(editingPayment?.paymentDate?.take(10) ?: "") }
-    var dueDate by remember { mutableStateOf(editingPayment?.dueDate?.take(10) ?: "") }
+    var paymentDate by remember {
+        mutableStateOf(
+            editingPayment?.paymentDate?.take(10)
+                ?: if (isMarkAsPaidMode) todayIso else todayIso
+        )
+    }
+    var dueDate by remember {
+        mutableStateOf(
+            if (isMarkAsPaidMode) "" else editingPayment?.dueDate?.take(10).orEmpty()
+        )
+    }
     var proofFileUrl by remember { mutableStateOf(editingPayment?.proofFileUrl) }
     var proofFile by remember { mutableStateOf<ExpenseProofFile?>(null) }
 
@@ -1081,7 +1269,12 @@ private fun PaymentRegistrationSheet(
             .padding(bottom = 32.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
-        Text(if (isEditMode) "Editar Pago" else "Registrar Pago", style = titleMediumBold())
+        val sheetTitle = when (mode) {
+            PaymentSheetMode.EDIT -> "Editar Pago"
+            PaymentSheetMode.MARK_AS_PAID -> "Marcar como pagado"
+            PaymentSheetMode.REGISTER -> "Registrar Pago"
+        }
+        Text(sheetTitle, style = titleMediumBold())
 
         // Payment method dropdown
         DMDropDownField(
@@ -1099,6 +1292,7 @@ private fun PaymentRegistrationSheet(
             text = amount,
             label = "Monto",
             modifier = Modifier,
+            readOnly = isMarkAsPaidMode,
             onChange = { newValue ->
                 val parsedAmount = newValue.toDoubleOrNull()
                 amount = if (parsedAmount != null && parsedAmount > expenseTotalAmount) {
@@ -1123,24 +1317,26 @@ private fun PaymentRegistrationSheet(
             onChange = { notes = it }
         )
 
-        if (selectedMethod == PaymentMethod.CREDIT) {
+        if (selectedMethod == PaymentMethod.CREDIT && !isMarkAsPaidMode) {
             InstallmentDueDateFieldKmp(
                 valueIso = dueDate,
                 onDatePickedIso = { dueDate = it },
                 modifier = Modifier,
-                label = "Fecha de vencimiento"
+                label = "Fecha de vencimiento",
+                minSelectableDate = tomorrow
             )
         } else {
             InstallmentDueDateFieldKmp(
                 valueIso = paymentDate,
                 onDatePickedIso = { paymentDate = it },
                 modifier = Modifier,
-                label = "Fecha de pago"
+                label = "Fecha de pago",
+                maxSelectableDate = today
             )
         }
 
         // Proof file
-        if (selectedMethod != PaymentMethod.CREDIT) {
+        if (selectedMethod != PaymentMethod.CREDIT && hasExpensesQr) {
             ProofFileSection(
                 proofFileUrl = proofFileUrl,
                 proofFile = proofFile,
@@ -1186,8 +1382,8 @@ private fun PaymentRegistrationSheet(
                         amountVal,
                         reference,
                         notes,
-                        paymentDate.ifBlank { null },
-                        dueDate.ifBlank { null },
+                        if (selectedMethod == PaymentMethod.CREDIT && !isMarkAsPaidMode) null else paymentDate.ifBlank { null },
+                        if (selectedMethod == PaymentMethod.CREDIT && !isMarkAsPaidMode) dueDate.ifBlank { null } else null,
                         proofFileUrl,
                         proofFile
                     )
@@ -1205,7 +1401,12 @@ private fun PaymentRegistrationSheet(
                     )
                     Spacer(modifier = Modifier.width(8.dp))
                 }
-                Text(if (isEditMode) "Actualizar" else "Registrar")
+                val submitLabel = when (mode) {
+                    PaymentSheetMode.EDIT -> "Actualizar"
+                    PaymentSheetMode.MARK_AS_PAID -> "Marcar pagado"
+                    PaymentSheetMode.REGISTER -> "Registrar"
+                }
+                Text(submitLabel)
             }
         }
     }

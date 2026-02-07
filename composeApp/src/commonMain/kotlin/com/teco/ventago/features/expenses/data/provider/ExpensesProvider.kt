@@ -4,6 +4,7 @@ import com.teco.ventago.Configs
 import com.teco.ventago.features.auth.domain.IAuthService
 import com.teco.ventago.features.expenses.domain.models.requests.ExpenseProofFile
 import com.teco.ventago.features.expenses.domain.models.requests.ListExpensesRequest
+import com.teco.ventago.features.expenses.domain.models.requests.UpsertExpenseRequest
 import com.teco.ventago.features.expenses.domain.models.requests.UpsertExpensePaymentRequest
 import com.teco.ventago.json
 import com.teco.ventago.utils.ApiError
@@ -18,10 +19,10 @@ import io.ktor.client.request.put
 import io.ktor.client.request.setBody
 import io.ktor.client.request.forms.MultiPartFormDataContent
 import io.ktor.client.request.forms.formData
-import io.ktor.http.ContentType
 import io.ktor.http.HttpHeaders
 import io.ktor.http.HttpStatusCode
 import io.ktor.http.Headers
+import io.ktor.http.ContentType
 import io.ktor.http.contentType
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.JsonObject
@@ -85,7 +86,7 @@ class ExpensesProvider(
         return handleAuth(response, res.status) { getExpense(businessId, expenseId) }
     }
 
-    override suspend fun createExpense(businessId: Int, payload: String): ApiResponse {
+    override suspend fun createExpense(businessId: Int, request: UpsertExpenseRequest): ApiResponse {
         val res = client.post(Configs.ordersBasePath + "/api/v1/expenses/create") {
             headers {
                 append(HttpHeaders.Accept, "*/*")
@@ -94,14 +95,14 @@ class ExpensesProvider(
                 append("X-Business-ID", "$businessId")
             }
             contentType(ContentType.Application.Json)
-            setBody(payload)
+            setBody(request)
         }
         val body = res.body<JsonObject>()
         val response = ApiResponse.fromJson(body)
-        return handleAuth(response, res.status) { createExpense(businessId, payload) }
+        return handleAuth(response, res.status) { createExpense(businessId, request) }
     }
 
-    override suspend fun updateExpense(businessId: Int, expenseId: Long, payload: String): ApiResponse {
+    override suspend fun updateExpense(businessId: Int, expenseId: Long, request: UpsertExpenseRequest): ApiResponse {
         val res = client.put(Configs.ordersBasePath + "/api/v1/expenses/$expenseId") {
             headers {
                 append(HttpHeaders.Accept, "*/*")
@@ -110,11 +111,11 @@ class ExpensesProvider(
                 append("X-Business-ID", "$businessId")
             }
             contentType(ContentType.Application.Json)
-            setBody(payload)
+            setBody(request)
         }
         val body = res.body<JsonObject>()
         val response = ApiResponse.fromJson(body)
-        return handleAuth(response, res.status) { updateExpense(businessId, expenseId, payload) }
+        return handleAuth(response, res.status) { updateExpense(businessId, expenseId, request) }
     }
 
     override suspend fun deleteExpense(businessId: Int, expenseId: Long): ApiResponse {

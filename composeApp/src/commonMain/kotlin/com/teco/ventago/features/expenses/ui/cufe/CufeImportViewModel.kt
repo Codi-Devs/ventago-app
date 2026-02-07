@@ -2,6 +2,8 @@ package com.teco.ventago.features.expenses.ui.cufe
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.teco.ventago.core.beta.BetaFeature
+import com.teco.ventago.core.beta.BetaService
 import com.teco.ventago.features.expenses.domain.ExpensesService
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -9,11 +11,14 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.launchIn
+import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
 class CufeImportViewModel(
-    private val expensesService: ExpensesService
+    private val expensesService: ExpensesService,
+    private val betaService: BetaService
 ) : ViewModel() {
     companion object {
         private const val POLL_INTERVAL_MS = 5_000L
@@ -26,6 +31,16 @@ class CufeImportViewModel(
     private var pollingJob: Job? = null
     private var pollingJobId: Long? = null
     private var isScreenVisible: Boolean = false
+
+    init {
+        viewModelScope.launch {
+            betaService.accessFlow(BetaFeature.EXPENSES_QR)
+                .onEach { hasAccess ->
+                    _uiState.value = _uiState.value.copy(hasExpensesQr = hasAccess)
+                }
+                .launchIn(this)
+        }
+    }
 
     fun setCufeInput(value: String) {
         _uiState.value = _uiState.value.copy(cufeInput = value, error = null)

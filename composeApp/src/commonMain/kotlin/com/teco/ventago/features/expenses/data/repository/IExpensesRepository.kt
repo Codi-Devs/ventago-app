@@ -7,13 +7,14 @@ import com.teco.ventago.features.expenses.domain.models.PagedCrawlJobs
 import com.teco.ventago.features.expenses.domain.models.PagedExpenses
 import com.teco.ventago.features.expenses.domain.models.requests.ExpenseProofFile
 import com.teco.ventago.features.expenses.domain.models.requests.ListExpensesRequest
+import com.teco.ventago.features.expenses.domain.models.requests.UpsertExpenseRequest
 import com.teco.ventago.features.expenses.domain.models.requests.UpsertExpensePaymentRequest
 
 interface IExpensesRepository {
     suspend fun listExpenses(businessId: Int, request: ListExpensesRequest): PagedExpenses
     suspend fun getExpense(businessId: Int, expenseId: Long): Expense
-    suspend fun createExpense(businessId: Int, payload: String): Expense
-    suspend fun updateExpense(businessId: Int, expenseId: Long, payload: String): Expense
+    suspend fun createExpense(businessId: Int, request: UpsertExpenseRequest): Expense
+    suspend fun updateExpense(businessId: Int, expenseId: Long, request: UpsertExpenseRequest): Expense
     suspend fun deleteExpense(businessId: Int, expenseId: Long): Boolean
 
     // Payments

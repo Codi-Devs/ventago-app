@@ -3,9 +3,15 @@ package com.teco.ventago.features.expenses.ui.create
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.teco.ventago.core.camera.SharedImage
+import com.teco.ventago.core.beta.BetaFeature
+import com.teco.ventago.core.beta.BetaService
 import com.teco.ventago.features.expenses.domain.ExpensesSelectionStore
 import com.teco.ventago.features.expenses.domain.ExpensesService
 import com.teco.ventago.features.expenses.domain.models.Expense
+import com.teco.ventago.features.expenses.domain.models.requests.ExpenseItemRequest
+import com.teco.ventago.features.expenses.domain.models.requests.ExpensePartyRequest
+import com.teco.ventago.features.expenses.domain.models.requests.InitialExpensePaymentRequest
+import com.teco.ventago.features.expenses.domain.models.requests.UpsertExpenseRequest
 import com.teco.ventago.utils.randomUUID
 import com.teco.ventago.utils.uploadImageToBunnyCdn
 import kotlinx.coroutines.Dispatchers
@@ -13,29 +19,34 @@ import kotlinx.coroutines.IO
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.launchIn
+import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
-import kotlinx.serialization.json.Json
-import kotlinx.serialization.json.JsonArray
-import kotlinx.serialization.json.JsonElement
-import kotlinx.serialization.json.JsonNull
-import kotlinx.serialization.json.JsonObject
-import kotlinx.serialization.json.JsonPrimitive
-import kotlinx.serialization.json.buildJsonArray
-import kotlinx.serialization.json.buildJsonObject
-import kotlinx.serialization.json.put
 
 class NewExpenseViewModel(
-    private val expensesService: ExpensesService
+    private val expensesService: ExpensesService,
+    private val betaService: BetaService
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(NewExpenseState())
     val uiState: StateFlow<NewExpenseState> = _uiState.asStateFlow()
 
+    init {
+        viewModelScope.launch {
+            betaService.accessFlow(BetaFeature.EXPENSES_QR)
+                .onEach { hasAccess ->
+                    _uiState.value = _uiState.value.copy(hasExpensesQr = hasAccess)
+                }
+                .launchIn(this)
+        }
+    }
+
     fun initForCreate() {
         val businessName = expensesService.getBusinessName() ?: ""
         val businessRuc = expensesService.getBusinessRuc() ?: ""
         _uiState.value = NewExpenseState(
+            hasExpensesQr = _uiState.value.hasExpensesQr,
             receiverName = businessName,
             receiverRuc = businessRuc
         )
@@ -53,6 +64,7 @@ class NewExpenseViewModel(
         } ?: listOf(EditableExpenseItem())
 
         _uiState.value = NewExpenseState(
+            hasExpensesQr = _uiState.value.hasExpensesQr,
             isEditMode = true,
             editingExpenseId = expense.id,
             invoiceNumber = expense.invoiceNumber ?: "",
@@ -84,6 +96,7 @@ class NewExpenseViewModel(
         } ?: listOf(EditableExpenseItem())
 
         _uiState.value = NewExpenseState(
+            hasExpensesQr = _uiState.value.hasExpensesQr,
             isEditMode = false,
             // Duplicate excludes invoice number and CUFE
             invoiceNumber = "",
@@ -181,12 +194,12 @@ class NewExpenseViewModel(
         viewModelScope.launch {
             _uiState.value = state.copy(isSubmitting = true, error = null)
             try {
-                val payload = buildPayload(state, businessId)
+                val request = buildRequest(state, businessId)
                 withContext(Dispatchers.IO) {
                     if (state.isEditMode && state.editingExpenseId != null) {
-                        expensesService.updateExpense(state.editingExpenseId, payload)
+                        expensesService.updateExpense(state.editingExpenseId, request)
                     } else {
-                        expensesService.createExpense(payload)
+                        expensesService.createExpense(request)
                     }
                 }
                 _uiState.value = _uiState.value.copy(isSubmitting = false, isSuccess = true)
@@ -196,70 +209,73 @@ class NewExpenseViewModel(
         }
     }
 
-    private fun buildPayload(state: NewExpenseState, businessId: Int): String {
+    private fun buildRequest(state: NewExpenseState, businessId: Int): UpsertExpenseRequest {
         val emissionDateApi = if (state.emissionDate.isNotBlank()) {
             "${state.emissionDate}T00:00:00-05:00"
         } else null
 
-        val itemsArray = buildJsonArray {
-            state.items.forEachIndexed { index, item ->
-                add(buildJsonObject {
-                    put("line_number", index + 1)
-                    put("description", item.description)
-                    put("quantity", item.quantity.toDoubleOrNull() ?: 0.0)
-                    put("unit_price", item.unitPrice.toDoubleOrNull() ?: 0.0)
-                    put("discount_amount", item.discountAmount.toDoubleOrNull() ?: 0.0)
-                    put("subtotal", item.subtotalValue)
-                    put("itbms_amount", item.itbmsAmount.toDoubleOrNull() ?: 0.0)
-                    put("total", item.totalValue)
-                })
-            }
+        val items = state.items.mapIndexed { index, item ->
+            ExpenseItemRequest(
+                lineNumber = index + 1,
+                description = item.description,
+                quantity = item.quantity.toDoubleOrNull() ?: 0.0,
+                unitPrice = item.unitPrice.toDoubleOrNull() ?: 0.0,
+                discountAmount = item.discountAmount.toDoubleOrNull() ?: 0.0,
+                subtotal = item.subtotalValue,
+                itbmsAmount = item.itbmsAmount.toDoubleOrNull() ?: 0.0,
+                total = item.totalValue
+            )
         }
 
-        val json = buildJsonObject {
-            put("business_id", businessId)
-            if (state.invoiceNumber.isNotBlank()) put("invoice_number", state.invoiceNumber)
-            if (state.cufe.isNotBlank()) put("cufe", state.cufe)
-            if (emissionDateApi != null) put("emission_date", emissionDateApi)
-            if (state.paymentMethod.isNotBlank()) put("payment_method", state.paymentMethod)
-            put("issuer", buildJsonObject {
-                put("name", state.issuerName)
-                if (state.issuerRuc.isNotBlank()) put("ruc", state.issuerRuc)
-                if (state.issuerDv.isNotBlank()) put("dv", state.issuerDv)
-            })
-            put("receiver", buildJsonObject {
-                put("name", state.receiverName)
-                if (state.receiverRuc.isNotBlank()) put("ruc", state.receiverRuc)
-                if (state.receiverDv.isNotBlank()) put("dv", state.receiverDv)
-                put("type", "business")
-            })
-            put("items", itemsArray)
-            put("subtotal", getSubtotal())
-            put("itbms_total", getItbmsTotal())
-            put("total_amount", getTotalAmount())
-            if (state.notes.isNotBlank()) put("notes", state.notes)
-            state.fileUrl?.let { put("file_url", it) }
-            // In edit mode, if original file was removed and no new file uploaded, send remove_file
-            if (state.isEditMode && state.originalFileUrl != null && state.fileUrl == null) {
-                put("remove_file", true)
+        val payment = if (!state.isEditMode && state.includePayment) {
+            val payAmount = state.paymentAmount.toDoubleOrNull()
+            if (payAmount != null && payAmount > 0) {
+                InitialExpensePaymentRequest(
+                    paymentMethod = state.paymentMethodForPayment,
+                    amountPaid = payAmount,
+                    paymentDate = if (state.paymentMethodForPayment == "credit") {
+                        null
+                    } else {
+                        state.paymentDate.takeIf { it.isNotBlank() }?.let { "${it}T00:00:00-05:00" }
+                    },
+                    dueDate = if (state.paymentMethodForPayment == "credit") {
+                        state.paymentDueDate.takeIf { it.isNotBlank() }?.let { "${it}T23:59:59-05:00" }
+                    } else {
+                        null
+                    }
+                )
+            } else {
+                null
             }
-            // Optional initial payment (create mode only)
-            if (!state.isEditMode && state.includePayment) {
-                val payAmount = state.paymentAmount.toDoubleOrNull()
-                if (payAmount != null && payAmount > 0) {
-                    put("payment", buildJsonObject {
-                        put("payment_method", state.paymentMethodForPayment)
-                        put("amount_paid", payAmount)
-                        if (state.paymentMethodForPayment == "credit" && state.paymentDueDate.isNotBlank()) {
-                            put("due_date", "${state.paymentDueDate}T23:59:59-05:00")
-                        } else if (state.paymentDate.isNotBlank()) {
-                            put("payment_date", "${state.paymentDate}T00:00:00-05:00")
-                        }
-                    })
-                }
-            }
+        } else {
+            null
         }
 
-        return json.toString()
+        return UpsertExpenseRequest(
+            businessId = businessId,
+            invoiceNumber = state.invoiceNumber.takeIf { it.isNotBlank() },
+            cufe = state.cufe.takeIf { it.isNotBlank() },
+            emissionDate = emissionDateApi,
+            paymentMethod = state.paymentMethod.takeIf { it.isNotBlank() },
+            issuer = ExpensePartyRequest(
+                name = state.issuerName,
+                ruc = state.issuerRuc.takeIf { it.isNotBlank() },
+                dv = state.issuerDv.takeIf { it.isNotBlank() }
+            ),
+            receiver = ExpensePartyRequest(
+                name = state.receiverName,
+                ruc = state.receiverRuc.takeIf { it.isNotBlank() },
+                dv = state.receiverDv.takeIf { it.isNotBlank() },
+                type = "business"
+            ),
+            items = items,
+            subtotal = getSubtotal(),
+            itbmsTotal = getItbmsTotal(),
+            totalAmount = getTotalAmount(),
+            notes = state.notes.takeIf { it.isNotBlank() },
+            fileUrl = state.fileUrl,
+            removeFile = if (state.isEditMode && state.originalFileUrl != null && state.fileUrl == null) true else null,
+            payment = payment
+        )
     }
 }

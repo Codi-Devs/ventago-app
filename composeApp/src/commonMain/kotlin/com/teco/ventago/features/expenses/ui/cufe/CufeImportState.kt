@@ -3,6 +3,7 @@ package com.teco.ventago.features.expenses.ui.cufe
 import com.teco.ventago.features.expenses.domain.models.CrawlJob
 
 data class CufeImportState(
+    val hasExpensesQr: Boolean = false,
     val cufeInput: String = "",
     val isImporting: Boolean = false,
     val currentJob: CrawlJob? = null,

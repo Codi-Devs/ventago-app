@@ -3,6 +3,8 @@ package com.teco.ventago.features.expenses.ui.details
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.teco.ventago.core.PdfSharer
+import com.teco.ventago.core.beta.BetaFeature
+import com.teco.ventago.core.beta.BetaService
 import com.teco.ventago.design_system.organism.LoadingBottomSheetState
 import com.teco.ventago.design_system.organism.LoadingState
 import com.teco.ventago.features.expenses.domain.ExpensesSelectionStore
@@ -18,16 +20,29 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.launchIn
+import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
 class ExpenseDetailsViewModel(
     private val expensesService: ExpensesService,
-    private val pdfSharer: PdfSharer
+    private val pdfSharer: PdfSharer,
+    private val betaService: BetaService
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(ExpenseDetailsState())
     val uiState: StateFlow<ExpenseDetailsState> = _uiState.asStateFlow()
+
+    init {
+        viewModelScope.launch {
+            betaService.accessFlow(BetaFeature.EXPENSES_QR)
+                .onEach { hasAccess ->
+                    _uiState.value = _uiState.value.copy(hasExpensesQr = hasAccess)
+                }
+                .launchIn(this)
+        }
+    }
 
     fun loadExpense(expenseId: Long? = null) {
         viewModelScope.launch {
@@ -169,6 +184,7 @@ class ExpenseDetailsViewModel(
         notes: String,
         paymentDate: String?,
         dueDate: String?,
+        paymentStatus: String? = null,
         proofFileUrl: String? = null,
         proofFile: ExpenseProofFile? = null
     ) {
@@ -183,6 +199,7 @@ class ExpenseDetailsViewModel(
                     notes = notes,
                     paymentDate = paymentDate,
                     dueDate = dueDate,
+                    paymentStatus = paymentStatus,
                     proofFileUrl = proofFileUrl
                 )
                 if (requestResult.request == null) {
@@ -229,17 +246,19 @@ class ExpenseDetailsViewModel(
     }
 
     /**
-     * Check if a credit lock exists - if there is a pending credit payment
-     * with amount >= total expense, block new payment registration.
+     * Check if a credit lock exists: any unpaid credit payment should be
+     * completed via "Marcar como pagado" instead of creating a new payment.
      */
     fun hasCreditLock(): Boolean {
-        val expense = _uiState.value.expense ?: return false
-        val totalAmount = expense.totalAmount ?: return false
-        return expense.payments?.any { payment ->
+        return getCreditLockPayment() != null
+    }
+
+    fun getCreditLockPayment(): ExpensePayment? {
+        val expense = _uiState.value.expense ?: return null
+        return expense.payments?.firstOrNull { payment ->
             payment.paymentMethod == "credit" &&
-                payment.paymentStatus == "pending" &&
-                (payment.amountPaid ?: 0.0) >= totalAmount
-        } == true
+                payment.paymentStatus != "paid"
+        }
     }
 
     fun generateAndOpenPdf() {
@@ -276,6 +295,7 @@ class ExpenseDetailsViewModel(
         notes: String,
         paymentDate: String?,
         dueDate: String?,
+        paymentStatus: String? = null,
         proofFileUrl: String?
     ): PaymentRequestResult {
         val normalizedPaymentDate = normalizeDateForApi(paymentDate)
@@ -295,7 +315,8 @@ class ExpenseDetailsViewModel(
                 notes = notes.ifBlank { null },
                 paymentDate = normalizedPaymentDate?.let { "${it}T00:00:00-05:00" },
                 dueDate = normalizedDueDate?.let { "${it}T23:59:59-05:00" },
-                proofFileUrl = proofFileUrl
+                proofFileUrl = proofFileUrl,
+                paymentStatus = paymentStatus
             )
         )
     }

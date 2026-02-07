@@ -62,12 +62,19 @@ import com.teco.ventago.design_system.buttons.ButtonM
 import com.teco.ventago.design_system.buttons.OutlinedButtonM
 import com.teco.ventago.design_system.buttons.TextButtonS
 import com.teco.ventago.design_system.loaders.shimmerBrush
+import com.teco.ventago.design_system.molecules.InstallmentDueDateFieldKmp
 import com.teco.ventago.design_system.textfields.DMOutlinedTextField
 import com.teco.ventago.features.expenses.domain.models.CrawlJob
 import com.teco.ventago.features.expenses.domain.models.Expense
+import com.teco.ventago.features.expenses.domain.models.PaymentMethod
 import com.teco.ventago.navigation.PosScreens
 import com.teco.ventago.utils.DateFormat.getFormattedDate
 import com.teco.ventago.utils.formatNumberToMoney
+import kotlinx.datetime.Clock
+import kotlinx.datetime.LocalDate
+import kotlinx.datetime.TimeZone
+import kotlinx.datetime.daysUntil
+import kotlinx.datetime.toLocalDateTime
 import org.jetbrains.compose.resources.stringResource
 import ventago.composeapp.generated.resources.Res
 import ventago.composeapp.generated.resources.apply_filters
@@ -141,26 +148,26 @@ fun ExpensesListScreen(
             }
         }
 
-        // Source filter chips
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .horizontalScroll(rememberScrollState())
-                .padding(horizontal = 16.dp),
-            horizontalArrangement = Arrangement.spacedBy(8.dp)
-        ) {
-            sourceOptions.forEach { (value, label) ->
-                FilterChip(
-                    selected = uiState.source == value,
-                    onClick = {
-                        viewModel.setSource(value)
-                        viewModel.applyFilters()
-                    },
-                    label = { Text(label) },
-                    colors = FilterChipDefaults.filterChipColors()
-                )
-            }
-        }
+        // Source filter chips Not showing by now
+//        Row(
+//            modifier = Modifier
+//                .fillMaxWidth()
+//                .horizontalScroll(rememberScrollState())
+//                .padding(horizontal = 16.dp),
+//            horizontalArrangement = Arrangement.spacedBy(8.dp)
+//        ) {
+//            sourceOptions.forEach { (value, label) ->
+//                FilterChip(
+//                    selected = uiState.source == value,
+//                    onClick = {
+//                        viewModel.setSource(value)
+//                        viewModel.applyFilters()
+//                    },
+//                    label = { Text(label) },
+//                    colors = FilterChipDefaults.filterChipColors()
+//                )
+//            }
+//        }
 
         // Payment status filter chips
         Row(
@@ -354,6 +361,10 @@ private fun ExpensesFilterSheet(
     onApply: () -> Unit,
     onClear: () -> Unit
 ) {
+    val today = remember { currentLocalDate() }
+    val startLocalDate = remember(startDate) { parseLocalDatePrefix(startDate) }
+    val endLocalDate = remember(endDate) { parseLocalDatePrefix(endDate) }
+
     Column(
         modifier = Modifier
             .fillMaxWidth()
@@ -370,17 +381,20 @@ private fun ExpensesFilterSheet(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.spacedBy(8.dp)
         ) {
-            DMOutlinedTextField(
-                text = startDate,
+            InstallmentDueDateFieldKmp(
+                valueIso = startDate,
+                onDatePickedIso = onStartDateChange,
+                modifier = Modifier.weight(1f),
                 label = stringResource(Res.string.expenses_start_date),
-                modifier = Modifier.weight(1f),
-                onChange = onStartDateChange
+                maxSelectableDate = endLocalDate ?: today
             )
-            DMOutlinedTextField(
-                text = endDate,
-                label = stringResource(Res.string.expenses_end_date),
+            InstallmentDueDateFieldKmp(
+                valueIso = endDate,
+                onDatePickedIso = onEndDateChange,
                 modifier = Modifier.weight(1f),
-                onChange = onEndDateChange
+                label = stringResource(Res.string.expenses_end_date),
+                minSelectableDate = startLocalDate,
+                maxSelectableDate = today
             )
         }
 
@@ -413,7 +427,11 @@ private fun ExpensesFilterSheet(
 
         Spacer(modifier = Modifier.height(8.dp))
 
-        ButtonM(onClick = onApply) {
+        ButtonM(
+            onClick = onApply,
+            containerColor = MaterialTheme.colorScheme.secondary,
+            contentColor = MaterialTheme.colorScheme.onSecondary
+        ) {
             Text(stringResource(Res.string.apply_filters))
         }
 
@@ -448,6 +466,7 @@ private fun ExpenseListItem(
         "not_paid" -> "No pagado"
         else -> expense.paymentStatus ?: ""
     }
+    val creditDueBadge = remember(expense) { buildCreditDueBadge(expense) }
 
     Surface(
         modifier = Modifier
@@ -512,8 +531,80 @@ private fun ExpenseListItem(
                         .background(statusColor, RoundedCornerShape(4.dp))
                         .padding(horizontal = 6.dp, vertical = 2.dp)
                 )
+                creditDueBadge?.let { badge ->
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Text(
+                        text = badge.text,
+                        style = TextStyle(
+                            fontSize = 10.sp,
+                            fontWeight = FontWeight.Medium,
+                            color = badge.textColor
+                        ),
+                        modifier = Modifier
+                            .background(badge.containerColor, RoundedCornerShape(4.dp))
+                            .padding(horizontal = 6.dp, vertical = 2.dp)
+                    )
+                }
             }
         }
+    }
+}
+
+private data class CreditDueBadge(
+    val text: String,
+    val containerColor: Color,
+    val textColor: Color
+)
+
+private fun buildCreditDueBadge(expense: Expense): CreditDueBadge? {
+    val creditPayment = expense.payments
+        .orEmpty()
+        .firstOrNull { it.paymentMethod == PaymentMethod.CREDIT.value && it.paymentStatus != "paid" }
+        ?: expense.payments
+            .orEmpty()
+            .firstOrNull { it.paymentMethod == PaymentMethod.CREDIT.value }
+        ?: return null
+
+    val dueDate = parseLocalDatePrefix(creditPayment.dueDate) ?: return null
+    val today = currentLocalDate()
+    val days = today.daysUntil(dueDate)
+    val label = when {
+        days < 0 -> "Vencido"
+        days == 0 -> "Vence hoy"
+        days == 1 -> "Vence en 1 día"
+        else -> "Vence en $days días"
+    }
+
+    return if (days < 0) {
+        CreditDueBadge(
+            text = label,
+            containerColor = Color(0xFFFFEBEE),
+            textColor = Color(0xFFD32F2F)
+        )
+    } else {
+        CreditDueBadge(
+            text = label,
+            containerColor = Color(0xFFFFF8E1),
+            textColor = Color(0xFFFF8F00)
+        )
+    }
+}
+
+private fun currentLocalDate(): LocalDate =
+    Clock.System.now().toLocalDateTime(TimeZone.currentSystemDefault()).date
+
+private fun parseLocalDatePrefix(value: String?): LocalDate? {
+    if (value.isNullOrBlank()) return null
+    return try {
+        val date = value.take(10)
+        val parts = date.split("-")
+        if (parts.size != 3) return null
+        val year = parts[0].toInt()
+        val month = parts[1].toInt()
+        val day = parts[2].toInt()
+        LocalDate(year, month, day)
+    } catch (_: Exception) {
+        null
     }
 }
 

@@ -12,6 +12,7 @@ import com.teco.ventago.features.expenses.domain.models.PagedCrawlJobs
 import com.teco.ventago.features.expenses.domain.models.PagedExpenses
 import com.teco.ventago.features.expenses.domain.models.requests.ExpenseProofFile
 import com.teco.ventago.features.expenses.domain.models.requests.ListExpensesRequest
+import com.teco.ventago.features.expenses.domain.models.requests.UpsertExpenseRequest
 import com.teco.ventago.features.expenses.domain.models.requests.UpsertExpensePaymentRequest
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
@@ -109,14 +110,14 @@ class ExpensesService(
         return repository.getExpense(businessId, expenseId)
     }
 
-    suspend fun createExpense(payload: String): Expense {
+    suspend fun createExpense(request: UpsertExpenseRequest): Expense {
         val businessId = businessId() ?: throw IllegalStateException("No business selected")
-        return repository.createExpense(businessId, payload)
+        return repository.createExpense(businessId, request)
     }
 
-    suspend fun updateExpense(expenseId: Long, payload: String): Expense {
+    suspend fun updateExpense(expenseId: Long, request: UpsertExpenseRequest): Expense {
         val businessId = businessId() ?: throw IllegalStateException("No business selected")
-        return repository.updateExpense(businessId, expenseId, payload)
+        return repository.updateExpense(businessId, expenseId, request)
     }
 
     suspend fun deleteExpense(expenseId: Long): Boolean {

@@ -11,6 +11,7 @@ import com.teco.ventago.features.expenses.domain.models.PagedCrawlJobs
 import com.teco.ventago.features.expenses.domain.models.PagedExpenses
 import com.teco.ventago.features.expenses.domain.models.requests.ExpenseProofFile
 import com.teco.ventago.features.expenses.domain.models.requests.ListExpensesRequest
+import com.teco.ventago.features.expenses.domain.models.requests.UpsertExpenseRequest
 import com.teco.ventago.features.expenses.domain.models.requests.UpsertExpensePaymentRequest
 import com.teco.ventago.json
 import com.teco.ventago.utils.BadRequestException
@@ -72,9 +73,9 @@ class ExpensesRepository(
         }
     }
 
-    override suspend fun createExpense(businessId: Int, payload: String): Expense {
+    override suspend fun createExpense(businessId: Int, request: UpsertExpenseRequest): Expense {
         return try {
-            val response = provider.createExpense(businessId, payload)
+            val response = provider.createExpense(businessId, request)
             if (response.error.isError()) {
                 throw BadRequestException(response.toJson())
             }
@@ -89,9 +90,9 @@ class ExpensesRepository(
         }
     }
 
-    override suspend fun updateExpense(businessId: Int, expenseId: Long, payload: String): Expense {
+    override suspend fun updateExpense(businessId: Int, expenseId: Long, request: UpsertExpenseRequest): Expense {
         return try {
-            val response = provider.updateExpense(businessId, expenseId, payload)
+            val response = provider.updateExpense(businessId, expenseId, request)
             if (response.error.isError()) {
                 throw BadRequestException(response.toJson())
             }

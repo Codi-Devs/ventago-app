@@ -11,6 +11,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.background
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
@@ -34,6 +35,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.teco.ventago.core.camera.PermissionCallback
 import com.teco.ventago.core.camera.PermissionStatus
@@ -136,6 +138,24 @@ fun CufeImportScreen(
             .padding(16.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
+        if (!uiState.hasExpensesQr) {
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                elevation = CardDefaults.cardElevation(2.dp),
+                colors = CardDefaults.cardColors(containerColor = cardContainerColor())
+            ) {
+                Column(modifier = Modifier.padding(16.dp)) {
+                    Text("Función no disponible", style = titleMediumBold())
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Text(
+                        "La importación por CUFE está disponible para usuarios del beta expenses_qr.",
+                        style = bodyMedium()
+                    )
+                }
+            }
+            return@Column
+        }
+
         // Instructions card
         Card(
             modifier = Modifier.fillMaxWidth(),
@@ -152,6 +172,15 @@ fun CufeImportScreen(
                     )
                     Spacer(modifier = Modifier.width(8.dp))
                     Text("Importar por CUFE", style = titleMediumBold())
+                    Spacer(modifier = Modifier.weight(1f))
+                    Text(
+                        text = "Gratis por tiempo limitado",
+                        style = labelSmall(color = MaterialTheme.colorScheme.onSecondary),
+                        fontWeight = FontWeight.SemiBold,
+                        modifier = Modifier
+                            .background(MaterialTheme.colorScheme.secondary, RoundedCornerShape(999.dp))
+                            .padding(horizontal = 10.dp, vertical = 4.dp)
+                    )
                 }
                 Spacer(modifier = Modifier.height(12.dp))
                 Text(

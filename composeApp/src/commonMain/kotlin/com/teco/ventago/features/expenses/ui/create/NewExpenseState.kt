@@ -44,7 +44,10 @@ data class NewExpenseState(
     // Submission
     val isSubmitting: Boolean = false,
     val isSuccess: Boolean = false,
-    val error: String? = null
+    val error: String? = null,
+
+    // Feature flags
+    val hasExpensesQr: Boolean = false
 )
 
 data class EditableExpenseItem(

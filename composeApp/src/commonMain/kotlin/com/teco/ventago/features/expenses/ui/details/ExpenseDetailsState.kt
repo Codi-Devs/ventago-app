@@ -14,6 +14,7 @@ data class ExpenseDetailsState(
     val isSubmittingPayment: Boolean = false,
     val paymentSuccess: Boolean = false,
     val paymentError: String? = null,
+    val hasExpensesQr: Boolean = false,
     // Payment editing
     val editingPayment: ExpensePayment? = null,
     // Action feedback

@@ -216,13 +216,15 @@ fun NewExpenseScreen(
             )
         }
 
-        // Invoice file upload
-        FileUploadCard(
-            fileUrl = uiState.fileUrl,
-            isUploading = uiState.isUploadingFile,
-            onFileSelected = { viewModel.uploadFile(it) },
-            onRemove = { viewModel.removeFile() }
-        )
+        // Invoice file upload (beta: expenses_qr)
+        if (uiState.hasExpensesQr) {
+            FileUploadCard(
+                fileUrl = uiState.fileUrl,
+                isUploading = uiState.isUploadingFile,
+                onFileSelected = { viewModel.uploadFile(it) },
+                onRemove = { viewModel.removeFile() }
+            )
+        }
 
         // Initial payment (create mode only)
         if (!uiState.isEditMode) {

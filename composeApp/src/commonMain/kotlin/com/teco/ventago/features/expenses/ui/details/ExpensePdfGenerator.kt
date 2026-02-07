@@ -206,9 +206,9 @@ object ExpensePdfGenerator {
                 val fontRef = if (line.bold) "/F2" else "/F1"
                 val safeText = sanitizeText(line.text)
                 stream.append("$fontRef ${line.fontSize} Tf\n")
-                stream.append("40 $y Td\n")
+                // Use absolute positioning for each line; relative Td can push text off-page.
+                stream.append("1 0 0 1 40 $y Tm\n")
                 stream.append("($safeText) Tj\n")
-                stream.append("0 0 Td\n") // reset position for next absolute Td
                 y -= (line.fontSize + 4)
             }
             stream.append("ET\n")
