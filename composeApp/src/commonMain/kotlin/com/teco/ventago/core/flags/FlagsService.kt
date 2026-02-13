@@ -4,6 +4,7 @@ import com.teco.ventago.core.logger.ILoggerService
 import com.teco.ventago.core.logger.Log
 import com.teco.ventago.core.logger.LogLevel
 import dev.gitlive.firebase.Firebase
+import dev.gitlive.firebase.auth.auth
 import dev.gitlive.firebase.database.DataSnapshot
 import dev.gitlive.firebase.database.database
 import kotlinx.coroutines.CoroutineScope
@@ -26,11 +27,28 @@ class FlagsService(
 
     private val flagsState = MutableStateFlow(AppFlagsState())
     private var listenerJob: Job? = null
+    private var authListenerJob: Job? = null
     private var initialized = false
+    private var shouldBeInitialized = false
 
     override fun flags(): StateFlow<AppFlagsState> = flagsState.asStateFlow()
 
     override fun initialize() {
+        shouldBeInitialized = true
+        observeAuthState()
+
+        if (Firebase.auth.currentUser == null) {
+            log(
+                level = LogLevel.INFO,
+                message = "FlagsService initialize deferred: Firebase user is not authenticated yet"
+            )
+            return
+        }
+
+        startListener()
+    }
+
+    private fun startListener() {
         if (initialized) {
             log(
                 level = LogLevel.WARNING,
@@ -67,10 +85,42 @@ class FlagsService(
         )
     }
 
+    private fun observeAuthState() {
+        if (authListenerJob != null) return
+
+        authListenerJob = Firebase.auth.authStateChanged
+            .onEach { firebaseUser ->
+                if (firebaseUser == null) {
+                    stopListener(resetFlags = true)
+                    return@onEach
+                }
+
+                if (shouldBeInitialized && !initialized) {
+                    startListener()
+                }
+            }
+            .catch { error ->
+                log(
+                    level = LogLevel.ERROR,
+                    message = "Error observing Firebase auth state in FlagsService: ${error.message ?: "UNKNOWN"}"
+                )
+            }
+            .launchIn(appScope)
+    }
+
     override fun destroy() {
+        shouldBeInitialized = false
+        authListenerJob?.cancel()
+        authListenerJob = null
+        stopListener(resetFlags = true)
+    }
+
+    private fun stopListener(resetFlags: Boolean) {
         listenerJob?.cancel()
         listenerJob = null
-        flagsState.value = AppFlagsState()
+        if (resetFlags) {
+            flagsState.value = AppFlagsState()
+        }
         initialized = false
     }
 

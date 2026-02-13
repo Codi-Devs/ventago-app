@@ -165,8 +165,12 @@ fun App(
         }
     }
 
-    LaunchedEffect(Unit) {
-        flagsService.initialize()
+    LaunchedEffect(mainState.isAuthenticated) {
+        if (mainState.isAuthenticated) {
+            flagsService.initialize()
+        } else {
+            flagsService.destroy()
+        }
     }
 
     DigitalMenuTheme {

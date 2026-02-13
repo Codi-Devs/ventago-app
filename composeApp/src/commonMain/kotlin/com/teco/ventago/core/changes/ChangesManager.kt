@@ -3,6 +3,7 @@ package com.teco.ventago.core.changes
 import com.teco.ventago.core.LocalStorage
 import com.teco.ventago.utils.randomUUID
 import dev.gitlive.firebase.Firebase
+import dev.gitlive.firebase.auth.auth
 import dev.gitlive.firebase.database.database
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -35,12 +36,15 @@ class ChangesManager(private val storage: LocalStorage): IChangesManager {
     private val purchaseChanged = MutableStateFlow(1)
     private val posCustomerChanged = MutableSharedFlow<String>(replay = 1)
 
-    private lateinit var job: Job
+    private var listenersJob: Job? = null
+    private var authListenerJob: Job? = null
     private var userId: Int? = null
     private var businessId: Int? = null
     private var menuId: Int? = null
+    private var pendingInitParams: InitParams? = null
 
     private var initialized = false
+    private val scope = CoroutineScope(Dispatchers.IO)
 
     override fun productsListener(): Flow<Int> = menuChanged
     override fun businessListener(): Flow<Int> = businessChanged
@@ -52,14 +56,39 @@ class ChangesManager(private val storage: LocalStorage): IChangesManager {
     override fun addedBusinessListener(): Flow<Int> = addedBusiness
 
     override fun initialize(businessId: Int, menuId: Int, userId: Int) {
-        if (initialized) return
+        pendingInitParams = InitParams(businessId = businessId, menuId = menuId, userId = userId)
+        observeAuthState()
+        if (Firebase.auth.currentUser == null) return
+        startListenersIfNeeded()
+    }
 
-        this.businessId = businessId
-        this.menuId = menuId
-        this.userId = userId
+    private fun observeAuthState() {
+        if (authListenerJob != null) return
+
+        authListenerJob = Firebase.auth.authStateChanged.onEach { firebaseUser ->
+            if (firebaseUser == null) {
+                stopActiveListeners()
+                return@onEach
+            }
+            startListenersIfNeeded()
+        }.launchIn(scope)
+    }
+
+    private fun startListenersIfNeeded() {
+        val params = pendingInitParams ?: return
+        if (initialized && this.businessId == params.businessId && this.menuId == params.menuId && this.userId == params.userId) return
+
+        stopActiveListeners()
+
+        val currentBusinessId = params.businessId
+        val currentUserId = params.userId
+
+        this.businessId = params.businessId
+        this.menuId = params.menuId
+        this.userId = params.userId
         initialized = true
-        job = CoroutineScope(Dispatchers.IO).launch {
-            changesRef.child("$businessId").valueEvents.onEach {
+        listenersJob = scope.launch {
+            changesRef.child("$currentBusinessId").valueEvents.onEach {
                 var changedBusinessDB = ""
                 if (it.child("changed_business").value != null) {
                     changedBusinessDB = it.child("changed_business").value<String?>() ?: ""
@@ -117,7 +146,7 @@ class ChangesManager(private val storage: LocalStorage): IChangesManager {
                 }
             }.launchIn(this)
 
-            userChangesRef.child(userId.toString()).valueEvents.onEach {
+            userChangesRef.child(currentUserId.toString()).valueEvents.onEach {
                 var addedBusinessDB = ""
                 if (it.child("added_business").exists) {
                     addedBusinessDB = it.child("added_business").value.toString()
@@ -159,6 +188,15 @@ class ChangesManager(private val storage: LocalStorage): IChangesManager {
                 }
             }.launchIn(this)
         }
+    }
+
+    private fun stopActiveListeners() {
+        initialized = false
+        listenersJob?.cancel()
+        listenersJob = null
+        userId = null
+        businessId = null
+        menuId = null
     }
 
     override suspend fun productsChanged() {
@@ -211,13 +249,15 @@ class ChangesManager(private val storage: LocalStorage): IChangesManager {
     }
 
     override fun removeListeners() {
-        if (!initialized) return
-        try {
-            initialized = false
-            userId = null
-            businessId = null
-            menuId = null
-            job.cancel()
-        } catch (ignored: Exception) { }
+        pendingInitParams = null
+        stopActiveListeners()
+        authListenerJob?.cancel()
+        authListenerJob = null
     }
+
+    private data class InitParams(
+        val businessId: Int,
+        val menuId: Int,
+        val userId: Int
+    )
 }
