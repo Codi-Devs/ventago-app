@@ -8,6 +8,8 @@ import com.teco.ventago.core.cache.ICacheService
 import com.teco.ventago.core.cache.RoomCache
 import com.teco.ventago.core.changes.ChangesManager
 import com.teco.ventago.core.changes.IChangesManager
+import com.teco.ventago.core.flags.FlagsService
+import com.teco.ventago.core.flags.IFlagsService
 import com.teco.ventago.core.firebase.AnalyticsService
 import com.teco.ventago.core.logger.ILoggerService
 import com.teco.ventago.core.logger.LoggerService
@@ -243,6 +245,13 @@ internal val viewModels = module {
 internal fun appModule() = module {
     single<IChangesManager> {
         ChangesManager(get())
+    }
+
+    single<IFlagsService> {
+        FlagsService(
+            logger = get(),
+            appScope = get(named("AppScope"))
+        )
     }
 
     single<ICacheService> {

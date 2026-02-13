@@ -49,7 +49,9 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.teco.ventago.core.LocalStorage
+import com.teco.ventago.core.flags.IFlagsService
 import com.teco.ventago.design_system.buttons.ButtonM
+import com.teco.ventago.design_system.molecules.flags.DgiDownAlertBanner
 import com.teco.ventago.design_system.molecules.customer.PosCustomerSelection
 import com.teco.ventago.design_system.textfields.DMOutlinedTextField
 import com.teco.ventago.design_system.textfields.helpers.DMDropDownField
@@ -82,6 +84,8 @@ fun PosScreen(
     navigate: (PosScreens) -> Unit
 ) {
     val uiState by viewModel.uiState.collectAsState()
+    val flagsService: IFlagsService = koinInject()
+    val flagsState by flagsService.flags().collectAsState()
     val isQuoteFlow = uiState.flowMode == FlowMode.QUOTE
 
     LaunchedEffect(Unit) {
@@ -112,6 +116,13 @@ fun PosScreen(
     {
 
         Spacer(modifier = Modifier.height(16.dp))
+
+        if (flagsState.dgiDown) {
+            DgiDownAlertBanner(
+                modifier = Modifier.padding(horizontal = 16.dp)
+            )
+            Spacer(modifier = Modifier.height(8.dp))
+        }
 
         if (!isQuoteFlow) {
             // === Branch ===

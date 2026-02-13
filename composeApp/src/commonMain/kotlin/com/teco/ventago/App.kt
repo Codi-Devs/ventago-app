@@ -2,6 +2,7 @@ package com.teco.ventago
 
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
@@ -53,10 +54,12 @@ import androidx.navigation.NavHostController
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import com.teco.ventago.core.SnackbarService
+import com.teco.ventago.core.flags.IFlagsService
 import com.teco.ventago.core.firebase.AnalyticsService
 import com.teco.ventago.design_system.molecules.AppChromeState
 import com.teco.ventago.design_system.molecules.ColoredTopBarHost
 import com.teco.ventago.design_system.molecules.DMTopAppBar
+import com.teco.ventago.design_system.molecules.flags.MaintenanceModeOverlay
 import com.teco.ventago.design_system.molecules.rememberAppChromeState
 import com.teco.ventago.design_system.theme.DigitalMenuTheme
 import com.teco.ventago.design_system.theme.cardContainerColor
@@ -101,6 +104,8 @@ fun App(
     val currentScreen = currentRoute?.toPosScreenOrNull() ?: PosScreens.LoginScreen
     println("ASDADS currentScreen: $currentScreen")
     val appChrome = rememberAppChromeState()
+    val flagsService = koinInject<IFlagsService>()
+    val flagsState by flagsService.flags().collectAsState()
 
 //    LaunchedEffect(mainState.isAuthenticated, mainState.missingBusiness) {
 //        println("newState isAuthenticated: ${mainState.isAuthenticated}")
@@ -159,16 +164,22 @@ fun App(
             }
         }
     }
+
+    LaunchedEffect(Unit) {
+        flagsService.initialize()
+    }
+
     DigitalMenuTheme {
         CompositionLocalProvider(
             LocalAppChrome provides appChrome,
             LocalNavController provides navController,
             ){
-            Scaffold(
-                snackbarHost = {
-                    SnackbarHost(hostState = snackbarHostState)
-                },
-                topBar = {
+            Box(modifier = Modifier.fillMaxSize()) {
+                Scaffold(
+                    snackbarHost = {
+                        SnackbarHost(hostState = snackbarHostState)
+                    },
+                    topBar = {
                     if (mainState.hideAppVar || !currentScreen.showAppBar) {
                         Spacer(Modifier.windowInsetsTopHeight(WindowInsets.statusBars))
                         return@Scaffold
@@ -302,8 +313,8 @@ fun App(
                         )
                     }
 
-                },
-                bottomBar = {
+                    },
+                    bottomBar = {
                     currentScreen.bottomBar?.let {
                         if (currentScreen == PosScreens.POSScreen || currentScreen == PosScreens.POSProductScreen || currentScreen == PosScreens.CartScreen) {
                             val auxbackStackEntry = remember { navController.getBackStackEntry(PosScreens.POS.name) }
@@ -407,14 +418,21 @@ fun App(
 
                         }
                     }
+                    }
+                ) { innerPadding ->
+                    Navigation(
+                        modifier = Modifier.fillMaxSize().padding(innerPadding),
+                        navController = navController,
+                        appViewModel = appViewModel,
+                        analyticsService = koinInject<AnalyticsService>()
+                    )
                 }
-            ) { innerPadding ->
-                Navigation(
-                    modifier = Modifier.fillMaxSize().padding(innerPadding),
-                    navController = navController,
-                    appViewModel = appViewModel,
-                    analyticsService = koinInject<AnalyticsService>()
-                )
+
+                if (flagsState.maintenanceMode) {
+                    MaintenanceModeOverlay(
+                        modifier = Modifier.fillMaxSize()
+                    )
+                }
             }
         }
 

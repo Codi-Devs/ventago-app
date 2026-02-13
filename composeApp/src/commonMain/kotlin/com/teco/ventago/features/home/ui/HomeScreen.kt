@@ -70,6 +70,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.teco.ventago.AppViewModel
 import com.teco.ventago.design_system.loaders.shimmerBrush
+import com.teco.ventago.design_system.molecules.flags.DgiDownAlertBanner
 import com.teco.ventago.design_system.organism.BarGraphic
 import com.teco.ventago.design_system.organism.HomeTopCard
 import com.teco.ventago.design_system.organism.SupportCard
@@ -80,6 +81,7 @@ import com.teco.ventago.design_system.theme.headlineLarge
 import com.teco.ventago.design_system.theme.labelSmall
 import com.teco.ventago.design_system.theme.latoFontFamily
 import com.teco.ventago.design_system.theme.titleMediumBold
+import com.teco.ventago.core.flags.IFlagsService
 import com.teco.ventago.features.home.ui.viewmodel.HomeViewModel
 import com.teco.ventago.core.LocalStorage
 import com.teco.ventago.features.quotes.domain.QuotesOnboarding
@@ -95,7 +97,6 @@ import ventago.composeapp.generated.resources.action_continue
 import ventago.composeapp.generated.resources.configure
 import ventago.composeapp.generated.resources.connect_paypal_subtitle
 import ventago.composeapp.generated.resources.connect_paypal_title
-import ventago.composeapp.generated.resources.dgi
 import ventago.composeapp.generated.resources.ic_arrow_forward_ios
 import ventago.composeapp.generated.resources.ic_paypal_onboarding
 import ventago.composeapp.generated.resources.pos
@@ -121,8 +122,10 @@ fun HomeScreen(
 ) {
     val platformState = rememberPlatformState()
     val storage: LocalStorage = koinInject()
+    val flagsService: IFlagsService = koinInject()
 
     val uiState by viewModel.uiState.collectAsState()
+    val flagsState by flagsService.flags().collectAsState()
 
     val appState = appViewModel.mainState.collectAsState()
     var showQuotesWelcomeSheet by remember { mutableStateOf(false) }
@@ -154,6 +157,12 @@ fun HomeScreen(
                 navigate(PosScreens.BusinessLogoSettingsScreen)
             },
         )
+
+        if (flagsState.dgiDown) {
+            DgiDownAlertBanner(
+                modifier = Modifier.padding(top = 16.dp, start = 16.dp, end = 16.dp)
+            )
+        }
 
         if (uiState.invoicingEnabled && uiState.invoicingPlanState != null) {
             InvoicingPlanCard(
