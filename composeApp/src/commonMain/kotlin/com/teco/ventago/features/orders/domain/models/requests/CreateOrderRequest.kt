@@ -21,11 +21,18 @@ data class CreateOrderRequest(
     val exportation: Exportation? = null,
     val logistics: Logistics? = null,
     @SerialName("delivery_location") val deliveryLocation: DeliveryLocation? = null,
+    @SerialName("additional_address") val additionalAddress: AdditionalAddress? = null,
     @SerialName("commercial_addenda") val commercialAddenda: CommercialAddenda? = null,
     val links: PaymentLinksBlock? = null,              // exclusive with payments
     val formats: List<String> = emptyList(),
 
     @SerialName("save_as") val saveAs: String = "confirmed"
+)
+
+@Serializable
+data class AdditionalAddress(
+    @SerialName("address_line") val addressLine: String,
+    @SerialName("location_code") val locationCode: String
 )
 
 // ================= Invoice / Branch =================

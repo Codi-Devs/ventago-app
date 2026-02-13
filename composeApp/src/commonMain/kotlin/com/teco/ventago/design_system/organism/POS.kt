@@ -1282,6 +1282,7 @@ private fun AdditionalInfoSheet(
 ) {
     // local expand states (start collapsed)
     var openLogistics by rememberSaveable { mutableStateOf(false) }
+    var openCustomerAddresses by rememberSaveable { mutableStateOf(false) }
     var openDelivery by rememberSaveable { mutableStateOf(false) }
     var openRetentions by rememberSaveable { mutableStateOf(false) }
     var openExport by rememberSaveable { mutableStateOf(uiState.expandExportSection) }
@@ -1391,6 +1392,118 @@ private fun AdditionalInfoSheet(
         }
 
         // ===== 2) Delivery Location =====
+        if (uiState.finalCustomer == false && uiState.customer != null) {
+            CollapsibleCard(
+                title = "Direcciones del cliente",
+                expanded = openCustomerAddresses,
+                onToggle = { openCustomerAddresses = !openCustomerAddresses }
+            ) {
+                Text(
+                    text = "Selecciona una dirección adicional para la factura.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 6.dp)
+                )
+
+                when {
+                    uiState.customerAddressesLoading -> {
+                        Text(
+                            text = "Cargando direcciones...",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.padding(horizontal = 16.dp, vertical = 6.dp)
+                        )
+                    }
+
+                    uiState.customerAddresses.isEmpty() -> {
+                        Text(
+                            text = "Este cliente no tiene direcciones disponibles.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.padding(horizontal = 16.dp, vertical = 6.dp)
+                        )
+                    }
+
+                    else -> {
+                        uiState.customerAddresses.forEach { address ->
+                            val selected = uiState.selectedCustomerAddressId == address.id
+                            val locationText = listOf(
+                                address.province,
+                                address.district,
+                                address.corregimiento
+                            ).filterNotNull().filter { it.isNotBlank() }.joinToString(" / ")
+
+                            Card(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(horizontal = 16.dp, vertical = 4.dp)
+                                    .clickable { viewModel.onCustomerAddressSelected(address.id) },
+                                border = BorderStroke(
+                                    width = if (selected) 2.dp else 1.dp,
+                                    color = if (selected) {
+                                        MaterialTheme.colorScheme.secondary
+                                    } else {
+                                        MaterialTheme.colorScheme.outlineVariant
+                                    }
+                                ),
+                                colors = CardDefaults.cardColors(
+                                    containerColor = if (selected) {
+                                        vanishedBackgroundColor()
+                                    } else {
+                                        MaterialTheme.colorScheme.surface
+                                    }
+                                )
+                            ) {
+                                Column(modifier = Modifier.padding(12.dp)) {
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        horizontalArrangement = Arrangement.SpaceBetween,
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        Text(
+                                            text = address.addressLine,
+                                            style = MaterialTheme.typography.bodyMedium
+                                        )
+                                        if (address.isDefault) {
+                                            Text(
+                                                text = "Predeterminada",
+                                                style = MaterialTheme.typography.labelSmall,
+                                                color = MaterialTheme.colorScheme.secondary
+                                            )
+                                        }
+                                    }
+                                    if (locationText.isNotBlank()) {
+                                        Text(
+                                            text = locationText,
+                                            style = MaterialTheme.typography.bodySmall,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                            modifier = Modifier.padding(top = 4.dp)
+                                        )
+                                    }
+                                    if (!address.locationCode.isNullOrBlank()) {
+                                        Text(
+                                            text = "Codigo: ${address.locationCode}",
+                                            style = MaterialTheme.typography.labelSmall,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                            modifier = Modifier.padding(top = 4.dp)
+                                        )
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+
+                Text(
+                    text = "Si deseas agregar o modificar direcciones del cliente, hazlo desde la version web.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
+                )
+            }
+        }
+
+        // ===== 3) Delivery Location =====
         CollapsibleCard(
             title = "Lugar de entrega",
             expanded = openDelivery,
@@ -1485,7 +1598,7 @@ private fun AdditionalInfoSheet(
             )
         }
 
-        // ===== 3) Retenciones =====
+        // ===== 4) Retenciones =====
         CollapsibleCard(
             title = "Retenciones",
             expanded = openRetentions,
@@ -1514,7 +1627,7 @@ private fun AdditionalInfoSheet(
             }
         }
 
-        // ===== 4) Exportación =====
+        // ===== 5) Exportación =====
         if (isExport) {
             CollapsibleCard(
                 title = "Exportación",

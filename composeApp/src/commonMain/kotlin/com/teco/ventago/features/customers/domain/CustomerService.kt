@@ -10,6 +10,7 @@ import com.teco.ventago.core.logger.LogLevel
 import com.teco.ventago.features.customers.data.provider.json
 import com.teco.ventago.features.customers.data.repository.ICustomerRepository
 import com.teco.ventago.features.customers.data.repository.dto.CustomerCreatedDto
+import com.teco.ventago.features.customers.domain.models.CustomerAddress
 import com.teco.ventago.features.customers.domain.models.Customer
 import com.teco.ventago.features.customers.domain.models.CustomerListItem
 import com.teco.ventago.features.customers.domain.models.ValidateRucResponse
@@ -111,6 +112,13 @@ class CustomerService(
 
     suspend fun validateRUCRegister(ruc: String): ValidateRucResponse {
         return repository.validateRUCRegister(ruc)
+    }
+
+    suspend fun listCustomerAddresses(
+        businessId: Int,
+        invoiceCustomerId: Int
+    ): List<CustomerAddress> {
+        return repository.listCustomerAddresses(businessId, invoiceCustomerId)
     }
 
     suspend fun refresh(businessIdOpt: Int? = currentBusinessId) {

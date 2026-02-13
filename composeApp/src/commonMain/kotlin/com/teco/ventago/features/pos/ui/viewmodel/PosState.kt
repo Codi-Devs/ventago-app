@@ -5,6 +5,7 @@ import com.teco.ventago.design_system.molecules.pos.GlobalDiscountMode
 import com.teco.ventago.design_system.organism.LoadingBottomSheetState
 import com.teco.ventago.features.branches.domain.model.Branch
 import com.teco.ventago.features.branches.domain.model.FiscalBillingPoint
+import com.teco.ventago.features.customers.domain.models.CustomerAddress
 import com.teco.ventago.features.customers.domain.models.Customer
 import com.teco.ventago.features.customers.domain.models.CustomerListItem
 import com.teco.ventago.features.invoicing.domain.models.InvoiceStatus
@@ -108,6 +109,9 @@ data class PosState(
     val deliveryProvinceIndex: Int = 0,
     val deliveryDistrictIndex: Int = 0,
     val deliveryCorregIndex: Int = 0,
+    val customerAddresses: List<CustomerAddress> = emptyList(),
+    val selectedCustomerAddressId: Long? = null,
+    val customerAddressesLoading: Boolean = false,
 
     // === Quotes ===
     val flowMode: FlowMode = FlowMode.SALE,

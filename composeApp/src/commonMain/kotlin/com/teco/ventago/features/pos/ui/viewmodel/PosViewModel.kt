@@ -10,6 +10,7 @@ import com.teco.ventago.features.branches.domain.BranchService
 import com.teco.ventago.features.branches.domain.model.Branch as BranchModel
 import com.teco.ventago.features.business.domain.BusinessService
 import com.teco.ventago.features.business.domain.model.Business
+import com.teco.ventago.features.customers.domain.CustomerService
 import com.teco.ventago.features.customers.domain.models.CustomerListItem
 import com.teco.ventago.features.financialProfile.domain.FinancialProfileService
 import com.teco.ventago.features.invoicing.domain.models.InvoiceStatus
@@ -18,6 +19,7 @@ import com.teco.ventago.features.orders.domain.models.Order
 import com.teco.ventago.features.orders.domain.models.requests.Branch
 import com.teco.ventago.features.orders.domain.models.requests.Charge
 import com.teco.ventago.features.orders.domain.models.requests.CommercialAddenda
+import com.teco.ventago.features.orders.domain.models.requests.AdditionalAddress
 import com.teco.ventago.features.orders.domain.models.requests.CreateOrderPayment
 import com.teco.ventago.features.orders.domain.models.requests.CreateOrderRequest
 import com.teco.ventago.features.orders.domain.models.requests.CreateOrderTotals
@@ -69,6 +71,7 @@ import kotlinx.coroutines.IO
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.launchIn
 import kotlinx.coroutines.flow.onEach
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import kotlinx.datetime.Clock
@@ -98,6 +101,7 @@ class PosViewModel(
     private val authService: IAuthService,
     private val businessService: BusinessService,
     private val branchService: BranchService,
+    private val customerService: CustomerService,
     private val productService: ProductService,
     private val posService: PosService,
     private val financialProfileService: FinancialProfileService,
@@ -113,6 +117,7 @@ class PosViewModel(
 
     private var order: Order? = null
     private var pendingQuoteBranchCode: String? = null
+    private var customerAddressesJob: Job? = null
 
     init {
         viewModelScope.launch {
@@ -167,6 +172,7 @@ class PosViewModel(
                         )
                     }
                     business = it
+                    fetchCustomerAddresses()
                 }
             }.launchIn(this)
         }
@@ -194,7 +200,14 @@ class PosViewModel(
         }
 
         if (args.customerId == null) {
-            updateState { copy(finalCustomer = true) }
+            updateState {
+                copy(
+                    finalCustomer = true,
+                    customerAddresses = emptyList(),
+                    selectedCustomerAddressId = null,
+                    customerAddressesLoading = false
+                )
+            }
         } else {
             updateState {
                 copy(
@@ -210,6 +223,7 @@ class PosViewModel(
                     )
                 )
             }
+            fetchCustomerAddresses()
         }
 
         // Load cart from order lines if available
@@ -372,7 +386,78 @@ class PosViewModel(
     }
 
     fun selectCustomer(customer: CustomerListItem?) {
-        updateState { copy(customer = customer) }
+        updateState {
+            copy(
+                customer = customer,
+                customerAddresses = emptyList(),
+                selectedCustomerAddressId = null,
+                customerAddressesLoading = false
+            )
+        }
+        fetchCustomerAddresses()
+    }
+
+    private fun fetchCustomerAddresses() {
+        val state = uiState.value
+        val selectedCustomer = state.customer
+        val shouldLoad = state.finalCustomer == false &&
+            selectedCustomer != null &&
+            selectedCustomer.id > 0
+
+        if (!shouldLoad) {
+            customerAddressesJob?.cancel()
+            updateState {
+                copy(
+                    customerAddresses = emptyList(),
+                    selectedCustomerAddressId = null,
+                    customerAddressesLoading = false
+                )
+            }
+            return
+        }
+
+        val businessId = business?.businessId ?: return
+        val customerId = selectedCustomer.id.toInt()
+
+        customerAddressesJob?.cancel()
+        customerAddressesJob = viewModelScope.launch {
+            updateState {
+                copy(
+                    customerAddressesLoading = true,
+                    customerAddresses = emptyList(),
+                    selectedCustomerAddressId = null
+                )
+            }
+
+            try {
+                val addresses = withContext(Dispatchers.IO) {
+                    customerService.listCustomerAddresses(
+                        businessId = businessId,
+                        invoiceCustomerId = customerId
+                    )
+                }
+
+                val selectedAddressId = addresses.firstOrNull { it.isDefault }?.id
+                    ?: addresses.firstOrNull()?.id
+
+                updateState {
+                    copy(
+                        customerAddresses = addresses,
+                        selectedCustomerAddressId = selectedAddressId,
+                        customerAddressesLoading = false
+                    )
+                }
+            } catch (e: Exception) {
+                println("Error fetching customer addresses: ${e.message}")
+                updateState {
+                    copy(
+                        customerAddresses = emptyList(),
+                        selectedCustomerAddressId = null,
+                        customerAddressesLoading = false
+                    )
+                }
+            }
+        }
     }
 
     fun governmentWarningInvalidProducts(): List<String> {
@@ -563,6 +648,7 @@ class PosViewModel(
 
 
     fun resetForNewSale() {
+        customerAddressesJob?.cancel()
         updateState {
             copy(
                 cart = emptyList(),
@@ -619,6 +705,9 @@ class PosViewModel(
                 deliveryProvinceIndex = 0,
                 deliveryDistrictIndex = 0,
                 deliveryCorregIndex = 0,
+                customerAddresses = emptyList(),
+                selectedCustomerAddressId = null,
+                customerAddressesLoading = false,
 
                 // Retention
                 retentionCodeIndex = 0,      // index in retention list
@@ -1117,7 +1206,14 @@ class PosViewModel(
             )
         }
 
-        val deliveryLocation: DeliveryLocation? = if (state.deliveryReceiverRuc.isNotEmpty()) {
+        val selectedAddressLocationCode = state.customerAddresses
+            .firstOrNull { it.id == state.selectedCustomerAddressId }
+            ?.locationCode
+            ?.takeIf { it.isNotBlank() }
+
+        val hasDeliveryData = state.deliveryReceiverRuc.isNotEmpty() || selectedAddressLocationCode != null
+
+        val deliveryLocation: DeliveryLocation? = if (hasDeliveryData) {
             DeliveryLocation(
                 receiverLegalName = state.deliveryReceiverLegalName,
                 receiverTaxpayerType = if (state.deliveryReceiverTaxpayerTypeIndex == 0) "01" else "02",
@@ -1125,11 +1221,24 @@ class PosViewModel(
                 receiverTaxDv = state.deliveryReceiverDv,
                 contactPhone = state.deliveryContactPhone,
                 alternateContactPhone = state.deliveryAltContactPhone,
-                locationCode = "8-8-8", // TODO fix hardcoded code
+                locationCode = selectedAddressLocationCode ?: "8-8-8",
             )
         } else {
             null
         }
+
+        val selectedCustomerAddress = state.customerAddresses
+            .firstOrNull { it.id == state.selectedCustomerAddressId }
+
+        val additionalAddress = selectedCustomerAddress
+            ?.takeIf { !it.isDefault }
+            ?.let { address ->
+                val locationCode = address.locationCode?.takeIf { it.isNotBlank() } ?: return@let null
+                AdditionalAddress(
+                    addressLine = address.addressLine,
+                    locationCode = locationCode
+                )
+            }
 
         val commercialAddenda: CommercialAddenda? = null // TODO add commercial addenda if needed
 
@@ -1151,6 +1260,7 @@ class PosViewModel(
             exportation = exportation,
             logistics = logistics,
             deliveryLocation = deliveryLocation,
+            additionalAddress = additionalAddress,
             commercialAddenda = commercialAddenda,
             links = links,
             formats = formats,
@@ -1377,6 +1487,9 @@ class PosViewModel(
                 finalIdType = if (isFinalCustomer) resolvedFinalIdType else current.finalIdType,
                 finalIdNumber = if (isFinalCustomer) finalIdNumber else null,
                 finalPassportCountry = if (isFinalCustomer) finalCountry else null,
+                customerAddresses = emptyList(),
+                selectedCustomerAddressId = null,
+                customerAddressesLoading = false,
                 globalDiscountMode = GlobalDiscountMode.NONE,
                 globalDiscountPercent = 0,
                 globalDiscountFixedCents = 0L,
@@ -1384,6 +1497,10 @@ class PosViewModel(
                 globalInsuranceCents = 0L,
                 globalOtherChargesCents = 0L
             )
+        }
+
+        if (!isFinalCustomer) {
+            fetchCustomerAddresses()
         }
 
         val branchCode = quote.branchCode
@@ -1450,6 +1567,9 @@ class PosViewModel(
                 finalIdType = if (isFinalCustomer) resolvedFinalIdType else current.finalIdType,
                 finalIdNumber = if (isFinalCustomer) finalIdNumber else null,
                 finalPassportCountry = if (isFinalCustomer) finalCountry else null,
+                customerAddresses = emptyList(),
+                selectedCustomerAddressId = null,
+                customerAddressesLoading = false,
                 globalDiscountMode = GlobalDiscountMode.NONE,
                 globalDiscountPercent = 0,
                 globalDiscountFixedCents = 0L,
@@ -1457,6 +1577,10 @@ class PosViewModel(
                 globalInsuranceCents = 0L,
                 globalOtherChargesCents = 0L
             )
+        }
+
+        if (!isFinalCustomer) {
+            fetchCustomerAddresses()
         }
 
         val branchCode = quote.branchCode
@@ -1594,7 +1718,16 @@ class PosViewModel(
 
     fun onFinalCustomerToggle(isFinal: Boolean) {
         updateState {
-            copy(finalCustomer = isFinal, customer = if (isFinal) null else customer)
+            copy(
+                finalCustomer = isFinal,
+                customer = if (isFinal) null else customer,
+                customerAddresses = if (isFinal) emptyList() else customerAddresses,
+                selectedCustomerAddressId = if (isFinal) null else selectedCustomerAddressId,
+                customerAddressesLoading = false
+            )
+        }
+        if (!isFinal) {
+            fetchCustomerAddresses()
         }
     }
 
@@ -1810,6 +1943,9 @@ class PosViewModel(
     fun onDelType(idx: Int) = updateState { copy(deliveryReceiverTaxpayerTypeIndex = idx) }
     fun onDelPhone(v: String) = updateState { copy(deliveryContactPhone = v) }
     fun onDelAltPhone(v: String) = updateState { copy(deliveryAltContactPhone = v) }
+    fun onCustomerAddressSelected(addressId: Long) = updateState {
+        copy(selectedCustomerAddressId = addressId)
+    }
 
     fun onProvinceSelected(idx: Int) = updateState {
         copy(

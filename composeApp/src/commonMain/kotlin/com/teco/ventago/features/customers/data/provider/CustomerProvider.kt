@@ -32,6 +32,7 @@ interface ICustomerProvider {
 
     suspend fun validateRUC(ruc: String, businessId: Int): ApiResponse
     suspend fun validateRUCRegister(ruc: String): ApiResponse
+    suspend fun listCustomerAddresses(businessId: Int, invoiceCustomerId: Int): ApiResponse
 }
 
 val json = Json {
@@ -177,6 +178,31 @@ class CustomerProvider(private val client: HttpClient, private val authService: 
             try {
                 authService.refreshToken(client)
                 validateRUCRegister(ruc)
+            } catch (_: Exception) {
+                response
+            }
+        } else {
+            response
+        }
+    }
+
+    override suspend fun listCustomerAddresses(businessId: Int, invoiceCustomerId: Int): ApiResponse {
+        val res = client.get("${Configs.ordersBasePath}/api/v1/invoicing/customers/$invoiceCustomerId/addresses") {
+            headers {
+                append(HttpHeaders.Accept, "*/*")
+                append(HttpHeaders.Authorization, "Bearer ${authService.getJwtToken()}")
+                append(HttpHeaders.ContentType, "application/json")
+                append("X-Business-ID", "$businessId")
+            }
+        }
+
+        val body = res.body<JsonObject>()
+        val response = ApiResponse.fromJson(body)
+
+        return if (response.error == ApiError.AUTH_001) {
+            try {
+                authService.refreshToken(client)
+                listCustomerAddresses(businessId, invoiceCustomerId)
             } catch (_: Exception) {
                 response
             }

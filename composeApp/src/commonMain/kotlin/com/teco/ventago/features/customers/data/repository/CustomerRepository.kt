@@ -7,16 +7,15 @@ import com.teco.ventago.core.logger.Log
 import com.teco.ventago.core.logger.LogLevel
 import com.teco.ventago.features.customers.data.provider.ICustomerProvider
 import com.teco.ventago.features.customers.data.repository.dto.CustomerCreatedDto
+import com.teco.ventago.features.customers.domain.models.CustomerAddress
 import com.teco.ventago.features.customers.domain.models.Customer
 import com.teco.ventago.features.customers.domain.models.CustomerListItem
 import com.teco.ventago.features.customers.domain.models.ValidateRucResponse
-import com.teco.ventago.features.financialProfile.domain.model.BusinessFinancialProfile
 import com.teco.ventago.utils.ApiError
-import com.teco.ventago.utils.ApiResponse
 import com.teco.ventago.utils.BadRequestException
 import com.teco.ventago.utils.InvalidRucException
 import com.teco.ventago.utils.isError
-import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.decodeFromJsonElement
 
@@ -33,6 +32,7 @@ interface ICustomerRepository {
 
     suspend fun validateRUC(ruc: String, businessId: Int): ValidateRucResponse
     suspend fun validateRUCRegister(ruc: String): ValidateRucResponse
+    suspend fun listCustomerAddresses(businessId: Int, invoiceCustomerId: Int): List<CustomerAddress>
 }
 
 class CustomerRepository(
@@ -148,6 +148,32 @@ class CustomerRepository(
                     LogLevel.ERROR,
                     "CustomerRepository::validateRUC",
                     "Error validating ruc. Error: ${e.message ?: "UNKNOWN"}"
+                )
+            )
+            throw e
+        }
+    }
+
+    override suspend fun listCustomerAddresses(
+        businessId: Int,
+        invoiceCustomerId: Int
+    ): List<CustomerAddress> {
+        try {
+            val response = provider.listCustomerAddresses(businessId, invoiceCustomerId)
+            if (response.error.isError()) {
+                throw BadRequestException(response.toJson())
+            }
+
+            val dataArray = response.data as? JsonArray ?: return emptyList()
+            return dataArray.mapNotNull { item ->
+                runCatching { json.decodeFromJsonElement<CustomerAddress>(item) }.getOrNull()
+            }
+        } catch (e: Exception) {
+            logger.sendLog(
+                Log(
+                    LogLevel.ERROR,
+                    "CustomerRepository::listCustomerAddresses",
+                    "Error listing customer addresses. businessId: $businessId, invoiceCustomerId: $invoiceCustomerId. Error: ${e.message ?: "UNKNOWN"}"
                 )
             )
             throw e
