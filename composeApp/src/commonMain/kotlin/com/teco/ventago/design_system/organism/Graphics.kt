@@ -2,6 +2,7 @@ package com.teco.ventago.design_system.organism
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -11,6 +12,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.WarningAmber
@@ -40,6 +42,7 @@ import com.teco.ventago.utils.toLongCents
 import org.jetbrains.compose.resources.stringResource
 import ventago.composeapp.generated.resources.Res
 import ventago.composeapp.generated.resources.no_data
+import kotlin.math.abs
 
 @Composable
 fun BarGraphic(
@@ -52,8 +55,9 @@ fun BarGraphic(
     normalColor: Color = MaterialTheme.colorScheme.secondaryContainer,
     onItemClick: (Int) -> Unit = {}
 ) {
+    val displayItems = if (itemsToShow <= 0) emptyList() else data.take(itemsToShow)
 
-    if (data.isEmpty()) {
+    if (displayItems.isEmpty()) {
         Row(
             Modifier
                 .height(barGraphicHeight.dp).fillMaxWidth(),
@@ -84,21 +88,21 @@ fun BarGraphic(
             )
         }
     } else {
+        val barWidth = if (displayItems.size > 18) 24.dp else 34.dp
+        val biggestValue = displayItems.maxOfOrNull { abs(it.second) } ?: 0.0
         Row (
-            modifier = modifier.height((barGraphicHeight+40.0).dp).fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
+            modifier = modifier
+                .height((barGraphicHeight + 40.0).dp)
+                .horizontalScroll(rememberScrollState()),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
             verticalAlignment = Alignment.Bottom
         ) {
-            val biggestValue = data.maxByOrNull { it.second }?.second ?: 0.0
-            data.forEachIndexed { index, pair ->
-                if (index >= itemsToShow) {
-                    return@forEachIndexed
-                }
+            displayItems.forEachIndexed { index, pair ->
                 val color = if (index == selectedIndex) selectedColor else normalColor
-                val height = if (pair.second == 0.0) {
+                val height = if (pair.second == 0.0 || biggestValue == 0.0) {
                     1.0
                 } else {
-                    getBarHeight(pair.second, biggestValue, barGraphicHeight)
+                    getBarHeight(abs(pair.second), biggestValue, barGraphicHeight)
                 }
 
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
@@ -129,7 +133,7 @@ fun BarGraphic(
 
                     Box(
                         Modifier
-                            .size(34.dp, height.dp)
+                            .size(barWidth, height.dp)
                             .background(color, RoundedCornerShape(4.dp))
                             .clickable {
                                 onItemClick(index)

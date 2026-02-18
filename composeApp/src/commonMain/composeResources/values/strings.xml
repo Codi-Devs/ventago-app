@@ -329,6 +329,21 @@
     <string name="visits_today">Visits</string>
     <string name="configure">Configure</string>
     <string name="no_data">There is no data. Register your first sale to see the graphic.</string>
+    <string name="home_range_7d">7D</string>
+    <string name="home_range_15d">15D</string>
+    <string name="home_range_month">Month</string>
+    <string name="home_range_year">Year</string>
+    <string name="home_year_sales">Year sales</string>
+    <string name="home_month_sales">Month sales</string>
+    <string name="home_today_sales">Today sales</string>
+    <string name="home_month_expenses">Month expenses</string>
+    <string name="home_includes_itbms">Includes ITBMS</string>
+    <string name="home_base">Base</string>
+    <string name="home_itbms">ITBMS</string>
+    <string name="home_orders">Orders</string>
+    <string name="home_daily_average">Daily average</string>
+    <string name="home_expenses_count">Records</string>
+    <string name="home_no_month_expenses">No expenses registered</string>
 
 <!--    Invoicing Strings -->
     <string name="invoicing">Invoicing</string>

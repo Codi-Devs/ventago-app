@@ -324,6 +324,21 @@
     <string name="visits_today">Visitas</string>
     <string name="configure">Configurar</string>
     <string name="no_data">No hay datos. Registra tu primera venta para ver el gráfico.</string>
+    <string name="home_range_7d">7D</string>
+    <string name="home_range_15d">15D</string>
+    <string name="home_range_month">Mes</string>
+    <string name="home_range_year">Año</string>
+    <string name="home_year_sales">Ventas del año</string>
+    <string name="home_month_sales">Ventas del mes</string>
+    <string name="home_today_sales">Ventas de hoy</string>
+    <string name="home_month_expenses">Gastos del mes</string>
+    <string name="home_includes_itbms">Incluye ITBMS</string>
+    <string name="home_base">Base</string>
+    <string name="home_itbms">ITBMS</string>
+    <string name="home_orders">Órdenes</string>
+    <string name="home_daily_average">Promedio diario</string>
+    <string name="home_expenses_count">Registros</string>
+    <string name="home_no_month_expenses">Sin gastos registrados</string>
 
 <!--    Invoicing Strings -->
     <string name="invoicing">Facturación</string>

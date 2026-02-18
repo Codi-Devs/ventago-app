@@ -41,7 +41,11 @@ import com.teco.ventago.features.customers.domain.CustomerService
 import com.teco.ventago.features.financialProfile.data.provider.FinancialProfileProvider
 import com.teco.ventago.features.financialProfile.data.repository.FinancialProfileRepository
 import com.teco.ventago.features.financialProfile.domain.FinancialProfileService
-import com.teco.ventago.features.home.domain.HistoricSalesService
+import com.teco.ventago.features.home.data.provider.HomeSummaryProvider
+import com.teco.ventago.features.home.data.provider.IHomeSummaryProvider
+import com.teco.ventago.features.home.data.repository.HomeSummaryRepository
+import com.teco.ventago.features.home.data.repository.IHomeSummaryRepository
+import com.teco.ventago.features.home.domain.HomeSummaryService
 import com.teco.ventago.features.home.ui.viewmodel.HomeViewModel
 import com.teco.ventago.features.orders.data.provider.OrdersProvider
 import com.teco.ventago.features.orders.data.repository.OrdersRepository
@@ -288,8 +292,27 @@ internal fun appModule() = module {
         FirebaseService()
     }
 
-    single<HistoricSalesService> {
-        HistoricSalesService(get())
+    single<IHomeSummaryProvider> {
+        HomeSummaryProvider(
+            client = get(),
+            authService = get()
+        )
+    }
+
+    single<IHomeSummaryRepository> {
+        HomeSummaryRepository(
+            provider = get(),
+            logger = get()
+        )
+    }
+
+    single {
+        HomeSummaryService(
+            repository = get(),
+            storage = get(),
+            logger = get(),
+            json = json
+        )
     }
 
     single<IAuthProvider> {

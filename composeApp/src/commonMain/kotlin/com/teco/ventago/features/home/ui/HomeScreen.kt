@@ -34,6 +34,8 @@ import androidx.compose.material.icons.rounded.EventAvailable
 import androidx.compose.material.icons.rounded.EventBusy
 import androidx.compose.material.icons.rounded.Payment
 import androidx.compose.material.icons.rounded.ReceiptLong
+import androidx.compose.material.icons.rounded.TrendingDown
+import androidx.compose.material.icons.rounded.TrendingUp
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
@@ -81,13 +83,24 @@ import com.teco.ventago.design_system.theme.headlineLarge
 import com.teco.ventago.design_system.theme.labelSmall
 import com.teco.ventago.design_system.theme.latoFontFamily
 import com.teco.ventago.design_system.theme.titleMediumBold
+import com.teco.ventago.design_system.theme.vanishedBackgroundColor
 import com.teco.ventago.core.flags.IFlagsService
 import com.teco.ventago.features.home.ui.viewmodel.HomeViewModel
+import com.teco.ventago.features.home.domain.model.HomeSalesRange
+import com.teco.ventago.features.home.domain.model.HomeSummary
 import com.teco.ventago.core.LocalStorage
 import com.teco.ventago.features.quotes.domain.QuotesOnboarding
 import com.teco.ventago.navigation.PosScreens
 import com.teco.ventago.rememberPlatformState
+import com.teco.ventago.utils.formatNumberToMoney
 import com.teco.ventago.utils.openWhatsappMessage
+import com.teco.ventago.utils.toDecimalString
+import com.teco.ventago.utils.toLongCents
+import kotlinx.datetime.Clock
+import kotlinx.datetime.TimeZone
+import kotlinx.datetime.toLocalDateTime
+import kotlin.math.abs
+import kotlin.math.round
 import org.jetbrains.compose.resources.painterResource
 import org.jetbrains.compose.resources.stringResource
 import org.koin.compose.viewmodel.koinViewModel
@@ -109,6 +122,21 @@ import ventago.composeapp.generated.resources.quotes_welcome_message_small
 import ventago.composeapp.generated.resources.quotes_welcome_title
 import ventago.composeapp.generated.resources.sales
 import ventago.composeapp.generated.resources.expenses
+import ventago.composeapp.generated.resources.home_base
+import ventago.composeapp.generated.resources.home_daily_average
+import ventago.composeapp.generated.resources.home_expenses_count
+import ventago.composeapp.generated.resources.home_includes_itbms
+import ventago.composeapp.generated.resources.home_itbms
+import ventago.composeapp.generated.resources.home_month_expenses
+import ventago.composeapp.generated.resources.home_month_sales
+import ventago.composeapp.generated.resources.home_no_month_expenses
+import ventago.composeapp.generated.resources.home_orders
+import ventago.composeapp.generated.resources.home_range_15d
+import ventago.composeapp.generated.resources.home_range_7d
+import ventago.composeapp.generated.resources.home_range_month
+import ventago.composeapp.generated.resources.home_range_year
+import ventago.composeapp.generated.resources.home_today_sales
+import ventago.composeapp.generated.resources.home_year_sales
 import ventago.composeapp.generated.resources.yappy_logo
 import ventago.composeapp.generated.resources.yappy_logo_portrait
 
@@ -178,28 +206,33 @@ fun HomeScreen(
             )
         }
 
-        val salesData = uiState.sales ?: mutableListOf()
-        val hasNonZeroSales = salesData.isNotEmpty() && salesData.any { it.second > 0.0 }
-        if (hasNonZeroSales) {
-            Text(
-                stringResource(Res.string.sales),
-                modifier = Modifier.padding(start = 16.dp, end = 16.dp, top = 16.dp),
-                style = TextStyle(
-                    fontSize = 16.sp,
-                    lineHeight = 24.sp,
-                    fontFamily = latoFontFamily(),
-                    fontWeight = FontWeight(500),
-                    letterSpacing = 0.15.sp,
-                )
+        val salesData = uiState.salesChart
+        Text(
+            stringResource(Res.string.sales),
+            modifier = Modifier.padding(start = 16.dp, end = 16.dp, top = 16.dp),
+            style = TextStyle(
+                fontSize = 16.sp,
+                lineHeight = 24.sp,
+                fontFamily = latoFontFamily(),
+                fontWeight = FontWeight(500),
+                letterSpacing = 0.15.sp,
             )
-            BarGraphic(
-                modifier = Modifier.padding(start = 16.dp, end = 16.dp, top = 24.dp),
-                data = salesData,
-                selectedIndex = uiState.selectedSalesIndex,
-                barGraphicHeight = 100.0,
-            ) {
-                viewModel.setSelectedSalesIndex(it)
-            }
+        )
+
+        HomeSalesRangeSelector(
+            selectedRange = uiState.selectedRange,
+            onRangeSelected = viewModel::setSalesRange,
+            modifier = Modifier.padding(start = 16.dp, end = 16.dp, top = 12.dp)
+        )
+
+        BarGraphic(
+            modifier = Modifier.padding(start = 16.dp, end = 16.dp, top = 16.dp),
+            data = salesData,
+            selectedIndex = uiState.selectedSalesIndex,
+            barGraphicHeight = 100.0,
+            itemsToShow = salesData.size,
+        ) {
+            viewModel.setSelectedSalesIndex(it)
         }
 
 
@@ -357,6 +390,14 @@ fun HomeScreen(
             }
         }
 
+        uiState.homeSummary?.let { summary ->
+            HomeSummaryCards(
+                summary = summary,
+                modifier = Modifier.padding(start = 16.dp, end = 16.dp, top = 16.dp)
+            )
+        }
+
+
         if (!appState.value.paymentsConfigured) {
             Card(
                 modifier = Modifier.padding(16.dp),
@@ -506,6 +547,224 @@ fun HomeScreen(
                 Spacer(Modifier.height(12.dp))
             }
         }
+    }
+}
+
+@Composable
+private fun HomeSalesRangeSelector(
+    selectedRange: HomeSalesRange,
+    onRangeSelected: (HomeSalesRange) -> Unit,
+    modifier: Modifier = Modifier
+) {
+    Row(
+        modifier = modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(8.dp)
+    ) {
+        HomeSalesRange.values().forEach { range ->
+            val selected = range == selectedRange
+            SuggestionChip(
+                onClick = { onRangeSelected(range) },
+                label = {
+                    Text(
+                        text = when (range) {
+                            HomeSalesRange.D7 -> stringResource(Res.string.home_range_7d)
+                            HomeSalesRange.D15 -> stringResource(Res.string.home_range_15d)
+                            HomeSalesRange.MONTH -> stringResource(Res.string.home_range_month)
+                            HomeSalesRange.YEAR -> stringResource(Res.string.home_range_year)
+                        },
+                        style = labelSmall(
+                            color = if (selected) {
+                                MaterialTheme.colorScheme.onPrimary
+                            } else {
+                                MaterialTheme.colorScheme.onSurface
+                            }
+                        )
+                    )
+                },
+                colors = SuggestionChipDefaults.suggestionChipColors(
+                    containerColor = if (selected) {
+                        MaterialTheme.colorScheme.primary
+                    } else {
+                        MaterialTheme.colorScheme.surfaceVariant
+                    }
+                )
+            )
+        }
+    }
+}
+
+@Composable
+private fun HomeSummaryCards(
+    summary: HomeSummary,
+    modifier: Modifier = Modifier
+) {
+    val dayOfMonth = Clock.System.now().toLocalDateTime(TimeZone.currentSystemDefault()).date.dayOfMonth
+    val averagePerDay = if (dayOfMonth > 0) summary.monthSalesTotalWithTaxes / dayOfMonth else 0.0
+    val hasMonthExpenses = summary.monthExpenseTotal != 0.0 || summary.monthExpenseCount > 0
+    val monthChangePositive = summary.monthSalesChangePerc >= 0.0
+
+    Column(modifier = modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+            Card(
+                modifier = Modifier.weight(1f),
+                elevation = CardDefaults.cardElevation(2.dp),
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.secondary)
+            ) {
+                Column(modifier = Modifier.padding(12.dp)) {
+                    Text(
+                        text = stringResource(Res.string.home_year_sales),
+                        style = bodyMediumBold(color = MaterialTheme.colorScheme.onSecondary)
+                    )
+                    Spacer(Modifier.height(8.dp))
+                    Text(
+                        text = toMoney(summary.yearSalesTotal),
+                        style = titleMediumBold(color = MaterialTheme.colorScheme.onSecondary)
+                    )
+                    Spacer(Modifier.height(2.dp))
+                    Text(
+                        text = stringResource(Res.string.home_includes_itbms),
+                        style = labelSmall(color = MaterialTheme.colorScheme.onSecondary.copy(alpha = 0.8f))
+                    )
+                }
+            }
+
+            Card(
+                modifier = Modifier.weight(1f),
+                elevation = CardDefaults.cardElevation(2.dp),
+                colors = CardDefaults.cardColors(containerColor = cardContainerColor())
+            ) {
+                Column(modifier = Modifier.padding(12.dp)) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = stringResource(Res.string.home_month_sales),
+                        style = bodyMediumBold()
+                    )
+                    Row(
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(50))
+                            .background(
+                                if (monthChangePositive) Color(0xFF2E7D32).copy(alpha = 0.15f)
+                                else Color(0xFFD32F2F).copy(alpha = 0.15f)
+                            )
+                            .padding(horizontal = 8.dp, vertical = 4.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(
+                            imageVector = if (monthChangePositive) Icons.Rounded.TrendingUp else Icons.Rounded.TrendingDown,
+                            contentDescription = null,
+                            tint = if (monthChangePositive) Color(0xFF2E7D32) else Color(0xFFD32F2F),
+                            modifier = Modifier.size(14.dp)
+                        )
+                        Spacer(Modifier.width(4.dp))
+                        Text(
+                            text = "${abs(summary.monthSalesChangePerc).toOneDecimal()}%",
+                            style = labelSmall(
+                                color = if (monthChangePositive) Color(0xFF2E7D32) else Color(0xFFD32F2F)
+                            )
+                        )
+                    }
+                }
+                Spacer(Modifier.height(8.dp))
+                Text(
+                    text = toMoney(summary.monthSalesTotalWithTaxes),
+                    style = titleMediumBold(color = MaterialTheme.colorScheme.primary)
+                )
+                Spacer(Modifier.height(8.dp))
+                Text(
+                    text = "${stringResource(Res.string.home_base)}: ${toMoney(summary.monthSalesTotal)}",
+                    style = labelSmall(color = MaterialTheme.colorScheme.onSurfaceVariant)
+                )
+                Spacer(Modifier.height(2.dp))
+                Text(
+                    text = "${stringResource(Res.string.home_itbms)}: ${toMoney(summary.monthSalesTaxTotal)}",
+                    style = labelSmall(color = MaterialTheme.colorScheme.onSurfaceVariant)
+                )
+                Spacer(Modifier.height(4.dp))
+                Text(
+                    text = "${stringResource(Res.string.home_orders)}: ${summary.monthOrderCount}",
+                    style = labelSmall(color = MaterialTheme.colorScheme.onSurfaceVariant)
+                )
+            }
+        }
+        }
+
+        Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+            Card(
+                modifier = Modifier.weight(1f),
+                elevation = CardDefaults.cardElevation(2.dp),
+                colors = CardDefaults.cardColors(containerColor = vanishedBackgroundColor())
+            ) {
+                Column(modifier = Modifier.padding(12.dp)) {
+                    Text(
+                        text = stringResource(Res.string.home_today_sales),
+                        style = bodyMediumBold()
+                    )
+                    Spacer(Modifier.height(8.dp))
+                    Text(
+                        text = toMoney(summary.todaySalesTotal),
+                        style = titleMediumBold(color = MaterialTheme.colorScheme.primary)
+                    )
+                    Spacer(Modifier.height(4.dp))
+                    Text(
+                        text = "${stringResource(Res.string.home_orders)}: ${summary.todayOrderCount}",
+                        style = labelSmall(color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    )
+                    Spacer(Modifier.height(2.dp))
+                    Text(
+                        text = "${stringResource(Res.string.home_daily_average)}: ${toMoney(averagePerDay)}",
+                        style = labelSmall(color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    )
+                }
+            }
+
+            Card(
+                modifier = Modifier.weight(1f),
+                elevation = CardDefaults.cardElevation(2.dp),
+                colors = CardDefaults.cardColors(containerColor = cardContainerColor())
+            ) {
+                Column(modifier = Modifier.padding(12.dp)) {
+                    Text(
+                        text = stringResource(Res.string.home_month_expenses),
+                        style = bodyMediumBold()
+                    )
+                    Spacer(Modifier.height(8.dp))
+                    if (hasMonthExpenses) {
+                        Text(
+                            text = toMoney(summary.monthExpenseTotal),
+                            style = titleMediumBold(color = MaterialTheme.colorScheme.primary)
+                        )
+                        Spacer(Modifier.height(4.dp))
+                        Text(
+                            text = "${stringResource(Res.string.home_expenses_count)}: ${summary.monthExpenseCount}",
+                            style = labelSmall(color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        )
+                    } else {
+                        Text(
+                            text = stringResource(Res.string.home_no_month_expenses),
+                            style = bodyMedium()
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+
+private fun toMoney(value: Double): String {
+    return formatNumberToMoney(value.toLongCents().toDecimalString())
+}
+
+private fun Double.toOneDecimal(): String {
+    val text = (round(this * 10.0) / 10.0).toString()
+    return if (text.contains('.')) {
+        val parts = text.split('.')
+        "${parts[0]}.${parts.getOrElse(1) { "0" }.take(1).padEnd(1, '0')}"
+    } else {
+        "$text.0"
     }
 }
 

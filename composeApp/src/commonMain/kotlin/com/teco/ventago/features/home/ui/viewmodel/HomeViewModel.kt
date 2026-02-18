@@ -1,19 +1,15 @@
 package com.teco.ventago.features.home.ui.viewmodel
 
-import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import androidx.lifecycle.viewmodel.compose.viewModel
 import com.teco.ventago.core.BaseViewModel
-import com.teco.ventago.features.auth.domain.IAuthService
+import com.teco.ventago.core.beta.BetaFeature
+import com.teco.ventago.core.beta.BetaService
 import com.teco.ventago.features.business.domain.BusinessService
 import com.teco.ventago.features.financialProfile.domain.FinancialProfileService
-import com.teco.ventago.features.financialProfile.domain.model.BusinessFinancialProfile
-import com.teco.ventago.features.home.domain.HistoricSalesService
-import com.teco.ventago.features.payments.domain.PaymentService
+import com.teco.ventago.features.home.domain.HomeSummaryService
+import com.teco.ventago.features.home.domain.model.HomeSalesChartMapper
+import com.teco.ventago.features.home.domain.model.HomeSalesRange
 import com.teco.ventago.features.product.domain.ProductService
-import com.teco.ventago.core.beta.BetaService
-import com.teco.ventago.core.beta.BetaFeature
-import com.teco.ventago.viewModels
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.launchIn
@@ -24,10 +20,11 @@ class HomeViewModel(
     private val businessService: BusinessService,
     private val productService: ProductService,
     private val financialProfileService: FinancialProfileService,
-    private val authService: IAuthService,
-    private val salesService: HistoricSalesService,
+    private val homeSummaryService: HomeSummaryService,
     private val betaService: BetaService,
-): BaseViewModel<HomeState, HomeStateUiEvent>(HomeState()) {
+) : BaseViewModel<HomeState, HomeStateUiEvent>(HomeState()) {
+
+    private var summaryBusinessId: Int? = null
 
     init {
         if (isEmptyData()) {
@@ -45,7 +42,6 @@ class HomeViewModel(
             }.onEach { newState ->
                 val business = newState.first
                 val products = newState.second
-                println("ASDASD: hasQuotes: ${business != null && products != null}")
                 if (business != null && products != null) {
                     updateState {
                         copy(
@@ -53,9 +49,25 @@ class HomeViewModel(
                             products = products
                         )
                     }
-                    delay(200)
-                    updateState { copy(isLoadingData = false) }
-                    salesService.initialize(business.businessId)
+                    if (uiState.value.isLoadingData) {
+                        delay(200)
+                        updateState { copy(isLoadingData = false) }
+                    }
+
+                    if (summaryBusinessId != business.businessId) {
+                        summaryBusinessId = business.businessId
+                        updateState { copy(isSummaryLoading = true, summaryError = null) }
+                        runCatching {
+                            homeSummaryService.setBusiness(business.businessId, refresh = true)
+                        }.onFailure { error ->
+                            updateState {
+                                copy(
+                                    isSummaryLoading = false,
+                                    summaryError = error.message ?: "Error loading summary"
+                                )
+                            }
+                        }
+                    }
                 }
             }.launchIn(this)
 
@@ -79,25 +91,43 @@ class HomeViewModel(
                 }
             }.launchIn(this)
 
-            salesService.getSales().onEach { newSales ->
-                val nextIndex = if (!newSales.isNullOrEmpty()) {
-                    newSales.lastIndex
-                } else {
-                    uiState.value.selectedSalesIndex
+            homeSummaryService.observe().onEach { summary ->
+                val chart = HomeSalesChartMapper.buildChart(summary, uiState.value.selectedRange)
+                updateState {
+                    copy(
+                        homeSummary = summary,
+                        salesChart = chart,
+                        selectedSalesIndex = if (chart.isNotEmpty()) chart.lastIndex else 0,
+                        isSummaryLoading = false,
+                        summaryError = if (summary != null) null else summaryError
+                    )
                 }
-                updateState { copy(sales = newSales, selectedSalesIndex = nextIndex) }
             }.launchIn(this)
         }
     }
-
-
 
     private fun isEmptyData(): Boolean {
         return uiState.value.business == null || uiState.value.products == null
     }
 
-    fun setSelectedSalesIndex(index: Int) {
-        updateState { copy(selectedSalesIndex = index) }
+    fun setSalesRange(range: HomeSalesRange) {
+        if (uiState.value.selectedRange == range) {
+            return
+        }
+
+        val chart = HomeSalesChartMapper.buildChart(uiState.value.homeSummary, range)
+        updateState {
+            copy(
+                selectedRange = range,
+                salesChart = chart,
+                selectedSalesIndex = if (chart.isNotEmpty()) chart.lastIndex else 0
+            )
+        }
     }
 
+    fun setSelectedSalesIndex(index: Int) {
+        val chart = uiState.value.salesChart
+        if (chart.isEmpty()) return
+        updateState { copy(selectedSalesIndex = index.coerceIn(0, chart.lastIndex)) }
+    }
 }

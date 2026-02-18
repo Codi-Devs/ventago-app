@@ -1,3 +1,22 @@
+## Skill Invocation Policy
+
+Apply `$disciplined-execution` on every task by default.
+
+**Required on all tasks**:
+- Start with plan-first execution for non-trivial work.
+- Use verification gates before marking work complete.
+- Keep task tracking in `tasks/todo.md` and corrections in `tasks/lessons.md`.
+- Apply simplicity, root-cause, and minimal-impact principles from the skill.
+
+## Reference Documentation
+
+Before making changes, review the relevant documentation:
+
+- **[Architecture](doc/architecture.md)** — Project structure, layers, data flow, navigation, DI, core services, and key dependencies.
+- **[Code Conventions](doc/code-conventions.md)** — Naming, ViewModel/State/Event patterns, Service/Repository/Provider patterns, serialization, error handling, loading states, async, and DI usage.
+
+---
+
 # UI Style Guide for Invoice / Quote / Transaction Detail Screens
 
 This document describes the standard UI patterns used to present invoices, quotes, and transaction details in the VentaGo KMP app.
