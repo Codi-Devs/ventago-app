@@ -30,13 +30,21 @@ object OrdersRequests {
             }
         """.trimIndent()
 
-    fun loadOrders(businessId: Int, pageSize: Int, page: Int): String =
-        """
+    fun loadOrders(
+        businessId: Int,
+        pageSize: Int,
+        page: Int,
+        paymentStatus: Int? = null
+    ): String {
+        val paymentStatusField = paymentStatus?.let { ",\n                \"payment_status\": $it" } ?: ""
+        return """
             {
+                "business_id": $businessId,
                 "page": $page,
-                "page_size": $pageSize
+                "page_size": $pageSize$paymentStatusField
             }
         """.trimIndent()
+    }
 
     fun changeOrderStatus(orderId: Int, status: Int, businessId: Int): String =
         """

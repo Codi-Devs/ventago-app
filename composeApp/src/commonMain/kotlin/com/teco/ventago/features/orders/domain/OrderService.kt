@@ -9,6 +9,7 @@ import com.teco.ventago.features.orders.domain.models.ManualPaymentMethodOption
 import com.teco.ventago.features.orders.domain.models.Order
 import com.teco.ventago.features.orders.domain.models.OrderStatus
 import com.teco.ventago.features.orders.domain.models.requests.CancelOrderRequest
+import com.teco.ventago.features.orders.domain.models.requests.DeleteOrderRequest
 import com.teco.ventago.features.orders.domain.models.requests.ManualPaymentItemRequest
 import com.teco.ventago.features.orders.domain.models.requests.RegisterManualPaymentsDataResponse
 import com.teco.ventago.features.orders.domain.models.requests.RegisterManualPaymentsRequest
@@ -48,8 +49,16 @@ class OrderService(private val repository: IOrdersRepository) {
     }
 
 
-    suspend fun loadOrders(businessId: Int): List<Order> {
-        val newOrders = repository.loadOrders(businessId, pageSize, page)
+    suspend fun loadOrders(
+        businessId: Int,
+        paymentStatus: Int? = null
+    ): List<Order> {
+        val newOrders = repository.loadOrders(
+            businessId = businessId,
+            pageSize = pageSize,
+            page = page,
+            paymentStatus = paymentStatus
+        )
         if (newOrders.isEmpty()) {
             return emptyList()
         }
@@ -65,9 +74,16 @@ class OrderService(private val repository: IOrdersRepository) {
         return ordersFlow.value
     }
 
-    suspend fun resetOrders(businessId: Int): List<Order> {
-        page = 0
-        return loadOrders(businessId)
+    suspend fun resetOrders(
+        businessId: Int,
+        paymentStatus: Int? = null
+    ): List<Order> {
+        mutex.withLock {
+            page = 0
+            orders.clear()
+            ordersFlow.value = emptyList()
+        }
+        return loadOrders(businessId, paymentStatus)
     }
 
     suspend fun cancelOrder(
@@ -98,6 +114,33 @@ class OrderService(private val repository: IOrdersRepository) {
             }
         }
         return canceled
+    }
+
+    suspend fun deleteOrder(
+        businessId: Int,
+        orderId: Int,
+        reason: String
+    ): Boolean {
+        val deleted = repository.deleteOrder(
+            businessId = businessId,
+            request = DeleteOrderRequest(
+                orderId = orderId.toLong(),
+                deleteReason = reason
+            )
+        )
+
+        if (deleted) {
+            mutex.withLock {
+                orders.removeAll { it.id == orderId }
+                ordersFlow.value = orders.toList()
+            }
+
+            selectedOrder.update { current ->
+                if (current?.id == orderId) null else current
+            }
+        }
+
+        return deleted
     }
 
     suspend fun registerManualPayment(

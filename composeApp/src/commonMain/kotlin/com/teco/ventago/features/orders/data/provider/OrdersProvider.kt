@@ -5,6 +5,7 @@ import com.teco.ventago.features.auth.domain.IAuthService
 import com.teco.ventago.features.orders.domain.models.Order
 import com.teco.ventago.features.orders.domain.models.requests.CancelOrderRequest
 import com.teco.ventago.features.orders.domain.models.requests.CreateOrderRequest
+import com.teco.ventago.features.orders.domain.models.requests.DeleteOrderRequest
 import com.teco.ventago.features.orders.domain.models.requests.RegisterManualPaymentsRequest
 import com.teco.ventago.utils.ApiError
 import com.teco.ventago.utils.ApiResponse
@@ -75,6 +76,31 @@ class OrdersProvider(private val client: HttpClient, private val authService: IA
             return try {
                 authService.refreshToken(client)
                 cancelOrder(businessId, request)
+            } catch (e: Exception) {
+                response
+            }
+        }
+        return response
+    }
+
+    override suspend fun deleteOrder(businessId: Int, request: DeleteOrderRequest): ApiResponse {
+        val res = client.post(Configs.ordersBasePath + "/api/v1/orders/delete") {
+            headers {
+                append(HttpHeaders.Accept, "*/*")
+                append(HttpHeaders.Authorization, "Bearer ${authService.getJwtToken()}")
+                append(HttpHeaders.ContentType, "application/json")
+                append("X-Business-ID", "$businessId")
+            }
+            contentType(ContentType.Application.Json)
+            setBody(json.encodeToString(DeleteOrderRequest.serializer(), request))
+        }
+
+        val body = res.body<JsonObject>()
+        val response = ApiResponse.fromJson(body)
+        if (response.error == ApiError.AUTH_001 || res.status == HttpStatusCode.Unauthorized) {
+            return try {
+                authService.refreshToken(client)
+                deleteOrder(businessId, request)
             } catch (e: Exception) {
                 response
             }
@@ -166,7 +192,12 @@ class OrdersProvider(private val client: HttpClient, private val authService: IA
     }
 
 
-    override suspend fun loadOrders(businessId: Int, pageSize: Int, page: Int): ApiResponse {
+    override suspend fun loadOrders(
+        businessId: Int,
+        pageSize: Int,
+        page: Int,
+        paymentStatus: Int?
+    ): ApiResponse {
         val res = client.post(Configs.ordersBasePath+"/api/v1/orders/get-orders") {
             headers {
                 append(HttpHeaders.Accept, "*/*")
@@ -175,7 +206,7 @@ class OrdersProvider(private val client: HttpClient, private val authService: IA
                 append("X-Business-ID", "$businessId")
             }
             contentType(ContentType.Application.Json)
-            setBody(OrdersRequests.loadOrders(businessId, pageSize, page))
+            setBody(OrdersRequests.loadOrders(businessId, pageSize, page, paymentStatus))
         }
 
         val body = res.body<JsonObject>()
@@ -183,7 +214,7 @@ class OrdersProvider(private val client: HttpClient, private val authService: IA
         if (response.error == ApiError.AUTH_001 || res.status == HttpStatusCode.Unauthorized) {
             return try {
                 authService.refreshToken(client)
-                loadOrders(businessId, pageSize, page)
+                loadOrders(businessId, pageSize, page, paymentStatus)
             } catch (e: Exception) {
                 response
             }

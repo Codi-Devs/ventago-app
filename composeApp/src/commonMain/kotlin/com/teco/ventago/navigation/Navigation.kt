@@ -42,6 +42,7 @@ import com.teco.ventago.features.branches.ui.billing_point.manage.viewmodel.Bill
 import com.teco.ventago.features.branches.ui.branches.manage.BranchesManageScreen
 import com.teco.ventago.features.customers.data.provider.json
 import com.teco.ventago.features.customers.domain.models.CustomerListItem
+import com.teco.ventago.features.home.ui.HomeSummaryScreen
 import com.teco.ventago.features.home.ui.HomeScreen
 import com.teco.ventago.features.invoicing.ui.InvoicingLandingScreen
 import com.teco.ventago.features.orders.domain.OrderService
@@ -119,6 +120,7 @@ import ventago.composeapp.generated.resources.categories
 import ventago.composeapp.generated.resources.change_business_name
 import ventago.composeapp.generated.resources.edit
 import ventago.composeapp.generated.resources.home
+import ventago.composeapp.generated.resources.home_summary_tab
 import ventago.composeapp.generated.resources.invoice_title
 import ventago.composeapp.generated.resources.invoicing
 import ventago.composeapp.generated.resources.invoicing_landing_title
@@ -178,7 +180,9 @@ enum class PosScreens(
         Res.string.reset_password,
         true
     ),
-    Greetings(Res.string.pos), HomeScreen(Res.string.home, false, showBackButton = false),
+    Greetings(Res.string.pos),
+    HomeScreen(Res.string.home, false, showBackButton = false),
+    SummaryScreen(Res.string.home_summary_tab, true, showBackButton = false),
 
     //    Products Screens
     ProductsManage(Res.string.categories, false), CategoriesManageScreen(
@@ -343,6 +347,13 @@ fun Navigation(
             HomeScreen(
                 appViewModel = appViewModel
             ) {
+                navController.navigate(it.name)
+            }
+        }
+
+        composable(route = PosScreens.SummaryScreen.name) {
+            analyticsService.logScreenView("HomeSummaryScreen")
+            HomeSummaryScreen {
                 navController.navigate(it.name)
             }
         }
@@ -929,6 +940,7 @@ private fun NavGraphBuilder.addOrdersNavigation(
         ) { backStackEntry ->
             val args = backStackEntry.toRoute<OrdersScreenRoute>()
             val orderNumber = args.orderNumber
+            val paymentStatus = args.paymentStatus
 
 //            val ordersOwner = rememberSafeGraphOwner(
 //                navController = navController,
@@ -940,8 +952,13 @@ private fun NavGraphBuilder.addOrdersNavigation(
 
             analyticsService.logScreenView("OrdersScreen")
 
-            if (!orderNumber.isNullOrEmpty()) {
-                viewModel.findOrderByOrderNumber(orderNumber)
+            LaunchedEffect(orderNumber, paymentStatus) {
+                if (paymentStatus != null) {
+                    viewModel.applyPaymentStatusFilter(paymentStatus)
+                }
+                if (!orderNumber.isNullOrEmpty()) {
+                    viewModel.findOrderByOrderNumber(orderNumber)
+                }
             }
 
             OrdersScreen(viewModel) { route, builder ->
@@ -1094,6 +1111,26 @@ private fun NavGraphBuilder.addExpensesNavigation(
             )
         }
 
+        composable<ExpensesListScreenRoute> { backStackEntry ->
+            val args = backStackEntry.toRoute<ExpensesListScreenRoute>()
+            val expensesOwner = rememberGraphOwner(navController, PosScreens.Expenses.name)
+            val viewModel: com.teco.ventago.features.expenses.ui.list.ExpensesListViewModel =
+                koinViewModel(viewModelStoreOwner = expensesOwner)
+            analyticsService.logScreenView("ExpensesListScreen")
+
+            LaunchedEffect(args.initialPaymentStatus) {
+                if (!args.initialPaymentStatus.isNullOrBlank()) {
+                    viewModel.applyInitialPaymentStatus(args.initialPaymentStatus)
+                }
+            }
+
+            com.teco.ventago.features.expenses.ui.list.ExpensesListScreen(
+                viewModel = viewModel,
+                navigate = { route -> navController.navigate(route.name) },
+                onBack = { navController.navigateUp() }
+            )
+        }
+
         composable(route = PosScreens.ExpenseDetailsScreen.name) {
             val expensesOwner = rememberGraphOwner(navController, PosScreens.Expenses.name)
             val viewModel: com.teco.ventago.features.expenses.ui.details.ExpenseDetailsViewModel =
@@ -1179,6 +1216,7 @@ fun PosScreens.withArgs(vararg args: Pair<String, String>): String {
 
 fun String.toPosScreenOrNull(): PosScreens? {
     if (this.contains("OrdersScreenRoute")) return PosScreens.OrdersScreen
+    if (this.contains("ExpensesListScreenRoute")) return PosScreens.ExpensesListScreen
     if (this.contains("PosNoteRoute")) return PosScreens.POSScreen
     if (this.contains("pos_note")) return PosScreens.POSScreen
     if (this.contains("OrderDetailsRoute")) return PosScreens.OrderDetailsScreen
@@ -1210,7 +1248,15 @@ private fun rememberSafeGraphOwner(
 }
 
 @Serializable
-data class OrdersScreenRoute(val orderNumber: String? = null)
+data class OrdersScreenRoute(
+    val orderNumber: String? = null,
+    val paymentStatus: Int? = null
+)
+
+@Serializable
+data class ExpensesListScreenRoute(
+    val initialPaymentStatus: String? = null
+)
 
 @Serializable
 @SerialName("pos_note")

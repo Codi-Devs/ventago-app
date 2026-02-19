@@ -73,8 +73,8 @@ import androidx.compose.ui.unit.sp
 import com.teco.ventago.AppViewModel
 import com.teco.ventago.design_system.loaders.shimmerBrush
 import com.teco.ventago.design_system.molecules.flags.DgiDownAlertBanner
-import com.teco.ventago.design_system.organism.BarGraphic
 import com.teco.ventago.design_system.organism.HomeTopCard
+import com.teco.ventago.design_system.organism.SalesLineGraphic
 import com.teco.ventago.design_system.organism.SupportCard
 import com.teco.ventago.design_system.theme.bodyMedium
 import com.teco.ventago.design_system.theme.bodyMediumBold
@@ -225,15 +225,13 @@ fun HomeScreen(
             modifier = Modifier.padding(start = 16.dp, end = 16.dp, top = 12.dp)
         )
 
-        BarGraphic(
+        SalesLineGraphic(
             modifier = Modifier.padding(start = 16.dp, end = 16.dp, top = 16.dp),
             data = salesData,
             selectedIndex = uiState.selectedSalesIndex,
-            barGraphicHeight = 100.0,
-            itemsToShow = salesData.size,
-        ) {
-            viewModel.setSelectedSalesIndex(it)
-        }
+            chartHeight = 220.dp,
+            onItemClick = viewModel::setSelectedSalesIndex
+        )
 
 
         val actionRowPadding = Modifier.padding(top = 16.dp, start = 16.dp, end = 16.dp)
@@ -389,14 +387,6 @@ fun HomeScreen(
                 }
             }
         }
-
-        uiState.homeSummary?.let { summary ->
-            HomeSummaryCards(
-                summary = summary,
-                modifier = Modifier.padding(start = 16.dp, end = 16.dp, top = 16.dp)
-            )
-        }
-
 
         if (!appState.value.paymentsConfigured) {
             Card(

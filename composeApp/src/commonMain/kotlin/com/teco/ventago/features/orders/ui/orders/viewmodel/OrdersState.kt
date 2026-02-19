@@ -13,6 +13,7 @@ data class OrdersState(
     val filterSelected: Int = 0,
     val ordersEnabled: Boolean = true,
     val hasQuotesAccess: Boolean = false,
+    val paymentStatusFilter: Int? = null,
     val showScanner: Boolean = false,
     val showPermissionRationalDialog: Boolean = false,
 

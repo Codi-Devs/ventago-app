@@ -23,6 +23,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.material.ExperimentalMaterialApi
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.Add
 import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material.icons.rounded.QrCodeScanner
 import androidx.compose.material.pullrefresh.PullRefreshIndicator
@@ -155,6 +156,16 @@ fun OrdersScreenActions(backStackEntry: NavBackStackEntry?) {
                 else -> println("Event not handled here")
             }
         }
+    }
+
+    IconButton(onClick = {
+        navController.navigate(PosScreens.POS.name)
+    }) {
+        Icon(
+            imageVector = Icons.Rounded.Add,
+            contentDescription = "New order",
+            tint = MaterialTheme.colorScheme.primary
+        )
     }
 
     IconButton(onClick = {

@@ -19,6 +19,7 @@ import com.teco.ventago.utils.toLongCents
 import com.teco.ventago.viewModels
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.IO
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.launchIn
 import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.launch
@@ -183,6 +184,33 @@ class OrdersDetailsViewModel(
                         showError()
                     }
                 }
+            }
+        }
+    }
+
+    fun deleteOrder(reason: String) {
+        val order = uiState.value.order ?: return
+        val businessId = business?.businessId ?: return
+        showLoading()
+        viewModelScope.launch {
+            try {
+                val deleted = withContext(Dispatchers.IO) {
+                    orderService.deleteOrder(
+                        businessId = businessId,
+                        orderId = order.id,
+                        reason = reason
+                    )
+                }
+
+                if (deleted) {
+                    showSuccess()
+                    delay(1200)
+                    emitEvent(OrderDetailsUiEvent.OrderDeleted)
+                } else {
+                    showError()
+                }
+            } catch (_: Exception) {
+                showError()
             }
         }
     }

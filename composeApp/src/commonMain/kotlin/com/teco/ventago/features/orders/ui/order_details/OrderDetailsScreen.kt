@@ -6,6 +6,7 @@ import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.shrinkVertically
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -66,6 +67,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -88,6 +90,7 @@ import androidx.compose.ui.unit.sp
 import androidx.navigation.NavBackStackEntry
 import androidx.navigation.NavOptionsBuilder
 import com.teco.ventago.design_system.buttons.ButtonM
+import com.teco.ventago.design_system.buttons.OutlinedButtonM
 import com.teco.ventago.design_system.buttons.TextButtonM
 import com.teco.ventago.design_system.buttons.TextButtonS
 import com.teco.ventago.design_system.molecules.orders.OrderStatusChip
@@ -118,6 +121,7 @@ import com.teco.ventago.features.orders.domain.models.Order
 import com.teco.ventago.features.orders.domain.models.OrderStatus
 import com.teco.ventago.features.orders.domain.models.PaymentStatus
 import com.teco.ventago.features.orders.ui.order_details.viewModel.OrderDetailsState
+import com.teco.ventago.features.orders.ui.order_details.viewModel.OrderDetailsUiEvent
 import com.teco.ventago.features.orders.ui.order_details.viewModel.OrdersDetailsViewModel
 import com.teco.ventago.navigation.PosNoteRoute
 import com.teco.ventago.navigation.PosScreens
@@ -306,12 +310,29 @@ fun OrderDetailsScreen(
 
     var showCancelDialog by remember { mutableStateOf(false) }
     var cancelReason by remember { mutableStateOf("") }
+    var showDeleteDialog by remember { mutableStateOf(false) }
+    var deleteReason by remember { mutableStateOf("") }
 
     val uiState by viewModel.uiState.collectAsState()
     val loadingSheetState = rememberModalBottomSheetState(confirmValueChange = { false })
     val linkSheetState = rememberModalBottomSheetState()
     val shareSheetState = rememberModalBottomSheetState()
     val markAsPaidSheetState = rememberModalBottomSheetState()
+
+    LaunchedEffect(Unit) {
+        viewModel.events.collect { event ->
+            when (event) {
+                is OrderDetailsUiEvent.OrderDeleted -> {
+                    navigate(PosScreens.OrdersScreen) {
+                        popUpTo(PosScreens.OrdersScreen.name) { inclusive = false }
+                        launchSingleTop = true
+                    }
+                }
+
+                else -> Unit
+            }
+        }
+    }
 
     val phoneNumber = when {
         !uiState.order?.customer?.phone.isNullOrBlank() &&
@@ -320,10 +341,21 @@ fun OrderDetailsScreen(
         else -> null
     }
 
-    val order = uiState.order!!
+    val order = uiState.order ?: run {
+        if (uiState.loadingBottomSheet.isLoading()) {
+            LoadingSheet(
+                state = uiState.loadingBottomSheet,
+                sheetState = loadingSheetState
+            ) {
+                viewModel.hideLoading()
+            }
+        }
+        return
+    }
 
     val canShowCancelButton = order.invoiceStatus != InvoiceStatus.ISSUED.id &&
             viewModel.isOrderCancellable(order.status)
+    val canShowDeleteButton = canDeleteOrder(order)
 
     Column(
         modifier = Modifier
@@ -368,18 +400,7 @@ fun OrderDetailsScreen(
                 }
 
                 InvoiceStatus.FAILED.id -> {
-                    ButtonM(onClick = {
-                        viewModel.retryElectronicInvoice()
-                    }) {
-                        Text("Reintentar factura electrónica")
-                    }
-                    if (canShowCancelButton) {
-                        TextButtonS(
-                            modifier = Modifier.fillMaxWidth(),
-                            label = "Anular pedido",
-                            color = MaterialTheme.colorScheme.error
-                        ) { showCancelDialog = true }
-                    }
+                    // No retry button and no cancel-order action for failed invoice orders.
                 }
 
                 InvoiceStatus.NONE.id, InvoiceStatus.PENDING.id -> {
@@ -432,6 +453,19 @@ fun OrderDetailsScreen(
 
                 InvoiceStatus.CANCELLED.id -> {
                     // Intentionally no actions
+                }
+            }
+
+            if (canShowDeleteButton) {
+                OutlinedButtonM(
+                    onClick = {
+                        deleteReason = ""
+                        showDeleteDialog = true
+                    },
+                    contentColor = MaterialTheme.colorScheme.error,
+                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.error.copy(alpha = 0.5f))
+                ) {
+                    Text("Eliminar pedido")
                 }
             }
         }
@@ -551,6 +585,40 @@ fun OrderDetailsScreen(
                 },
                 dismissButton = {
                     TextButton(onClick = { showCancelDialog = false }) { Text("Cancelar") }
+                }
+            )
+        }
+
+        if (showDeleteDialog) {
+            AlertDialog(
+                onDismissRequest = { showDeleteDialog = false },
+                title = { Text("Eliminar pedido") },
+                text = {
+                    Column {
+                        Text("Ingresa el motivo de eliminación del pedido.")
+                        Spacer(Modifier.height(8.dp))
+                        DMOutlinedTextField(
+                            text = deleteReason,
+                            label = "Motivo",
+                            onChange = { deleteReason = it },
+                            modifier = Modifier.fillMaxWidth(),
+                            maxLines = 3
+                        )
+                    }
+                },
+                confirmButton = {
+                    ButtonM(
+                        onClick = {
+                            showDeleteDialog = false
+                            viewModel.deleteOrder(deleteReason.trim())
+                        },
+                        enabled = deleteReason.isNotBlank(),
+                        containerColor = MaterialTheme.colorScheme.error,
+                        contentColor = MaterialTheme.colorScheme.onError
+                    ) { Text("Eliminar") }
+                },
+                dismissButton = {
+                    TextButton(onClick = { showDeleteDialog = false }) { Text("Cancelar") }
                 }
             )
         }
@@ -1194,6 +1262,14 @@ fun paymentStatusLabel(paymentStatus: Int): String = when (paymentStatus) {
     3 -> "Reembolsado"
     4 -> "Cancelado"
     else -> "Sin pagar"
+}
+
+private fun canDeleteOrder(order: Order): Boolean {
+    val invoiceStatus = order.invoiceStatus ?: InvoiceStatus.NONE.id
+    val hasFailedOrNotInvoicedStatus = invoiceStatus == InvoiceStatus.FAILED.id ||
+            invoiceStatus == InvoiceStatus.NONE.id
+
+    return order.status == OrderStatus.DRAFT || hasFailedOrNotInvoicedStatus
 }
 
 fun paymentStatusChipColors(paymentStatus: Int): Pair<Color, Color> = when (paymentStatus) {

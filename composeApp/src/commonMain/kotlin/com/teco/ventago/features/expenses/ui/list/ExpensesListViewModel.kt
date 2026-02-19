@@ -293,6 +293,13 @@ class ExpensesListViewModel(
         _uiState.value = _uiState.value.copy(paymentStatuses = statuses.take(1))
     }
 
+    fun applyInitialPaymentStatus(status: String) {
+        val current = _uiState.value.paymentStatuses.firstOrNull()
+        if (current == status) return
+        setPaymentStatuses(listOf(status))
+        applyFilters()
+    }
+
     fun applyFilters() {
         // Validate date range (max 3 months)
         val state = _uiState.value

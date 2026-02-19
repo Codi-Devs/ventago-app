@@ -78,7 +78,10 @@ class OrdersViewModel(
         viewModelScope.launch {
             withContext(Dispatchers.IO) {
                 try {
-                    val aux = orderService.loadOrders(businessId)
+                    val aux = orderService.loadOrders(
+                        businessId = businessId,
+                        paymentStatus = uiState.value.paymentStatusFilter
+                    )
                     withContext(Dispatchers.Main) {
                         if (aux.isEmpty()) {
                             updateState { copy(noMoreOrders = true) }
@@ -112,9 +115,12 @@ class OrdersViewModel(
         viewModelScope.launch {
             withContext(Dispatchers.IO) {
                 try {
-                    orderService.resetOrders(businessId)
+                    orderService.resetOrders(
+                        businessId = businessId,
+                        paymentStatus = uiState.value.paymentStatusFilter
+                    )
                     withContext(Dispatchers.Main) {
-//                        filterOrders(uiState.value.filterSelected)
+                        filterOrders(uiState.value.filterSelected)
                         updateState {
                             copy(
                                 refreshingOrder = false,
@@ -267,6 +273,19 @@ class OrdersViewModel(
     fun showScanner(showScanner: Boolean) {
         println("ASDADS: viewmodel instance: $this")
         updateState { copy(showScanner = showScanner) }
+    }
+
+    fun applyPaymentStatusFilter(paymentStatus: Int?) {
+        if (uiState.value.paymentStatusFilter == paymentStatus) return
+
+        updateState {
+            copy(
+                paymentStatusFilter = paymentStatus,
+                orders = emptyList(),
+                noMoreOrders = false
+            )
+        }
+        refreshOrders()
     }
 
     fun showPermissionRationalDialog(showPermissionRationalDialog: Boolean) {

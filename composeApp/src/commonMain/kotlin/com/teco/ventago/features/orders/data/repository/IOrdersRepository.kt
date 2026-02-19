@@ -5,6 +5,7 @@ import com.teco.ventago.features.orders.domain.models.IsBusinessRegisteredRespon
 import com.teco.ventago.features.orders.domain.models.Order
 import com.teco.ventago.features.orders.domain.models.requests.CancelOrderRequest
 import com.teco.ventago.features.orders.domain.models.requests.CreateOrderRequest
+import com.teco.ventago.features.orders.domain.models.requests.DeleteOrderRequest
 import com.teco.ventago.features.orders.domain.models.requests.RegisterManualPaymentsDataResponse
 import com.teco.ventago.features.orders.domain.models.requests.RegisterManualPaymentsRequest
 import com.teco.ventago.features.orders.domain.models.requests.RetryInvoiceResponse
@@ -16,7 +17,12 @@ interface IOrdersRepository {
 
     suspend fun isBusinessRegistered(businessId: Int): IsBusinessRegisteredResponse
 
-    suspend fun loadOrders(businessId: Int, pageSize: Int, page: Int): List<Order>
+    suspend fun loadOrders(
+        businessId: Int,
+        pageSize: Int,
+        page: Int,
+        paymentStatus: Int? = null
+    ): List<Order>
 
     suspend fun changeOrderStatus(
         order: Order,
@@ -38,6 +44,7 @@ interface IOrdersRepository {
     ): CreateOrderResponse
 
     suspend fun cancelOrder(businessId: Int, request: CancelOrderRequest): Boolean
+    suspend fun deleteOrder(businessId: Int, request: DeleteOrderRequest): Boolean
 
     suspend fun registerManualPayments(
         businessId: Int,

@@ -339,6 +339,17 @@
     <string name="home_daily_average">Promedio diario</string>
     <string name="home_expenses_count">Registros</string>
     <string name="home_no_month_expenses">Sin gastos registrados</string>
+    <string name="home_summary_tab">Resumen</string>
+    <string name="home_summary_empty">Sin datos disponibles</string>
+    <string name="home_summary_receivable">ÓRDENES POR COBRAR</string>
+    <string name="home_summary_payable">CUENTAS POR PAGAR</string>
+    <string name="home_summary_overdue">Vencidas</string>
+    <string name="home_summary_vs_previous_month">vs mes anterior</string>
+    <string name="home_summary_view_details">Ver detalles &gt;</string>
+    <string name="home_summary_top_clients">TOP 5 CLIENTES</string>
+    <string name="home_summary_no_top_clients">Sin clientes frecuentes</string>
+    <string name="home_summary_orders_word">órdenes</string>
+    <string name="home_summary_records_word">registros</string>
 
 <!--    Invoicing Strings -->
     <string name="invoicing">Facturación</string>

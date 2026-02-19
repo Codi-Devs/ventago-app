@@ -9,6 +9,7 @@ import com.teco.ventago.features.orders.domain.models.IsBusinessRegisteredRespon
 import com.teco.ventago.features.orders.domain.models.Order
 import com.teco.ventago.features.orders.domain.models.requests.CancelOrderRequest
 import com.teco.ventago.features.orders.domain.models.requests.CreateOrderRequest
+import com.teco.ventago.features.orders.domain.models.requests.DeleteOrderRequest
 import com.teco.ventago.features.orders.domain.models.requests.RegisterManualPaymentsDataResponse
 import com.teco.ventago.features.orders.domain.models.requests.RegisterManualPaymentsRequest
 import com.teco.ventago.features.orders.domain.models.requests.RetryInvoiceResponse
@@ -56,9 +57,19 @@ class OrdersRepository(private val provider: IOrdersProvider, private val logger
         }
     }
 
-    override suspend fun loadOrders(businessId: Int, pageSize: Int, page: Int): List<Order> {
+    override suspend fun loadOrders(
+        businessId: Int,
+        pageSize: Int,
+        page: Int,
+        paymentStatus: Int?
+    ): List<Order> {
         try {
-            val response = provider.loadOrders(businessId, pageSize, page)
+            val response = provider.loadOrders(
+                businessId = businessId,
+                pageSize = pageSize,
+                page = page,
+                paymentStatus = paymentStatus
+            )
 
             if (response.error.isError()) {
                 throw BadRequestException(response.toJson())
@@ -86,7 +97,7 @@ class OrdersRepository(private val provider: IOrdersProvider, private val logger
                 Log(
                     LogLevel.INFO,
                     "loadOrders",
-                    "Loaded ${orders.size} orders of total $total (page=$pageNum, size=$size)"
+                    "Loaded ${orders.size} orders of total $total (page=$pageNum, size=$size, paymentStatus=${paymentStatus ?: "ALL"})"
                 )
             )
 
@@ -95,7 +106,7 @@ class OrdersRepository(private val provider: IOrdersProvider, private val logger
             logger.sendLog(
                 Log(
                     LogLevel.ERROR, "loadOrders",
-                    "Error loading orders. Error: ${e.message ?: "UNKNOWN"}, businessId: $businessId, pageSize: $pageSize, page: $page"
+                    "Error loading orders. Error: ${e.message ?: "UNKNOWN"}, businessId: $businessId, pageSize: $pageSize, page: $page, paymentStatus: ${paymentStatus ?: "ALL"}"
                 )
             )
             throw e
@@ -224,6 +235,27 @@ class OrdersRepository(private val provider: IOrdersProvider, private val logger
                     LogLevel.ERROR,
                     "updateShippingMethods",
                     "Error canceling Order. Error: ${e.message ?: "UNKNOWN"}. BusinessId: $businessId"
+                )
+            )
+            throw e
+        }
+    }
+
+    override suspend fun deleteOrder(businessId: Int, request: DeleteOrderRequest): Boolean {
+        try {
+            val response = provider.deleteOrder(businessId, request)
+
+            if (response.error.isError()) {
+                throw BadRequestException(response.toJson())
+            }
+
+            return response.successful
+        } catch (e: Exception) {
+            logger.sendLog(
+                Log(
+                    LogLevel.ERROR,
+                    "deleteOrder",
+                    "Error deleting order. Error: ${e.message ?: "UNKNOWN"}, businessId: $businessId, orderId: ${request.orderId}"
                 )
             )
             throw e

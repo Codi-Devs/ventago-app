@@ -34,6 +34,7 @@ data class OrderDetailsState(
 
 sealed class OrderDetailsUiEvent {
     data class ShowPaymentLinkSheet(val url: String) : OrderDetailsUiEvent()
+    data object OrderDeleted : OrderDetailsUiEvent()
 }
 
 

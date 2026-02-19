@@ -344,6 +344,17 @@
     <string name="home_daily_average">Daily average</string>
     <string name="home_expenses_count">Records</string>
     <string name="home_no_month_expenses">No expenses registered</string>
+    <string name="home_summary_tab">Summary</string>
+    <string name="home_summary_empty">No summary data available</string>
+    <string name="home_summary_receivable">ORDERS RECEIVABLE</string>
+    <string name="home_summary_payable">ACCOUNTS PAYABLE</string>
+    <string name="home_summary_overdue">Overdue</string>
+    <string name="home_summary_vs_previous_month">vs previous month</string>
+    <string name="home_summary_view_details">View details &gt;</string>
+    <string name="home_summary_top_clients">TOP 5 CLIENTS</string>
+    <string name="home_summary_no_top_clients">No recurring clients yet</string>
+    <string name="home_summary_orders_word">orders</string>
+    <string name="home_summary_records_word">records</string>
 
 <!--    Invoicing Strings -->
     <string name="invoicing">Invoicing</string>

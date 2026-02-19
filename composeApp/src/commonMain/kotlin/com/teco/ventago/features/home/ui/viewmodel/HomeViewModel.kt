@@ -15,6 +15,9 @@ import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.launchIn
 import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.launch
+import kotlinx.datetime.Clock
+import kotlinx.datetime.TimeZone
+import kotlinx.datetime.toLocalDateTime
 
 class HomeViewModel(
     private val businessService: BusinessService,
@@ -92,12 +95,13 @@ class HomeViewModel(
             }.launchIn(this)
 
             homeSummaryService.observe().onEach { summary ->
-                val chart = HomeSalesChartMapper.buildChart(summary, uiState.value.selectedRange)
+                val range = uiState.value.selectedRange
+                val chart = HomeSalesChartMapper.buildChart(summary, range)
                 updateState {
                     copy(
                         homeSummary = summary,
                         salesChart = chart,
-                        selectedSalesIndex = if (chart.isNotEmpty()) chart.lastIndex else 0,
+                        selectedSalesIndex = defaultSelectedIndex(range, chart),
                         isSummaryLoading = false,
                         summaryError = if (summary != null) null else summaryError
                     )
@@ -120,7 +124,7 @@ class HomeViewModel(
             copy(
                 selectedRange = range,
                 salesChart = chart,
-                selectedSalesIndex = if (chart.isNotEmpty()) chart.lastIndex else 0
+                selectedSalesIndex = defaultSelectedIndex(range, chart)
             )
         }
     }
@@ -129,5 +133,20 @@ class HomeViewModel(
         val chart = uiState.value.salesChart
         if (chart.isEmpty()) return
         updateState { copy(selectedSalesIndex = index.coerceIn(0, chart.lastIndex)) }
+    }
+
+    private fun defaultSelectedIndex(range: HomeSalesRange, chart: List<Pair<String, Double>>): Int {
+        if (chart.isEmpty()) return 0
+        return when (range) {
+            HomeSalesRange.YEAR -> {
+                val currentMonthIndex = Clock.System.now()
+                    .toLocalDateTime(TimeZone.currentSystemDefault())
+                    .date
+                    .monthNumber - 1
+                currentMonthIndex.coerceIn(0, chart.lastIndex)
+            }
+
+            else -> chart.lastIndex
+        }
     }
 }

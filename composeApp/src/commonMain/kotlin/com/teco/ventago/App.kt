@@ -10,6 +10,7 @@ import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.layout.windowInsetsTopHeight
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Assessment
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.Inventory
 import androidx.compose.material.icons.filled.ReceiptLong
@@ -18,6 +19,7 @@ import androidx.compose.material.icons.filled.Shop
 import androidx.compose.material.icons.filled.ShoppingCartCheckout
 import androidx.compose.material.icons.outlined.Home
 import androidx.compose.material.icons.outlined.Inventory
+import androidx.compose.material.icons.outlined.Assessment
 import androidx.compose.material.icons.outlined.ReceiptLong
 import androidx.compose.material.icons.outlined.Settings
 import androidx.compose.material.icons.outlined.Shop
@@ -25,6 +27,8 @@ import androidx.compose.material.icons.outlined.ShoppingCartCheckout
 import androidx.compose.material.icons.rounded.ReceiptLong
 import androidx.compose.material.icons.rounded.ShoppingCartCheckout
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.Badge
+import androidx.compose.material3.BadgedBox
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.NavigationBar
@@ -54,6 +58,7 @@ import androidx.navigation.NavHostController
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import com.teco.ventago.core.SnackbarService
+import com.teco.ventago.core.LocalStorage
 import com.teco.ventago.core.flags.IFlagsService
 import com.teco.ventago.core.firebase.AnalyticsService
 import com.teco.ventago.design_system.molecules.AppChromeState
@@ -78,6 +83,7 @@ import org.koin.compose.KoinContext
 import org.koin.compose.koinInject
 import org.koin.compose.viewmodel.koinViewModel
 import ventago.composeapp.generated.resources.Res
+import ventago.composeapp.generated.resources.home_summary_tab
 import ventago.composeapp.generated.resources.pos_edit_quote
 import ventago.composeapp.generated.resources.pos_new_invoice
 import ventago.composeapp.generated.resources.pos_new_quote
@@ -85,6 +91,8 @@ import ventago.composeapp.generated.resources.pos_new_quote
 val LocalAppChrome = staticCompositionLocalOf<AppChromeState> {
     error("AppChromeState not provided")
 }
+
+private const val SUMMARY_TAB_HINT_SEEN_KEY_PREFIX = "summary_tab_hint_seen"
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -105,7 +113,18 @@ fun App(
     println("ASDADS currentScreen: $currentScreen")
     val appChrome = rememberAppChromeState()
     val flagsService = koinInject<IFlagsService>()
+    val localStorage: LocalStorage = koinInject()
     val flagsState by flagsService.flags().collectAsState()
+    val summaryHintSeenKey = remember(mainState.business?.businessId, mainState.isAuthenticated) {
+        if (mainState.isAuthenticated) {
+            "$SUMMARY_TAB_HINT_SEEN_KEY_PREFIX:${mainState.business?.businessId ?: "default"}"
+        } else {
+            "$SUMMARY_TAB_HINT_SEEN_KEY_PREFIX:guest"
+        }
+    }
+    var showSummaryHintDot by remember(summaryHintSeenKey) {
+        mutableStateOf(localStorage.bool(summaryHintSeenKey) != true)
+    }
 
 //    LaunchedEffect(mainState.isAuthenticated, mainState.missingBusiness) {
 //        println("newState isAuthenticated: ${mainState.isAuthenticated}")
@@ -170,6 +189,13 @@ fun App(
             flagsService.initialize()
         } else {
             flagsService.destroy()
+        }
+    }
+
+    LaunchedEffect(currentScreen, showSummaryHintDot, summaryHintSeenKey) {
+        if (currentScreen == PosScreens.SummaryScreen && showSummaryHintDot) {
+            localStorage.set(summaryHintSeenKey, true)
+            showSummaryHintDot = false
         }
     }
 
@@ -333,6 +359,7 @@ fun App(
 
                     }?: run {
                         if (currentScreen != PosScreens.HomeScreen
+                            && currentScreen != PosScreens.SummaryScreen
                             && currentScreen != PosScreens.CategoriesManageScreen
                             && currentScreen != PosScreens.SettingsScreen
                             && currentScreen != PosScreens.OrdersScreen)
@@ -363,6 +390,35 @@ fun App(
                                 },
                                 label = {
                                     Text("Home")
+                                }
+                            )
+                            NavigationBarItem(
+                                selected = currentScreen == PosScreens.SummaryScreen,
+                                onClick = {
+                                    if (currentScreen != PosScreens.SummaryScreen) {
+                                        navController.navigate(PosScreens.SummaryScreen.name)
+                                    }
+                                },
+                                icon = {
+                                    BadgedBox(
+                                        badge = {
+                                            if (showSummaryHintDot) {
+                                                Badge(
+                                                    containerColor = MaterialTheme.colorScheme.secondary,
+                                                    contentColor = MaterialTheme.colorScheme.secondary
+                                                )
+                                            }
+                                        }
+                                    ) {
+                                        Icon(
+                                            imageVector = if (currentScreen == PosScreens.SummaryScreen)
+                                                Icons.Filled.Assessment else Icons.Outlined.Assessment,
+                                            contentDescription = "Resumen"
+                                        )
+                                    }
+                                },
+                                label = {
+                                    Text(stringResource(Res.string.home_summary_tab))
                                 }
                             )
                             NavigationBarItem(

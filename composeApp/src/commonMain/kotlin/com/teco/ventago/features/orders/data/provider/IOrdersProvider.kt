@@ -3,6 +3,7 @@ package com.teco.ventago.features.orders.data.provider
 import com.teco.ventago.features.orders.domain.models.Order
 import com.teco.ventago.features.orders.domain.models.requests.CancelOrderRequest
 import com.teco.ventago.features.orders.domain.models.requests.CreateOrderRequest
+import com.teco.ventago.features.orders.domain.models.requests.DeleteOrderRequest
 import com.teco.ventago.features.orders.domain.models.requests.RegisterManualPaymentsRequest
 import com.teco.ventago.utils.ApiResponse
 
@@ -11,6 +12,7 @@ interface IOrdersProvider {
     suspend fun createOrder(businessId: Int, createOrderRequest: CreateOrderRequest): ApiResponse
 
     suspend fun cancelOrder(businessId: Int, request: CancelOrderRequest): ApiResponse
+    suspend fun deleteOrder(businessId: Int, request: DeleteOrderRequest): ApiResponse
     suspend fun registerManualPayments(businessId: Int, orderId: Int, request: RegisterManualPaymentsRequest): ApiResponse
     suspend fun retryElectronicInvoice(
         businessId: Int,
@@ -22,7 +24,12 @@ interface IOrdersProvider {
 
     suspend fun isBusinessRegistered(businessId: Int): ApiResponse
 
-    suspend fun loadOrders(businessId: Int, pageSize: Int, page: Int): ApiResponse
+    suspend fun loadOrders(
+        businessId: Int,
+        pageSize: Int,
+        page: Int,
+        paymentStatus: Int? = null
+    ): ApiResponse
 
     suspend fun changeOrderStatus(order: Order, status: Int, businessId: Int): ApiResponse
 
