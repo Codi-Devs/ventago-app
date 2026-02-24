@@ -2,6 +2,7 @@ package com.teco.ventago.features.pos.ui.viewmodel
 
 import androidx.lifecycle.viewModelScope
 import com.teco.ventago.core.BaseViewModel
+import com.teco.ventago.core.LocalStorage
 import com.teco.ventago.core.PdfSharer
 import com.teco.ventago.design_system.molecules.pos.DiscountMode
 import com.teco.ventago.design_system.molecules.pos.GlobalDiscountMode
@@ -51,6 +52,7 @@ import com.teco.ventago.features.product.domain.ProductService
 import com.teco.ventago.features.product.domain.model.Item
 import com.teco.ventago.features.product.domain.model.ProductType
 import com.teco.ventago.features.product.domain.model.AdditionalInfoKey
+import com.teco.ventago.features.product.domain.model.Products
 import com.teco.ventago.features.quotes.domain.QuoteRequestBuilder
 import com.teco.ventago.features.quotes.domain.QuotesService
 import com.teco.ventago.features.quotes.domain.models.Quote
@@ -107,9 +109,11 @@ class PosViewModel(
     private val financialProfileService: FinancialProfileService,
     private val quotesService: QuotesService,
     private val pdfSharer: PdfSharer,
+    private val localStorage: LocalStorage,
 ) : BaseViewModel<PosState, PosStateUiEvent>(PosState()) {
     private companion object {
         const val DEFAULT_QUOTE_BRANCH_CODE = "0000"
+        const val PRODUCT_VIEW_MODE_KEY_PREFIX = "pos.product_view_mode"
     }
 
     var business: Business? = null
@@ -124,8 +128,7 @@ class PosViewModel(
 
             productService.observe().onEach { products ->
                 products?.let {
-                    items = productService.getAllActiveItems(it)
-                    updateItemList(items)
+                    refreshProductsCatalog(it)
                 }
             }.launchIn(this)
 
@@ -165,13 +168,15 @@ class PosViewModel(
 
             businessService.getBusiness().onEach { businessData ->
                 businessData?.let {
+                    business = it
+                    val persistedViewMode = readPersistedProductViewMode(it.businessId)
                     updateState {
                         copy(
                             currency = it.currency.currencyCode,
-                            currencySymbol = it.currency.symbol
+                            currencySymbol = it.currency.symbol,
+                            productViewMode = persistedViewMode
                         )
                     }
-                    business = it
                     fetchCustomerAddresses()
                 }
             }.launchIn(this)
@@ -368,21 +373,89 @@ class PosViewModel(
         }
     }
 
-    fun updateItemList(itemsToUpdate: List<Item>) = updateState {
-        val newItems = itemsToUpdate.map { it }
-        copy(items = newItems) // new list + changed item instance
+    private fun refreshProductsCatalog(products: Products) {
+        val activeItems = productService.getAllActiveItems(products)
+        val categoriesWithActiveItems = products.categories
+            .asSequence()
+            .filter { it.active }
+            .map { category ->
+                category to category.items.filter { item -> item.active }
+            }
+            .filter { (_, categoryItems) -> categoryItems.isNotEmpty() }
+            .toList()
+
+        val categoryByItemId = mutableMapOf<Int, Int>()
+        categoriesWithActiveItems.forEach { (category, categoryItems) ->
+            categoryItems.forEach { item ->
+                if (!categoryByItemId.containsKey(item.itemId)) {
+                    categoryByItemId[item.itemId] = category.id
+                }
+            }
+        }
+
+        val availableCategories = categoriesWithActiveItems.map { (category, _) ->
+            PosProductCategoryFilter(id = category.id, label = category.name)
+        }
+
+        items = activeItems
+        updateState {
+            val selectedCategoryId = selectedProductCategoryId
+                ?.takeIf { categoryId -> availableCategories.any { it.id == categoryId } }
+            copy(
+                items = activeItems,
+                itemCategoryById = categoryByItemId,
+                availableProductCategories = availableCategories,
+                selectedProductCategoryId = selectedCategoryId
+            )
+        }
+        applyProductFilters()
+    }
+
+    private fun applyProductFilters() {
+        val state = uiState.value
+        val query = state.query.trim()
+        val selectedCategoryId = state.selectedProductCategoryId
+
+        val filteredItems = state.items.filter { item ->
+            val matchesQuery = query.isBlank() ||
+                item.name.contains(query, ignoreCase = true) ||
+                item.description.contains(query, ignoreCase = true)
+            val matchesCategory = selectedCategoryId == null ||
+                state.itemCategoryById[item.itemId] == selectedCategoryId
+            matchesQuery && matchesCategory
+        }
+
+        updateState { copy(visibleItems = filteredItems) }
     }
 
     fun onSearchChange(query: String) {
         updateState { copy(query = query) }
-        if (query.isEmpty()) {
-            updateState { copy(items = this@PosViewModel.items) }
-            return
-        }
-        updateItemList(uiState.value.items.filter { item ->
-            item.name.contains(query, ignoreCase = true)
-                    || item.description.contains(query, ignoreCase = true)
-        })
+        applyProductFilters()
+    }
+
+    fun onProductCategorySelected(categoryId: Int?) {
+        updateState { copy(selectedProductCategoryId = categoryId) }
+        applyProductFilters()
+    }
+
+    fun setProductViewMode(mode: ProductViewMode) {
+        updateState { copy(productViewMode = mode) }
+        persistProductViewMode(mode)
+    }
+
+    private fun readPersistedProductViewMode(businessId: Int): ProductViewMode {
+        val saved = localStorage.string(productViewModeKey(businessId))
+        return runCatching { ProductViewMode.valueOf(saved.orEmpty()) }
+            .getOrDefault(ProductViewMode.LIST)
+    }
+
+    private fun persistProductViewMode(mode: ProductViewMode) {
+        val businessId = business?.businessId ?: return
+        localStorage.set(productViewModeKey(businessId), mode.name)
+    }
+
+    private fun productViewModeKey(businessId: Int): String {
+        return "$PRODUCT_VIEW_MODE_KEY_PREFIX.$businessId"
     }
 
     fun selectCustomer(customer: CustomerListItem?) {
@@ -655,6 +728,8 @@ class PosViewModel(
                 personalizedItems = mapOf(),
                 taxExempt = false,
                 query = "",
+                visibleItems = items,
+                selectedProductCategoryId = null,
                 tipAmount = 0L,
                 tipIsPercentage = true,
                 charged = mapOf(),
@@ -1236,7 +1311,8 @@ class PosViewModel(
                 val locationCode = address.locationCode?.takeIf { it.isNotBlank() } ?: return@let null
                 AdditionalAddress(
                     addressLine = address.addressLine,
-                    locationCode = locationCode
+                    locationCode = locationCode,
+                    email = address.email?.trim()?.takeIf { it.isNotBlank() }
                 )
             }
 

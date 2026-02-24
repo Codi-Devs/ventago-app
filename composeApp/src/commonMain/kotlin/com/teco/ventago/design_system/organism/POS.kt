@@ -4,7 +4,9 @@ import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -19,10 +21,15 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.GridItemSpan
+import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
+import androidx.compose.foundation.lazy.grid.items as gridItems
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
@@ -31,6 +38,8 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.Divider
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.Apps
+import androidx.compose.material.icons.filled.FormatListBulleted
 import androidx.compose.material.icons.filled.Share
 import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material.icons.outlined.Add
@@ -48,6 +57,8 @@ import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.ElevatedCard
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.FilterChip
+import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -67,6 +78,7 @@ import androidx.compose.runtime.setValue
 import kotlinx.coroutines.delay
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.painter.BitmapPainter
 import androidx.compose.ui.graphics.vector.rememberVectorPainter
@@ -77,6 +89,7 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.navigation.NavOptionsBuilder
@@ -90,6 +103,7 @@ import com.teco.ventago.design_system.molecules.DMAlertDialog
 import com.teco.ventago.design_system.molecules.DMSimpleAlertDialog
 import com.teco.ventago.design_system.molecules.InverseTicketDivider
 import com.teco.ventago.design_system.molecules.ListRowCard
+import com.teco.ventago.design_system.molecules.PosItemGridCard
 import com.teco.ventago.design_system.molecules.PosItemRow
 import com.teco.ventago.design_system.molecules.customer.PosCustomerSelection
 import com.teco.ventago.design_system.molecules.pos.GlobalInvoiceSheet
@@ -109,6 +123,7 @@ import com.teco.ventago.design_system.theme.vanishedBackgroundColor
 import com.teco.ventago.features.invoicing.domain.models.InvoiceStatus
 import com.teco.ventago.features.pos.domain.models.CartLine
 import com.teco.ventago.features.pos.domain.models.Tax
+import com.teco.ventago.features.pos.ui.viewmodel.ProductViewMode
 import com.teco.ventago.features.pos.ui.viewmodel.PosState
 import com.teco.ventago.features.pos.ui.viewmodel.PosViewModel
 import com.teco.ventago.navigation.PosScreens
@@ -130,6 +145,7 @@ import ventago.composeapp.generated.resources.add_products
 import ventago.composeapp.generated.resources.add_products_desc
 import ventago.composeapp.generated.resources.empty_pos_clients
 import ventago.composeapp.generated.resources.fi_rs_comment_user
+import ventago.composeapp.generated.resources.filter_all
 import ventago.composeapp.generated.resources.invoice_i_subtotal
 import ventago.composeapp.generated.resources.pos_change
 import ventago.composeapp.generated.resources.pos_discount
@@ -137,6 +153,8 @@ import ventago.composeapp.generated.resources.pos_new_sale
 import ventago.composeapp.generated.resources.pos_see_orders
 import ventago.composeapp.generated.resources.pos_see_ticket
 import ventago.composeapp.generated.resources.pos_tip
+import ventago.composeapp.generated.resources.pos_view_grid
+import ventago.composeapp.generated.resources.pos_view_list
 import ventago.composeapp.generated.resources.qr_not_available
 import ventago.composeapp.generated.resources.ready
 import ventago.composeapp.generated.resources.search
@@ -740,7 +758,7 @@ fun PosListOrganism(
     viewModel: PosViewModel, modifier: Modifier = Modifier, navigate: (PosScreens) -> Unit
 ) {
     val uiState by viewModel.uiState.collectAsState()
-    val lazyListState = rememberLazyListState()
+    val productControlsHeight = 56.dp
 
     Column(
         modifier = modifier.padding(horizontal = 0.dp).fillMaxSize()
@@ -753,191 +771,322 @@ fun PosListOrganism(
             ) { screen -> navigate(screen) }
         }
 
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(start = 16.dp, end = 16.dp, top = 8.dp),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            DMOutlinedTextField(
+                text = uiState.query,
+                label = stringResource(Res.string.search),
+                modifier = Modifier
+                    .weight(1f)
+                    .height(productControlsHeight),
+                onChange = {
+                    viewModel.onSearchChange(it)
+                },
+                leadingIcon = Icons.Rounded.Search,
+                maxLines = 1,
+                imeAction = ImeAction.Done,
+            )
 
-        DMOutlinedTextField(
-            text = uiState.query,
-            label = stringResource(Res.string.search),
-            modifier = Modifier.padding(start = 16.dp, end = 16.dp, bottom = 0.dp, top = 8.dp),
-            onChange = {
-                viewModel.onSearchChange(it)
-            },
-            leadingIcon = Icons.Rounded.Search,
-            maxLines = 1,
-            imeAction = ImeAction.Done,
-        )
+            ProductViewModeSelector(
+                selectedMode = uiState.productViewMode,
+                selectorHeight = productControlsHeight,
+                onSelect = viewModel::setProductViewMode
+            )
+        }
 
-        if (uiState.items.isEmpty()) {
-            LazyColumn(
-                modifier = Modifier.fillMaxWidth().background(
-                    color = vanishedBackgroundColor(), shape = RoundedCornerShape(12.dp)
-                ).padding(top = 8.dp, bottom = 8.dp),
-                state = lazyListState,
+        if (uiState.availableProductCategories.size > 1) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(start = 16.dp, end = 16.dp, top = 8.dp)
+                    .horizontalScroll(rememberScrollState()),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalAlignment = Alignment.CenterVertically
             ) {
-                item(key = "new_product") {
-                    Card(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(72.dp)
-                            .padding(
-                                start = 16.dp, end = 16.dp, top = 8.dp, bottom = 8.dp
-                            )
-                            .dashedBorder(
-                                strokeWidth = 1.5.dp,
-                                color = MaterialTheme.colorScheme.secondary,
-                                cornerRadiusDp = 10.dp
-                            ),
-                        enabled = true,
-                        elevation = CardDefaults.elevatedCardElevation(4.dp),
-                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.background),
-                        shape = RoundedCornerShape(10.dp),
-                        onClick = {
-                            navigate(PosScreens.AddItemScreen)
-                        }
-                    ) {
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .fillMaxHeight()
-                                .padding(start = 16.dp, top = 8.dp, bottom = 8.dp, end = 8.dp),
-                            horizontalArrangement = Arrangement.Start,
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Column(
-                                modifier = Modifier
-                                    .padding(end = 16.dp),
-                                horizontalAlignment = Alignment.CenterHorizontally,
-                                verticalArrangement = Arrangement.Center
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Outlined.Add,
-                                    contentDescription = null,
-                                    tint = MaterialTheme.colorScheme.secondary,
-                                    modifier = Modifier.size(28.dp)
-                                )
-                            }
-
-                            Box(
-                                modifier = Modifier
-                                    .padding(horizontal = 12.dp)
-                                    .width(1.dp)
-                                    .fillMaxHeight()
-                                    .background(color = Gray70)
-                            )
-
-                            Box(
-                                modifier = Modifier
-                                    .weight(1f)
-                                    .fillMaxHeight(),
-                                contentAlignment = Alignment.CenterStart
-                            ) {
-                                Text(
-                                    text = "Producto Personalizado",
-                                    maxLines = 1,
-                                    overflow = TextOverflow.Ellipsis,
-                                    style = bodyMediumBold(color = MaterialTheme.colorScheme.secondary)
-                                )
-                            }
-                        }
-                    }
+                FilterChip(
+                    selected = uiState.selectedProductCategoryId == null,
+                    onClick = { viewModel.onProductCategorySelected(null) },
+                    label = { Text(stringResource(Res.string.filter_all)) },
+                    colors = FilterChipDefaults.filterChipColors()
+                )
+                uiState.availableProductCategories.forEach { category ->
+                    FilterChip(
+                        selected = uiState.selectedProductCategoryId == category.id,
+                        onClick = { viewModel.onProductCategorySelected(category.id) },
+                        label = { Text(category.label) },
+                        colors = FilterChipDefaults.filterChipColors()
+                    )
                 }
             }
-        } else {
+        }
+
+        val addItemToCart: (com.teco.ventago.features.product.domain.model.Item) -> Unit = { item ->
+            viewModel.addItemToCart(
+                item,
+                tax = item.taxPercent?.let { tax ->
+                    Tax(
+                        id = tax,
+                        name = "$tax",
+                        rateBps = tax * 100
+                    )
+                }
+            )
+        }
+
+        if (uiState.productViewMode == ProductViewMode.LIST) {
+            val lazyListState = rememberLazyListState()
             LazyColumn(
-                modifier = Modifier.fillMaxWidth().background(
-                    color = vanishedBackgroundColor(), shape = RoundedCornerShape(12.dp)
-                ).padding(top = 8.dp, bottom = 8.dp),
+                modifier = Modifier
+                    .weight(1f)
+                    .fillMaxWidth()
+                    .background(
+                        color = vanishedBackgroundColor(),
+                        shape = RoundedCornerShape(12.dp)
+                    )
+                    .padding(top = 8.dp, bottom = 8.dp),
                 state = lazyListState,
             ) {
-                // Add "New Product" card at the beginning
                 item(key = "new_product") {
-                    Card(
+                    PosPersonalizedProductCard(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .height(72.dp) // Make it taller
                             .padding(
                                 start = 16.dp, end = 16.dp, top = 8.dp, bottom = 8.dp
-                            )
-                            .dashedBorder(
-                                strokeWidth = 1.5.dp,
-                                color = MaterialTheme.colorScheme.secondary,
-                                cornerRadiusDp = 10.dp
                             ),
-                        enabled = true,
-                        elevation = CardDefaults.elevatedCardElevation(4.dp),
-                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.background),
-                        shape = RoundedCornerShape(10.dp),
-                        onClick = {
-                            navigate(PosScreens.AddItemScreen)
-                        }
-                    ) {
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .fillMaxHeight()
-                                .padding(start = 16.dp, top = 8.dp, bottom = 8.dp, end = 8.dp),
-                            horizontalArrangement = Arrangement.Start,
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            // LEFT - Icon
-                            Column(
-                                modifier = Modifier
-                                    .padding(end = 16.dp),
-                                horizontalAlignment = Alignment.CenterHorizontally,
-                                verticalArrangement = Arrangement.Center
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Outlined.Add,
-                                    contentDescription = null,
-                                    tint = MaterialTheme.colorScheme.secondary,
-                                    modifier = Modifier.size(28.dp)
-                                )
-                            }
-
-                            // Divider - Full height
-                            Box(
-                                modifier = Modifier
-                                    .padding(horizontal = 12.dp)
-                                    .width(1.dp)
-                                    .fillMaxHeight()
-                                    .background(color = Gray70)
-                            )
-
-                            // CENTER - Text content
-                            Box(
-                                modifier = Modifier
-                                    .weight(1f)
-                                    .fillMaxHeight(),
-                                contentAlignment = Alignment.CenterStart
-                            ) {
-                                Text(
-                                    text = "Producto Personalizado",
-                                    maxLines = 1,
-                                    overflow = TextOverflow.Ellipsis,
-                                    style = bodyMediumBold(color = MaterialTheme.colorScheme.secondary)
-                                )
-                            }
-                        }
-                    }
+                        onClick = { navigate(PosScreens.AddItemScreen) }
+                    )
                 }
 
-                items(uiState.items, key = { it.itemId }) { item ->
+                items(uiState.visibleItems, key = { it.itemId }) { item ->
                     PosItemRow(
                         item = item,
                         currency = uiState.currency,
                         modifier = Modifier.padding(
                             start = 16.dp, end = 16.dp, top = 8.dp, bottom = 8.dp
                         ),
-                        onClick = {
-                            viewModel.addItemToCart(
-                                item, tax = item.taxPercent?.let { tax ->
-                                    Tax(
-                                        id = tax, name = "$tax", rateBps = tax * 100
-                                    )
-                                })
-                        },
+                        onClick = { addItemToCart(item) },
                     )
-
                 }
+            }
+        } else {
+            BoxWithConstraints(
+                modifier = Modifier
+                    .weight(1f)
+                    .fillMaxWidth()
+                    .background(
+                        color = vanishedBackgroundColor(),
+                        shape = RoundedCornerShape(12.dp)
+                    )
+                    .padding(horizontal = 8.dp)
+            ) {
+                val minCardWidth = if (maxWidth < 480.dp) 150.dp else 180.dp
+                LazyVerticalGrid(
+                    columns = GridCells.Adaptive(minSize = minCardWidth),
+                    modifier = Modifier.fillMaxSize(),
+                    contentPadding = PaddingValues(top = 8.dp, bottom = 8.dp),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    item(key = "new_product") {
+                        PosPersonalizedProductGridCard(
+                            modifier = Modifier.padding(horizontal = 8.dp),
+                            onClick = { navigate(PosScreens.AddItemScreen) }
+                        )
+                    }
+                    gridItems(uiState.visibleItems, key = { it.itemId }) { item ->
+                        PosItemGridCard(
+                            item = item,
+                            currency = uiState.currency,
+                            modifier = Modifier.padding(horizontal = 8.dp),
+                            onClick = { addItemToCart(item) }
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun ProductViewModeSelector(
+    selectedMode: ProductViewMode,
+    selectorHeight: Dp,
+    onSelect: (ProductViewMode) -> Unit
+) {
+    val shape = RoundedCornerShape(6.dp)
+    val borderColor = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.45f)
+    val selectedContainer = MaterialTheme.colorScheme.onSurfaceVariant
+    val selectedContent = MaterialTheme.colorScheme.surface
+    val unselectedContent = MaterialTheme.colorScheme.onSurfaceVariant
+
+    Row(
+        modifier = Modifier
+            .padding(top = 4.dp)
+            .height(selectorHeight)
+            .clip(shape)
+            .border(width = 1.dp, color = borderColor, shape = shape)
+    ) {
+        val isGridSelected = selectedMode == ProductViewMode.GRID
+        Box(
+            modifier = Modifier
+                .fillMaxHeight()
+                .width(selectorHeight)
+                .background(if (isGridSelected) selectedContainer else Color.Transparent)
+                .clickable { onSelect(ProductViewMode.GRID) }
+                .padding(horizontal = 10.dp),
+            contentAlignment = Alignment.Center
+        ) {
+            Icon(
+                imageVector = Icons.Filled.Apps,
+                contentDescription = stringResource(Res.string.pos_view_grid),
+                tint = if (isGridSelected) selectedContent else unselectedContent
+            )
+        }
+
+        Box(
+            modifier = Modifier
+                .width(1.dp)
+                .fillMaxHeight()
+                .background(borderColor)
+        )
+
+        val isListSelected = selectedMode == ProductViewMode.LIST
+        Box(
+            modifier = Modifier
+                .fillMaxHeight()
+                .width(selectorHeight)
+                .background(if (isListSelected) selectedContainer else Color.Transparent)
+                .clickable { onSelect(ProductViewMode.LIST) }
+                .padding(horizontal = 10.dp),
+            contentAlignment = Alignment.Center
+        ) {
+            Icon(
+                imageVector = Icons.Filled.FormatListBulleted,
+                contentDescription = stringResource(Res.string.pos_view_list),
+                tint = if (isListSelected) selectedContent else unselectedContent
+            )
+        }
+    }
+}
+
+@Composable
+private fun PosPersonalizedProductCard(
+    modifier: Modifier = Modifier,
+    onClick: () -> Unit
+) {
+    Card(
+        modifier = modifier
+            .height(72.dp)
+            .dashedBorder(
+                strokeWidth = 1.5.dp,
+                color = MaterialTheme.colorScheme.secondary,
+                cornerRadiusDp = 10.dp
+            ),
+        enabled = true,
+        elevation = CardDefaults.elevatedCardElevation(4.dp),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.background),
+        shape = RoundedCornerShape(10.dp),
+        onClick = onClick
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .fillMaxHeight()
+                .padding(start = 16.dp, top = 8.dp, bottom = 8.dp, end = 8.dp),
+            horizontalArrangement = Arrangement.Start,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Column(
+                modifier = Modifier.padding(end = 16.dp),
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.Center
+            ) {
+                Icon(
+                    imageVector = Icons.Outlined.Add,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.secondary,
+                    modifier = Modifier.size(28.dp)
+                )
+            }
+
+            Box(
+                modifier = Modifier
+                    .padding(horizontal = 12.dp)
+                    .width(1.dp)
+                    .fillMaxHeight()
+                    .background(color = Gray70)
+            )
+
+            Box(
+                modifier = Modifier
+                    .weight(1f)
+                    .fillMaxHeight(),
+                contentAlignment = Alignment.CenterStart
+            ) {
+                Text(
+                    text = "Producto Personalizado",
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    style = bodyMediumBold(color = MaterialTheme.colorScheme.secondary)
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun PosPersonalizedProductGridCard(
+    modifier: Modifier = Modifier,
+    onClick: () -> Unit
+) {
+    Card(
+        modifier = modifier
+            .fillMaxWidth()
+            .height(104.dp)
+            .dashedBorder(
+                strokeWidth = 1.5.dp,
+                color = MaterialTheme.colorScheme.secondary,
+                cornerRadiusDp = 10.dp
+            ),
+        enabled = true,
+        elevation = CardDefaults.elevatedCardElevation(4.dp),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.background),
+        shape = RoundedCornerShape(10.dp),
+        onClick = onClick
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(horizontal = 12.dp, vertical = 8.dp),
+            verticalArrangement = Arrangement.SpaceBetween
+        ) {
+            Text(
+                text = "Producto Personalizado",
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis,
+                style = bodyMediumBold()
+            )
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(6.dp)
+            ) {
+                Icon(
+                    imageVector = Icons.Outlined.Add,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.secondary,
+                    modifier = Modifier.size(18.dp)
+                )
+                Text(
+                    text = stringResource(Res.string.add_products),
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    style = bodyMediumBold(color = MaterialTheme.colorScheme.secondary)
+                )
             }
         }
     }
@@ -1431,7 +1580,7 @@ private fun AdditionalInfoSheet(
                                 address.province,
                                 address.district,
                                 address.corregimiento
-                            ).filterNotNull().filter { it.isNotBlank() }.joinToString(" / ")
+                            ).filterNotNull().filter { it.isNotBlank() }.joinToString(", ")
 
                             Card(
                                 modifier = Modifier
@@ -1480,10 +1629,10 @@ private fun AdditionalInfoSheet(
                                             modifier = Modifier.padding(top = 4.dp)
                                         )
                                     }
-                                    if (!address.locationCode.isNullOrBlank()) {
+                                    address.email?.takeIf { it.isNotBlank() }?.let { email ->
                                         Text(
-                                            text = "Codigo: ${address.locationCode}",
-                                            style = MaterialTheme.typography.labelSmall,
+                                            text = email,
+                                            style = MaterialTheme.typography.bodySmall,
                                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                                             modifier = Modifier.padding(top = 4.dp)
                                         )

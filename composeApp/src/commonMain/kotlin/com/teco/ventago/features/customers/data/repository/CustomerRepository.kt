@@ -7,9 +7,13 @@ import com.teco.ventago.core.logger.Log
 import com.teco.ventago.core.logger.LogLevel
 import com.teco.ventago.features.customers.data.provider.ICustomerProvider
 import com.teco.ventago.features.customers.data.repository.dto.CustomerCreatedDto
+import com.teco.ventago.features.customers.domain.models.CreateBillingAddressRequest
 import com.teco.ventago.features.customers.domain.models.CustomerAddress
 import com.teco.ventago.features.customers.domain.models.Customer
+import com.teco.ventago.features.customers.domain.models.CustomerDetails
 import com.teco.ventago.features.customers.domain.models.CustomerListItem
+import com.teco.ventago.features.customers.domain.models.UpdateBillingAddressRequest
+import com.teco.ventago.features.customers.domain.models.UpdateCustomerDetailsRequest
 import com.teco.ventago.features.customers.domain.models.ValidateRucResponse
 import com.teco.ventago.utils.ApiError
 import com.teco.ventago.utils.BadRequestException
@@ -32,7 +36,33 @@ interface ICustomerRepository {
 
     suspend fun validateRUC(ruc: String, businessId: Int): ValidateRucResponse
     suspend fun validateRUCRegister(ruc: String): ValidateRucResponse
+    suspend fun getCustomerById(businessId: Int, customerId: Long): CustomerDetails
+    suspend fun updateCustomerDetails(
+        businessId: Int,
+        customerId: Long,
+        request: UpdateCustomerDetailsRequest
+    ): Boolean
+
+    suspend fun deleteCustomer(businessId: Int, customerId: Long): Boolean
     suspend fun listCustomerAddresses(businessId: Int, invoiceCustomerId: Int): List<CustomerAddress>
+    suspend fun createCustomerAddress(
+        businessId: Int,
+        customerId: Long,
+        request: CreateBillingAddressRequest
+    ): Boolean
+
+    suspend fun updateCustomerAddress(
+        businessId: Int,
+        customerId: Long,
+        addressId: Long,
+        request: UpdateBillingAddressRequest
+    ): Boolean
+
+    suspend fun deleteCustomerAddress(
+        businessId: Int,
+        customerId: Long,
+        addressId: Long
+    ): Boolean
 }
 
 class CustomerRepository(
@@ -59,7 +89,7 @@ class CustomerRepository(
                 Log(
                     LogLevel.ERROR,
                     "CustomerRepository::createCustomer",
-                    "Error creating customer. Error: ${e.message ?: "UNKNOWN"}"
+                    "Error creating customer. businessId: $businessId, customerName: ${customer.name}. Error: ${e.message ?: "UNKNOWN"}"
                 )
             )
             throw e
@@ -77,7 +107,6 @@ class CustomerRepository(
         try {
 
             val response = provider.listCustomers(businessId, page, size, ruc, email, name)
-            println("ASDASD: Response from backend: ${response.toJson()}")
             if (response.error.isError()) {
                 throw BadRequestException(response.toJson())
             }
@@ -88,12 +117,11 @@ class CustomerRepository(
                 throw BadRequestException(response.toJson())
             }
         } catch (e: Exception) {
-            println("ASDASD: Error listing customers. Error: ${e.message ?: "UNKNOWN"}")
             logger.sendLog(
                 Log(
                     LogLevel.ERROR,
                     "CustomerRepository::listCustomers",
-                    "Error listing customers. Error: ${e.message ?: "UNKNOWN"}"
+                    "Error listing customers. businessId: $businessId, page: $page, size: $size, ruc: ${ruc ?: "-"}, email: ${email ?: "-"}, name: ${name ?: "-"}. Error: ${e.message ?: "UNKNOWN"}"
                 )
             )
             throw e
@@ -154,6 +182,72 @@ class CustomerRepository(
         }
     }
 
+    override suspend fun getCustomerById(businessId: Int, customerId: Long): CustomerDetails {
+        try {
+            val response = provider.getCustomerById(businessId, customerId)
+            if (response.error.isError()) {
+                throw BadRequestException(response.toJson())
+            }
+
+            if (response.data is JsonObject) {
+                return json.decodeFromJsonElement<CustomerDetails>(response.data)
+            } else {
+                throw BadRequestException(response.toJson())
+            }
+        } catch (e: Exception) {
+            logger.sendLog(
+                Log(
+                    LogLevel.ERROR,
+                    "CustomerRepository::getCustomerById",
+                    "Error getting customer details. businessId: $businessId, customerId: $customerId. Error: ${e.message ?: "UNKNOWN"}"
+                )
+            )
+            throw e
+        }
+    }
+
+    override suspend fun updateCustomerDetails(
+        businessId: Int,
+        customerId: Long,
+        request: UpdateCustomerDetailsRequest
+    ): Boolean {
+        try {
+            val response = provider.updateCustomerDetails(businessId, customerId, request)
+            if (response.error.isError()) {
+                throw BadRequestException(response.toJson())
+            }
+            return true
+        } catch (e: Exception) {
+            logger.sendLog(
+                Log(
+                    LogLevel.ERROR,
+                    "CustomerRepository::updateCustomerDetails",
+                    "Error updating customer details. businessId: $businessId, customerId: $customerId. Error: ${e.message ?: "UNKNOWN"}"
+                )
+            )
+            throw e
+        }
+    }
+
+    override suspend fun deleteCustomer(businessId: Int, customerId: Long): Boolean {
+        try {
+            val response = provider.deleteCustomer(businessId, customerId)
+            if (response.error.isError()) {
+                throw BadRequestException(response.toJson())
+            }
+            return true
+        } catch (e: Exception) {
+            logger.sendLog(
+                Log(
+                    LogLevel.ERROR,
+                    "CustomerRepository::deleteCustomer",
+                    "Error deleting customer. businessId: $businessId, customerId: $customerId. Error: ${e.message ?: "UNKNOWN"}"
+                )
+            )
+            throw e
+        }
+    }
+
     override suspend fun listCustomerAddresses(
         businessId: Int,
         invoiceCustomerId: Int
@@ -174,6 +268,76 @@ class CustomerRepository(
                     LogLevel.ERROR,
                     "CustomerRepository::listCustomerAddresses",
                     "Error listing customer addresses. businessId: $businessId, invoiceCustomerId: $invoiceCustomerId. Error: ${e.message ?: "UNKNOWN"}"
+                )
+            )
+            throw e
+        }
+    }
+
+    override suspend fun createCustomerAddress(
+        businessId: Int,
+        customerId: Long,
+        request: CreateBillingAddressRequest
+    ): Boolean {
+        try {
+            val response = provider.createCustomerAddress(businessId, customerId, request)
+            if (response.error.isError()) {
+                throw BadRequestException(response.toJson())
+            }
+            return true
+        } catch (e: Exception) {
+            logger.sendLog(
+                Log(
+                    LogLevel.ERROR,
+                    "CustomerRepository::createCustomerAddress",
+                    "Error creating customer address. businessId: $businessId, customerId: $customerId. Error: ${e.message ?: "UNKNOWN"}"
+                )
+            )
+            throw e
+        }
+    }
+
+    override suspend fun updateCustomerAddress(
+        businessId: Int,
+        customerId: Long,
+        addressId: Long,
+        request: UpdateBillingAddressRequest
+    ): Boolean {
+        try {
+            val response = provider.updateCustomerAddress(businessId, customerId, addressId, request)
+            if (response.error.isError()) {
+                throw BadRequestException(response.toJson())
+            }
+            return true
+        } catch (e: Exception) {
+            logger.sendLog(
+                Log(
+                    LogLevel.ERROR,
+                    "CustomerRepository::updateCustomerAddress",
+                    "Error updating customer address. businessId: $businessId, customerId: $customerId, addressId: $addressId. Error: ${e.message ?: "UNKNOWN"}"
+                )
+            )
+            throw e
+        }
+    }
+
+    override suspend fun deleteCustomerAddress(
+        businessId: Int,
+        customerId: Long,
+        addressId: Long
+    ): Boolean {
+        try {
+            val response = provider.deleteCustomerAddress(businessId, customerId, addressId)
+            if (response.error.isError()) {
+                throw BadRequestException(response.toJson())
+            }
+            return true
+        } catch (e: Exception) {
+            logger.sendLog(
+                Log(
+                    LogLevel.ERROR,
+                    "CustomerRepository::deleteCustomerAddress",
+                    "Error deleting customer address. businessId: $businessId, customerId: $customerId, addressId: $addressId. Error: ${e.message ?: "UNKNOWN"}"
                 )
             )
             throw e

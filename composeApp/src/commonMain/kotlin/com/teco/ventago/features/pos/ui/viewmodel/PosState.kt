@@ -18,6 +18,12 @@ import com.teco.ventago.utils.ViewState
 import kotlin.math.roundToLong
 
 enum class PaymentFlowMode { MANUAL_OR_INSTALLMENTS, PAYMENT_LINK }
+enum class ProductViewMode { LIST, GRID }
+
+data class PosProductCategoryFilter(
+    val id: Int,
+    val label: String
+)
 
 data class InstallmentUI(
     val amountCents: Long = 0L,
@@ -26,6 +32,11 @@ data class InstallmentUI(
 
 data class PosState(
     val items: List<Item> = listOf(),
+    val visibleItems: List<Item> = listOf(),
+    val availableProductCategories: List<PosProductCategoryFilter> = emptyList(),
+    val selectedProductCategoryId: Int? = null,
+    val productViewMode: ProductViewMode = ProductViewMode.LIST,
+    val itemCategoryById: Map<Int, Int> = mapOf(),
     val cart: List<CartLine> = listOf(),
     val personalizedItems: Map<String, Item> = mapOf(), // Stores personalized products keyed by lineId (since all have itemId = -1)
     val taxExempt: Boolean = false,

@@ -1,0 +1,297 @@
+package com.teco.ventago.features.customers.ui.form.viewmodel
+
+import androidx.lifecycle.viewModelScope
+import com.teco.ventago.core.BaseViewModel
+import com.teco.ventago.core.location.PanamaLocations
+import com.teco.ventago.features.customers.domain.CustomerService
+import com.teco.ventago.features.customers.domain.models.Customer
+import com.teco.ventago.features.customers.domain.models.UpdateCustomerDetailsRequest
+import com.teco.ventago.features.financialProfile.domain.FinancialProfileService
+import com.teco.ventago.features.invoicing.domain.models.FeCustomerType
+import com.teco.ventago.features.invoicing.domain.models.rucNeeded
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.launchIn
+import kotlinx.coroutines.flow.onEach
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+
+class CustomerFormViewModel(
+    private val customerService: CustomerService,
+    private val financialProfileService: FinancialProfileService,
+) : BaseViewModel<CustomerFormState, CustomerFormUiEvent>(CustomerFormState()) {
+
+    private var businessId: Int = -1
+    private var pendingEditCustomerId: Long? = null
+
+    init {
+        viewModelScope.launch {
+            financialProfileService.observe().onEach { profile ->
+                val newBusinessId = profile?.businessId ?: -1
+                if (newBusinessId <= 0) return@onEach
+                businessId = newBusinessId
+                updateState {
+                    copy(invoicingEnabled = profile?.invoicingActive == true)
+                }
+                pendingEditCustomerId?.let { customerId ->
+                    if (uiState.value.mode == CustomerFormMode.EDIT && uiState.value.customerId == customerId && uiState.value.isFetching) {
+                        loadCustomerForEdit(customerId)
+                    }
+                }
+            }.launchIn(this)
+        }
+    }
+
+    fun initCreate() {
+        pendingEditCustomerId = null
+        updateState {
+            CustomerFormState(
+                mode = CustomerFormMode.CREATE,
+                invoicingEnabled = this.invoicingEnabled
+            )
+        }
+    }
+
+    fun loadForEdit(customerId: Long) {
+        pendingEditCustomerId = customerId
+        updateState {
+            copy(
+                mode = CustomerFormMode.EDIT,
+                customerId = customerId,
+                isFetching = true,
+                errorMessage = null
+            )
+        }
+        if (businessId <= 0) {
+            return
+        }
+        loadCustomerForEdit(customerId)
+    }
+
+    private fun loadCustomerForEdit(customerId: Long) {
+        viewModelScope.launch {
+            runCatching {
+                withContext(Dispatchers.Default) {
+                    customerService.getCustomerById(businessId = businessId, customerId = customerId)
+                }
+            }.onSuccess { details ->
+                val type = details.feCustomerType?.let { code ->
+                    FeCustomerType.entries.firstOrNull { it.code == code }
+                } ?: FeCustomerType.FINAL_CONSUMER
+
+                val districtOptions = PanamaLocations.districts(details.province)
+                val corregimientoOptions = PanamaLocations.corregimientos(details.province, details.district)
+
+                updateState {
+                    copy(
+                        mode = CustomerFormMode.EDIT,
+                        customerId = details.id,
+                        customerType = type,
+                        name = details.legalName.orEmpty(),
+                        legalName = details.legalName.orEmpty(),
+                        email = details.email.orEmpty(),
+                        phone = details.phone1.orEmpty(),
+                        ruc = details.rucNumber.orEmpty(),
+                        rucCheckDigit = details.rucCheckDigit.orEmpty(),
+                        addressLine = details.addressLine.orEmpty(),
+                        selectedProvince = details.province,
+                        selectedDistrict = details.district,
+                        selectedCorregimiento = details.corregimiento,
+                        selectedCountryCode = details.countryCode ?: "PA",
+                        districtOptions = districtOptions,
+                        corregimientoOptions = corregimientoOptions,
+                        isFetching = false,
+                        errorMessage = null,
+                    )
+                }
+            }.onFailure {
+                updateState {
+                    copy(
+                        isFetching = false,
+                        errorMessage = it.message ?: "Failed to load customer"
+                    )
+                }
+            }
+        }
+    }
+
+    fun onCustomerTypeChange(value: FeCustomerType) {
+        updateState {
+            copy(
+                customerType = value,
+                ruc = "",
+                rucCheckDigit = "",
+                legalName = "",
+                name = if (value.rucNeeded()) "" else name,
+                cedulaCF = if (value == FeCustomerType.FINAL_CONSUMER) cedulaCF else "",
+                foreignIdNumber = if (value == FeCustomerType.FOREIGNER) foreignIdNumber else "",
+            )
+        }
+    }
+
+    fun onNameChange(value: String) = updateState { copy(name = value) }
+    fun onEmailChange(value: String) = updateState { copy(email = value) }
+    fun onPhoneChange(value: String) = updateState { copy(phone = value) }
+    fun onRucChange(value: String) = updateState { copy(ruc = value) }
+    fun onCedulaChange(value: String) = updateState { copy(cedulaCF = value) }
+    fun onAddressLineChange(value: String) = updateState { copy(addressLine = value) }
+    fun onForeignIdNumberChange(value: String) = updateState { copy(foreignIdNumber = value) }
+
+    fun onForeignIdTypeChange(value: CustomerForeignIdType) {
+        updateState { copy(foreignIdType = value) }
+    }
+
+    fun onCountryCodeChange(value: String) {
+        updateState { copy(selectedCountryCode = value) }
+    }
+
+    fun onProvinceChange(province: String) {
+        val districts = PanamaLocations.districts(province)
+        updateState {
+            copy(
+                selectedProvince = province,
+                selectedDistrict = null,
+                selectedCorregimiento = null,
+                districtOptions = districts,
+                corregimientoOptions = emptyList(),
+            )
+        }
+    }
+
+    fun onDistrictChange(district: String) {
+        val corregimientos = PanamaLocations.corregimientos(uiState.value.selectedProvince, district)
+        updateState {
+            copy(
+                selectedDistrict = district,
+                selectedCorregimiento = null,
+                corregimientoOptions = corregimientos,
+            )
+        }
+    }
+
+    fun onCorregimientoChange(corregimiento: String) {
+        updateState { copy(selectedCorregimiento = corregimiento) }
+    }
+
+    fun validateRuc() {
+        val current = uiState.value
+        if (businessId <= 0 || current.ruc.isBlank() || !current.customerType.rucNeeded()) return
+
+        showLoading()
+        viewModelScope.launch {
+            runCatching {
+                withContext(Dispatchers.Default) {
+                    customerService.validateRUC(current.ruc, businessId)
+                }
+            }.onSuccess { validated ->
+                updateState {
+                    copy(
+                        rucCheckDigit = validated.dv,
+                        legalName = validated.legalName,
+                        name = validated.legalName,
+                    )
+                }
+                showSuccess()
+            }.onFailure {
+                showError()
+            }
+        }
+    }
+
+    fun saveCustomer() {
+        if (businessId <= 0) return
+        val current = uiState.value
+
+        if (current.mode == CustomerFormMode.CREATE && current.name.isBlank()) {
+            viewModelScope.launch {
+                emitEvent(CustomerFormUiEvent.ValidationError("El nombre es requerido"))
+            }
+            return
+        }
+
+        showLoading()
+        viewModelScope.launch {
+            runCatching {
+                withContext(Dispatchers.Default) {
+                    if (current.isEditMode) {
+                        val locationCode = if (current.customerType != FeCustomerType.FOREIGNER) {
+                            PanamaLocations.codeFor(
+                                current.selectedProvince,
+                                current.selectedDistrict,
+                                current.selectedCorregimiento
+                            )
+                        } else {
+                            null
+                        }
+
+                        customerService.updateCustomerDetails(
+                            businessId = businessId,
+                            customerId = requireNotNull(current.customerId),
+                            request = UpdateCustomerDetailsRequest(
+                                email = current.email.ifBlank { null },
+                                phone1 = current.phone.ifBlank { null },
+                                addressLine = current.addressLine.ifBlank { null },
+                                locationCode = locationCode,
+                            )
+                        )
+                    } else {
+                        val locationCode = if (current.customerType != FeCustomerType.FOREIGNER) {
+                            PanamaLocations.codeFor(
+                                current.selectedProvince,
+                                current.selectedDistrict,
+                                current.selectedCorregimiento
+                            )
+                        } else {
+                            null
+                        }
+
+                        val customer = Customer(
+                            id = -1,
+                            name = current.name,
+                            phone = current.phone.ifBlank { null },
+                            email = current.email.ifBlank { null },
+                            ruc = current.ruc.ifBlank { null },
+                            invoiceCustomer = current.invoicingEnabled,
+                            rucCheckDigit = current.rucCheckDigit.ifBlank { null },
+                            tags = emptyList(),
+                            customerType = current.customerType,
+                            taxPayerType = current.taxPayerType,
+                            addressLine = current.addressLine.ifBlank { null },
+                            province = current.selectedProvince,
+                            district = current.selectedDistrict,
+                            corregimiento = current.selectedCorregimiento,
+                            locationCode = locationCode,
+                            foreignIdType = if (current.customerType == FeCustomerType.FOREIGNER) {
+                                current.foreignIdType.code
+                            } else {
+                                null
+                            },
+                            foreignIdNumber = if (current.customerType == FeCustomerType.FOREIGNER) {
+                                current.foreignIdNumber.ifBlank { null }
+                            } else {
+                                null
+                            },
+                            cedulaCF = if (current.customerType == FeCustomerType.FINAL_CONSUMER) {
+                                current.cedulaCF.ifBlank { null }
+                            } else {
+                                null
+                            },
+                            countryCode = current.selectedCountryCode,
+                        )
+
+                        customerService.createCustomer(
+                            customer = customer,
+                            businessId = businessId,
+                        )
+                    }
+                }
+            }.onSuccess {
+                showSuccess()
+                delay(700)
+                emitEvent(CustomerFormUiEvent.Saved)
+            }.onFailure {
+                showError()
+            }
+        }
+    }
+}

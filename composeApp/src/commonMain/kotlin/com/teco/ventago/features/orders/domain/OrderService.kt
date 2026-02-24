@@ -51,13 +51,15 @@ class OrderService(private val repository: IOrdersRepository) {
 
     suspend fun loadOrders(
         businessId: Int,
-        paymentStatus: Int? = null
+        paymentStatus: Int? = null,
+        customerId: Long? = null
     ): List<Order> {
         val newOrders = repository.loadOrders(
             businessId = businessId,
             pageSize = pageSize,
             page = page,
-            paymentStatus = paymentStatus
+            paymentStatus = paymentStatus,
+            customerId = customerId
         )
         if (newOrders.isEmpty()) {
             return emptyList()
@@ -76,14 +78,30 @@ class OrderService(private val repository: IOrdersRepository) {
 
     suspend fun resetOrders(
         businessId: Int,
-        paymentStatus: Int? = null
+        paymentStatus: Int? = null,
+        customerId: Long? = null
     ): List<Order> {
         mutex.withLock {
             page = 0
             orders.clear()
             ordersFlow.value = emptyList()
         }
-        return loadOrders(businessId, paymentStatus)
+        return loadOrders(businessId, paymentStatus, customerId)
+    }
+
+    suspend fun listOrdersForCustomerPaged(
+        businessId: Int,
+        customerId: Long,
+        pageSize: Int = 5,
+        page: Int = 0
+    ): Paged<Order> {
+        return repository.loadOrdersPaged(
+            businessId = businessId,
+            pageSize = pageSize,
+            page = page,
+            paymentStatus = null,
+            customerId = customerId
+        )
     }
 
     suspend fun cancelOrder(

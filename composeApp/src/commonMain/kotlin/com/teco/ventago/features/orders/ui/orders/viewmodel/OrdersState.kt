@@ -14,6 +14,7 @@ data class OrdersState(
     val ordersEnabled: Boolean = true,
     val hasQuotesAccess: Boolean = false,
     val paymentStatusFilter: Int? = null,
+    val customerIdFilter: Long? = null,
     val showScanner: Boolean = false,
     val showPermissionRationalDialog: Boolean = false,
 

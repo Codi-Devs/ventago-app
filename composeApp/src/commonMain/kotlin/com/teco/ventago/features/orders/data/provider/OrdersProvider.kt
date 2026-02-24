@@ -196,7 +196,8 @@ class OrdersProvider(private val client: HttpClient, private val authService: IA
         businessId: Int,
         pageSize: Int,
         page: Int,
-        paymentStatus: Int?
+        paymentStatus: Int?,
+        customerId: Long?
     ): ApiResponse {
         val res = client.post(Configs.ordersBasePath+"/api/v1/orders/get-orders") {
             headers {
@@ -206,7 +207,7 @@ class OrdersProvider(private val client: HttpClient, private val authService: IA
                 append("X-Business-ID", "$businessId")
             }
             contentType(ContentType.Application.Json)
-            setBody(OrdersRequests.loadOrders(businessId, pageSize, page, paymentStatus))
+            setBody(OrdersRequests.loadOrders(businessId, pageSize, page, paymentStatus, customerId))
         }
 
         val body = res.body<JsonObject>()
@@ -214,7 +215,7 @@ class OrdersProvider(private val client: HttpClient, private val authService: IA
         if (response.error == ApiError.AUTH_001 || res.status == HttpStatusCode.Unauthorized) {
             return try {
                 authService.refreshToken(client)
-                loadOrders(businessId, pageSize, page, paymentStatus)
+                loadOrders(businessId, pageSize, page, paymentStatus, customerId)
             } catch (e: Exception) {
                 response
             }

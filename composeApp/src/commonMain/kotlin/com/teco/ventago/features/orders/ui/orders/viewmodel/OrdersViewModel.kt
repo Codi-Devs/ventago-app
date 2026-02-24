@@ -80,7 +80,8 @@ class OrdersViewModel(
                 try {
                     val aux = orderService.loadOrders(
                         businessId = businessId,
-                        paymentStatus = uiState.value.paymentStatusFilter
+                        paymentStatus = uiState.value.paymentStatusFilter,
+                        customerId = uiState.value.customerIdFilter
                     )
                     withContext(Dispatchers.Main) {
                         if (aux.isEmpty()) {
@@ -117,7 +118,8 @@ class OrdersViewModel(
                 try {
                     orderService.resetOrders(
                         businessId = businessId,
-                        paymentStatus = uiState.value.paymentStatusFilter
+                        paymentStatus = uiState.value.paymentStatusFilter,
+                        customerId = uiState.value.customerIdFilter
                     )
                     withContext(Dispatchers.Main) {
                         filterOrders(uiState.value.filterSelected)
@@ -281,6 +283,19 @@ class OrdersViewModel(
         updateState {
             copy(
                 paymentStatusFilter = paymentStatus,
+                orders = emptyList(),
+                noMoreOrders = false
+            )
+        }
+        refreshOrders()
+    }
+
+    fun applyCustomerFilter(customerId: Long?) {
+        if (uiState.value.customerIdFilter == customerId) return
+
+        updateState {
+            copy(
+                customerIdFilter = customerId,
                 orders = emptyList(),
                 noMoreOrders = false
             )

@@ -38,6 +38,9 @@ import com.teco.ventago.features.business.domain.BusinessService
 import com.teco.ventago.features.customers.data.provider.CustomerProvider
 import com.teco.ventago.features.customers.data.repository.CustomerRepository
 import com.teco.ventago.features.customers.domain.CustomerService
+import com.teco.ventago.features.customers.ui.details.viewmodel.CustomerDetailsViewModel
+import com.teco.ventago.features.customers.ui.form.viewmodel.CustomerFormViewModel
+import com.teco.ventago.features.customers.ui.list.viewmodel.CustomersListViewModel
 import com.teco.ventago.features.financialProfile.data.provider.FinancialProfileProvider
 import com.teco.ventago.features.financialProfile.data.repository.FinancialProfileRepository
 import com.teco.ventago.features.financialProfile.domain.FinancialProfileService
@@ -216,6 +219,9 @@ internal val viewModels = module {
     viewModelOf(::AddCustomerViewModel)
     viewModelOf(::ClientListViewModel)
     viewModelOf(::SearchCustomerViewModel)
+    viewModelOf(::CustomersListViewModel)
+    viewModelOf(::CustomerDetailsViewModel)
+    viewModelOf(::CustomerFormViewModel)
     viewModel { (branchCode: String) ->
         BillingPointsManageViewModel(
             branchService = get(),

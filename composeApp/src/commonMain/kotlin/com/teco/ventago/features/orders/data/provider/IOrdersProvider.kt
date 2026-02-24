@@ -28,7 +28,8 @@ interface IOrdersProvider {
         businessId: Int,
         pageSize: Int,
         page: Int,
-        paymentStatus: Int? = null
+        paymentStatus: Int? = null,
+        customerId: Long? = null
     ): ApiResponse
 
     suspend fun changeOrderStatus(order: Order, status: Int, businessId: Int): ApiResponse

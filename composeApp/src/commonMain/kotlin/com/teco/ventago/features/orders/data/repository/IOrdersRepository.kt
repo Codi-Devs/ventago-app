@@ -11,6 +11,7 @@ import com.teco.ventago.features.orders.domain.models.requests.RegisterManualPay
 import com.teco.ventago.features.orders.domain.models.requests.RetryInvoiceResponse
 import com.teco.ventago.features.orders.domain.models.responses.CreateOrderResponse
 import com.teco.ventago.features.orders.domain.models.responses.InvoiceDocsDto
+import com.teco.ventago.core.Paged
 
 
 interface IOrdersRepository {
@@ -21,8 +22,17 @@ interface IOrdersRepository {
         businessId: Int,
         pageSize: Int,
         page: Int,
-        paymentStatus: Int? = null
+        paymentStatus: Int? = null,
+        customerId: Long? = null
     ): List<Order>
+
+    suspend fun loadOrdersPaged(
+        businessId: Int,
+        pageSize: Int,
+        page: Int,
+        paymentStatus: Int? = null,
+        customerId: Long? = null
+    ): Paged<Order>
 
     suspend fun changeOrderStatus(
         order: Order,

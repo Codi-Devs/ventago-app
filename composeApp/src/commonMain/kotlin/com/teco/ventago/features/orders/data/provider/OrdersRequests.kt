@@ -34,14 +34,16 @@ object OrdersRequests {
         businessId: Int,
         pageSize: Int,
         page: Int,
-        paymentStatus: Int? = null
+        paymentStatus: Int? = null,
+        customerId: Long? = null
     ): String {
         val paymentStatusField = paymentStatus?.let { ",\n                \"payment_status\": $it" } ?: ""
+        val customerIdField = customerId?.let { ",\n                \"customer_id\": $it" } ?: ""
         return """
             {
                 "business_id": $businessId,
                 "page": $page,
-                "page_size": $pageSize$paymentStatusField
+                "page_size": $pageSize$paymentStatusField$customerIdField
             }
         """.trimIndent()
     }

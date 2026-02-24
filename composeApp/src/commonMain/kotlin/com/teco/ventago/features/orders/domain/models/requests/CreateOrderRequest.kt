@@ -32,7 +32,8 @@ data class CreateOrderRequest(
 @Serializable
 data class AdditionalAddress(
     @SerialName("address_line") val addressLine: String,
-    @SerialName("location_code") val locationCode: String
+    @SerialName("location_code") val locationCode: String,
+    @SerialName("email") val email: String? = null
 )
 
 // ================= Invoice / Branch =================

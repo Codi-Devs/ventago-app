@@ -15,6 +15,7 @@ import com.teco.ventago.features.orders.domain.models.requests.RegisterManualPay
 import com.teco.ventago.features.orders.domain.models.requests.RetryInvoiceResponse
 import com.teco.ventago.features.orders.domain.models.responses.CreateOrderResponse
 import com.teco.ventago.features.orders.domain.models.responses.InvoiceDocsDto
+import com.teco.ventago.core.Paged
 import com.teco.ventago.json
 import com.teco.ventago.utils.ApiResponse
 import com.teco.ventago.utils.BadRequestException
@@ -61,14 +62,32 @@ class OrdersRepository(private val provider: IOrdersProvider, private val logger
         businessId: Int,
         pageSize: Int,
         page: Int,
-        paymentStatus: Int?
+        paymentStatus: Int?,
+        customerId: Long?
     ): List<Order> {
+        return loadOrdersPaged(
+            businessId = businessId,
+            pageSize = pageSize,
+            page = page,
+            paymentStatus = paymentStatus,
+            customerId = customerId
+        ).items
+    }
+
+    override suspend fun loadOrdersPaged(
+        businessId: Int,
+        pageSize: Int,
+        page: Int,
+        paymentStatus: Int?,
+        customerId: Long?
+    ): Paged<Order> {
         try {
             val response = provider.loadOrders(
                 businessId = businessId,
                 pageSize = pageSize,
                 page = page,
-                paymentStatus = paymentStatus
+                paymentStatus = paymentStatus,
+                customerId = customerId
             )
 
             if (response.error.isError()) {
@@ -97,16 +116,21 @@ class OrdersRepository(private val provider: IOrdersProvider, private val logger
                 Log(
                     LogLevel.INFO,
                     "loadOrders",
-                    "Loaded ${orders.size} orders of total $total (page=$pageNum, size=$size, paymentStatus=${paymentStatus ?: "ALL"})"
+                    "Loaded ${orders.size} orders of total $total (page=$pageNum, size=$size, paymentStatus=${paymentStatus ?: "ALL"}, customerId=${customerId ?: "ALL"})"
                 )
             )
 
-            return orders
+            return Paged(
+                page = pageNum,
+                size = size,
+                total = total,
+                items = orders
+            )
         } catch (e: Exception) {
             logger.sendLog(
                 Log(
                     LogLevel.ERROR, "loadOrders",
-                    "Error loading orders. Error: ${e.message ?: "UNKNOWN"}, businessId: $businessId, pageSize: $pageSize, page: $page, paymentStatus: ${paymentStatus ?: "ALL"}"
+                    "Error loading orders. Error: ${e.message ?: "UNKNOWN"}, businessId: $businessId, pageSize: $pageSize, page: $page, paymentStatus: ${paymentStatus ?: "ALL"}, customerId: ${customerId ?: "ALL"}"
                 )
             )
             throw e

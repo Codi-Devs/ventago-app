@@ -1,3 +1,123 @@
+# POS Search/Selector Height Alignment TODO
+
+## Plan
+- [x] Inspect current POS search + view-mode selector row sizing.
+- [x] Enforce shared control height so search field and selector render with equal height.
+- [x] Run Android compile verification.
+
+## Verification Gates
+- [x] `./gradlew :composeApp:compileDebugKotlinAndroid`
+
+## Review Notes
+- Search field and list/grid selector now use one shared `56.dp` control height in the POS products toolbar row.
+- Android compile verification passed after the UI sizing change.
+
+---
+
+# Additional Address Cards Layout Refinement TODO
+
+## Plan
+- [x] Remove `location_code` rendering in POS customer additional-address cards.
+- [x] Update POS additional-address card layout to show: address + default badge, `province/district/corregimiento` line, optional email line.
+- [x] Update Customers Details additional-address rows to the same layout pattern.
+- [x] Run Android compile verification.
+
+## Verification Gates
+- [x] `./gradlew :composeApp:compileDebugKotlinAndroid`
+
+## Review Notes
+- Layout updated in POS and customer details additional address sections per requested structure.
+- `location_code` display was removed from POS address cards.
+
+---
+
+# Additional Address Email Support (Customers + POS Order Payload) TODO
+
+## Plan
+- [x] Add optional `email` to customer additional address request/response models and order `AdditionalAddress` model.
+- [x] Update customer details add/edit billing-address sheet to capture optional email with basic validation.
+- [x] Wire `email` through `CustomerDetailsViewModel` create/update address flows as trimmed nullable.
+- [x] Show address email in customer billing-address rows and POS customer-address selector cards.
+- [x] Pass address email in POS create-order `additional_address` payload mapping.
+- [x] Add localized optional-email field label in `values` and `values-es`.
+- [x] Extend unit tests for address email deserialization and request serialization.
+
+## Verification Gates
+- [x] `./gradlew :composeApp:testDebugUnitTest --tests com.teco.ventago.features.customers.CustomerModelsAndOrdersRequestTest`
+- [x] `./gradlew :composeApp:compileDebugKotlinAndroid`
+- [x] `./gradlew :composeApp:compileKotlinIosSimulatorArm64` (fails due pre-existing unrelated compile errors in `features/expenses/ui/cufe/CufeImportViewModel.kt` and `features/quotes/ui/preview/PdfPreview.ios.kt`)
+
+## Review Notes
+- Added optional `email` to billing-address create/update requests, customer-address response model, and order `additional_address` model.
+- Updated customer address add/edit bottom sheet with optional email field (`KeyboardType.Email`) and basic validation (`local@domain.tld` shape).
+- Wired email through `CustomerDetailsViewModel` address create/update flows as trimmed nullable values.
+- Displayed address email in customer details billing-address rows and POS customer-address selection cards when present.
+- Included selected address email in POS create-order request mapping (`additional_address.email`) for non-default additional addresses.
+- Added localized `customers_address_email_optional` string in `values` and `values-es`.
+- Extended `CustomerModelsAndOrdersRequestTest` to cover address email deserialization and serialization for billing-address requests and `AdditionalAddress`.
+
+---
+
+# POS Product Selection Improvements TODO
+
+## Plan
+- [x] Add POS product selection tracking block before implementation.
+- [x] Extend `PosState` with canonical-vs-visible product state, category filter metadata, and list/grid mode enum state.
+- [x] Refactor `PosViewModel` product filtering to a single pipeline (`query` + category) over canonical products.
+- [x] Persist and restore POS product view mode by business (`pos.product_view_mode.<businessId>`).
+- [x] Update `PosListOrganism` with horizontal category chips (`Todos` + categories), list/grid selector, and adaptive grid rendering.
+- [x] Add compact grid product card composable and keep "Producto Personalizado" as first action in list and grid.
+- [x] Add localized strings for list/grid selector labels in `values` and `values-es`.
+
+## Verification Gates
+- [x] `./gradlew :composeApp:compileDebugKotlinAndroid`
+- [x] `./gradlew :composeApp:compileKotlinIosSimulatorArm64` (fails due pre-existing unrelated compile errors in `features/expenses/ui/cufe/CufeImportViewModel.kt` and `features/quotes/ui/preview/PdfPreview.ios.kt`)
+
+## Review Notes
+- Added canonical-vs-visible product state in POS (`items` remains canonical, `visibleItems` drives rendering) and introduced category filter/view mode state (`selectedProductCategoryId`, `availableProductCategories`, `productViewMode`, `itemCategoryById`).
+- Refactored POS filtering in `PosViewModel` to a single pipeline (`applyProductFilters`) combining search + selected category against canonical products, preserving downstream order/cart logic correctness.
+- Added per-business persisted product view mode with key `pos.product_view_mode.<businessId>` using `LocalStorage`.
+- Updated `PosListOrganism` with horizontal non-wrapping category chips (`Todos` + categories when >1), list/grid selector chips, list rendering from `visibleItems`, and adaptive `LazyVerticalGrid` rendering.
+- Added `PosItemGridCard` and reusable personalized product card support so "Producto Personalizado" remains the first action in list and grid modes.
+- Added localized `pos_view_list` and `pos_view_grid` strings in `values` and `values-es`.
+- Updated list/grid selector visual style to a segmented two-icon control matching the requested capsule design.
+- Adjusted grid product cards to fixed height and inline price formatting (`<number> <currency>`) to keep aligned rows even with multi-line item names.
+
+---
+
+# Customers UI Improvements (List + Details + Loading Standards) TODO
+
+## Plan
+- [x] Add this tracking block before implementation and keep scope limited to Customers UI + AGENTS loading guardrail.
+- [x] Update `AGENTS.md` with shimmer/skeleton-first rule for API-backed list/detail/form fetch states.
+- [x] Refactor `CustomersListScreen` to Expenses-like filter bottom sheet (`name`, `ruc`, `email`) with Apply/Clear actions.
+- [x] Add customers list shimmer loader and move create action to floating action button.
+- [x] Add optional foreign identification fields to `CustomerDetails` model.
+- [x] Refactor `CustomerDetailsScreen` with shimmer loading, Información General ordering/format, foreign identity rules, and address rendering rules.
+- [x] Replace billing address full-width actions with icon buttons and use one add/edit bottom sheet form.
+- [x] Keep `LoadingSheet` transitions for detail mutations and close address sheet only on successful mutations.
+- [x] Add divider between orders KPI and recent orders list in customer details.
+- [x] Add/update localized strings in `values/strings.xml` and `values-es/strings.xml`.
+- [x] Add shimmer/skeleton state in `CustomerFormScreen` when loading edit data.
+
+## Verification Gates
+- [x] `./gradlew :composeApp:compileDebugKotlinAndroid`
+- [x] `./gradlew :composeApp:testDebugUnitTest`
+- [x] `./gradlew :composeApp:compileKotlinIosSimulatorArm64` (fails due pre-existing unrelated compile errors in `CufeImportViewModel.kt` and `PdfPreview.ios.kt`)
+- [x] Confirm only intended files changed (repo already had unrelated pre-existing modified files before this pass).
+
+## Review Notes
+- Updated Customers list UX to Expenses-style: top search row + bottom-sheet filters with Apply/Clear, shimmer initial loader, and create `FloatingActionButton`.
+- Updated Customers details UX: shimmer initial loader, Información General field ordering/rules, separate RUC and DV rows, foreign identification fallback, and refined address rendering (without `location_code` display).
+- Replaced billing-address full-width action buttons with icon actions and moved add/edit flows into one reusable bottom sheet form.
+- Added address mutation success event to close the address bottom sheet only on successful create/update while keeping `LoadingSheet` mutation feedback.
+- Added divider between order KPI rows and recent orders list in customer details card.
+- Added optional foreign identification fields to `CustomerDetails` model for tolerant parsing.
+- Added/updated localized strings in both `values` and `values-es`, and added AGENTS guardrail for shimmer/skeleton-first API loading states.
+- Added customer form shimmer skeleton for edit fetch loading states.
+
+---
+
 # Home Summary API Integration TODO
 
 ## Plan
@@ -175,3 +295,33 @@
 - Service delete flow now removes the order from `orders`/`ordersFlow` and clears `selectedOrder` when applicable for list/detail consistency.
 - `OrdersDetailsViewModel` now exposes `deleteOrder(reason)` using `LoadingSheet` (`showLoading` -> `showSuccess`/`showError`) and emits `OrderDeleted` after success.
 - `OrderDetailsScreen` now shows a conditional `Eliminar pedido` action, prompts for required delete reason, and navigates back to Orders when delete succeeds.
+
+---
+
+# Customers Management Section TODO
+
+## Plan
+- [x] Add customers navigation graph and typed routes (`CustomersManage`, list/details/create/edit) without modifying POS customer flow.
+- [x] Add Home shortcut card to enter the new customers section from `HomeScreen`.
+- [x] Expand customers provider/repository/service with customer details, update/delete, and billing-address CRUD endpoints using typed request models.
+- [x] Expand orders request chain to support optional `customer_id` filter and expose a non-mutating paged reader for customer order resume.
+- [x] Implement customers list UI (filters + pagination + actions) under `features/customers/ui/list`.
+- [x] Implement customer form UI/viewmodel for create and edit modes under `features/customers/ui/form`.
+- [x] Implement customer details UI/viewmodel (card layout, billing addresses CRUD, order resume KPI + last 5 orders) under `features/customers/ui/details`.
+- [x] Wire new viewmodels in `AppModule.kt` and add required strings in `values` and `values-es`.
+- [x] Add/adjust common unit tests for customers parsing/repository/service and orders `customer_id` request behavior.
+
+## Verification Gates
+- [x] `./gradlew :composeApp:compileDebugKotlinAndroid`
+- [x] `./gradlew :composeApp:testDebugUnitTest`
+- [ ] `./gradlew :composeApp:compileKotlinIosSimulatorArm64` (fails due pre-existing unrelated errors in `CufeImportViewModel.kt` and `PdfPreview.ios.kt`)
+- [x] Validate no unrelated files were modified by this implementation.
+
+## Review Notes
+- Implemented a standalone customers management graph from Home shortcut (`CustomersManage`) with list/create/details/edit routes while keeping existing POS customer-selection screens unchanged.
+- Added new customers UI packages for list, form, and details with filters, pagination, full create/edit flow, customer deletion, billing-address CRUD, and order resume (KPI + recent 5 orders).
+- Extended customers data/domain layers with typed models and endpoints: get-by-id, update details, delete customer, and billing address create/update/delete; repository methods include contextual try/catch logging.
+- Extended orders stack to support optional `customer_id` filtering through provider/repository/service and added `OrderService.listOrdersForCustomerPaged(...)` for details screen without mutating main orders state.
+- Added localized strings in both `values/strings.xml` and `values-es/strings.xml` for the new customer screens, and removed debug prints introduced in customer provider/repository/service flow.
+- Added/expanded common tests (`CustomerModelsAndOrdersRequestTest`) for customer details/address parsing, orders request `customer_id` include/omit, repository mutation success on `error == null`, and customer service create/update/delete state/cache updates.
+- Android compile and unit tests pass. iOS simulator compile is still blocked by pre-existing unrelated files (`features/expenses/ui/cufe/CufeImportViewModel.kt`, `features/quotes/ui/preview/PdfPreview.ios.kt`).

@@ -42,6 +42,9 @@ import com.teco.ventago.features.branches.ui.billing_point.manage.viewmodel.Bill
 import com.teco.ventago.features.branches.ui.branches.manage.BranchesManageScreen
 import com.teco.ventago.features.customers.data.provider.json
 import com.teco.ventago.features.customers.domain.models.CustomerListItem
+import com.teco.ventago.features.customers.ui.details.CustomerDetailsScreen
+import com.teco.ventago.features.customers.ui.form.CustomerFormScreen
+import com.teco.ventago.features.customers.ui.list.CustomersListScreen
 import com.teco.ventago.features.home.ui.HomeSummaryScreen
 import com.teco.ventago.features.home.ui.HomeScreen
 import com.teco.ventago.features.invoicing.ui.InvoicingLandingScreen
@@ -118,6 +121,7 @@ import ventago.composeapp.generated.resources.branch
 import ventago.composeapp.generated.resources.branches
 import ventago.composeapp.generated.resources.categories
 import ventago.composeapp.generated.resources.change_business_name
+import ventago.composeapp.generated.resources.details
 import ventago.composeapp.generated.resources.edit
 import ventago.composeapp.generated.resources.home
 import ventago.composeapp.generated.resources.home_summary_tab
@@ -132,6 +136,7 @@ import ventago.composeapp.generated.resources.orders
 import ventago.composeapp.generated.resources.payments
 import ventago.composeapp.generated.resources.paypal
 import ventago.composeapp.generated.resources.pos
+import ventago.composeapp.generated.resources.pos_add_client
 import ventago.composeapp.generated.resources.pos_cart
 import ventago.composeapp.generated.resources.pos_clients
 import ventago.composeapp.generated.resources.pos_invoice
@@ -240,6 +245,12 @@ enum class PosScreens(
         actions = { backStackEntry, navigate, _ -> ClientListActions(backStackEntry, navigate) }),
 
     AddCustomerScreen(Res.string.pos_clients),
+
+    CustomersManage(Res.string.pos_clients),
+    CustomersListScreen(Res.string.pos_clients),
+    CustomerDetailsScreen(Res.string.details),
+    CustomerCreateScreen(Res.string.pos_add_client),
+    CustomerEditScreen(Res.string.edit),
 
 
     // Payments Screens
@@ -370,6 +381,7 @@ fun Navigation(
         addPaymentsNavigation(navController, appViewModel, analyticsService)
 
         addOrdersNavigation(navController, analyticsService)
+        addCustomersNavigation(navController, analyticsService)
 
         addSettingsNavigation(navController, analyticsService)
 
@@ -925,6 +937,9 @@ private fun NavGraphBuilder.addOrdersNavigation(
             val viewModel: OrdersViewModel = koinViewModel(viewModelStoreOwner = ordersOwner)
 
             analyticsService.logScreenView("OrdersScreen")
+            LaunchedEffect(Unit) {
+                viewModel.applyCustomerFilter(null)
+            }
             OrdersScreen(viewModel) { route, builder ->
                 navController.navigate(route, builder)
             }
@@ -941,6 +956,7 @@ private fun NavGraphBuilder.addOrdersNavigation(
             val args = backStackEntry.toRoute<OrdersScreenRoute>()
             val orderNumber = args.orderNumber
             val paymentStatus = args.paymentStatus
+            val customerId = args.customerId
 
 //            val ordersOwner = rememberSafeGraphOwner(
 //                navController = navController,
@@ -952,7 +968,8 @@ private fun NavGraphBuilder.addOrdersNavigation(
 
             analyticsService.logScreenView("OrdersScreen")
 
-            LaunchedEffect(orderNumber, paymentStatus) {
+            LaunchedEffect(orderNumber, paymentStatus, customerId) {
+                viewModel.applyCustomerFilter(customerId)
                 if (paymentStatus != null) {
                     viewModel.applyPaymentStatusFilter(paymentStatus)
                 }
@@ -989,6 +1006,61 @@ private fun NavGraphBuilder.addOrdersNavigation(
             OrderHistoryScreen(viewModel) {
                 navController.navigateUp()
             }
+        }
+    }
+}
+
+private fun NavGraphBuilder.addCustomersNavigation(
+    navController: NavHostController,
+    analyticsService: AnalyticsService
+) {
+    navigation(
+        route = PosScreens.CustomersManage.name,
+        startDestination = PosScreens.CustomersListScreen.name
+    ) {
+        composable(route = PosScreens.CustomersListScreen.name) {
+            analyticsService.logScreenView("CustomersListScreen")
+            CustomersListScreen(
+                onCreateCustomer = { navController.navigate(PosScreens.CustomerCreateScreen.name) },
+                onCustomerSelected = { customerId ->
+                    navController.navigate(CustomerDetailsRoute(customerId = customerId))
+                }
+            )
+        }
+
+        composable<CustomerDetailsRoute> { backStackEntry ->
+            analyticsService.logScreenView("CustomerDetailsScreen")
+            val args = backStackEntry.toRoute<CustomerDetailsRoute>()
+
+            CustomerDetailsScreen(
+                customerId = args.customerId,
+                onBackAfterDelete = { navController.navigateUp() },
+                onEdit = { customerId ->
+                    navController.navigate(CustomerEditRoute(customerId = customerId))
+                },
+                onSeeAllOrders = { customerId ->
+                    navController.navigate(OrdersScreenRoute(customerId = customerId))
+                }
+            )
+        }
+
+        composable(route = PosScreens.CustomerCreateScreen.name) {
+            analyticsService.logScreenView("CustomerCreateScreen")
+            CustomerFormScreen(
+                customerId = null,
+                onSaved = { navController.navigateUp() },
+                onValidationError = { /* no-op for now */ }
+            )
+        }
+
+        composable<CustomerEditRoute> { backStackEntry ->
+            analyticsService.logScreenView("CustomerEditScreen")
+            val args = backStackEntry.toRoute<CustomerEditRoute>()
+            CustomerFormScreen(
+                customerId = args.customerId,
+                onSaved = { navController.navigateUp() },
+                onValidationError = { /* no-op for now */ }
+            )
         }
     }
 }
@@ -1216,6 +1288,8 @@ fun PosScreens.withArgs(vararg args: Pair<String, String>): String {
 
 fun String.toPosScreenOrNull(): PosScreens? {
     if (this.contains("OrdersScreenRoute")) return PosScreens.OrdersScreen
+    if (this.contains("CustomerDetailsRoute")) return PosScreens.CustomerDetailsScreen
+    if (this.contains("CustomerEditRoute")) return PosScreens.CustomerEditScreen
     if (this.contains("ExpensesListScreenRoute")) return PosScreens.ExpensesListScreen
     if (this.contains("PosNoteRoute")) return PosScreens.POSScreen
     if (this.contains("pos_note")) return PosScreens.POSScreen
@@ -1250,8 +1324,15 @@ private fun rememberSafeGraphOwner(
 @Serializable
 data class OrdersScreenRoute(
     val orderNumber: String? = null,
-    val paymentStatus: Int? = null
+    val paymentStatus: Int? = null,
+    val customerId: Long? = null
 )
+
+@Serializable
+data class CustomerDetailsRoute(val customerId: Long)
+
+@Serializable
+data class CustomerEditRoute(val customerId: Long)
 
 @Serializable
 data class ExpensesListScreenRoute(

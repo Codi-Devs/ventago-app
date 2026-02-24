@@ -33,6 +33,7 @@ import androidx.compose.material.icons.rounded.Description
 import androidx.compose.material.icons.rounded.EventAvailable
 import androidx.compose.material.icons.rounded.EventBusy
 import androidx.compose.material.icons.rounded.Payment
+import androidx.compose.material.icons.rounded.Person
 import androidx.compose.material.icons.rounded.ReceiptLong
 import androidx.compose.material.icons.rounded.TrendingDown
 import androidx.compose.material.icons.rounded.TrendingUp
@@ -113,6 +114,7 @@ import ventago.composeapp.generated.resources.connect_paypal_title
 import ventago.composeapp.generated.resources.ic_arrow_forward_ios
 import ventago.composeapp.generated.resources.ic_paypal_onboarding
 import ventago.composeapp.generated.resources.pos
+import ventago.composeapp.generated.resources.pos_clients
 import ventago.composeapp.generated.resources.pos_new_quote
 import ventago.composeapp.generated.resources.quotes
 import ventago.composeapp.generated.resources.quotes_badge_beta
@@ -339,17 +341,19 @@ fun HomeScreen(
         }
 
 
-        // Expenses shortcut
-        Card(
+        Row(
             modifier = Modifier
                 .padding(top = 12.dp, start = 16.dp, end = 16.dp)
-                .fillMaxWidth()
-                .height(90.dp),
-            elevation = CardDefaults.cardElevation(4.dp),
-            colors = CardDefaults.cardColors(containerColor = cardContainerColor()),
-            onClick = { navigate(PosScreens.Expenses) }
+                .fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
+            verticalAlignment = Alignment.CenterVertically
         ) {
-            Box(modifier = Modifier.fillMaxSize()) {
+            Card(
+                modifier = Modifier.weight(1f).height(90.dp),
+                elevation = CardDefaults.cardElevation(4.dp),
+                colors = CardDefaults.cardColors(containerColor = cardContainerColor()),
+                onClick = { navigate(PosScreens.CustomersManage) }
+            ) {
                 Column(
                     modifier = Modifier
                         .fillMaxSize()
@@ -358,32 +362,61 @@ fun HomeScreen(
                     horizontalAlignment = Alignment.CenterHorizontally
                 ) {
                     Icon(
-                        imageVector = Icons.Rounded.ReceiptLong,
+                        imageVector = Icons.Rounded.Person,
                         contentDescription = null,
-                        tint = MaterialTheme.colorScheme.secondary,
+                        tint = MaterialTheme.colorScheme.primary,
                         modifier = Modifier.size(28.dp)
                     )
                     Spacer(modifier = Modifier.height(8.dp))
                     Text(
-                        text = stringResource(Res.string.expenses),
-                        style = bodyMediumBold(color = MaterialTheme.colorScheme.secondary)
+                        text = stringResource(Res.string.pos_clients),
+                        style = bodyMediumBold(color = MaterialTheme.colorScheme.primary)
                     )
                 }
+            }
 
-                Box(
-                    modifier = Modifier
-                        .align(Alignment.TopEnd)
-                        .padding(top = 8.dp, end = 8.dp)
-                        .clip(RoundedCornerShape(50))
-                        .background(shimmeringSecondaryBrush())
-                        .padding(horizontal = 10.dp, vertical = 4.dp),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Text(
-                        text = "Nuevo",
-                        style = labelSmall(color = MaterialTheme.colorScheme.onSecondary),
-                        maxLines = 1
-                    )
+            Card(
+                modifier = Modifier.weight(1f).height(90.dp),
+                elevation = CardDefaults.cardElevation(4.dp),
+                colors = CardDefaults.cardColors(containerColor = cardContainerColor()),
+                onClick = { navigate(PosScreens.Expenses) }
+            ) {
+                Box(modifier = Modifier.fillMaxSize()) {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .padding(12.dp),
+                        verticalArrangement = Arrangement.Center,
+                        horizontalAlignment = Alignment.CenterHorizontally
+                    ) {
+                        Icon(
+                            imageVector = Icons.Rounded.ReceiptLong,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.secondary,
+                            modifier = Modifier.size(28.dp)
+                        )
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Text(
+                            text = stringResource(Res.string.expenses),
+                            style = bodyMediumBold(color = MaterialTheme.colorScheme.secondary)
+                        )
+                    }
+
+                    Box(
+                        modifier = Modifier
+                            .align(Alignment.TopEnd)
+                            .padding(top = 8.dp, end = 8.dp)
+                            .clip(RoundedCornerShape(50))
+                            .background(shimmeringSecondaryBrush())
+                            .padding(horizontal = 10.dp, vertical = 4.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text(
+                            text = "Nuevo",
+                            style = labelSmall(color = MaterialTheme.colorScheme.onSecondary),
+                            maxLines = 1
+                        )
+                    }
                 }
             }
         }
