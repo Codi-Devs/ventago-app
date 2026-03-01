@@ -20,6 +20,7 @@ data class ExpensesListState(
     val issuerRuc: String = "",
     val source: String? = null,
     val paymentStatuses: List<String> = emptyList(),
+    val categorizationStatus: String? = null,
     // Search
     val searchQuery: String = "",
     // Feature flags

@@ -5,13 +5,18 @@ import androidx.lifecycle.viewModelScope
 import com.teco.ventago.core.PdfSharer
 import com.teco.ventago.core.beta.BetaFeature
 import com.teco.ventago.core.beta.BetaService
-import com.teco.ventago.design_system.organism.LoadingBottomSheetState
 import com.teco.ventago.design_system.organism.LoadingState
+import com.teco.ventago.design_system.organism.LoadingBottomSheetState
+import com.teco.ventago.features.expenses.domain.ExpenseConceptMode
 import com.teco.ventago.features.expenses.domain.ExpensesSelectionStore
 import com.teco.ventago.features.expenses.domain.ExpensesService
+import com.teco.ventago.features.expenses.domain.buildExpenseCategorizationPayload
+import com.teco.ventago.features.expenses.domain.inferDefaultExpenseAccount
 import com.teco.ventago.features.expenses.domain.models.Expense
 import com.teco.ventago.features.expenses.domain.models.ExpensePayment
 import com.teco.ventago.features.expenses.domain.models.PaymentSummary
+import com.teco.ventago.features.expenses.domain.resolveExpenseConceptMode
+import com.teco.ventago.features.expenses.domain.toConceptSelections
 import com.teco.ventago.features.expenses.domain.models.requests.ExpenseProofFile
 import com.teco.ventago.features.expenses.domain.models.requests.UpsertExpensePaymentRequest
 import kotlinx.coroutines.Dispatchers
@@ -44,9 +49,13 @@ class ExpenseDetailsViewModel(
         }
     }
 
-    fun loadExpense(expenseId: Long? = null) {
+    fun loadExpense(expenseId: Long? = null, openCategorization: Boolean = false) {
         viewModelScope.launch {
-            _uiState.value = _uiState.value.copy(isLoading = true, error = null)
+            _uiState.value = _uiState.value.copy(
+                isLoading = true,
+                error = null,
+                pendingOpenCategorization = openCategorization
+            )
             try {
                 val expense = withContext(Dispatchers.IO) {
                     val selected = ExpensesSelectionStore.selected
@@ -55,6 +64,7 @@ class ExpenseDetailsViewModel(
                     expensesService.getExpense(idToLoad)
                 }
                 _uiState.value = _uiState.value.copy(expense = expense, isLoading = false)
+                loadConceptEditorData(expense)
             } catch (e: Exception) {
                 _uiState.value = _uiState.value.copy(isLoading = false, error = e.message)
             }
@@ -245,6 +255,141 @@ class ExpenseDetailsViewModel(
         )
     }
 
+    fun setConceptSheetVisible(visible: Boolean) {
+        _uiState.value = _uiState.value.copy(showConceptSheet = visible, conceptError = null)
+    }
+
+    fun setConceptDefaultAccount(accountId: Long?, accountName: String?) {
+        val editor = _uiState.value.conceptEditorState
+        _uiState.value = _uiState.value.copy(
+            conceptEditorState = editor.copy(
+                defaultAccountId = accountId,
+                defaultAccountName = accountName
+            ),
+            conceptError = null
+        )
+    }
+
+    fun setConceptPerItem(enabled: Boolean) {
+        val editor = _uiState.value.conceptEditorState
+        _uiState.value = _uiState.value.copy(
+            conceptEditorState = editor.copy(applyConceptPerItem = enabled),
+            conceptError = null
+        )
+    }
+
+    fun setConceptItemAccount(index: Int, accountId: Long?, accountName: String?) {
+        val editor = _uiState.value.conceptEditorState
+        if (index !in editor.items.indices) return
+        val updatedItems = editor.items.toMutableList()
+        updatedItems[index] = updatedItems[index].copy(
+            expenseAccountId = accountId,
+            expenseAccountName = accountName
+        )
+        _uiState.value = _uiState.value.copy(
+            conceptEditorState = editor.copy(items = updatedItems),
+            conceptError = null
+        )
+    }
+
+    fun applyConceptToAllItems() {
+        val state = _uiState.value
+        val editor = state.conceptEditorState
+        val accountId = editor.defaultAccountId
+        if (accountId == null) {
+            _uiState.value = state.copy(
+                conceptError = "Selecciona un concepto para aplicar a todos los items."
+            )
+            return
+        }
+        val updatedItems = editor.items.map { item ->
+            item.copy(
+                expenseAccountId = accountId,
+                expenseAccountName = editor.defaultAccountName
+            )
+        }
+        _uiState.value = state.copy(
+            conceptEditorState = editor.copy(items = updatedItems),
+            conceptError = null
+        )
+    }
+
+    fun saveConcepts() {
+        val expense = _uiState.value.expense ?: return
+        val editor = _uiState.value.conceptEditorState
+
+        if (editor.items.isEmpty()) {
+            _uiState.value = _uiState.value.copy(conceptError = "No hay items disponibles para actualizar.")
+            return
+        }
+
+        val mode = if (editor.applyConceptPerItem) ExpenseConceptMode.PER_ITEM else ExpenseConceptMode.GLOBAL
+        if (mode == ExpenseConceptMode.GLOBAL && editor.defaultAccountId == null) {
+            _uiState.value = _uiState.value.copy(conceptError = "Selecciona un concepto para toda la factura.")
+            return
+        }
+        if (mode == ExpenseConceptMode.PER_ITEM &&
+            editor.defaultAccountId == null &&
+            editor.items.none { it.expenseAccountId != null }
+        ) {
+            _uiState.value = _uiState.value.copy(
+                conceptError = "Selecciona al menos un concepto para guardar los cambios."
+            )
+            return
+        }
+
+        viewModelScope.launch {
+            _uiState.value = _uiState.value.copy(
+                isSavingConcepts = true,
+                conceptError = null,
+                loadingBottomSheet = LoadingBottomSheetState(LoadingState.LOADING, "Guardando conceptos...")
+            )
+            try {
+                val expenseId = expense.id ?: throw IllegalStateException("No expense selected")
+                val payload = buildExpenseCategorizationPayload(
+                    defaultAccountId = editor.defaultAccountId,
+                    mode = mode,
+                    items = editor.items.map { item ->
+                        com.teco.ventago.features.expenses.domain.ExpenseItemConceptSelection(
+                            itemId = item.itemId,
+                            lineNumber = item.lineNumber,
+                            accountId = if (mode == ExpenseConceptMode.GLOBAL) editor.defaultAccountId else item.expenseAccountId
+                        )
+                    }
+                )
+                val updatedExpense = withContext(Dispatchers.IO) {
+                    expensesService.categorizeExpense(expenseId, payload)
+                }
+                ExpensesSelectionStore.selected = updatedExpense
+                _uiState.value = _uiState.value.copy(
+                    expense = updatedExpense,
+                    showConceptSheet = false,
+                    isSavingConcepts = false,
+                    snackbarMessage = "Conceptos actualizados correctamente.",
+                    loadingBottomSheet = LoadingBottomSheetState(
+                        LoadingState.SUCCESS,
+                        "Conceptos actualizados correctamente."
+                    )
+                )
+                populateConceptEditor(updatedExpense, keepSheetClosed = true)
+                expensesService.publishExpenseUpdate(updatedExpense)
+            } catch (e: Exception) {
+                _uiState.value = _uiState.value.copy(
+                    isSavingConcepts = false,
+                    conceptError = e.message ?: "No se pudieron guardar los conceptos de gasto.",
+                    loadingBottomSheet = LoadingBottomSheetState(
+                        LoadingState.ERROR,
+                        "No se pudieron guardar los conceptos de gasto."
+                    )
+                )
+            }
+        }
+    }
+
+    fun consumeSnackbar() {
+        _uiState.value = _uiState.value.copy(snackbarMessage = null)
+    }
+
     /**
      * Check if a credit lock exists: any unpaid credit payment should be
      * completed via "Marcar como pagado" instead of creating a new payment.
@@ -336,6 +481,67 @@ class ExpenseDetailsViewModel(
     private fun showError(title: String) {
         _uiState.value = _uiState.value.copy(
             loadingBottomSheet = LoadingBottomSheetState(LoadingState.ERROR, title)
+        )
+    }
+
+    private fun loadConceptEditorData(expense: Expense) {
+        viewModelScope.launch {
+            _uiState.value = _uiState.value.copy(
+                conceptEditorState = _uiState.value.conceptEditorState.copy(isLoadingAccounts = true)
+            )
+            try {
+                val accounts = withContext(Dispatchers.IO) {
+                    expensesService.getExpenseAccounts(includeInactive = false)
+                }
+                populateConceptEditor(expense, accounts)
+            } catch (_: Exception) {
+                populateConceptEditor(expense, emptyList())
+                _uiState.value = _uiState.value.copy(
+                    conceptError = "No se pudieron cargar los conceptos de gasto."
+                )
+            }
+        }
+    }
+
+    private fun populateConceptEditor(
+        expense: Expense,
+        accounts: List<com.teco.ventago.features.expenses.domain.models.ExpenseAccount> = _uiState.value.conceptEditorState.expenseAccounts,
+        keepSheetClosed: Boolean = false
+    ) {
+        val inferredDefault = inferDefaultExpenseAccount(
+            defaultAccountId = expense.defaultAccountId,
+            items = expense.toConceptSelections()
+        )
+        val mode = resolveExpenseConceptMode(
+            defaultAccountId = inferredDefault,
+            items = expense.toConceptSelections()
+        )
+        val defaultName = expense.defaultAccount?.name
+            ?: expense.items.orEmpty()
+                .mapNotNull { it.expenseAccount?.name }
+                .distinct()
+                .singleOrNull()
+
+        val shouldOpenSheet = _uiState.value.pendingOpenCategorization && !keepSheetClosed
+        _uiState.value = _uiState.value.copy(
+            conceptEditorState = ExpenseConceptEditorState(
+                defaultAccountId = inferredDefault,
+                defaultAccountName = defaultName,
+                applyConceptPerItem = mode == ExpenseConceptMode.PER_ITEM,
+                items = expense.items.orEmpty().map { item ->
+                    ExpenseConceptEditableItem(
+                        itemId = item.id,
+                        lineNumber = item.lineNumber,
+                        description = item.description ?: "Sin descripcion",
+                        expenseAccountId = item.expenseAccountId,
+                        expenseAccountName = item.expenseAccount?.name
+                    )
+                },
+                expenseAccounts = accounts,
+                isLoadingAccounts = false
+            ),
+            showConceptSheet = shouldOpenSheet,
+            pendingOpenCategorization = false
         )
     }
 

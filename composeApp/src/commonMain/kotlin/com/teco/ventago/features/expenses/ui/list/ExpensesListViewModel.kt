@@ -6,6 +6,7 @@ import com.teco.ventago.core.beta.BetaFeature
 import com.teco.ventago.core.beta.BetaService
 import com.teco.ventago.features.expenses.domain.ExpensesService
 import com.teco.ventago.features.expenses.domain.models.Expense
+import com.teco.ventago.features.expenses.domain.buildExpenseConceptLabel
 import com.teco.ventago.features.expenses.domain.models.requests.ListExpensesRequest
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.IO
@@ -125,8 +126,10 @@ class ExpensesListViewModel(
 
                 expensesService.markCacheHydrated()
 
-                // Merge into cache
-                if (response.expenses.isNotEmpty()) {
+                // Update cache: replace on refresh, merge on pagination
+                if (refresh) {
+                    expensesService.replaceCache(response.expenses)
+                } else if (response.expenses.isNotEmpty()) {
                     expensesService.mergeExpensesIntoCache(response.expenses)
                 }
 
@@ -172,9 +175,9 @@ class ExpensesListViewModel(
                     return@launch
                 }
 
-                // Merge and update
-                val merged = expensesService.mergeExpensesIntoCache(response.expenses)
-                val filtered = applyLocalFilters(merged, currentState)
+                // Replace cache with fresh data from API
+                expensesService.replaceCache(response.expenses)
+                val filtered = applyLocalFilters(response.expenses, currentState)
                 val noMore = response.expenses.isEmpty() ||
                     (response.size != null && response.expenses.size < (response.size))
 
@@ -200,12 +203,13 @@ class ExpensesListViewModel(
             startDate = state.startDate?.let { formatStartDate(it) },
             endDate = state.endDate?.let { formatEndDate(it) },
             source = state.source,
-            paymentStatus = state.paymentStatuses.firstOrNull(),
+            paymentStatus = state.paymentStatuses.takeIf { it.isNotEmpty() },
             issuerName = state.issuerName.ifBlank { null },
             issuerRuc = state.issuerRuc.ifBlank { null },
             invoiceNumber = state.searchQuery.ifBlank {
                 state.invoiceNumber.ifBlank { null }
-            }
+            },
+            categorizationStatus = state.categorizationStatus
         )
     }
 
@@ -228,6 +232,10 @@ class ExpensesListViewModel(
 
         if (state.paymentStatuses.isNotEmpty()) {
             filtered = filtered.filter { it.paymentStatus in state.paymentStatuses }
+        }
+
+        if (state.categorizationStatus != null) {
+            filtered = filtered.filter { it.categorizationStatus == state.categorizationStatus }
         }
 
         val search = state.searchQuery.ifBlank { state.invoiceNumber }
@@ -293,6 +301,10 @@ class ExpensesListViewModel(
         _uiState.value = _uiState.value.copy(paymentStatuses = statuses.take(1))
     }
 
+    fun setCategorizationStatus(status: String?) {
+        _uiState.value = _uiState.value.copy(categorizationStatus = status)
+    }
+
     fun applyInitialPaymentStatus(status: String) {
         val current = _uiState.value.paymentStatuses.firstOrNull()
         if (current == status) return
@@ -339,6 +351,7 @@ class ExpensesListViewModel(
             issuerRuc = "",
             source = null,
             paymentStatuses = emptyList(),
+            categorizationStatus = null,
             searchQuery = "",
             page = 1,
             expenses = emptyList(),
@@ -346,6 +359,8 @@ class ExpensesListViewModel(
         )
         loadExpenses(refresh = true)
     }
+
+    fun expenseConceptLabel(expense: Expense): String = buildExpenseConceptLabel(expense)
 
     fun selectExpense(expense: Expense) {
         com.teco.ventago.features.expenses.domain.ExpensesSelectionStore.selected = expense

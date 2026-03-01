@@ -38,8 +38,11 @@ import androidx.compose.material.icons.rounded.Warning
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.Checkbox
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Divider
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
@@ -75,6 +78,7 @@ import com.teco.ventago.core.camera.rememberGalleryManager
 import com.teco.ventago.core.file.rememberDocumentPickerManager
 import com.teco.ventago.design_system.buttons.ButtonM
 import com.teco.ventago.design_system.buttons.OutlinedButtonM
+import com.teco.ventago.design_system.buttons.TextButtonS
 import com.teco.ventago.design_system.loaders.shimmerBrush
 import com.teco.ventago.design_system.molecules.InstallmentDueDateFieldKmp
 import com.teco.ventago.design_system.organism.LoadingSheet
@@ -84,12 +88,14 @@ import com.teco.ventago.design_system.theme.cardContainerColor
 import com.teco.ventago.design_system.theme.labelSmall
 import com.teco.ventago.design_system.theme.titleMediumBold
 import com.teco.ventago.features.expenses.domain.ExpensesSelectionStore
+import com.teco.ventago.features.expenses.domain.buildExpenseConceptLabel
 import com.teco.ventago.features.expenses.domain.models.Expense
 import com.teco.ventago.features.expenses.domain.models.ExpenseItem
 import com.teco.ventago.features.expenses.domain.models.ExpenseParty
 import com.teco.ventago.features.expenses.domain.models.ExpensePayment
 import com.teco.ventago.features.expenses.domain.models.PaymentSummary
 import com.teco.ventago.features.expenses.domain.models.requests.ExpenseProofFile
+import com.teco.ventago.features.expenses.ui.components.ExpenseAccountSelectorField
 import com.teco.ventago.design_system.textfields.DMMoneyOutlinedTextField
 import com.teco.ventago.design_system.textfields.DMOutlinedTextField
 import com.teco.ventago.design_system.textfields.helpers.DMDropDownField
@@ -115,11 +121,14 @@ import ventago.composeapp.generated.resources.expense_details
 fun ExpenseDetailsScreen(
     viewModel: ExpenseDetailsViewModel,
     onBack: () -> Unit,
+    openCategorization: Boolean = false,
     onEdit: () -> Unit = {},
     onDuplicate: () -> Unit = {}
 ) {
     val uiState by viewModel.uiState.collectAsState()
     val loadingSheetState = rememberModalBottomSheetState(confirmValueChange = { false })
+    val conceptSheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+    val snackbarHostState = remember { SnackbarHostState() }
     val uriHandler = LocalUriHandler.current
     var showPaymentSheet by remember { mutableStateOf(false) }
     var paymentSheetMode by remember { mutableStateOf(PaymentSheetMode.REGISTER) }
@@ -128,7 +137,7 @@ fun ExpenseDetailsScreen(
 
     LaunchedEffect(Unit) {
         val selected = ExpensesSelectionStore.selected
-        viewModel.loadExpense(selected?.id)
+        viewModel.loadExpense(selected?.id, openCategorization = openCategorization)
     }
 
     LaunchedEffect(uiState.isDeleted) {
@@ -141,6 +150,12 @@ fun ExpenseDetailsScreen(
             paymentSheetMode = PaymentSheetMode.REGISTER
             viewModel.resetPaymentState()
         }
+    }
+
+    LaunchedEffect(uiState.snackbarMessage) {
+        val message = uiState.snackbarMessage ?: return@LaunchedEffect
+        snackbarHostState.showSnackbar(message)
+        viewModel.consumeSnackbar()
     }
 
     if (uiState.isLoading && uiState.expense == null) {
@@ -158,117 +173,131 @@ fun ExpenseDetailsScreen(
     val expense = uiState.expense ?: return
     val creditLockPayment = viewModel.getCreditLockPayment()
 
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .verticalScroll(rememberScrollState())
-            .padding(16.dp),
-        verticalArrangement = Arrangement.spacedBy(16.dp)
-    ) {
-        // Header card
-        ExpenseHeaderCard(expense)
+    Box(modifier = Modifier.fillMaxSize()) {
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .verticalScroll(rememberScrollState())
+                .padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(16.dp)
+        ) {
+            // Header card
+            ExpenseHeaderCard(expense)
 
-        // Items card
-        if (!expense.items.isNullOrEmpty()) {
-            ItemsCard(expense.items)
-        }
-
-        // Parties card
-        PartiesCard(expense.issuer, expense.receiver)
-
-        // Payment summary card
-        PaymentSummaryCard(
-            expense = expense,
-            isPaid = expense.paymentStatus == "paid",
-            hasCreditLock = creditLockPayment != null,
-            onRegisterPayment = {
-                paymentSheetMode = PaymentSheetMode.REGISTER
-                viewModel.setEditingPayment(null)
-                showPaymentSheet = true
-            },
-            onMarkCreditAsPaid = {
-                if (creditLockPayment != null) {
-                    paymentSheetMode = PaymentSheetMode.MARK_AS_PAID
-                    viewModel.setEditingPayment(creditLockPayment)
-                    showPaymentSheet = true
-                }
-            }
-        )
-
-        // Payments list card
-        if (!expense.payments.isNullOrEmpty()) {
-            PaymentsListCard(
-                payments = expense.payments,
-                onMarkPaid = { payment ->
-                    if (payment.paymentMethod == PaymentMethod.CREDIT.value && payment.paymentStatus != "paid") {
-                        paymentSheetMode = PaymentSheetMode.MARK_AS_PAID
-                        viewModel.setEditingPayment(payment)
-                        showPaymentSheet = true
-                    } else {
-                        viewModel.markPaymentAsPaid(payment)
-                    }
-                },
-                onEdit = { p ->
-                    paymentSheetMode = PaymentSheetMode.EDIT
-                    viewModel.setEditingPayment(p)
-                    showPaymentSheet = true
-                },
-                onDelete = { viewModel.deletePayment(it.id ?: return@PaymentsListCard) },
-                onDownloadProof = { url -> uriHandler.openUri(url) }
+            ConceptSummaryCard(
+                expense = expense,
+                onEditConcepts = { viewModel.setConceptSheetVisible(true) }
             )
-        }
 
-        // Notes card
-        if (!expense.notes.isNullOrBlank()) {
-            NotesCard(expense.notes)
-        }
+            // Items card
+            if (!expense.items.isNullOrEmpty()) {
+                ItemsCard(expense.items)
+            }
 
-        // CUFE card
-        if (!expense.cufe.isNullOrBlank()) {
-            Card(
-                modifier = Modifier.fillMaxWidth(),
-                elevation = CardDefaults.cardElevation(2.dp),
-                colors = CardDefaults.cardColors(containerColor = cardContainerColor())
-            ) {
-                Column(modifier = Modifier.padding(16.dp)) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Icon(
-                            imageVector = Icons.Rounded.QrCode,
-                            contentDescription = null,
-                            tint = MaterialTheme.colorScheme.primary,
-                            modifier = Modifier.size(20.dp)
-                        )
-                        Spacer(modifier = Modifier.width(8.dp))
-                        Text("CUFE", style = bodyMediumBold())
+            // Parties card
+            PartiesCard(expense.issuer, expense.receiver)
+
+            // Payment summary card
+            PaymentSummaryCard(
+                expense = expense,
+                isPaid = expense.paymentStatus == "paid",
+                hasCreditLock = creditLockPayment != null,
+                onRegisterPayment = {
+                    paymentSheetMode = PaymentSheetMode.REGISTER
+                    viewModel.setEditingPayment(null)
+                    showPaymentSheet = true
+                },
+                onMarkCreditAsPaid = {
+                    if (creditLockPayment != null) {
+                        paymentSheetMode = PaymentSheetMode.MARK_AS_PAID
+                        viewModel.setEditingPayment(creditLockPayment)
+                        showPaymentSheet = true
                     }
-                    Spacer(modifier = Modifier.height(8.dp))
-                    Text(
-                        text = expense.cufe,
-                        style = bodyMedium(),
-                        maxLines = 2,
-                        overflow = TextOverflow.Ellipsis
-                    )
+                }
+            )
+
+            // Payments list card
+            if (!expense.payments.isNullOrEmpty()) {
+                PaymentsListCard(
+                    payments = expense.payments,
+                    onMarkPaid = { payment ->
+                        if (payment.paymentMethod == PaymentMethod.CREDIT.value && payment.paymentStatus != "paid") {
+                            paymentSheetMode = PaymentSheetMode.MARK_AS_PAID
+                            viewModel.setEditingPayment(payment)
+                            showPaymentSheet = true
+                        } else {
+                            viewModel.markPaymentAsPaid(payment)
+                        }
+                    },
+                    onEdit = { p ->
+                        paymentSheetMode = PaymentSheetMode.EDIT
+                        viewModel.setEditingPayment(p)
+                        showPaymentSheet = true
+                    },
+                    onDelete = { viewModel.deletePayment(it.id ?: return@PaymentsListCard) },
+                    onDownloadProof = { url -> uriHandler.openUri(url) }
+                )
+            }
+
+            // Notes card
+            if (!expense.notes.isNullOrBlank()) {
+                NotesCard(expense.notes)
+            }
+
+            // CUFE card
+            if (!expense.cufe.isNullOrBlank()) {
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    elevation = CardDefaults.cardElevation(2.dp),
+                    colors = CardDefaults.cardColors(containerColor = cardContainerColor())
+                ) {
+                    Column(modifier = Modifier.padding(16.dp)) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Icon(
+                                imageVector = Icons.Rounded.QrCode,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.secondary,
+                                modifier = Modifier.size(20.dp)
+                            )
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text("CUFE", style = bodyMediumBold())
+                        }
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Text(
+                            text = expense.cufe,
+                            style = bodyMedium(),
+                            maxLines = 2,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                    }
                 }
             }
+
+            // Actions section
+            ActionsSection(
+                expense = expense,
+                isDeleting = uiState.isDeleting,
+                onEdit = onEdit,
+                onDuplicate = onDuplicate,
+                onDelete = { viewModel.deleteExpense() },
+                onOpenDgi = { cufe ->
+                    uriHandler.openUri("https://dgi-fep.mef.gob.pa/Consultas/FacturasPorCUFE/$cufe")
+                },
+                onDownloadFile = { url ->
+                    uriHandler.openUri(url)
+                },
+                onGeneratePdf = { viewModel.generateAndOpenPdf() }
+            )
+
+            Spacer(modifier = Modifier.height(32.dp))
         }
 
-        // Actions section
-        ActionsSection(
-            expense = expense,
-            isDeleting = uiState.isDeleting,
-            onEdit = onEdit,
-            onDuplicate = onDuplicate,
-            onDelete = { viewModel.deleteExpense() },
-            onOpenDgi = { cufe ->
-                uriHandler.openUri("https://dgi-fep.mef.gob.pa/Consultas/FacturasPorCUFE/$cufe")
-            },
-            onDownloadFile = { url ->
-                uriHandler.openUri(url)
-            },
-            onGeneratePdf = { viewModel.generateAndOpenPdf() }
+        SnackbarHost(
+            hostState = snackbarHostState,
+            modifier = Modifier
+                .align(Alignment.BottomCenter)
+                .padding(16.dp)
         )
-
-        Spacer(modifier = Modifier.height(32.dp))
     }
 
     // Payment registration/edit bottom sheet
@@ -333,6 +362,24 @@ fun ExpenseDetailsScreen(
         }
     }
 
+    if (uiState.showConceptSheet) {
+        ModalBottomSheet(
+            onDismissRequest = { viewModel.setConceptSheetVisible(false) },
+            sheetState = conceptSheetState,
+            containerColor = MaterialTheme.colorScheme.background
+        ) {
+            ExpenseConceptSheet(
+                state = uiState,
+                onDefaultAccountSelected = viewModel::setConceptDefaultAccount,
+                onPerItemChange = viewModel::setConceptPerItem,
+                onApplyToAll = viewModel::applyConceptToAllItems,
+                onItemAccountSelected = viewModel::setConceptItemAccount,
+                onSave = viewModel::saveConcepts,
+                onDismiss = { viewModel.setConceptSheetVisible(false) }
+            )
+        }
+    }
+
     // Overpayment confirmation dialog
     if (showOverpaymentDialog && pendingPaymentData != null) {
         AlertDialog(
@@ -381,6 +428,50 @@ fun ExpenseDetailsScreen(
             sheetState = loadingSheetState
         ) {
             viewModel.hideLoading()
+        }
+    }
+}
+
+@Composable
+private fun ConceptSummaryCard(
+    expense: Expense,
+    onEditConcepts: () -> Unit
+) {
+    val statusLabel = when (expense.categorizationStatus) {
+        "categorized" -> "Con concepto"
+        "partial" -> "Parcial"
+        else -> "Sin concepto"
+    }
+    val summary = "${expense.categorizedItemsCount ?: 0}/${expense.totalItemsCount ?: expense.items.orEmpty().size} items"
+
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        elevation = CardDefaults.cardElevation(2.dp),
+        colors = CardDefaults.cardColors(containerColor = cardContainerColor())
+    ) {
+        Column(modifier = Modifier.padding(16.dp)) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text("Concepto", style = bodyMediumBold())
+                TextButton(onClick = onEditConcepts) {
+                    Text("Editar conceptos")
+                }
+            }
+            InfoRow("Estado", statusLabel)
+            Spacer(modifier = Modifier.height(4.dp))
+            InfoRow("Items", summary)
+            expense.defaultAccount?.name?.let {
+                Spacer(modifier = Modifier.height(4.dp))
+                InfoRow("Concepto factura", it, maxLines = 2)
+            }
+            Spacer(modifier = Modifier.height(8.dp))
+            Text(
+                text = buildExpenseConceptLabel(expense),
+                style = bodyMediumBold(color = MaterialTheme.colorScheme.primary)
+            )
         }
     }
 }
@@ -464,7 +555,7 @@ private fun ExpenseHeaderCard(expense: Expense) {
                     Icon(
                         imageVector = Icons.Rounded.Receipt,
                         contentDescription = null,
-                        tint = MaterialTheme.colorScheme.primary,
+                        tint = MaterialTheme.colorScheme.secondary,
                         modifier = Modifier.size(22.dp)
                     )
                     Spacer(modifier = Modifier.width(8.dp))
@@ -516,11 +607,11 @@ private fun ItemsCard(items: List<ExpenseItem>) {
                 Icon(
                     imageVector = Icons.Rounded.Inventory2,
                     contentDescription = null,
-                    tint = MaterialTheme.colorScheme.primary,
+                    tint = MaterialTheme.colorScheme.secondary,
                     modifier = Modifier.size(20.dp)
                 )
                 Spacer(modifier = Modifier.width(8.dp))
-                Text("Artículos (${items.size})", style = bodyMediumBold())
+                Text("Items (${items.size})", style = bodyMediumBold())
             }
             Spacer(modifier = Modifier.height(8.dp))
             items.forEachIndexed { index, item ->
@@ -562,12 +653,117 @@ private fun ExpenseItemRow(item: ExpenseItem) {
                     style = labelSmall(color = MaterialTheme.colorScheme.onSurfaceVariant)
                 )
             }
+            Text(
+                text = "Concepto: ${item.expenseAccount?.name ?: item.expenseAccountId?.let { "Concepto #$it" } ?: "Sin concepto"}",
+                style = labelSmall(color = MaterialTheme.colorScheme.onSurfaceVariant),
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis
+            )
         }
         Spacer(modifier = Modifier.width(8.dp))
         Text(
             text = "${item.quantity ?: 0}x",
             style = bodyMediumBold()
         )
+    }
+}
+
+@Composable
+private fun ExpenseConceptSheet(
+    state: ExpenseDetailsState,
+    onDefaultAccountSelected: (Long?, String?) -> Unit,
+    onPerItemChange: (Boolean) -> Unit,
+    onApplyToAll: () -> Unit,
+    onItemAccountSelected: (Int, Long?, String?) -> Unit,
+    onSave: () -> Unit,
+    onDismiss: () -> Unit
+) {
+    val editor = state.conceptEditorState
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp, vertical = 8.dp),
+        verticalArrangement = Arrangement.spacedBy(12.dp)
+    ) {
+        Text("Conceptos de gasto", style = titleMediumBold())
+
+        ExpenseAccountSelectorField(
+            label = if (editor.applyConceptPerItem) {
+                "Aplicar mismo concepto a todos los items"
+            } else {
+                "Concepto de gasto para toda la factura"
+            },
+            selectedText = editor.defaultAccountName.orEmpty(),
+            placeholder = "Sin concepto de gasto",
+            accounts = editor.expenseAccounts,
+            isLoading = editor.isLoadingAccounts,
+            leafOnly = true,
+            emptyOptionLabel = "Sin concepto de gasto",
+            hint = if (editor.applyConceptPerItem) {
+                "Selecciona un concepto y presiona \"Aplicar a todos\" para asignarlo a cada item."
+            } else {
+                "Al guardar en este modo, se aplicara el mismo concepto a todos los items."
+            },
+            onSelected = onDefaultAccountSelected
+        )
+
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Checkbox(
+                checked = editor.applyConceptPerItem,
+                onCheckedChange = onPerItemChange
+            )
+            Spacer(modifier = Modifier.width(4.dp))
+            Text("Aplicar concepto por item", style = bodyMedium())
+        }
+
+        if (editor.applyConceptPerItem) {
+            TextButtonS(label = "Aplicar a todos") {
+                onApplyToAll()
+            }
+            editor.items.forEachIndexed { index, item ->
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    elevation = CardDefaults.cardElevation(1.dp),
+                    colors = CardDefaults.cardColors(containerColor = cardContainerColor())
+                ) {
+                    Column(modifier = Modifier.padding(12.dp)) {
+                        Text(item.description, style = bodyMediumBold())
+                        Spacer(modifier = Modifier.height(8.dp))
+                        ExpenseAccountSelectorField(
+                            label = "Concepto",
+                            selectedText = item.expenseAccountName.orEmpty(),
+                            placeholder = "Sin concepto",
+                            accounts = editor.expenseAccounts,
+                            isLoading = editor.isLoadingAccounts,
+                            leafOnly = true,
+                            emptyOptionLabel = "Sin concepto",
+                            onSelected = { accountId, accountName ->
+                                onItemAccountSelected(index, accountId, accountName)
+                            }
+                        )
+                    }
+                }
+            }
+        }
+
+        state.conceptError?.let {
+            Text(
+                text = it,
+                color = MaterialTheme.colorScheme.error,
+                style = bodyMedium()
+            )
+        }
+
+        ButtonM(onClick = onSave, enabled = !state.isSavingConcepts) {
+            Text("Guardar conceptos")
+        }
+        OutlinedButtonM(onClick = onDismiss) {
+            Text("Cancelar")
+        }
+        Spacer(modifier = Modifier.height(16.dp))
     }
 }
 
@@ -583,7 +779,7 @@ private fun PartiesCard(issuer: ExpenseParty?, receiver: ExpenseParty?) {
                 Icon(
                     imageVector = Icons.Rounded.Business,
                     contentDescription = null,
-                    tint = MaterialTheme.colorScheme.primary,
+                    tint = MaterialTheme.colorScheme.secondary,
                     modifier = Modifier.size(20.dp)
                 )
                 Spacer(modifier = Modifier.width(8.dp))
@@ -607,7 +803,7 @@ private fun PartiesCard(issuer: ExpenseParty?, receiver: ExpenseParty?) {
                 Icon(
                     imageVector = Icons.Rounded.Business,
                     contentDescription = null,
-                    tint = MaterialTheme.colorScheme.primary,
+                    tint = MaterialTheme.colorScheme.secondary,
                     modifier = Modifier.size(20.dp)
                 )
                 Spacer(modifier = Modifier.width(8.dp))
@@ -652,7 +848,7 @@ private fun PaymentSummaryCard(
                 Icon(
                     imageVector = Icons.Rounded.Payment,
                     contentDescription = null,
-                    tint = MaterialTheme.colorScheme.primary,
+                    tint = MaterialTheme.colorScheme.secondary,
                     modifier = Modifier.size(20.dp)
                 )
                 Spacer(modifier = Modifier.width(8.dp))
@@ -745,7 +941,7 @@ private fun PaymentsListCard(
                 Icon(
                     imageVector = Icons.Rounded.History,
                     contentDescription = null,
-                    tint = MaterialTheme.colorScheme.primary,
+                    tint = MaterialTheme.colorScheme.secondary,
                     modifier = Modifier.size(20.dp)
                 )
                 Spacer(modifier = Modifier.width(8.dp))
@@ -777,7 +973,7 @@ private fun NotesCard(notes: String) {
                 Icon(
                     imageVector = Icons.Rounded.Notes,
                     contentDescription = null,
-                    tint = MaterialTheme.colorScheme.primary,
+                    tint = MaterialTheme.colorScheme.secondary,
                     modifier = Modifier.size(20.dp)
                 )
                 Spacer(modifier = Modifier.width(8.dp))
@@ -813,9 +1009,9 @@ private fun PaymentRow(
     onDownloadProof: (String) -> Unit
 ) {
     val dateDisplay = payment.paymentDate?.let {
-        formatPaymentDateTime(it)
+        formatPaymentDate(it)
     } ?: payment.dueDate?.let {
-        "Vence: ${formatPaymentDateTime(it)}"
+        "Vence: ${formatPaymentDate(it)}"
     } ?: ""
 
     val statusColor = when (payment.paymentStatus) {
@@ -929,29 +1125,22 @@ private fun PaymentRow(
     }
 }
 
-private fun formatPaymentDateTime(raw: String): String {
+private fun formatPaymentDate(raw: String): String {
     val normalized = raw.trim()
-    val inputFormats = listOf(
-        "yyyy-MM-dd'T'HH:mm:ss.SSSSSSXXX",
-        "yyyy-MM-dd'T'HH:mm:ss.SSSXXX",
-        "yyyy-MM-dd'T'HH:mm:ssXXX",
-        "yyyy-MM-dd'T'HH:mm:ss.SSSSSS'Z'",
-        "yyyy-MM-dd'T'HH:mm:ss.SSS'Z'",
-        "yyyy-MM-dd'T'HH:mm:ss'Z'",
-        "yyyy-MM-dd'T'HH:mm:ss"
-    )
-
-    inputFormats.forEach { format ->
-        val formatted = runCatching {
-            getFormattedDate(normalized, format, "dd/MM/yyyy HH:mm")
-        }.getOrNull()
-        if (formatted != null) return formatted
-    }
-
-    return when {
-        normalized.length >= 16 -> normalized.take(16).replace('T', ' ')
-        normalized.length >= 10 -> normalized.take(10)
-        else -> normalized
+    // Extract date part (YYYY-MM-DD) from ISO datetime strings
+    val datePrefix = if (normalized.length >= 10) normalized.take(10) else normalized
+    return try {
+        val parts = datePrefix.split("-")
+        if (parts.size == 3) {
+            val year = parts[0]
+            val month = parts[1]
+            val day = parts[2]
+            "$day/$month/$year"
+        } else {
+            datePrefix
+        }
+    } catch (_: Exception) {
+        datePrefix
     }
 }
 

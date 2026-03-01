@@ -7,11 +7,15 @@ import com.teco.ventago.features.business.domain.BusinessService
 import com.teco.ventago.features.expenses.data.repository.IExpensesRepository
 import com.teco.ventago.features.expenses.domain.models.CrawlJob
 import com.teco.ventago.features.expenses.domain.models.Expense
+import com.teco.ventago.features.expenses.domain.models.ExpenseAccount
 import com.teco.ventago.features.expenses.domain.models.ExpensePayment
 import com.teco.ventago.features.expenses.domain.models.PagedCrawlJobs
 import com.teco.ventago.features.expenses.domain.models.PagedExpenses
+import com.teco.ventago.features.expenses.domain.models.requests.CategorizeExpenseRequest
+import com.teco.ventago.features.expenses.domain.models.requests.CreateExpenseAccountRequest
 import com.teco.ventago.features.expenses.domain.models.requests.ExpenseProofFile
 import com.teco.ventago.features.expenses.domain.models.requests.ListExpensesRequest
+import com.teco.ventago.features.expenses.domain.models.requests.UpdateExpenseAccountRequest
 import com.teco.ventago.features.expenses.domain.models.requests.UpsertExpenseRequest
 import com.teco.ventago.features.expenses.domain.models.requests.UpsertExpensePaymentRequest
 import kotlinx.coroutines.flow.MutableSharedFlow
@@ -61,6 +65,10 @@ class ExpensesService(
             val encoded = json.encodeToString(expenses)
             storage.set(cacheKey(), encoded)
         }
+    }
+
+    fun replaceCache(expenses: List<Expense>) {
+        saveCacheExpenses(expenses)
     }
 
     fun mergeExpensesIntoCache(fresh: List<Expense>): List<Expense> {
@@ -125,14 +133,46 @@ class ExpensesService(
         return repository.createExpense(businessId, request, file, paymentProofFiles)
     }
 
-    suspend fun updateExpense(expenseId: Long, request: UpsertExpenseRequest): Expense {
+    suspend fun updateExpense(
+        expenseId: Long,
+        request: UpsertExpenseRequest,
+        file: ExpenseProofFile? = null
+    ): Expense {
         val businessId = businessId() ?: throw IllegalStateException("No business selected")
-        return repository.updateExpense(businessId, expenseId, request)
+        return repository.updateExpense(businessId, expenseId, request, file)
     }
 
     suspend fun deleteExpense(expenseId: Long): Boolean {
         val businessId = businessId() ?: throw IllegalStateException("No business selected")
         return repository.deleteExpense(businessId, expenseId)
+    }
+
+    suspend fun categorizeExpense(expenseId: Long, request: CategorizeExpenseRequest): Expense {
+        val businessId = businessId() ?: throw IllegalStateException("No business selected")
+        return repository.categorizeExpense(businessId, expenseId, request)
+    }
+
+    suspend fun getExpenseAccounts(includeInactive: Boolean = false): List<ExpenseAccount> {
+        val businessId = businessId() ?: throw IllegalStateException("No business selected")
+        return repository.getExpenseAccounts(businessId, includeInactive)
+    }
+
+    suspend fun createExpenseAccount(request: CreateExpenseAccountRequest): ExpenseAccount {
+        val businessId = businessId() ?: throw IllegalStateException("No business selected")
+        return repository.createExpenseAccount(businessId, request)
+    }
+
+    suspend fun updateExpenseAccount(
+        accountId: Long,
+        request: UpdateExpenseAccountRequest
+    ): ExpenseAccount {
+        val businessId = businessId() ?: throw IllegalStateException("No business selected")
+        return repository.updateExpenseAccount(businessId, accountId, request)
+    }
+
+    suspend fun deactivateExpenseAccount(accountId: Long): Boolean {
+        val businessId = businessId() ?: throw IllegalStateException("No business selected")
+        return repository.deactivateExpenseAccount(businessId, accountId)
     }
 
     fun getBusinessId(): Int? = businessId()

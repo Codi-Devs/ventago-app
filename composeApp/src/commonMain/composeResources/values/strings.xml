@@ -552,6 +552,7 @@
     <string name="cufe_import">CUFE Import</string>
     <string name="expenses_start_date">Start date (YYYY-MM-DD)</string>
     <string name="expenses_end_date">End date (YYYY-MM-DD)</string>
+    <string name="expense_accounts_settings">Conceptos de gasto</string>
     <string name="customers_loading">Loading customer...</string>
     <string name="customers_retry">Retry</string>
     <string name="customers_empty">No customers found</string>

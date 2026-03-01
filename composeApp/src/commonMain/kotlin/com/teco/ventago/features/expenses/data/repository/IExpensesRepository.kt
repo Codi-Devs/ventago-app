@@ -1,14 +1,18 @@
 package com.teco.ventago.features.expenses.data.repository
 
 import com.teco.ventago.features.expenses.domain.models.CrawlJob
+import com.teco.ventago.features.expenses.domain.models.ExpenseAccount
 import com.teco.ventago.features.expenses.domain.models.Expense
 import com.teco.ventago.features.expenses.domain.models.ExpensePayment
 import com.teco.ventago.features.expenses.domain.models.PagedCrawlJobs
 import com.teco.ventago.features.expenses.domain.models.PagedExpenses
+import com.teco.ventago.features.expenses.domain.models.requests.CategorizeExpenseRequest
+import com.teco.ventago.features.expenses.domain.models.requests.CreateExpenseAccountRequest
 import com.teco.ventago.features.expenses.domain.models.requests.ExpenseProofFile
 import com.teco.ventago.features.expenses.domain.models.requests.ListExpensesRequest
 import com.teco.ventago.features.expenses.domain.models.requests.UpsertExpenseRequest
 import com.teco.ventago.features.expenses.domain.models.requests.UpsertExpensePaymentRequest
+import com.teco.ventago.features.expenses.domain.models.requests.UpdateExpenseAccountRequest
 
 interface IExpensesRepository {
     suspend fun listExpenses(businessId: Int, request: ListExpensesRequest): PagedExpenses
@@ -19,8 +23,29 @@ interface IExpensesRepository {
         file: ExpenseProofFile? = null,
         paymentProofFiles: List<ExpenseProofFile> = emptyList()
     ): Expense
-    suspend fun updateExpense(businessId: Int, expenseId: Long, request: UpsertExpenseRequest): Expense
+    suspend fun updateExpense(
+        businessId: Int,
+        expenseId: Long,
+        request: UpsertExpenseRequest,
+        file: ExpenseProofFile? = null
+    ): Expense
     suspend fun deleteExpense(businessId: Int, expenseId: Long): Boolean
+    suspend fun categorizeExpense(
+        businessId: Int,
+        expenseId: Long,
+        request: CategorizeExpenseRequest
+    ): Expense
+    suspend fun getExpenseAccounts(businessId: Int, includeInactive: Boolean): List<ExpenseAccount>
+    suspend fun createExpenseAccount(
+        businessId: Int,
+        request: CreateExpenseAccountRequest
+    ): ExpenseAccount
+    suspend fun updateExpenseAccount(
+        businessId: Int,
+        accountId: Long,
+        request: UpdateExpenseAccountRequest
+    ): ExpenseAccount
+    suspend fun deactivateExpenseAccount(businessId: Int, accountId: Long): Boolean
 
     // Payments
     suspend fun createPayment(

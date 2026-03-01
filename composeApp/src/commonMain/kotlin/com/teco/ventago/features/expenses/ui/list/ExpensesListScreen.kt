@@ -259,7 +259,7 @@ fun ExpensesListScreen(
                     verticalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
                     items(uiState.expenses, key = { it.id ?: it.hashCode() }) { expense ->
-                        ExpenseListItem(expense) {
+                        ExpenseListItem(expense, viewModel.expenseConceptLabel(expense)) {
                             viewModel.selectExpense(expense)
                             navigate(PosScreens.ExpenseDetailsScreen)
                         }
@@ -443,6 +443,7 @@ private fun ExpensesFilterSheet(
 @Composable
 private fun ExpenseListItem(
     expense: Expense,
+    conceptLabel: String,
     onClick: () -> Unit
 ) {
     val emissionDate = expense.emissionDate?.let {
@@ -507,6 +508,13 @@ private fun ExpenseListItem(
                     text = emissionDate,
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                Text(
+                    text = "Concepto: $conceptLabel",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
                 )
             }
 

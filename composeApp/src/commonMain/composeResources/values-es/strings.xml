@@ -543,6 +543,7 @@
     <string name="cufe_import">Importar CUFE</string>
     <string name="expenses_start_date">Fecha inicio</string>
     <string name="expenses_end_date">Fecha fin</string>
+    <string name="expense_accounts_settings">Conceptos de gasto</string>
     <string name="customers_loading">Cargando cliente...</string>
     <string name="customers_retry">Reintentar</string>
     <string name="customers_empty">No hay clientes registrados</string>

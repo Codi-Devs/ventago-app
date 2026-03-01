@@ -87,6 +87,7 @@ import com.teco.ventago.features.expenses.ui.create.NewExpenseViewModel
 import com.teco.ventago.features.expenses.ui.cufe.CufeImportViewModel
 import com.teco.ventago.features.expenses.ui.details.ExpenseDetailsViewModel
 import com.teco.ventago.features.expenses.ui.list.ExpensesListViewModel
+import com.teco.ventago.features.expenses.ui.accounts.ExpenseAccountsViewModel
 import com.teco.ventago.features.product.ui.category.add.viewmodel.AddCategoryViewModel
 import com.teco.ventago.features.product.ui.category.add.viewmodel.ModifyCategoryViewModel
 import com.teco.ventago.features.product.ui.category.edit.viewmodel.EditCategoryViewModel
@@ -204,6 +205,7 @@ internal val viewModels = module {
     viewModelOf(::ExpenseDetailsViewModel)
     viewModelOf(::NewExpenseViewModel)
     viewModelOf(::CufeImportViewModel)
+    viewModelOf(::ExpenseAccountsViewModel)
     viewModelOf(::OrdersViewModel)
     viewModelOf(::ChangeImageViewModel)
     viewModelOf(::ChangeNameViewModel)
@@ -501,7 +503,8 @@ internal fun appModule() = module {
             repository = ExpensesRepository(
                 provider = ExpensesProvider(
                     client = get(),
-                    authService = get()
+                    authService = get(),
+                    logger = get()
                 ),
                 logger = get()
             ),

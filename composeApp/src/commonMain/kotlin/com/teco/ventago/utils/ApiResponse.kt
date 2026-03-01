@@ -2,24 +2,66 @@ package com.teco.ventago.utils
 
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.boolean
+import kotlinx.serialization.json.booleanOrNull
+import kotlinx.serialization.json.contentOrNull
+import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
+import kotlinx.serialization.json.JsonNull
 
 @kotlinx.serialization.Serializable
-data class ApiResponse(val successful: Boolean, val data: JsonElement?, val error: ApiError?) {
+data class ApiResponse(
+    val successful: Boolean,
+    val data: JsonElement?,
+    val error: ApiError?,
+    val errorCode: String? = null,
+    val errorMessage: String? = null
+) {
 
 
     fun toJson(): String {
-        return "{\"successful\":$successful,\"data\":${data?.toString() ?: "null"},\"error\":\"${error?.error}\"}"
+        return "{\"successful\":$successful,\"data\":${data?.toString() ?: "null"},\"error\":\"${errorCode ?: error?.error}\",\"errorMessage\":${errorMessage?.let { "\"$it\"" } ?: "null"}}"
     }
     companion object {
         fun fromJson(json: JsonObject): ApiResponse {
-            val successful = json["success"]?.jsonPrimitive?.boolean ?: false
-            val error = ApiError.fromError(json["error"]?.jsonPrimitive!!.content)
+            val successful = json["success"]?.jsonPrimitive?.booleanOrNull ?: false
+            val parsedError = parseError(json["error"])
             val data = json["data"]
-            return ApiResponse(successful, data, error)
+            return ApiResponse(
+                successful = successful,
+                data = data,
+                error = ApiError.fromError(parsedError.code),
+                errorCode = parsedError.code,
+                errorMessage = parsedError.message
+            )
+        }
+
+        private fun parseError(errorElement: JsonElement?): ParsedError {
+            return when (errorElement) {
+                null, JsonNull -> ParsedError()
+                is JsonPrimitive -> {
+                    val content = errorElement.contentOrNull
+                    ParsedError(
+                        code = content?.takeIf { it.isNotBlank() },
+                        message = content?.takeIf { it.isNotBlank() }
+                    )
+                }
+                is JsonObject -> {
+                    ParsedError(
+                        code = errorElement["code"]?.jsonPrimitive?.contentOrNull,
+                        message = errorElement["message"]?.jsonPrimitive?.contentOrNull
+                    )
+                }
+                else -> ParsedError(message = errorElement.toString())
+            }
         }
     }
+
+    private data class ParsedError(
+        val code: String? = null,
+        val message: String? = null
+    )
 }
 
 enum class ApiError(val error: String?){
@@ -38,6 +80,7 @@ enum class ApiError(val error: String?){
     F_AUTH_005("F_AUTH_005"), // TOO_MANY_ATTEMPTS_TRY_LATER
     F_AUTH_006("F_AUTH_006"), // UNDEFINED
     F_AUTH_007("F_AUTH_007"), // Firebase auth expection
+    O_RP_002("O_RP_002"),
     UNDEFINED("U_001"),
     INVALID_RUC("CU_001"),
     RUC_NOT_FOUND("CU_002"),
@@ -61,6 +104,7 @@ enum class ApiError(val error: String?){
                 "F_AUTH_005" -> F_AUTH_005   // TOO_MANY_ATTEMPTS_TRY_LATER
                 "F_AUTH_006" -> F_AUTH_006   // UNDEFINED
                 "F_AUTH_007" -> F_AUTH_007  // Firebase auth expection
+                "O_RP_002" -> O_RP_002
                 else -> NO_ERROR
             }
         }
@@ -70,5 +114,4 @@ enum class ApiError(val error: String?){
 fun ApiError?.isError(): Boolean {
     return this != ApiError.NO_ERROR
 }
-
 

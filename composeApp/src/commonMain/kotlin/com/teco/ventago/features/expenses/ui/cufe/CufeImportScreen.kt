@@ -378,7 +378,7 @@ private fun ImportStatusContent(
                         )
                         Spacer(modifier = Modifier.width(8.dp))
                     }
-                    Text("Ver gasto importado")
+                    Text("Ir a concepto de gasto")
                 }
             }
 

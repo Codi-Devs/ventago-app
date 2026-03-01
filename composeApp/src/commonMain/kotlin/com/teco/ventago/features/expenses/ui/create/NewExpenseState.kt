@@ -1,5 +1,7 @@
 package com.teco.ventago.features.expenses.ui.create
 
+import com.teco.ventago.design_system.organism.LoadingBottomSheetState
+import com.teco.ventago.features.expenses.domain.models.ExpenseAccount
 import com.teco.ventago.features.expenses.domain.models.Expense
 import com.teco.ventago.features.expenses.domain.models.ExpenseItem
 
@@ -28,8 +30,19 @@ data class NewExpenseState(
     // Items
     val items: List<EditableExpenseItem> = listOf(EditableExpenseItem()),
 
-    // Initial payment (create mode only)
+    // Concepts
+    val defaultExpenseAccountId: Long? = null,
+    val defaultExpenseAccountName: String? = null,
+    val applyConceptPerItem: Boolean = false,
+    val expenseAccounts: List<ExpenseAccount> = emptyList(),
+    val expenseAccountsLoading: Boolean = false,
+    val conceptValidationError: String? = null,
+    val hadExistingConcepts: Boolean = false,
+
+    // Initial payments (create mode only)
     val includePayment: Boolean = false,
+    val initialPayments: List<EditableInitialPayment> = listOf(EditableInitialPayment()),
+    // Legacy single-payment fields kept for compatibility
     val paymentAmount: String = "",
     val paymentMethodForPayment: String = "cash",
     val paymentDate: String = "",
@@ -49,15 +62,28 @@ data class NewExpenseState(
     val error: String? = null,
 
     // Feature flags
-    val hasExpensesQr: Boolean = false
+    val hasExpensesQr: Boolean = false,
+    val loadingBottomSheet: LoadingBottomSheetState = LoadingBottomSheetState()
+)
+
+data class EditableInitialPayment(
+    val paymentMethod: String = "cash",
+    val amount: String = "",
+    val paymentDate: String = "",
+    val dueDate: String = "",
+    val proofFileName: String? = null
 )
 
 data class EditableExpenseItem(
+    val itemId: Long? = null,
+    val lineNumber: Int = 1,
     val description: String = "",
     val quantity: String = "1",
     val unitPrice: String = "",
     val discountAmount: String = "0",
     val itbmsAmount: String = "0",
+    val expenseAccountId: Long? = null,
+    val expenseAccountName: String? = null,
 ) {
     val subtotalValue: Double
         get() {
@@ -70,7 +96,8 @@ data class EditableExpenseItem(
     val totalValue: Double
         get() = subtotalValue + (itbmsAmount.toDoubleOrNull() ?: 0.0)
 
-    fun toExpenseItem(lineNumber: Int) = ExpenseItem(
+    fun toExpenseItem(lineNumber: Int = this.lineNumber) = ExpenseItem(
+        id = itemId,
         lineNumber = lineNumber,
         description = description,
         quantity = quantity.toDoubleOrNull() ?: 0.0,
@@ -78,6 +105,7 @@ data class EditableExpenseItem(
         discountAmount = discountAmount.toDoubleOrNull() ?: 0.0,
         subtotal = subtotalValue,
         itbmsAmount = itbmsAmount.toDoubleOrNull() ?: 0.0,
-        total = totalValue
+        total = totalValue,
+        expenseAccountId = expenseAccountId
     )
 }

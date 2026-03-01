@@ -34,6 +34,8 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
+import androidx.compose.material3.rememberModalBottomSheetState
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -52,6 +54,7 @@ import com.teco.ventago.design_system.buttons.ButtonM
 import com.teco.ventago.design_system.buttons.OutlinedButtonM
 import com.teco.ventago.design_system.buttons.TextButtonS
 import com.teco.ventago.design_system.molecules.InstallmentDueDateFieldKmp
+import com.teco.ventago.design_system.organism.LoadingSheet
 import com.teco.ventago.design_system.textfields.DMOutlinedTextField
 import com.teco.ventago.design_system.textfields.helpers.DMDropDownField
 import com.teco.ventago.core.file.SharedFile
@@ -69,6 +72,7 @@ import com.teco.ventago.core.camera.createPermissionsManager
 import com.teco.ventago.core.camera.rememberCameraManager
 import com.teco.ventago.core.camera.rememberGalleryManager
 import com.teco.ventago.features.expenses.domain.ExpensesSelectionStore
+import com.teco.ventago.features.expenses.ui.components.ExpenseAccountSelectorField
 import com.teco.ventago.utils.formatNumberToMoney
 import kotlinx.coroutines.launch
 import kotlinx.datetime.Clock
@@ -78,6 +82,7 @@ import kotlinx.datetime.TimeZone
 import kotlinx.datetime.plus
 import kotlinx.datetime.toLocalDateTime
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun NewExpenseScreen(
     viewModel: NewExpenseViewModel,
@@ -86,6 +91,7 @@ fun NewExpenseScreen(
     onBack: () -> Unit
 ) {
     val uiState by viewModel.uiState.collectAsState()
+    val loadingSheetState = rememberModalBottomSheetState(confirmValueChange = { false })
     val today = remember { currentLocalDate() }
     val tomorrow = remember(today) { today.plus(DatePeriod(days = 1)) }
     val isManualRegistration = !uiState.isEditMode && !isDuplicateMode
@@ -124,6 +130,7 @@ fun NewExpenseScreen(
             expanded = invoiceInfoExpanded,
             onExpandedChange = { invoiceInfoExpanded = it }
         ) {
+            RequiredLabel("No. Factura")
             DMOutlinedTextField(
                 text = uiState.invoiceNumber,
                 label = "No. Factura",
@@ -138,6 +145,7 @@ fun NewExpenseScreen(
                 onChange = { viewModel.setCufe(it) }
             )
             Spacer(modifier = Modifier.height(8.dp))
+            RequiredLabel("Fecha de emisión")
             InstallmentDueDateFieldKmp(
                 valueIso = uiState.emissionDate,
                 onDatePickedIso = { viewModel.setEmissionDate(it) },
@@ -154,6 +162,7 @@ fun NewExpenseScreen(
             expanded = issuerExpanded,
             onExpandedChange = { issuerExpanded = it }
         ) {
+            RequiredLabel("Nombre del emisor")
             DMOutlinedTextField(
                 text = uiState.issuerName,
                 label = "Nombre del emisor",
@@ -176,6 +185,7 @@ fun NewExpenseScreen(
             expanded = receiverExpanded,
             onExpandedChange = { receiverExpanded = it }
         ) {
+            RequiredLabel("Nombre del receptor")
             DMOutlinedTextField(
                 text = uiState.receiverName,
                 label = "Nombre del receptor",
@@ -193,11 +203,22 @@ fun NewExpenseScreen(
 
         // Items
         SectionCard(
-            title = "Artículos",
+            title = "Items",
             collapsible = isManualRegistration,
             expanded = itemsExpanded,
             onExpandedChange = { itemsExpanded = it }
         ) {
+            ExpenseConceptSection(
+                uiState = uiState,
+                onDefaultAccountSelected = viewModel::setDefaultExpenseAccount,
+                onApplyConceptPerItemChange = viewModel::setApplyConceptPerItem,
+                onApplyDefaultToAll = viewModel::applyDefaultConceptToAllItems
+            )
+
+            Spacer(modifier = Modifier.height(12.dp))
+            Divider()
+            Spacer(modifier = Modifier.height(12.dp))
+
             uiState.items.forEachIndexed { index, item ->
                 if (index > 0) {
                     Divider(modifier = Modifier.padding(vertical = 8.dp))
@@ -206,7 +227,13 @@ fun NewExpenseScreen(
                     item = item,
                     index = index,
                     canRemove = uiState.items.size > 1,
+                    showConceptSelector = uiState.applyConceptPerItem,
+                    expenseAccounts = uiState.expenseAccounts,
+                    expenseAccountsLoading = uiState.expenseAccountsLoading,
                     onUpdate = { viewModel.updateItem(index, it) },
+                    onExpenseAccountSelected = { accountId, accountName ->
+                        viewModel.setItemExpenseAccount(index, accountId, accountName)
+                    },
                     onRemove = { viewModel.removeItem(index) }
                 )
             }
@@ -224,7 +251,7 @@ fun NewExpenseScreen(
             // Totals
             TotalsRow("Subtotal", formatNumberToMoney("${viewModel.getSubtotal()}"))
             TotalsRow("ITBMS", formatNumberToMoney("${viewModel.getItbmsTotal()}"))
-            TotalsRow("Total", formatNumberToMoney("${viewModel.getTotalAmount()}"), bold = true)
+            TotalsRow("Total", formatNumberToMoney("${viewModel.getTotalAmount()}"), bold = true, useSecondaryColor = true)
         }
 
         // Notes
@@ -277,10 +304,10 @@ fun NewExpenseScreen(
             }
         }
 
-        // Initial payment (create mode only)
+        // Initial payments (create mode only)
         if (!uiState.isEditMode) {
             SectionCard(
-                title = "Pago Inicial (opcional)",
+                title = "Pagos Iniciales (opcional)",
                 collapsible = isManualRegistration,
                 expanded = initialPaymentExpanded,
                 onExpandedChange = { initialPaymentExpanded = it }
@@ -294,54 +321,31 @@ fun NewExpenseScreen(
                         onCheckedChange = { viewModel.setIncludePayment(it) }
                     )
                     Spacer(modifier = Modifier.width(4.dp))
-                    Text("Incluir pago inicial", style = bodyMedium())
+                    Text("Incluir pagos iniciales", style = bodyMedium())
                 }
 
                 if (uiState.includePayment) {
-                    Spacer(modifier = Modifier.height(8.dp))
-                    InitialPaymentMethodSelector(
-                        selected = uiState.paymentMethodForPayment,
-                        onSelect = { viewModel.setPaymentMethodForPayment(it) }
-                    )
-                    Spacer(modifier = Modifier.height(8.dp))
-                    DMOutlinedTextField(
-                        text = uiState.paymentAmount,
-                        label = "Monto del pago",
-                        modifier = Modifier,
-                        onChange = { viewModel.setPaymentAmount(it) }
-                    )
-                    Spacer(modifier = Modifier.height(8.dp))
-                    if (uiState.paymentMethodForPayment == "credit") {
-                        InstallmentDueDateFieldKmp(
-                            valueIso = uiState.paymentDueDate,
-                            onDatePickedIso = { viewModel.setPaymentDueDate(it) },
-                            label = "Fecha de vencimiento",
-                            modifier = Modifier,
-                            minSelectableDate = tomorrow
-                        )
-                    } else {
-                        InstallmentDueDateFieldKmp(
-                            valueIso = uiState.paymentDate,
-                            onDatePickedIso = { viewModel.setPaymentDate(it) },
-                            label = "Fecha de pago",
-                            modifier = Modifier,
-                            maxSelectableDate = today
-                        )
-                        if (uiState.hasExpensesQr) {
-                            Spacer(modifier = Modifier.height(8.dp))
-                            Text(
-                                text = "Comprobante de pago (opcional)",
-                                style = labelSmall(color = MaterialTheme.colorScheme.onSurfaceVariant)
-                            )
-                            Spacer(modifier = Modifier.height(6.dp))
-                            FileUploadCard(
-                                fileUrl = null,
-                                selectedLocalFileName = uiState.initialPaymentProofName,
-                                isUploading = false,
-                                onFileSelected = { viewModel.uploadInitialPaymentProof(it) },
-                                onRemove = { viewModel.removeInitialPaymentProof() }
-                            )
+                    uiState.initialPayments.forEachIndexed { index, payment ->
+                        if (index > 0) {
+                            Divider(modifier = Modifier.padding(vertical = 8.dp))
                         }
+                        InitialPaymentEditor(
+                            payment = payment,
+                            index = index,
+                            canRemove = uiState.initialPayments.size > 1,
+                            today = today,
+                            tomorrow = tomorrow,
+                            hasExpensesQr = uiState.hasExpensesQr,
+                            onUpdate = { viewModel.updateInitialPayment(index, it) },
+                            onRemove = { viewModel.removeInitialPayment(index) },
+                            onFileSelected = { viewModel.uploadInitialPaymentProofAt(index, it) },
+                            onRemoveProof = { viewModel.removeInitialPaymentProofAt(index) }
+                        )
+                    }
+
+                    Spacer(modifier = Modifier.height(8.dp))
+                    TextButtonS(label = "+ Agregar pago") {
+                        viewModel.addInitialPayment()
                     }
                 }
             }
@@ -355,17 +359,26 @@ fun NewExpenseScreen(
                 style = bodyMedium()
             )
         }
+        uiState.conceptValidationError?.let {
+            Text(
+                text = it,
+                color = MaterialTheme.colorScheme.error,
+                style = bodyMedium()
+            )
+        }
 
         // Submit
         ButtonM(
             onClick = { viewModel.submit() },
-            enabled = !uiState.isSubmitting
+            enabled = !uiState.isSubmitting,
+            containerColor = MaterialTheme.colorScheme.secondary,
+            contentColor = MaterialTheme.colorScheme.onSecondary
         ) {
             if (uiState.isSubmitting) {
                 CircularProgressIndicator(
                     modifier = Modifier.size(16.dp),
                     strokeWidth = 2.dp,
-                    color = MaterialTheme.colorScheme.onPrimary
+                    color = MaterialTheme.colorScheme.onSecondary
                 )
                 Spacer(modifier = Modifier.width(8.dp))
             }
@@ -375,6 +388,66 @@ fun NewExpenseScreen(
         }
 
         Spacer(modifier = Modifier.height(32.dp))
+    }
+
+    if (uiState.loadingBottomSheet.isLoading()) {
+        LoadingSheet(
+            state = uiState.loadingBottomSheet,
+            sheetState = loadingSheetState
+        ) {
+            viewModel.hideLoading()
+        }
+    }
+}
+
+@Composable
+private fun ExpenseConceptSection(
+    uiState: NewExpenseState,
+    onDefaultAccountSelected: (Long?, String?) -> Unit,
+    onApplyConceptPerItemChange: (Boolean) -> Unit,
+    onApplyDefaultToAll: () -> Unit
+) {
+    Column(modifier = Modifier.fillMaxWidth()) {
+        Text(
+            text = "Concepto de gasto",
+            style = bodyMediumBold(color = MaterialTheme.colorScheme.secondary),
+            modifier = Modifier.padding(bottom = 4.dp)
+        )
+        ExpenseAccountSelectorField(
+            label = "Concepto de gasto (factura completa)",
+            selectedText = uiState.defaultExpenseAccountName.orEmpty(),
+            placeholder = "Sin concepto de gasto",
+            accounts = uiState.expenseAccounts,
+            isLoading = uiState.expenseAccountsLoading,
+            leafOnly = true,
+            emptyOptionLabel = "Sin concepto de gasto",
+            hint = if (uiState.applyConceptPerItem) {
+                "Selecciona un concepto y aplicalo a todos los items, o asigna uno distinto por linea."
+            } else {
+                "Se aplicara al gasto completo cuando no uses asignacion por item."
+            },
+            onSelected = onDefaultAccountSelected
+        )
+
+        Spacer(modifier = Modifier.height(12.dp))
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Checkbox(
+                checked = uiState.applyConceptPerItem,
+                onCheckedChange = onApplyConceptPerItemChange
+            )
+            Spacer(modifier = Modifier.width(4.dp))
+            Text("Aplicar concepto por item", style = bodyMedium())
+        }
+
+        if (uiState.applyConceptPerItem) {
+            Spacer(modifier = Modifier.height(8.dp))
+            TextButtonS(label = "Aplicar mismo concepto a todos los items") {
+                onApplyDefaultToAll()
+            }
+        }
     }
 }
 
@@ -421,7 +494,11 @@ private fun ItemEditor(
     item: EditableExpenseItem,
     index: Int,
     canRemove: Boolean,
+    showConceptSelector: Boolean,
+    expenseAccounts: List<com.teco.ventago.features.expenses.domain.models.ExpenseAccount>,
+    expenseAccountsLoading: Boolean,
     onUpdate: (EditableExpenseItem) -> Unit,
+    onExpenseAccountSelected: (Long?, String?) -> Unit,
     onRemove: () -> Unit
 ) {
     Column(modifier = Modifier.fillMaxWidth()) {
@@ -448,6 +525,7 @@ private fun ItemEditor(
 
         Spacer(modifier = Modifier.height(8.dp))
 
+        RequiredLabel("Descripción")
         DMOutlinedTextField(
             text = item.description,
             label = "Descripción",
@@ -457,22 +535,43 @@ private fun ItemEditor(
 
         Spacer(modifier = Modifier.height(8.dp))
 
+        if (showConceptSelector) {
+            ExpenseAccountSelectorField(
+                label = "Concepto",
+                selectedText = item.expenseAccountName.orEmpty(),
+                placeholder = "Sin concepto",
+                accounts = expenseAccounts,
+                isLoading = expenseAccountsLoading,
+                leafOnly = true,
+                emptyOptionLabel = "Sin concepto",
+                hint = null,
+                onSelected = onExpenseAccountSelected
+            )
+            Spacer(modifier = Modifier.height(8.dp))
+        }
+
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.spacedBy(8.dp)
         ) {
-            DMOutlinedTextField(
-                text = item.quantity,
-                label = "Cant.",
-                modifier = Modifier.weight(1f),
-                onChange = { onUpdate(item.copy(quantity = it)) }
-            )
-            DMOutlinedTextField(
-                text = item.unitPrice,
-                label = "Precio unit.",
-                modifier = Modifier.weight(1f),
-                onChange = { onUpdate(item.copy(unitPrice = it)) }
-            )
+            Column(modifier = Modifier.weight(1f)) {
+                RequiredLabel("Cant.")
+                DMOutlinedTextField(
+                    text = item.quantity,
+                    label = "Cant.",
+                    modifier = Modifier,
+                    onChange = { onUpdate(item.copy(quantity = it)) }
+                )
+            }
+            Column(modifier = Modifier.weight(1f)) {
+                RequiredLabel("Precio unit.")
+                DMOutlinedTextField(
+                    text = item.unitPrice,
+                    label = "Precio unit.",
+                    modifier = Modifier,
+                    onChange = { onUpdate(item.copy(unitPrice = it)) }
+                )
+            }
         }
 
         Spacer(modifier = Modifier.height(8.dp))
@@ -510,7 +609,11 @@ private fun ItemEditor(
 }
 
 @Composable
-private fun TotalsRow(label: String, value: String, bold: Boolean = false) {
+private fun TotalsRow(label: String, value: String, bold: Boolean = false, useSecondaryColor: Boolean = false) {
+    val color = when {
+        useSecondaryColor -> MaterialTheme.colorScheme.secondary
+        else -> MaterialTheme.colorScheme.onSurface
+    }
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -519,11 +622,11 @@ private fun TotalsRow(label: String, value: String, bold: Boolean = false) {
     ) {
         Text(
             text = label,
-            style = if (bold) bodyMediumBold() else labelSmall(color = MaterialTheme.colorScheme.onSurfaceVariant)
+            style = if (bold) bodyMediumBold(color = color) else labelSmall(color = MaterialTheme.colorScheme.onSurfaceVariant)
         )
         Text(
             text = value,
-            style = if (bold) bodyMediumBold() else bodyMedium()
+            style = if (bold) bodyMediumBold(color = color) else bodyMedium()
         )
     }
 }
@@ -714,6 +817,111 @@ private fun FileUploadCard(
                     Spacer(modifier = Modifier.width(4.dp))
                     Text("PDF")
                 }
+            }
+        }
+    }
+}
+
+@Composable
+private fun RequiredLabel(fieldName: String) {
+    Row(modifier = Modifier.padding(bottom = 2.dp)) {
+        Text(
+            text = "* ",
+            style = labelSmall(color = MaterialTheme.colorScheme.secondary)
+        )
+        Text(
+            text = fieldName,
+            style = labelSmall(color = MaterialTheme.colorScheme.onSurfaceVariant)
+        )
+    }
+}
+
+@Composable
+private fun InitialPaymentEditor(
+    payment: EditableInitialPayment,
+    index: Int,
+    canRemove: Boolean,
+    today: LocalDate,
+    tomorrow: LocalDate,
+    hasExpensesQr: Boolean,
+    onUpdate: (EditableInitialPayment) -> Unit,
+    onRemove: () -> Unit,
+    onFileSelected: (com.teco.ventago.core.file.SharedFile) -> Unit,
+    onRemoveProof: () -> Unit
+) {
+    val allMethods = remember { PaymentMethod.getAllMethods() }
+    val selectedIndex = allMethods.indexOfFirst { it.value == payment.paymentMethod }.takeIf { it >= 0 } ?: 0
+
+    Column(modifier = Modifier.fillMaxWidth()) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text("Pago ${index + 1}", style = bodyMediumBold())
+            if (canRemove) {
+                IconButton(onClick = onRemove, modifier = Modifier.size(32.dp)) {
+                    Icon(
+                        imageVector = Icons.Rounded.Close,
+                        contentDescription = "Eliminar",
+                        tint = MaterialTheme.colorScheme.error,
+                        modifier = Modifier.size(18.dp)
+                    )
+                }
+            }
+        }
+
+        Spacer(modifier = Modifier.height(8.dp))
+        DMDropDownField(
+            modifier = Modifier.fillMaxWidth(),
+            label = "Método de pago",
+            items = allMethods,
+            selectedIndex = selectedIndex,
+            onItemSelected = { _, item ->
+                onUpdate(payment.copy(paymentMethod = item.value))
+            },
+            selectedItemToString = { it.label }
+        )
+
+        Spacer(modifier = Modifier.height(8.dp))
+        DMOutlinedTextField(
+            text = payment.amount,
+            label = "Monto del pago",
+            modifier = Modifier,
+            onChange = { onUpdate(payment.copy(amount = it)) }
+        )
+
+        Spacer(modifier = Modifier.height(8.dp))
+        if (payment.paymentMethod == "credit") {
+            InstallmentDueDateFieldKmp(
+                valueIso = payment.dueDate,
+                onDatePickedIso = { onUpdate(payment.copy(dueDate = it)) },
+                label = "Fecha de vencimiento",
+                modifier = Modifier,
+                minSelectableDate = tomorrow
+            )
+        } else {
+            InstallmentDueDateFieldKmp(
+                valueIso = payment.paymentDate,
+                onDatePickedIso = { onUpdate(payment.copy(paymentDate = it)) },
+                label = "Fecha de pago",
+                modifier = Modifier,
+                maxSelectableDate = today
+            )
+            if (hasExpensesQr) {
+                Spacer(modifier = Modifier.height(8.dp))
+                Text(
+                    text = "Comprobante de pago (opcional)",
+                    style = labelSmall(color = MaterialTheme.colorScheme.onSurfaceVariant)
+                )
+                Spacer(modifier = Modifier.height(6.dp))
+                FileUploadCard(
+                    fileUrl = null,
+                    selectedLocalFileName = payment.proofFileName,
+                    isUploading = false,
+                    onFileSelected = onFileSelected,
+                    onRemove = onRemoveProof
+                )
             }
         }
     }

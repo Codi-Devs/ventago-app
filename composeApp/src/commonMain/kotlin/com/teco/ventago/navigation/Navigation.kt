@@ -147,6 +147,7 @@ import ventago.composeapp.generated.resources.quote_summary
 import ventago.composeapp.generated.resources.quotes
 import ventago.composeapp.generated.resources.expenses
 import ventago.composeapp.generated.resources.expense_details
+import ventago.composeapp.generated.resources.expense_accounts_settings
 import ventago.composeapp.generated.resources.new_expense
 import ventago.composeapp.generated.resources.cufe_import
 import ventago.composeapp.generated.resources.register
@@ -300,6 +301,7 @@ enum class PosScreens(
         Res.string.change_business_name
     ),
     BusinessAddressSettingsScreen(Res.string.add_address),
+    ExpenseAccountsSettingsScreen(Res.string.expense_accounts_settings),
 
     //Branches Screens
     Branches(Res.string.branch),
@@ -1095,6 +1097,11 @@ private fun NavGraphBuilder.addSettingsNavigation(
             analyticsService.logScreenView("BusinessAddressSettingsScreen")
             SetBusinessAddressScreen(koinViewModel<SetAddressViewModel>())
         }
+
+        composable(route = PosScreens.ExpenseAccountsSettingsScreen.name) {
+            analyticsService.logScreenView("ExpenseAccountsSettingsScreen")
+            com.teco.ventago.features.expenses.ui.accounts.ExpenseAccountsScreen()
+        }
     }
 }
 
@@ -1211,6 +1218,26 @@ private fun NavGraphBuilder.addExpensesNavigation(
             com.teco.ventago.features.expenses.ui.details.ExpenseDetailsScreen(
                 viewModel = viewModel,
                 onBack = { navController.navigateUp() },
+                openCategorization = false,
+                onEdit = { navController.navigate(PosScreens.EditExpenseScreen.name) },
+                onDuplicate = { navController.navigate(PosScreens.DuplicateExpenseScreen.name) }
+            )
+        }
+
+        composable<ExpenseDetailsRoute> { backStackEntry ->
+            val args = backStackEntry.toRoute<ExpenseDetailsRoute>()
+            val expensesOwner = rememberGraphOwner(navController, PosScreens.Expenses.name)
+            val viewModel: com.teco.ventago.features.expenses.ui.details.ExpenseDetailsViewModel =
+                koinViewModel(viewModelStoreOwner = expensesOwner)
+            analyticsService.logScreenView("ExpenseDetailsScreen")
+            if (args.expenseId != null) {
+                com.teco.ventago.features.expenses.domain.ExpensesSelectionStore.selected =
+                    com.teco.ventago.features.expenses.domain.models.Expense(id = args.expenseId)
+            }
+            com.teco.ventago.features.expenses.ui.details.ExpenseDetailsScreen(
+                viewModel = viewModel,
+                onBack = { navController.navigateUp() },
+                openCategorization = args.openCategorization,
                 onEdit = { navController.navigate(PosScreens.EditExpenseScreen.name) },
                 onDuplicate = { navController.navigate(PosScreens.DuplicateExpenseScreen.name) }
             )
@@ -1260,10 +1287,12 @@ private fun NavGraphBuilder.addExpensesNavigation(
                 viewModel = viewModel,
                 onBack = { navController.navigateUp() },
                 onExpenseImported = { expenseId ->
-                    // Navigate to details of the imported expense
-                    com.teco.ventago.features.expenses.domain.ExpensesSelectionStore.selected =
-                        com.teco.ventago.features.expenses.domain.models.Expense(id = expenseId)
-                    navController.navigate(PosScreens.ExpenseDetailsScreen.name) {
+                    navController.navigate(
+                        ExpenseDetailsRoute(
+                            expenseId = expenseId,
+                            openCategorization = true
+                        )
+                    ) {
                         popUpTo(PosScreens.ExpensesListScreen.name) { inclusive = false }
                     }
                 }
@@ -1337,6 +1366,12 @@ data class CustomerEditRoute(val customerId: Long)
 @Serializable
 data class ExpensesListScreenRoute(
     val initialPaymentStatus: String? = null
+)
+
+@Serializable
+data class ExpenseDetailsRoute(
+    val expenseId: Long? = null,
+    val openCategorization: Boolean = false
 )
 
 @Serializable

@@ -1,5 +1,48 @@
 # POS Search/Selector Height Alignment TODO
 
+## Expense Categorization Request Debug TODO
+
+### Plan
+- [x] Inspeccionar el punto final donde se serializa y envía `PATCH /expenses/{id}/categorization`.
+- [x] Loggear el payload JSON limpio final antes del `setBody` para comparar con el request esperado por backend.
+- [x] Ejecutar una verificación puntual para confirmar que el build sigue compilando y que el logging quedó activo.
+
+### Verification Gates
+- [ ] `./gradlew --no-daemon -Pkotlin.incremental=false :composeApp:compileDebugKotlinAndroid` (bloqueado por un problema local de build/output tracking: `NoSuchFileException ... Res$array.class`)
+- [x] `./gradlew --no-daemon -Pkotlin.incremental=false :composeApp:testDebugUnitTest --tests com.teco.ventago.features.expenses.ExpenseConceptsTest`
+
+### Review Notes
+- Se agregó logging en `ExpensesProvider::categorizeExpense` del payload JSON final limpio enviado a `PATCH /api/v1/expenses/{id}/categorization`.
+- Si backend rechaza el request, ahora también se registra `status`, `errorCode`, `errorMessage` y el mismo payload para correlación directa.
+- Se cambió la serialización de `CategorizeExpenseRequest` a `json.encodeToJsonElement(CategorizeExpenseRequest.serializer(), request)` para evitar que el encode genérico termine produciendo `{}` en este endpoint.
+- Se agregó un test unitario que verifica que el body serializado contiene `default_account_id`, `only_uncategorized` e `items`.
+- Se reemplazó el encode genérico del `PATCH /categorization` por un builder explícito de `JsonObject` con las claves exactas del backend (`default_account_id`, `only_uncategorized`, `items`, `item_id`, `line_number`, `account_id`).
+- La compilación Android completa sigue inestable por un problema local del directorio `build/tmp/kotlin-classes/debug/.../Res$array.class`; la verificación útil del cambio quedó cubierta por `testDebugUnitTest`.
+
+## Expense Concepts Parity TODO
+
+### Plan
+- [x] Extender modelos, requests y normalización API de gastos para conceptos/categorización.
+- [x] Ampliar provider/repository/service de gastos con catálogo de conceptos, `PATCH /categorization` y `PUT` multipart en edición.
+- [x] Implementar helpers de dominio para árbol jerárquico, labels, modo de conceptos y payloads.
+- [x] Actualizar crear/editar gasto manual para soportar concepto global y por item, incluyendo secuencia `PUT` + `PATCH`.
+- [x] Actualizar lista, detalle, CTA de importación y navegación tipada del detalle.
+- [x] Agregar pantalla de catálogo de conceptos en Configuración y selector reutilizable.
+- [x] Añadir tests unitarios y ejecutar gates de verificación.
+
+### Verification Gates
+- [x] `./gradlew :composeApp:testDebugUnitTest`
+- [ ] `./gradlew :composeApp:compileDebugKotlinAndroid` (el código dejó de fallar por símbolos; el gate quedó bloqueado por caches/daemon incrementales de Kotlin en el entorno local: `Could not close incremental caches`)
+- [ ] `./gradlew :composeApp:compileKotlinIosSimulatorArm64` (sigue bloqueado por errores preexistentes no relacionados en `features/expenses/ui/cufe/CufeImportViewModel.kt` y `features/quotes/ui/preview/PdfPreview.ios.kt`)
+
+### Review Notes
+- Se implementó la paridad principal de conceptos de gasto en expenses: catálogo, create/edit manual con concepto global o por item, `PATCH /categorization`, lista, detalle, CTA post-importación y navegación tipada de detalle.
+- El flujo de edición manual dejó de usar upload previo a Bunny para el archivo nuevo; ahora el archivo viaja en el `PUT /expenses/{id}` multipart, alineado con backend.
+- Se agregaron helpers de dominio y tests para normalización API, árbol jerárquico, modo de conceptos, labels y payloads.
+- La verificación Android quedó bloqueada por un problema del entorno de compilación Kotlin incremental después de resolver el último error real de código (`expense_accounts_settings`); iOS mantiene bloqueos preexistentes no causados por este cambio.
+
+---
+
 ## Plan
 - [x] Inspect current POS search + view-mode selector row sizing.
 - [x] Enforce shared control height so search field and selector render with equal height.

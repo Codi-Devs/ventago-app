@@ -421,86 +421,8 @@ fun HomeScreen(
             }
         }
 
-        if (!appState.value.paymentsConfigured) {
-            Card(
-                modifier = Modifier.padding(16.dp),
-                elevation = CardDefaults.cardElevation(4.dp),
-                colors = CardDefaults.cardColors(
-                    containerColor = cardContainerColor()
-                ),
-            ) {
-                Row(
-                    modifier = Modifier.padding(top = 8.dp),
-                    horizontalArrangement = Arrangement.Center,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Image(
-                        modifier = Modifier.padding(start = 8.dp, end = 8.dp).height(40.dp)
-                            .width(54.dp),
-                        painter = painterResource(Res.drawable.yappy_logo_portrait),
-                        contentDescription = "",
-                    )
-                    Column(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(start = 8.dp, top = 8.dp, end = 8.dp)
-                    ) {
-                        Text(
-                            text = "Recibe pagos con Yappy",
-                            style = titleMediumBold().merge(
-                                TextStyle(
-                                    textAlign = TextAlign.Start
-                                )
-                            )
-                        )
-                        Text(
-                            text = "Conecta tu cuenta Yappy y acepta pagos del método de pago más popular de Panamá. Los fondos llegan directamente a tu cuenta bancaria.",
-                            style = bodyMedium().merge(
-                                TextStyle(
-                                    textAlign = TextAlign.Start
-                                )
-                            )
-                        )
-                    }
-                }
-
-                Row(
-                    modifier = Modifier.fillMaxSize().padding(end = 16.dp, bottom = 16.dp),
-                    horizontalArrangement = Arrangement.End,
-                ) {
-                    Button(
-                        colors = ButtonDefaults.buttonColors(
-                            containerColor = MaterialTheme.colorScheme.primary,
-                            contentColor = MaterialTheme.colorScheme.onPrimary/* Other colors use values from MaterialTheme */
-                        ),
-                        onClick = {
-                            navigate(PosScreens.Payments)
-                        },
-                        modifier = Modifier
-                            .padding(start = 16.dp, top = 16.dp)
-                            .height(42.dp)
-                            .wrapContentWidth(),
-                        content = {
-                            Icon(
-                                modifier = Modifier
-                                    .padding(start = 0.dp, end = 8.dp)
-                                    .size(30.dp),
-                                tint = MaterialTheme.colorScheme.onPrimary,
-                                imageVector = Icons.Rounded.Payment,
-                                contentDescription = ""
-                            )
-                            Text(
-                                modifier = Modifier.padding(end = 16.dp),
-                                text = stringResource(Res.string.configure),
-                                style = bodyMediumBold(color = MaterialTheme.colorScheme.onPrimary)
-                            )
-                        },
-                        shape = RoundedCornerShape(10.dp),
-                        enabled = true
-                    )
-                }
-            }
-        }
+        // HIDDEN: Yappy/payment methods configuration card temporarily disabled (backend bug)
+        // See tasks/restore-payment-links.md for full restore instructions
 
 
 

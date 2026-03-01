@@ -274,79 +274,81 @@ fun PaymentScreenContent(
         // Credit notes (04) and debit notes (05) cannot use payment links or be saved as drafts
         val isCreditOrDebitNote = ui.selectedDocType == "04" || ui.selectedDocType == "05"
 
-        // Only show tabs if not a credit/debit note
-        if (!isCreditOrDebitNote) {
-            val modes = listOf(PaymentFlowMode.MANUAL_OR_INSTALLMENTS, PaymentFlowMode.PAYMENT_LINK)
-            val labels = listOf("Manual/Cuotas", "Enlace de Pago")
-            TabRow(
-                selectedTabIndex = modes.indexOf(ui.paymentFlowMode),
-                modifier = Modifier,
-                indicator = { tabPositions ->
-                    TabRowDefaults.SecondaryIndicator(
-                        Modifier.tabIndicatorOffset(tabPositions[modes.indexOf(ui.paymentFlowMode)]),
-                        color = MaterialTheme.colorScheme.secondary
-                    )
-                },
-                containerColor = MaterialTheme.colorScheme.background) {
-                modes.forEachIndexed { i, m ->
-                    Tab(
-                        selected = (m == ui.paymentFlowMode),
-                        onClick = {
-                            viewModel.setPaymentFlow(m)
-                        },
-                        text = { Text(labels[i]) }
-                    )
-                }
-            }
-        }
+        // HIDDEN: Payment Link tab temporarily disabled (backend bug)
+        // To restore: uncomment the TabRow block below and the PaymentLinkSection else branch
+        // See tasks/restore-payment-links.md for full instructions
+//        if (!isCreditOrDebitNote) {
+//            val modes = listOf(PaymentFlowMode.MANUAL_OR_INSTALLMENTS, PaymentFlowMode.PAYMENT_LINK)
+//            val labels = listOf("Manual/Cuotas", "Enlace de Pago")
+//            TabRow(
+//                selectedTabIndex = modes.indexOf(ui.paymentFlowMode),
+//                modifier = Modifier,
+//                indicator = { tabPositions ->
+//                    TabRowDefaults.SecondaryIndicator(
+//                        Modifier.tabIndicatorOffset(tabPositions[modes.indexOf(ui.paymentFlowMode)]),
+//                        color = MaterialTheme.colorScheme.secondary
+//                    )
+//                },
+//                containerColor = MaterialTheme.colorScheme.background) {
+//                modes.forEachIndexed { i, m ->
+//                    Tab(
+//                        selected = (m == ui.paymentFlowMode),
+//                        onClick = {
+//                            viewModel.setPaymentFlow(m)
+//                        },
+//                        text = { Text(labels[i]) }
+//                    )
+//                }
+//            }
+//        }
 
         Spacer(Modifier.height(12.dp))
 
-        // For credit/debit notes, always show manual payment (no payment links or drafts)
-        if (isCreditOrDebitNote || ui.paymentFlowMode == PaymentFlowMode.MANUAL_OR_INSTALLMENTS) {
-            ManualAndInstallmentsSection(
-                viewModel = viewModel,
-                legal = legal,
-                tips = tips,
-                totalToCharge = totalToCharge,
-                remaining = remaining,
-                onToggleMethod = viewModel::toggleManualMethod,
-                onAmountChange = viewModel::setManualAmount,
-                onOtherDesc = viewModel::setOtherDescription,
-                onAddInstallment = viewModel::addInstallment,
-                onRemoveInstallment = viewModel::removeInstallment,
-                onInstallmentAmount = viewModel::setInstallmentAmount,
-                onInstallmentDate = viewModel::setInstallmentDueDate,
-                methodOptions = viewModel.manualMethodOptions(),
-                selectedDocType = ui.selectedDocType,
-                onConfirm = {
-                    requestGovernmentWarningOrProceed {
-                        viewModel.createOrder(createPaymentLink = false, saveAsDraft = false)
-                    }
-                },
-                onSaveDraft = {
-                    requestGovernmentWarningOrProceed {
-                        viewModel.createOrder(createPaymentLink = false, saveAsDraft = true)
-                    }
-                },
-                // Disable save draft for credit/debit notes
-                saveDraftEnabled = hasPositiveAmount && !isCreditOrDebitNote
-            )
-        } else {
-            PaymentLinkSection(
-                totalToCharge = totalToCharge,
-                enabled = hasPositiveAmount,
-                onConfirm = {
-                    requestGovernmentWarningOrProceed {
-                        if (!ui.paymentsConfigured) {
-                            navigate(PosScreens.Payments, null)
-                        } else {
-                            viewModel.createOrder(createPaymentLink = true, saveAsDraft = false)
-                        }
-                    }
+        // Always show manual payment while payment links are disabled
+        ManualAndInstallmentsSection(
+            viewModel = viewModel,
+            legal = legal,
+            tips = tips,
+            totalToCharge = totalToCharge,
+            remaining = remaining,
+            onToggleMethod = viewModel::toggleManualMethod,
+            onAmountChange = viewModel::setManualAmount,
+            onOtherDesc = viewModel::setOtherDescription,
+            onAddInstallment = viewModel::addInstallment,
+            onRemoveInstallment = viewModel::removeInstallment,
+            onInstallmentAmount = viewModel::setInstallmentAmount,
+            onInstallmentDate = viewModel::setInstallmentDueDate,
+            methodOptions = viewModel.manualMethodOptions(),
+            selectedDocType = ui.selectedDocType,
+            onConfirm = {
+                requestGovernmentWarningOrProceed {
+                    viewModel.createOrder(createPaymentLink = false, saveAsDraft = false)
                 }
-            )
-        }
+            },
+            onSaveDraft = {
+                requestGovernmentWarningOrProceed {
+                    viewModel.createOrder(createPaymentLink = false, saveAsDraft = true)
+                }
+            },
+            // Disable save draft for credit/debit notes
+            saveDraftEnabled = hasPositiveAmount && !isCreditOrDebitNote
+        )
+        // HIDDEN: PaymentLinkSection temporarily disabled (backend bug)
+//        } else {
+//            PaymentLinkSection(
+//                totalToCharge = totalToCharge,
+//                enabled = hasPositiveAmount,
+//                onConfirm = {
+//                    requestGovernmentWarningOrProceed {
+//                        if (!ui.paymentsConfigured) {
+//                            navigate(PosScreens.Payments, null)
+//                        } else {
+//                            viewModel.createOrder(createPaymentLink = true, saveAsDraft = false)
+//                        }
+//                    }
+//                }
+//            )
+//        }
     }
 
     if (ui.loadingBottomSheet.isLoading()) {

@@ -2,8 +2,11 @@ package com.teco.ventago.features.expenses.data.provider
 
 import com.teco.ventago.features.expenses.domain.models.requests.ListExpensesRequest
 import com.teco.ventago.features.expenses.domain.models.requests.ExpenseProofFile
+import com.teco.ventago.features.expenses.domain.models.requests.CategorizeExpenseRequest
+import com.teco.ventago.features.expenses.domain.models.requests.CreateExpenseAccountRequest
 import com.teco.ventago.features.expenses.domain.models.requests.UpsertExpenseRequest
 import com.teco.ventago.features.expenses.domain.models.requests.UpsertExpensePaymentRequest
+import com.teco.ventago.features.expenses.domain.models.requests.UpdateExpenseAccountRequest
 import com.teco.ventago.utils.ApiResponse
 
 interface IExpensesProvider {
@@ -15,8 +18,26 @@ interface IExpensesProvider {
         file: ExpenseProofFile? = null,
         paymentProofFiles: List<ExpenseProofFile> = emptyList()
     ): ApiResponse
-    suspend fun updateExpense(businessId: Int, expenseId: Long, request: UpsertExpenseRequest): ApiResponse
+    suspend fun updateExpense(
+        businessId: Int,
+        expenseId: Long,
+        request: UpsertExpenseRequest,
+        file: ExpenseProofFile? = null
+    ): ApiResponse
     suspend fun deleteExpense(businessId: Int, expenseId: Long): ApiResponse
+    suspend fun categorizeExpense(
+        businessId: Int,
+        expenseId: Long,
+        request: CategorizeExpenseRequest
+    ): ApiResponse
+    suspend fun getExpenseAccounts(businessId: Int, includeInactive: Boolean): ApiResponse
+    suspend fun createExpenseAccount(businessId: Int, request: CreateExpenseAccountRequest): ApiResponse
+    suspend fun updateExpenseAccount(
+        businessId: Int,
+        accountId: Long,
+        request: UpdateExpenseAccountRequest
+    ): ApiResponse
+    suspend fun deactivateExpenseAccount(businessId: Int, accountId: Long): ApiResponse
 
     // Payments
     suspend fun createPayment(

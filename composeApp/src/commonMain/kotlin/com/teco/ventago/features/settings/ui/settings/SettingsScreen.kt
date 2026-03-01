@@ -384,150 +384,8 @@ fun SettingsScreen(
                 }
             }
 
-            // Payments Card
-            Card(modifier = Modifier.fillMaxWidth().padding(all = 16.dp),
-                elevation = CardDefaults.elevatedCardElevation(4.dp),
-                colors = CardDefaults.cardColors(
-                    containerColor = cardContainerColor(),
-                ),
-                shape = RoundedCornerShape(10.dp),
-                onClick = {
-                    navigate(PosScreens.Payments)
-                })
-            {
-                Text(
-                    modifier = Modifier.padding(top = 16.dp, start = 16.dp, end = 16.dp),
-                    text = stringResource(Res.string.payment_methods),
-                    style = titleMedium()
-                )
-                if (uiState.loadingPaymentMethods) {
-                    val brush = shimmerBrush()
-                    Column(
-                        modifier = Modifier
-                            .fillMaxWidth().padding(horizontal = 16.dp),
-                        horizontalAlignment = Alignment.CenterHorizontally,
-                    ) {
-                        Spacer(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .height(100.dp)
-                                .padding(top = 16.dp, start = 16.dp, end = 16.dp)
-                                .clip(shape = RoundedCornerShape(4.dp))
-                                .background(brush = brush)
-                        )
-
-                        Spacer(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .height(48.dp)
-                                .padding(top = 16.dp, start = 16.dp, end = 16.dp)
-                                .clip(shape = RoundedCornerShape(4.dp))
-                                .background(brush = brush)
-                        )
-                    }
-                    return@Card
-                }
-                Text(
-                    modifier = Modifier.padding(top = 16.dp, start = 16.dp, end = 16.dp),
-                    text = stringResource(Res.string.settings_configure_payment),
-                    style = bodyMedium()
-                )
-
-                Column(
-                    modifier = Modifier
-                        .fillMaxWidth(),
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                ) {
-                    uiState.availablePaymentMethods["paypal"]?.takeIf { it.visible && it.enabled }?.let { method ->
-                        PaymentItem(
-                            modifier = Modifier,
-                            itemId = method.id,
-                            title = {
-                                Image(
-                                    modifier = Modifier.padding(
-                                        start = 16.dp,
-                                        end = 8.dp,
-                                        top = 12.dp,
-                                        bottom = 12.dp
-                                    ),
-                                    painter = painterResource(Res.drawable.paypal),
-                                    contentDescription = "",
-                                )
-                            },
-                            enabled = true,
-                            onClick = { _ ->
-                                navigate(PosScreens.Payments)
-                            },
-                        )
-                    }
-
-                    uiState.availablePaymentMethods["yappy"]?.takeIf { it.visible && it.enabled }?.let { method ->
-                        PaymentItem(
-                            modifier = Modifier,
-                            itemId = method.id,
-                            title = {
-                                Image(
-                                    modifier = Modifier.padding(
-                                        start = 16.dp,
-                                        end = 8.dp,
-                                        top = 12.dp,
-                                        bottom = 12.dp
-                                    ),
-                                    painter = painterResource(Res.drawable.yappy_logo),
-                                    contentDescription = "",
-                                )
-                            },
-                            enabled = true,
-                            onClick = { id ->
-                                navigate(PosScreens.Payments)
-                            },
-                        )
-                    }
-
-                    uiState.availablePaymentMethods["transference"]?.takeIf { it.visible && it.enabled}?.let { method ->
-                        PaymentItem(
-                            modifier = Modifier,
-                            itemId = method.id,
-                            title = {
-                                Image(
-                                    modifier = Modifier.padding(start = 16.dp, top = 10.dp, bottom = 10.dp),
-                                    painter = painterResource(Res.drawable.ic_bank),
-                                    contentDescription = "",
-                                    colorFilter = ColorFilter.tint(MaterialTheme.colorScheme.onBackground) // Tint the icon
-                                )
-                                Text(
-                                    stringResource(Res.string.bank_transfer),
-                                    style = titleSmallBold(),
-                                    modifier = Modifier.padding(
-                                        start = 8.dp,
-                                        end = 8.dp,
-                                        top = 10.dp,
-                                        bottom = 10.dp
-                                    )
-                                )
-                            },
-                            enabled = true,
-                            onClick = { _ ->
-                                navigate(PosScreens.Payments)
-                            },
-                        )
-                    }
-
-                    if (viewModel.hasMorePaymentMethods()) {
-                        DottedButton(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding( start = 16.dp, end = 16.dp, bottom = 16.dp)
-                                .height(50.dp),
-                            onClick = {
-                                navigate(PosScreens.Payments)
-                            }
-                        )
-                    }
-
-                }
-
-            }
+            // HIDDEN: Payments Card temporarily disabled (backend bug)
+            // See tasks/restore-payment-links.md for full restore instructions
 
             QuoteSettingsSection(
                 additionalInfo = uiState.defaultQuoteAdditionalInfo,
@@ -555,6 +413,13 @@ fun SettingsScreen(
                     )
                 }
 
+
+                SettingsTextButton(
+                    label = "Conceptos de gasto",
+                    onClick = {
+                        navigate(PosScreens.ExpenseAccountsSettingsScreen)
+                    }
+                )
 
                 SettingsTextButton(
                     label = stringResource(Res.string.terms_and_conditions),
