@@ -13,7 +13,7 @@ import kotlinx.serialization.Serializable
 
 @Serializable
 data class ListQuotesRequest(
-    val page: Int = 0,
+    val page: Int = 1,
     @SerialName("page_size") val pageSize: Int = 10,
     @SerialName("customer_name") val customerName: String? = null,
     @SerialName("customer_ruc") val customerRuc: String? = null,

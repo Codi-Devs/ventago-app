@@ -51,7 +51,7 @@ class OrdersViewModel(
                 if (orders.isNotEmpty()) {
                     updateState {
                         copy(
-                            orders = orderService.orders,
+                            orders = orders.toList(),
                             isLoadingOrders = false,
                         )
                     }
@@ -164,10 +164,11 @@ class OrdersViewModel(
      * 3 - Processing(Processing Status)
      */
     fun filterOrders(filter: Int) {
-        filterOrders(filter, orderService.orders)
+        filterOrders(filter, orderService.orders.toList())
     }
 
     private fun filterOrders(filter: Int, orders: List<Order>) {
+        val ordersSnapshot = orders.toList()
         updateState { copy(filterSelected = filter) }
         val status = when (filter) {
             0 -> {
@@ -195,9 +196,9 @@ class OrdersViewModel(
         updateState {
             copy(
                 orders = if (status == -1) {
-                    orders
+                    ordersSnapshot
                 } else {
-                    orders.filter { order -> order.status == status }
+                    ordersSnapshot.filter { order -> order.status == status }
                 },
                 selectedChip =filter
             )

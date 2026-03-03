@@ -30,11 +30,15 @@ data class PaymentAllocation(
 
 class OrderService(private val repository: IOrdersRepository) {
 
+    private companion object {
+        const val INITIAL_PAGE = 1
+    }
+
     val orders = mutableListOf<Order>()
     val ordersFlow = MutableStateFlow<List<Order>>(emptyList())
     val selectedOrder = MutableStateFlow<Order?>(null)
     private val pageSize = 10
-    private var page = 0
+    private var page = INITIAL_PAGE
 
     private val mutex = Mutex()
 
@@ -44,7 +48,7 @@ class OrderService(private val repository: IOrdersRepository) {
     fun clear() {
         orders.clear()
         ordersFlow.value = emptyList()
-        page = 0
+        page = INITIAL_PAGE
         selectedOrder.value = null
     }
 
@@ -82,7 +86,7 @@ class OrderService(private val repository: IOrdersRepository) {
         customerId: Long? = null
     ): List<Order> {
         mutex.withLock {
-            page = 0
+            page = INITIAL_PAGE
             orders.clear()
             ordersFlow.value = emptyList()
         }

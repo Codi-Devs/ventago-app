@@ -7,3 +7,5 @@
 - Home summary metrics can be hierarchical: `overdue` amounts/counts may already be included in `pending` totals. Do not sum `pending + overdue` in UI; use `pending` as total and derive non-overdue pending as `max(total - overdue, 0)`.
 - Prevention rule: before wiring KPI cards, verify metric semantics with API logs/sample payloads and add a short inline note in the composable when a derived value is used to avoid future double-count regressions.
 - For side-by-side toolbar controls in Compose (search + segmented toggle), define one shared height constant and apply it to both controls to avoid visual mismatch from component defaults.
+- In Compose list screens, never publish a shared mutable collection from the service layer into UI state. Snapshot with `toList()` before storing/rendering, or concurrent service mutations can crash `LazyColumn` with `ConcurrentModificationException`.
+- When a backend paginates from page `1`, keep the client state/request defaults aligned to that contract and de-duplicate appended results by stable identifiers so repeated pages cannot crash keyed lazy lists.

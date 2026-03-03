@@ -12,10 +12,16 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import kotlin.collections.LinkedHashMap
 
 class QuotesListViewModel(
     private val quotesService: QuotesService
 ) : ViewModel() {
+
+    private companion object {
+        const val INITIAL_PAGE = 1
+        const val PAGE_SIZE = 10
+    }
 
     private val _uiState = MutableStateFlow(QuotesListState())
     val uiState: StateFlow<QuotesListState> = _uiState.asStateFlow()
@@ -26,9 +32,14 @@ class QuotesListViewModel(
 
     fun loadQuotes(refresh: Boolean = false) {
         viewModelScope.launch {
-            val currentPage = if (refresh) 0 else _uiState.value.page
-            _uiState.value = _uiState.value.copy(
-                isLoading = !refresh && _uiState.value.quotes.isEmpty(),
+            val currentState = _uiState.value
+            if (currentState.isLoading || currentState.refreshing || (!refresh && currentState.noMore)) {
+                return@launch
+            }
+
+            val currentPage = if (refresh) INITIAL_PAGE else currentState.page
+            _uiState.value = currentState.copy(
+                isLoading = !refresh && currentState.quotes.isEmpty(),
                 refreshing = refresh
             )
             try {
@@ -37,7 +48,7 @@ class QuotesListViewModel(
                     quotesService.listQuotes(
                         ListQuotesRequest(
                             page = currentPage,
-                            pageSize = 10,
+                            pageSize = PAGE_SIZE,
                             customerName = filters.customerName.ifBlank { null },
                             customerRuc = filters.customerRuc.ifBlank { null },
                             quoteNumber = filters.quoteNumber.ifBlank { null },
@@ -45,8 +56,11 @@ class QuotesListViewModel(
                         )
                     )
                 }
-                val newQuotes = if (refresh) response.items else _uiState.value.quotes + response.items
-                val noMore = response.items.isEmpty() || (response.size != null && response.items.size < (response.size ?: 10))
+                val newQuotes = mergeQuotes(
+                    existing = if (refresh) emptyList() else _uiState.value.quotes,
+                    incoming = response.items
+                )
+                val noMore = response.items.isEmpty() || (response.size != null && response.items.size < (response.size ?: PAGE_SIZE))
                 _uiState.value = _uiState.value.copy(
                     quotes = newQuotes,
                     page = currentPage + 1,
@@ -86,7 +100,7 @@ class QuotesListViewModel(
     }
 
     fun applyFilters() {
-        _uiState.value = _uiState.value.copy(page = 0, quotes = emptyList(), noMore = false)
+        _uiState.value = _uiState.value.copy(page = INITIAL_PAGE, quotes = emptyList(), noMore = false)
         loadQuotes(refresh = true)
     }
 
@@ -96,10 +110,27 @@ class QuotesListViewModel(
             customerRuc = "",
             quoteNumber = "",
             status = null,
-            page = 0,
+            page = INITIAL_PAGE,
             quotes = emptyList(),
             noMore = false
         )
         loadQuotes(refresh = true)
+    }
+
+    private fun mergeQuotes(existing: List<Quote>, incoming: List<Quote>): List<Quote> {
+        val mergedQuotes = LinkedHashMap<String, Quote>()
+        (existing + incoming).forEachIndexed { index, quote ->
+            mergedQuotes[quoteDedupKey(quote, index)] = quote
+        }
+        return mergedQuotes.values.toList()
+    }
+
+    private fun quoteDedupKey(quote: Quote, index: Int): String {
+        return when {
+            quote.id != null -> "id:${quote.id}"
+            !quote.quoteNumber.isNullOrBlank() -> "quote_number:${quote.quoteNumber}"
+            !quote.displayNumber.isNullOrBlank() -> "display_number:${quote.displayNumber}"
+            else -> "fallback:$index:${quote.hashCode()}"
+        }
     }
 }

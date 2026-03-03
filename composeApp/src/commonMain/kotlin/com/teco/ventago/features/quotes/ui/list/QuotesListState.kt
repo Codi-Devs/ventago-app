@@ -6,7 +6,7 @@ import com.teco.ventago.features.quotes.domain.models.Quote
 
 data class QuotesListState(
     val quotes: List<Quote> = emptyList(),
-    val page: Int = 0,
+    val page: Int = 1,
     val isLoading: Boolean = false,
     val refreshing: Boolean = false,
     val noMore: Boolean = false,

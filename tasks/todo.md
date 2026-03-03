@@ -1,3 +1,32 @@
+# Orders See More Pagination TODO
+
+## Plan
+- [x] Inspect orders pagination state/request path for the `See more` flow.
+- [x] Align orders page tracking with the backend paging contract so the first append request fetches the next page.
+- [x] Run Android compile verification and record the result.
+
+## Verification Gates
+- [x] `./gradlew :composeApp:compileDebugKotlinAndroid`
+
+## Review Notes
+- `OrderService` now starts and resets the orders list page counter at `1` instead of `0`, matching the backend paging contract used by the orders list endpoint.
+- This fixes the first `See more` tap requesting the same initial page again before moving to the real next page on the second tap.
+
+# Orders + Quotes List Crash Fix TODO
+
+## Plan
+- [x] Inspect orders list state/render path and remove shared mutable list exposure that can trigger Compose iteration crashes.
+- [x] Fix quotes list pagination to start at page `1` and prevent duplicate quote rows/keys when appending pages.
+- [x] Run focused verification for the touched KMP code and record results.
+
+## Verification Gates
+- [x] `./gradlew :composeApp:compileDebugKotlinAndroid`
+
+## Review Notes
+- Orders list state no longer stores the live mutable `orderService.orders`; the ViewModel now snapshots to immutable lists before publishing/filtering, preventing Compose iteration over a concurrently mutated `ArrayList`.
+- Quotes list pagination now starts at page `1` end-to-end (`ListQuotesRequest`, UI state resets, and initial loads), matching the backend’s 1-based paging contract.
+- Quotes list loading now ignores overlapping requests, merges pages through identifier-based de-duplication, and uses safer lazy item keys to avoid duplicate-key crashes if repeated backend rows slip through.
+
 # POS Search/Selector Height Alignment TODO
 
 ## Expense Categorization Request Debug TODO

@@ -20,7 +20,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.material.ExperimentalMaterialApi
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ReceiptLong
@@ -213,7 +213,10 @@ fun QuotesListScreen(
                             }
                         }
 
-                        items(quotes, key = { it.id ?: it.hashCode() }) { quote ->
+                        itemsIndexed(
+                            items = quotes,
+                            key = { index, quote -> quoteLazyKey(quote, index) }
+                        ) { _, quote ->
                             QuoteListItem(quote) {
                                 QuoteSelectionStore.selected = quote
                                 navigate(PosScreens.QuoteDetailsScreen)
@@ -358,6 +361,15 @@ fun QuotesListScreen(
                 }
             }
         }
+    }
+}
+
+private fun quoteLazyKey(quote: Quote, index: Int): String {
+    return when {
+        quote.id != null -> "quote-id-${quote.id}"
+        !quote.quoteNumber.isNullOrBlank() -> "quote-number-${quote.quoteNumber}"
+        !quote.displayNumber.isNullOrBlank() -> "quote-display-${quote.displayNumber}"
+        else -> "quote-fallback-${quote.createdAt ?: "unknown"}-$index-${quote.hashCode()}"
     }
 }
 
