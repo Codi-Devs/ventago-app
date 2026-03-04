@@ -277,6 +277,7 @@ class PosViewModel(
                     quantity = orderLine.quantity.coerceAtLeast(1),
                     tax = tax,
                     discount = discount,
+                    costCents = existingItem.cost?.toLongCents(),
                 )
 
                 updateState { copy(cart = cart + newLine) }
@@ -638,6 +639,7 @@ class PosViewModel(
                 quantity = deltaQty.coerceAtLeast(1),
                 tax = tax,
                 discount = null,
+                costCents = item.cost?.toLongCents(),
             )
             // Store personalized items (itemId < 0) keyed by lineId for later use in order creation
             val newPersonalizedItems = if (isPersonalized) {
@@ -1699,7 +1701,8 @@ class PosViewModel(
                 overrideUnitPrice = overrideUnitPrice,
                 quantity = quantity,
                 discount = discount,
-                tax = tax
+                tax = tax,
+                costCents = product?.cost?.toLongCents(),
             )
         }
     }

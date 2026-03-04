@@ -34,7 +34,7 @@ data class ItemState(
     val description: String = "",
     val price: Long = 0,
     val cost: Long = 0,
-    val taxPercent: Int = 0,
+    val taxPercent: Int = 7,
     val productTypeId: Int = 1,
 
     val barcode: String = "",

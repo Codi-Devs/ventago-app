@@ -37,6 +37,8 @@ data class CartLine(
 
     val pharmaBatchNumber: String? = null,
     val pharmaBatchQty: Int? = null,
+
+    val costCents: Money? = null,         // cost from catalog (cents), used for margin display
 ) {
     fun unitPrice(): Money = overrideUnitPrice ?: baseUnitPrice
 

@@ -62,9 +62,13 @@ import com.teco.ventago.design_system.theme.titleLarge
 import com.teco.ventago.design_system.theme.titleMedium
 import com.teco.ventago.features.pos.domain.models.CartLine
 import com.teco.ventago.features.pos.domain.models.Discount
+import com.teco.ventago.design_system.theme.Online
+import com.teco.ventago.design_system.theme.RedLight
+import com.teco.ventago.design_system.theme.WarningAmber
 import com.teco.ventago.utils.formatNumberToMoney
 import com.teco.ventago.utils.toLongCents
 import kotlin.math.max
+import kotlin.math.roundToInt
 
 @Stable
 enum class DiscountMode { NONE, PERCENT, FIXED }
@@ -157,6 +161,22 @@ fun ModifyCartItemSheet(
     // Parsed values
     val unitPriceCents = remember(unitPriceRaw) { rawTextToCents(unitPriceRaw) }
     val fixedCents = remember(fixedRaw) { rawTextToCents(fixedRaw) }
+
+    // Margin calculation: only for registered products (itemId > 0) with cost > 0
+    val showMargin = itemToModify.itemId > 0
+            && itemToModify.costCents != null
+            && itemToModify.costCents > 0L
+    val marginPercent = remember(unitPriceCents, itemToModify.costCents) {
+        val price = unitPriceCents.toDouble()
+        val cost = (itemToModify.costCents ?: 0L).toDouble()
+        if (price > 0.0) ((price - cost) / price) * 100.0 else 0.0
+    }
+    val marginColor = when {
+        unitPriceCents == 0L -> MaterialTheme.colorScheme.onSurfaceVariant
+        marginPercent >= 30 -> Online
+        marginPercent >= 15 -> WarningAmber
+        else -> RedLight
+    }
     val percent = remember(percentText) {
         percentText.filter(Char::isDigit).toIntOrNull()?.coerceIn(0, 100) ?: 0
     }
@@ -230,11 +250,22 @@ fun ModifyCartItemSheet(
                     onChange = { unitPriceRaw = it.filter(Char::isDigit) },
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(bottom = 12.dp),
+                        .padding(bottom = if (showMargin) 4.dp else 12.dp),
                     imeAction = ImeAction.Done,
                     maxLines = 1,
                     leadingIcon = null
                 )
+
+                // Margin indicator
+                if (showMargin) {
+                    val costDisplay = formatNumberToMoney((itemToModify.costCents!! / 100.0).toString())
+                    Text(
+                        text = "Margen: ${marginPercent.roundToInt()}% (costo: $currencySymbol$costDisplay)",
+                        style = labelMedium(),
+                        color = marginColor,
+                        modifier = Modifier.padding(bottom = 12.dp)
+                    )
+                }
 
                 // Quantity
                 Row(
