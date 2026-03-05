@@ -40,9 +40,35 @@ object ExpensesErrorMapper {
         }
     }
 
+    fun mapMerchantError(response: ApiResponse): String {
+        return when {
+            response.matchesMerchantNotFound() ->
+                "El proveedor no fue encontrado."
+            response.matchesMerchantAlreadyExists() ->
+                "Ya existe un proveedor con ese RUC."
+            response.errorCode == "O_RP_002" ->
+                "La informacion del proveedor es invalida. Verifica los datos."
+            response.errorCode == "AUTH_001" ->
+                "Tu sesion expiro. Inicia sesion nuevamente."
+            else -> "No se pudo procesar la solicitud del proveedor."
+        }
+    }
+
     private fun ApiResponse.matchesAccountNotFound(): Boolean {
         val code = errorCode?.lowercase()
         val message = errorMessage?.lowercase()
         return code == "expense account not found" || message == "expense account not found"
+    }
+
+    private fun ApiResponse.matchesMerchantNotFound(): Boolean {
+        val code = errorCode?.lowercase()
+        val message = errorMessage?.lowercase()
+        return code == "expense merchant not found" || message == "expense merchant not found"
+    }
+
+    private fun ApiResponse.matchesMerchantAlreadyExists(): Boolean {
+        val code = errorCode?.lowercase()
+        val message = errorMessage?.lowercase()
+        return code == "expense merchant already exists" || message == "expense merchant already exists"
     }
 }

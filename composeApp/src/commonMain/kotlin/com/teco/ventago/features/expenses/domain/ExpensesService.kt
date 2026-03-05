@@ -18,6 +18,11 @@ import com.teco.ventago.features.expenses.domain.models.requests.ListExpensesReq
 import com.teco.ventago.features.expenses.domain.models.requests.UpdateExpenseAccountRequest
 import com.teco.ventago.features.expenses.domain.models.requests.UpsertExpenseRequest
 import com.teco.ventago.features.expenses.domain.models.requests.UpsertExpensePaymentRequest
+import com.teco.ventago.features.expenses.domain.models.ExpenseMerchant
+import com.teco.ventago.features.expenses.domain.models.PagedMerchants
+import com.teco.ventago.features.expenses.domain.models.requests.ListMerchantsRequest
+import com.teco.ventago.features.expenses.domain.models.requests.CreateMerchantRequest
+import com.teco.ventago.features.expenses.domain.models.requests.UpdateMerchantRequest
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.asSharedFlow
@@ -209,6 +214,44 @@ class ExpensesService(
     suspend fun deletePayment(expenseId: Long, paymentId: Long): Boolean {
         val businessId = businessId() ?: throw IllegalStateException("No business selected")
         return repository.deletePayment(businessId, expenseId, paymentId)
+    }
+
+    // Merchants
+
+    suspend fun listMerchants(request: ListMerchantsRequest): PagedMerchants {
+        val businessId = businessId() ?: throw IllegalStateException("No business selected")
+        return repository.listMerchants(businessId, request)
+    }
+
+    suspend fun searchMerchants(search: String, page: Int = 1, pageSize: Int = 20): List<ExpenseMerchant> {
+        val businessId = businessId() ?: throw IllegalStateException("No business selected")
+        val result = repository.listMerchants(businessId, ListMerchantsRequest(
+            page = page,
+            pageSize = pageSize,
+            search = search,
+            includeInactive = false
+        ))
+        return result.merchants
+    }
+
+    suspend fun getMerchant(merchantId: Long): ExpenseMerchant {
+        val businessId = businessId() ?: throw IllegalStateException("No business selected")
+        return repository.getMerchant(businessId, merchantId)
+    }
+
+    suspend fun createMerchant(request: CreateMerchantRequest): ExpenseMerchant {
+        val businessId = businessId() ?: throw IllegalStateException("No business selected")
+        return repository.createMerchant(businessId, request)
+    }
+
+    suspend fun updateMerchant(merchantId: Long, request: UpdateMerchantRequest): ExpenseMerchant {
+        val businessId = businessId() ?: throw IllegalStateException("No business selected")
+        return repository.updateMerchant(businessId, merchantId, request)
+    }
+
+    suspend fun deactivateMerchant(merchantId: Long): Boolean {
+        val businessId = businessId() ?: throw IllegalStateException("No business selected")
+        return repository.deactivateMerchant(businessId, merchantId)
     }
 
     // Crawl jobs (CUFE import)

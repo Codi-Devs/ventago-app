@@ -12,7 +12,9 @@ import com.teco.ventago.features.expenses.domain.models.ExpenseItem
 import com.teco.ventago.features.expenses.domain.models.ExpenseParty
 import com.teco.ventago.features.expenses.domain.models.ExpensePayment
 import com.teco.ventago.features.expenses.domain.models.PagedCrawlJobs
+import com.teco.ventago.features.expenses.domain.models.ExpenseMerchant
 import com.teco.ventago.features.expenses.domain.models.PagedExpenses
+import com.teco.ventago.features.expenses.domain.models.PagedMerchants
 import com.teco.ventago.features.expenses.domain.models.PaymentSummary
 import com.teco.ventago.features.expenses.domain.models.requests.CategorizeExpenseRequest
 import com.teco.ventago.features.expenses.domain.models.requests.CreateExpenseAccountRequest
@@ -21,6 +23,9 @@ import com.teco.ventago.features.expenses.domain.models.requests.ListExpensesReq
 import com.teco.ventago.features.expenses.domain.models.requests.UpdateExpenseAccountRequest
 import com.teco.ventago.features.expenses.domain.models.requests.UpsertExpensePaymentRequest
 import com.teco.ventago.features.expenses.domain.models.requests.UpsertExpenseRequest
+import com.teco.ventago.features.expenses.domain.models.requests.ListMerchantsRequest
+import com.teco.ventago.features.expenses.domain.models.requests.CreateMerchantRequest
+import com.teco.ventago.features.expenses.domain.models.requests.UpdateMerchantRequest
 import com.teco.ventago.json
 import com.teco.ventago.utils.BadRequestException
 import kotlinx.serialization.json.JsonArray
@@ -295,6 +300,82 @@ class ExpensesRepository(
         }
     }
 
+    // Merchants
+
+    override suspend fun listMerchants(businessId: Int, request: ListMerchantsRequest): PagedMerchants {
+        return try {
+            val response = provider.listMerchants(businessId, request)
+            ensureSuccess(response, ExpensesErrorMapper.mapMerchantError(response))
+            val dataObj = response.data?.jsonObject ?: return PagedMerchants()
+            json.decodeFromJsonElement(PagedMerchants.serializer(), dataObj)
+        } catch (e: Exception) {
+            logAndThrow(
+                flow = "listMerchants",
+                context = "Error listing merchants. businessId: $businessId",
+                error = e
+            )
+        }
+    }
+
+    override suspend fun getMerchant(businessId: Int, merchantId: Long): ExpenseMerchant {
+        return try {
+            val response = provider.getMerchant(businessId, merchantId)
+            ensureSuccess(response, ExpensesErrorMapper.mapMerchantError(response))
+            val dataObj = response.data?.jsonObject ?: throw BadRequestException("Missing data")
+            json.decodeFromJsonElement(ExpenseMerchant.serializer(), dataObj)
+        } catch (e: Exception) {
+            logAndThrow(
+                flow = "getMerchant",
+                context = "Error getting merchant. businessId: $businessId, merchantId: $merchantId",
+                error = e
+            )
+        }
+    }
+
+    override suspend fun createMerchant(businessId: Int, request: CreateMerchantRequest): ExpenseMerchant {
+        return try {
+            val response = provider.createMerchant(businessId, request)
+            ensureSuccess(response, ExpensesErrorMapper.mapMerchantError(response))
+            val dataObj = response.data?.jsonObject ?: throw BadRequestException("Missing data")
+            json.decodeFromJsonElement(ExpenseMerchant.serializer(), dataObj)
+        } catch (e: Exception) {
+            logAndThrow(
+                flow = "createMerchant",
+                context = "Error creating merchant. businessId: $businessId",
+                error = e
+            )
+        }
+    }
+
+    override suspend fun updateMerchant(businessId: Int, merchantId: Long, request: UpdateMerchantRequest): ExpenseMerchant {
+        return try {
+            val response = provider.updateMerchant(businessId, merchantId, request)
+            ensureSuccess(response, ExpensesErrorMapper.mapMerchantError(response))
+            val dataObj = response.data?.jsonObject ?: throw BadRequestException("Missing data")
+            json.decodeFromJsonElement(ExpenseMerchant.serializer(), dataObj)
+        } catch (e: Exception) {
+            logAndThrow(
+                flow = "updateMerchant",
+                context = "Error updating merchant. businessId: $businessId, merchantId: $merchantId",
+                error = e
+            )
+        }
+    }
+
+    override suspend fun deactivateMerchant(businessId: Int, merchantId: Long): Boolean {
+        return try {
+            val response = provider.deactivateMerchant(businessId, merchantId)
+            ensureSuccess(response, ExpensesErrorMapper.mapMerchantError(response))
+            response.successful
+        } catch (e: Exception) {
+            logAndThrow(
+                flow = "deactivateMerchant",
+                context = "Error deactivating merchant. businessId: $businessId, merchantId: $merchantId",
+                error = e
+            )
+        }
+    }
+
     override suspend fun crawlExpense(businessId: Int, payload: String): CrawlJob {
         return try {
             val response = provider.crawlExpense(businessId, payload)
@@ -441,6 +522,9 @@ class ExpensesRepository(
             paymentStatus = dataObj.stringValue("payment_status"),
             paymentSummary = (dataObj["payment_summary"] as? JsonObject)?.let(::mapPaymentSummary),
             totalPaid = dataObj.doubleValue("total_paid"),
+            merchant = (dataObj["merchant"] as? JsonObject)?.let { merchantObj ->
+                runCatching { json.decodeFromJsonElement(ExpenseMerchant.serializer(), merchantObj) }.getOrNull()
+            },
             createdAt = dataObj.stringValue("created_at"),
             updatedAt = dataObj.stringValue("updated_at")
         )
@@ -484,7 +568,9 @@ class ExpensesRepository(
             name = dataObj.stringValue("name"),
             ruc = dataObj.stringValue("ruc"),
             dv = dataObj.stringValue("dv"),
-            type = dataObj.stringValue("type")
+            type = dataObj.stringValue("type"),
+            address = dataObj.stringValue("address"),
+            phone = dataObj.stringValue("phone")
         )
     }
 

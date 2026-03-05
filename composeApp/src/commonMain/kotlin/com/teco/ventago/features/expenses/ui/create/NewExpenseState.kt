@@ -4,6 +4,7 @@ import com.teco.ventago.design_system.organism.LoadingBottomSheetState
 import com.teco.ventago.features.expenses.domain.models.ExpenseAccount
 import com.teco.ventago.features.expenses.domain.models.Expense
 import com.teco.ventago.features.expenses.domain.models.ExpenseItem
+import com.teco.ventago.features.expenses.domain.models.ExpenseMerchant
 
 data class NewExpenseState(
     // Mode
@@ -21,6 +22,16 @@ data class NewExpenseState(
     val issuerName: String = "",
     val issuerRuc: String = "",
     val issuerDv: String = "",
+    val issuerAddress: String = "",
+    val issuerPhone: String = "",
+
+    // Merchant (proveedor) autocomplete
+    val selectedMerchantId: Long? = null,
+    val selectedMerchantName: String? = null,
+    val merchantSuggestions: List<ExpenseMerchant> = emptyList(),
+    val isMerchantSearching: Boolean = false,
+    val saveMerchant: Boolean = false,
+    val originalMerchantId: Long? = null,
 
     // Receiver (prefilled from business)
     val receiverName: String = "",

@@ -2,6 +2,7 @@ package com.teco.ventago.features.expenses.ui.list
 
 import com.teco.ventago.features.expenses.domain.models.CrawlJob
 import com.teco.ventago.features.expenses.domain.models.Expense
+import com.teco.ventago.features.expenses.domain.models.ExpenseMerchant
 
 data class ExpensesListState(
     val expenses: List<Expense> = emptyList(),
@@ -18,6 +19,10 @@ data class ExpensesListState(
     val invoiceNumber: String = "",
     val issuerName: String = "",
     val issuerRuc: String = "",
+    val merchantId: Long? = null,
+    val merchantName: String? = null,
+    val merchantSuggestions: List<ExpenseMerchant> = emptyList(),
+    val isMerchantSearching: Boolean = false,
     val source: String? = null,
     val paymentStatuses: List<String> = emptyList(),
     val categorizationStatus: String? = null,

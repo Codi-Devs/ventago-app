@@ -8,8 +8,11 @@ import com.teco.ventago.features.expenses.domain.ExpensesService
 import com.teco.ventago.features.expenses.domain.models.Expense
 import com.teco.ventago.features.expenses.domain.buildExpenseConceptLabel
 import com.teco.ventago.features.expenses.domain.models.requests.ListExpensesRequest
+import com.teco.ventago.features.expenses.domain.models.ExpenseMerchant
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.IO
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -27,6 +30,7 @@ class ExpensesListViewModel(
 
     private val _uiState = MutableStateFlow(ExpensesListState())
     val uiState: StateFlow<ExpensesListState> = _uiState.asStateFlow()
+    private var merchantSearchJob: Job? = null
 
     init {
         viewModelScope.launch {
@@ -209,7 +213,8 @@ class ExpensesListViewModel(
             invoiceNumber = state.searchQuery.ifBlank {
                 state.invoiceNumber.ifBlank { null }
             },
-            categorizationStatus = state.categorizationStatus
+            categorizationStatus = state.categorizationStatus,
+            merchantId = state.merchantId
         )
     }
 
@@ -286,7 +291,46 @@ class ExpensesListViewModel(
     }
 
     fun setIssuerName(value: String) {
-        _uiState.value = _uiState.value.copy(issuerName = value)
+        val wasSelected = _uiState.value.merchantId != null
+        _uiState.value = _uiState.value.copy(
+            issuerName = value,
+            merchantId = if (wasSelected) null else _uiState.value.merchantId,
+            merchantName = if (wasSelected) null else _uiState.value.merchantName
+        )
+        searchMerchantsForFilter(value)
+    }
+
+    fun selectFilterMerchant(merchant: ExpenseMerchant) {
+        _uiState.value = _uiState.value.copy(
+            issuerName = merchant.name,
+            merchantId = merchant.id,
+            merchantName = merchant.name,
+            merchantSuggestions = emptyList()
+        )
+    }
+
+    fun dismissFilterMerchantSuggestions() {
+        _uiState.value = _uiState.value.copy(merchantSuggestions = emptyList())
+    }
+
+    private fun searchMerchantsForFilter(query: String) {
+        merchantSearchJob?.cancel()
+        if (query.length < 2) {
+            _uiState.value = _uiState.value.copy(merchantSuggestions = emptyList(), isMerchantSearching = false)
+            return
+        }
+        merchantSearchJob = viewModelScope.launch {
+            delay(300)
+            _uiState.value = _uiState.value.copy(isMerchantSearching = true)
+            try {
+                val results = withContext(Dispatchers.IO) {
+                    expensesService.searchMerchants(query)
+                }
+                _uiState.value = _uiState.value.copy(merchantSuggestions = results, isMerchantSearching = false)
+            } catch (_: Exception) {
+                _uiState.value = _uiState.value.copy(merchantSuggestions = emptyList(), isMerchantSearching = false)
+            }
+        }
     }
 
     fun setIssuerRuc(value: String) {
@@ -349,6 +393,9 @@ class ExpensesListViewModel(
             invoiceNumber = "",
             issuerName = "",
             issuerRuc = "",
+            merchantId = null,
+            merchantName = null,
+            merchantSuggestions = emptyList(),
             source = null,
             paymentStatuses = emptyList(),
             categorizationStatus = null,

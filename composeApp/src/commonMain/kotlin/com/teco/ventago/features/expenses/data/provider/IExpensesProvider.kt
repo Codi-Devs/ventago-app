@@ -7,6 +7,9 @@ import com.teco.ventago.features.expenses.domain.models.requests.CreateExpenseAc
 import com.teco.ventago.features.expenses.domain.models.requests.UpsertExpenseRequest
 import com.teco.ventago.features.expenses.domain.models.requests.UpsertExpensePaymentRequest
 import com.teco.ventago.features.expenses.domain.models.requests.UpdateExpenseAccountRequest
+import com.teco.ventago.features.expenses.domain.models.requests.ListMerchantsRequest
+import com.teco.ventago.features.expenses.domain.models.requests.CreateMerchantRequest
+import com.teco.ventago.features.expenses.domain.models.requests.UpdateMerchantRequest
 import com.teco.ventago.utils.ApiResponse
 
 interface IExpensesProvider {
@@ -60,6 +63,13 @@ interface IExpensesProvider {
     suspend fun crawlExpense(businessId: Int, payload: String): ApiResponse
     suspend fun getCrawlJobStatus(businessId: Int, jobId: Long): ApiResponse
     suspend fun listCrawlJobs(businessId: Int, page: Int, pageSize: Int): ApiResponse
+
+    // Merchants
+    suspend fun listMerchants(businessId: Int, request: ListMerchantsRequest): ApiResponse
+    suspend fun getMerchant(businessId: Int, merchantId: Long): ApiResponse
+    suspend fun createMerchant(businessId: Int, request: CreateMerchantRequest): ApiResponse
+    suspend fun updateMerchant(businessId: Int, merchantId: Long, request: UpdateMerchantRequest): ApiResponse
+    suspend fun deactivateMerchant(businessId: Int, merchantId: Long): ApiResponse
 
     // Excel import
     suspend fun importExpenses(businessId: Int, payload: String): ApiResponse

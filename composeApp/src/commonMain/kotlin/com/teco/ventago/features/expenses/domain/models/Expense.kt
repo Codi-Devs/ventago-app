@@ -32,6 +32,7 @@ data class Expense(
     @SerialName("payment_status") val paymentStatus: String? = null,
     @SerialName("payment_summary") val paymentSummary: PaymentSummary? = null,
     @SerialName("total_paid") val totalPaid: Double? = null,
+    val merchant: ExpenseMerchant? = null,
     @SerialName("created_at") val createdAt: String? = null,
     @SerialName("updated_at") val updatedAt: String? = null
 ) {

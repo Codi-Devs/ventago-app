@@ -22,7 +22,10 @@ import com.teco.ventago.features.expenses.domain.models.requests.InitialExpenseP
 import com.teco.ventago.features.expenses.domain.models.requests.UpsertExpenseRequest
 import com.teco.ventago.features.expenses.domain.resolveExpenseConceptMode
 import com.teco.ventago.features.expenses.domain.toConceptSelections
+import com.teco.ventago.features.expenses.domain.models.ExpenseMerchant
 import com.teco.ventago.utils.randomUUID
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -43,6 +46,7 @@ class NewExpenseViewModel(
     private var localExpenseFile: ExpenseProofFile? = null
     private var localInitialPaymentProofFile: ExpenseProofFile? = null
     private val localInitialPaymentProofFiles = mutableMapOf<Int, ExpenseProofFile>()
+    private var merchantSearchJob: Job? = null
 
     init {
         viewModelScope.launch {
@@ -157,6 +161,12 @@ class NewExpenseViewModel(
             issuerName = expense.issuer?.name ?: "",
             issuerRuc = expense.issuer?.ruc ?: "",
             issuerDv = expense.issuer?.dv ?: "",
+            issuerAddress = expense.issuer?.address ?: "",
+            issuerPhone = expense.issuer?.phone ?: "",
+            selectedMerchantId = if (isEditMode) expense.merchant?.id else null,
+            selectedMerchantName = if (isEditMode) expense.merchant?.name else null,
+            originalMerchantId = if (isEditMode) expense.merchant?.id else null,
+            saveMerchant = expense.merchant != null,
             receiverName = expense.receiver?.name ?: "",
             receiverRuc = expense.receiver?.ruc ?: "",
             receiverDv = expense.receiver?.dv ?: "",
@@ -206,12 +216,67 @@ class NewExpenseViewModel(
     fun setEmissionDate(value: String) { updateState { copy(emissionDate = value) } }
     fun setPaymentMethod(value: String) { updateState { copy(paymentMethod = value) } }
     fun setNotes(value: String) { updateState { copy(notes = value) } }
-    fun setIssuerName(value: String) { updateState { copy(issuerName = value) } }
+    fun setIssuerName(value: String) {
+        val wasSelected = _uiState.value.selectedMerchantId != null
+        updateState {
+            copy(
+                issuerName = value,
+                selectedMerchantId = if (wasSelected) null else selectedMerchantId,
+                selectedMerchantName = if (wasSelected) null else selectedMerchantName
+            )
+        }
+        searchMerchants(value)
+    }
     fun setIssuerRuc(value: String) { updateState { copy(issuerRuc = value) } }
     fun setIssuerDv(value: String) { updateState { copy(issuerDv = value) } }
+    fun setIssuerAddress(value: String) { updateState { copy(issuerAddress = value) } }
+    fun setIssuerPhone(value: String) { updateState { copy(issuerPhone = value) } }
     fun setReceiverName(value: String) { updateState { copy(receiverName = value) } }
     fun setReceiverRuc(value: String) { updateState { copy(receiverRuc = value) } }
     fun setReceiverDv(value: String) { updateState { copy(receiverDv = value) } }
+
+    fun setSaveMerchant(value: Boolean) {
+        updateState { copy(saveMerchant = value) }
+    }
+
+    fun selectMerchant(merchant: ExpenseMerchant) {
+        updateState {
+            copy(
+                issuerName = merchant.name,
+                issuerRuc = merchant.ruc ?: "",
+                issuerDv = merchant.dv ?: "",
+                issuerAddress = merchant.address ?: "",
+                issuerPhone = merchant.phone ?: "",
+                selectedMerchantId = merchant.id,
+                selectedMerchantName = merchant.name,
+                merchantSuggestions = emptyList()
+            )
+        }
+    }
+
+    fun dismissMerchantSuggestions() {
+        updateState { copy(merchantSuggestions = emptyList()) }
+    }
+
+    private fun searchMerchants(query: String) {
+        merchantSearchJob?.cancel()
+        if (query.length < 2) {
+            updateState { copy(merchantSuggestions = emptyList(), isMerchantSearching = false) }
+            return
+        }
+        merchantSearchJob = viewModelScope.launch {
+            delay(300)
+            updateState { copy(isMerchantSearching = true) }
+            try {
+                val results = withContext(kotlinx.coroutines.Dispatchers.Default) {
+                    expensesService.searchMerchants(query)
+                }
+                updateState { copy(merchantSuggestions = results, isMerchantSearching = false) }
+            } catch (_: Exception) {
+                updateState { copy(merchantSuggestions = emptyList(), isMerchantSearching = false) }
+            }
+        }
+    }
 
     fun setDefaultExpenseAccount(accountId: Long?, accountName: String?) {
         updateState {
@@ -629,7 +694,9 @@ class NewExpenseViewModel(
             issuer = ExpensePartyRequest(
                 name = state.issuerName,
                 ruc = state.issuerRuc.takeIf { it.isNotBlank() },
-                dv = state.issuerDv.takeIf { it.isNotBlank() }
+                dv = state.issuerDv.takeIf { it.isNotBlank() },
+                address = state.issuerAddress.takeIf { it.isNotBlank() },
+                phone = state.issuerPhone.takeIf { it.isNotBlank() }
             ),
             receiver = ExpensePartyRequest(
                 name = state.receiverName,
@@ -649,8 +716,23 @@ class NewExpenseViewModel(
                 state.fileUrl == null &&
                 localExpenseFile == null
             ) true else null,
-            payments = payments
+            payments = payments,
+            saveMerchant = resolveSaveMerchant(state)
         )
+    }
+
+    private fun resolveSaveMerchant(state: NewExpenseState): Boolean? {
+        if (!state.isEditMode) {
+            // Create mode: only send if checkbox is ON
+            return if (state.saveMerchant) true else null
+        }
+        // Edit mode (tri-state)
+        val hadMerchant = state.originalMerchantId != null
+        return when {
+            hadMerchant && !state.saveMerchant -> false
+            state.saveMerchant -> true
+            else -> null
+        }
     }
 
     private fun clearTransientFiles() {

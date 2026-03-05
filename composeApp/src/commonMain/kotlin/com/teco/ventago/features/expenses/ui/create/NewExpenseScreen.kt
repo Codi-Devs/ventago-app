@@ -20,6 +20,7 @@ import androidx.compose.material.icons.rounded.Add
 import androidx.compose.material.icons.rounded.CameraAlt
 import androidx.compose.material.icons.rounded.CheckCircle
 import androidx.compose.material.icons.rounded.Close
+import androidx.compose.material.icons.rounded.Store
 import androidx.compose.material.icons.rounded.Collections
 import androidx.compose.material.icons.rounded.Description
 import androidx.compose.material.icons.rounded.KeyboardArrowDown
@@ -33,6 +34,7 @@ import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -163,12 +165,68 @@ fun NewExpenseScreen(
             onExpandedChange = { issuerExpanded = it }
         ) {
             RequiredLabel("Nombre del emisor")
-            DMOutlinedTextField(
-                text = uiState.issuerName,
-                label = "Nombre del emisor",
-                modifier = Modifier,
-                onChange = { viewModel.setIssuerName(it) }
-            )
+            Column {
+                DMOutlinedTextField(
+                    text = uiState.issuerName,
+                    label = "Nombre del emisor",
+                    modifier = Modifier,
+                    onChange = { viewModel.setIssuerName(it) }
+                )
+                Text(
+                    text = "Escribe el nombre para ver proveedores existentes y autocompletar.",
+                    style = labelSmall(color = MaterialTheme.colorScheme.onSurfaceVariant),
+                    modifier = Modifier.padding(top = 2.dp, start = 4.dp)
+                )
+                if (uiState.merchantSuggestions.isNotEmpty()) {
+                    Surface(
+                        modifier = Modifier.fillMaxWidth().padding(top = 2.dp),
+                        shape = RoundedCornerShape(12.dp),
+                        shadowElevation = 8.dp,
+                        color = MaterialTheme.colorScheme.background
+                    ) {
+                        Column(modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp)) {
+                            uiState.merchantSuggestions.forEachIndexed { index, merchant ->
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .clickable { viewModel.selectMerchant(merchant) }
+                                        .padding(horizontal = 16.dp, vertical = 10.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Rounded.Store,
+                                        contentDescription = null,
+                                        modifier = Modifier.size(20.dp),
+                                        tint = MaterialTheme.colorScheme.primary.copy(alpha = 0.7f)
+                                    )
+                                    Spacer(modifier = Modifier.width(12.dp))
+                                    Column(modifier = Modifier.weight(1f)) {
+                                        Text(
+                                            text = merchant.name,
+                                            style = bodyMedium(),
+                                            maxLines = 1,
+                                            overflow = TextOverflow.Ellipsis
+                                        )
+                                        if (!merchant.ruc.isNullOrBlank()) {
+                                            Text(
+                                                text = "RUC: ${merchant.ruc}${if (!merchant.dv.isNullOrBlank()) "-${merchant.dv}" else ""}",
+                                                style = labelSmall(color = MaterialTheme.colorScheme.onSurfaceVariant),
+                                                maxLines = 1
+                                            )
+                                        }
+                                    }
+                                }
+                                if (index < uiState.merchantSuggestions.lastIndex) {
+                                    Divider(
+                                        modifier = Modifier.padding(horizontal = 16.dp),
+                                        color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
+            }
             Spacer(modifier = Modifier.height(8.dp))
             DMOutlinedTextField(
                 text = uiState.issuerRuc,
@@ -176,6 +234,39 @@ fun NewExpenseScreen(
                 modifier = Modifier,
                 onChange = { viewModel.setIssuerRuc(it) }
             )
+            Spacer(modifier = Modifier.height(8.dp))
+            DMOutlinedTextField(
+                text = uiState.issuerDv,
+                label = "DV",
+                modifier = Modifier,
+                onChange = { viewModel.setIssuerDv(it) }
+            )
+            Spacer(modifier = Modifier.height(8.dp))
+            DMOutlinedTextField(
+                text = uiState.issuerAddress,
+                label = "Dirección (opcional)",
+                modifier = Modifier,
+                onChange = { viewModel.setIssuerAddress(it) }
+            )
+            Spacer(modifier = Modifier.height(8.dp))
+            DMOutlinedTextField(
+                text = uiState.issuerPhone,
+                label = "Teléfono (opcional)",
+                modifier = Modifier,
+                onChange = { viewModel.setIssuerPhone(it) }
+            )
+            Spacer(modifier = Modifier.height(8.dp))
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Checkbox(
+                    checked = uiState.saveMerchant,
+                    onCheckedChange = { viewModel.setSaveMerchant(it) }
+                )
+                Spacer(modifier = Modifier.width(4.dp))
+                Text("Guardar emisor para próximos gastos", style = bodyMedium())
+            }
         }
 
         // Receiver

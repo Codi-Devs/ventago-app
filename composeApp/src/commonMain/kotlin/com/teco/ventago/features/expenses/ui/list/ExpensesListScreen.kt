@@ -25,11 +25,13 @@ import androidx.compose.material.icons.rounded.Add
 import androidx.compose.material.icons.rounded.QrCodeScanner
 import androidx.compose.material.icons.rounded.Receipt
 import androidx.compose.material.icons.rounded.Search
+import androidx.compose.material.icons.rounded.Store
 import androidx.compose.material.icons.rounded.Tune
 import androidx.compose.material.pullrefresh.PullRefreshIndicator
 import androidx.compose.material.pullrefresh.pullRefresh
 import androidx.compose.material.pullrefresh.rememberPullRefreshState
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.Divider
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.FilterChipDefaults
@@ -66,6 +68,7 @@ import com.teco.ventago.design_system.molecules.InstallmentDueDateFieldKmp
 import com.teco.ventago.design_system.textfields.DMOutlinedTextField
 import com.teco.ventago.features.expenses.domain.models.CrawlJob
 import com.teco.ventago.features.expenses.domain.models.Expense
+import com.teco.ventago.features.expenses.domain.models.ExpenseMerchant
 import com.teco.ventago.features.expenses.domain.models.PaymentMethod
 import com.teco.ventago.navigation.PosScreens
 import com.teco.ventago.utils.DateFormat.getFormattedDate
@@ -333,6 +336,9 @@ fun ExpensesListScreen(
                 onEndDateChange = { viewModel.setEndDate(it.ifBlank { null }) },
                 issuerName = uiState.issuerName,
                 onIssuerNameChange = { viewModel.setIssuerName(it) },
+                merchantSuggestions = uiState.merchantSuggestions,
+                onMerchantSelected = { viewModel.selectFilterMerchant(it) },
+                onDismissMerchantSuggestions = { viewModel.dismissFilterMerchantSuggestions() },
                 issuerRuc = uiState.issuerRuc,
                 onIssuerRucChange = { viewModel.setIssuerRuc(it) },
                 invoiceNumber = uiState.invoiceNumber,
@@ -358,6 +364,9 @@ private fun ExpensesFilterSheet(
     onEndDateChange: (String) -> Unit,
     issuerName: String,
     onIssuerNameChange: (String) -> Unit,
+    merchantSuggestions: List<ExpenseMerchant>,
+    onMerchantSelected: (ExpenseMerchant) -> Unit,
+    onDismissMerchantSuggestions: () -> Unit,
     issuerRuc: String,
     onIssuerRucChange: (String) -> Unit,
     invoiceNumber: String,
@@ -408,12 +417,64 @@ private fun ExpensesFilterSheet(
             color = MaterialTheme.colorScheme.onSurfaceVariant
         )
 
-        DMOutlinedTextField(
-            text = issuerName,
-            label = stringResource(Res.string.expenses_issuer_name),
-            modifier = Modifier,
-            onChange = onIssuerNameChange
-        )
+        Column {
+            DMOutlinedTextField(
+                text = issuerName,
+                label = stringResource(Res.string.expenses_issuer_name),
+                modifier = Modifier,
+                onChange = onIssuerNameChange
+            )
+            if (merchantSuggestions.isNotEmpty()) {
+                Surface(
+                    modifier = Modifier.fillMaxWidth().padding(top = 2.dp),
+                    shape = RoundedCornerShape(12.dp),
+                    shadowElevation = 8.dp,
+                    color = MaterialTheme.colorScheme.background
+                ) {
+                    Column(modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp)) {
+                        merchantSuggestions.forEachIndexed { index, merchant ->
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clickable { onMerchantSelected(merchant) }
+                                    .padding(horizontal = 16.dp, vertical = 10.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Rounded.Store,
+                                    contentDescription = null,
+                                    modifier = Modifier.size(20.dp),
+                                    tint = MaterialTheme.colorScheme.primary.copy(alpha = 0.7f)
+                                )
+                                Spacer(modifier = Modifier.width(12.dp))
+                                Column(modifier = Modifier.weight(1f)) {
+                                    Text(
+                                        text = merchant.name,
+                                        style = MaterialTheme.typography.bodyMedium,
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis
+                                    )
+                                    if (!merchant.ruc.isNullOrBlank()) {
+                                        Text(
+                                            text = "RUC: ${merchant.ruc}${if (!merchant.dv.isNullOrBlank()) "-${merchant.dv}" else ""}",
+                                            style = MaterialTheme.typography.bodySmall,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                            maxLines = 1
+                                        )
+                                    }
+                                }
+                            }
+                            if (index < merchantSuggestions.lastIndex) {
+                                Divider(
+                                    modifier = Modifier.padding(horizontal = 16.dp),
+                                    color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+        }
 
         DMOutlinedTextField(
             text = issuerRuc,

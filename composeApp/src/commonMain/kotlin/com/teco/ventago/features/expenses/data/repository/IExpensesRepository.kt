@@ -13,6 +13,11 @@ import com.teco.ventago.features.expenses.domain.models.requests.ListExpensesReq
 import com.teco.ventago.features.expenses.domain.models.requests.UpsertExpenseRequest
 import com.teco.ventago.features.expenses.domain.models.requests.UpsertExpensePaymentRequest
 import com.teco.ventago.features.expenses.domain.models.requests.UpdateExpenseAccountRequest
+import com.teco.ventago.features.expenses.domain.models.ExpenseMerchant
+import com.teco.ventago.features.expenses.domain.models.PagedMerchants
+import com.teco.ventago.features.expenses.domain.models.requests.ListMerchantsRequest
+import com.teco.ventago.features.expenses.domain.models.requests.CreateMerchantRequest
+import com.teco.ventago.features.expenses.domain.models.requests.UpdateMerchantRequest
 
 interface IExpensesRepository {
     suspend fun listExpenses(businessId: Int, request: ListExpensesRequest): PagedExpenses
@@ -63,6 +68,13 @@ interface IExpensesRepository {
         proofFile: ExpenseProofFile? = null
     ): ExpensePayment
     suspend fun deletePayment(businessId: Int, expenseId: Long, paymentId: Long): Boolean
+
+    // Merchants
+    suspend fun listMerchants(businessId: Int, request: ListMerchantsRequest): PagedMerchants
+    suspend fun getMerchant(businessId: Int, merchantId: Long): ExpenseMerchant
+    suspend fun createMerchant(businessId: Int, request: CreateMerchantRequest): ExpenseMerchant
+    suspend fun updateMerchant(businessId: Int, merchantId: Long, request: UpdateMerchantRequest): ExpenseMerchant
+    suspend fun deactivateMerchant(businessId: Int, merchantId: Long): Boolean
 
     // Crawl jobs
     suspend fun crawlExpense(businessId: Int, payload: String): CrawlJob

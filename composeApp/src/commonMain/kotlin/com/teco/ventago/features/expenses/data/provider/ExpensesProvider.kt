@@ -12,6 +12,9 @@ import com.teco.ventago.features.expenses.domain.models.requests.ListExpensesReq
 import com.teco.ventago.features.expenses.domain.models.requests.UpdateExpenseAccountRequest
 import com.teco.ventago.features.expenses.domain.models.requests.UpsertExpensePaymentRequest
 import com.teco.ventago.features.expenses.domain.models.requests.UpsertExpenseRequest
+import com.teco.ventago.features.expenses.domain.models.requests.ListMerchantsRequest
+import com.teco.ventago.features.expenses.domain.models.requests.CreateMerchantRequest
+import com.teco.ventago.features.expenses.domain.models.requests.UpdateMerchantRequest
 import com.teco.ventago.json
 import com.teco.ventago.utils.ApiError
 import com.teco.ventago.utils.ApiResponse
@@ -326,6 +329,54 @@ class ExpensesProvider(
         }
         val response = normalizeResponse(res.body())
         return handleAuth(response, res.status) { listCrawlJobs(businessId, page, pageSize) }
+    }
+
+    // Merchants
+
+    override suspend fun listMerchants(businessId: Int, request: ListMerchantsRequest): ApiResponse {
+        val res = client.post(Configs.ordersBasePath + "/api/v1/expenses/merchants/list") {
+            applyAuthorizedHeaders(businessId)
+            contentType(ContentType.Application.Json)
+            setBody(json.encodeToString(ListMerchantsRequest.serializer(), request))
+        }
+        val response = normalizeResponse(res.body())
+        return handleAuth(response, res.status) { listMerchants(businessId, request) }
+    }
+
+    override suspend fun getMerchant(businessId: Int, merchantId: Long): ApiResponse {
+        val res = client.get(Configs.ordersBasePath + "/api/v1/expenses/merchants/$merchantId") {
+            applyJsonHeaders(businessId)
+        }
+        val response = normalizeResponse(res.body())
+        return handleAuth(response, res.status) { getMerchant(businessId, merchantId) }
+    }
+
+    override suspend fun createMerchant(businessId: Int, request: CreateMerchantRequest): ApiResponse {
+        val res = client.post(Configs.ordersBasePath + "/api/v1/expenses/merchants") {
+            applyAuthorizedHeaders(businessId)
+            contentType(ContentType.Application.Json)
+            setBody(json.encodeToString(CreateMerchantRequest.serializer(), request))
+        }
+        val response = normalizeResponse(res.body())
+        return handleAuth(response, res.status) { createMerchant(businessId, request) }
+    }
+
+    override suspend fun updateMerchant(businessId: Int, merchantId: Long, request: UpdateMerchantRequest): ApiResponse {
+        val res = client.put(Configs.ordersBasePath + "/api/v1/expenses/merchants/$merchantId") {
+            applyAuthorizedHeaders(businessId)
+            contentType(ContentType.Application.Json)
+            setBody(json.encodeToString(UpdateMerchantRequest.serializer(), request))
+        }
+        val response = normalizeResponse(res.body())
+        return handleAuth(response, res.status) { updateMerchant(businessId, merchantId, request) }
+    }
+
+    override suspend fun deactivateMerchant(businessId: Int, merchantId: Long): ApiResponse {
+        val res = client.delete(Configs.ordersBasePath + "/api/v1/expenses/merchants/$merchantId") {
+            applyJsonHeaders(businessId)
+        }
+        val response = normalizeResponse(res.body())
+        return handleAuth(response, res.status) { deactivateMerchant(businessId, merchantId) }
     }
 
     override suspend fun importExpenses(businessId: Int, payload: String): ApiResponse {

@@ -15,7 +15,8 @@ data class ListExpensesRequest(
     @SerialName("issuer_name") val issuerName: String? = null,
     @SerialName("issuer_ruc") val issuerRuc: String? = null,
     @SerialName("invoice_number") val invoiceNumber: String? = null,
-    @SerialName("categorization_status") val categorizationStatus: String? = null
+    @SerialName("categorization_status") val categorizationStatus: String? = null,
+    @SerialName("merchant_id") val merchantId: Long? = null
 )
 
 @Serializable
@@ -47,7 +48,8 @@ data class UpsertExpenseRequest(
     val notes: String? = null,
     @SerialName("file_url") val fileUrl: String? = null,
     @SerialName("remove_file") val removeFile: Boolean? = null,
-    val payments: List<InitialExpensePaymentRequest>? = null
+    val payments: List<InitialExpensePaymentRequest>? = null,
+    @SerialName("save_merchant") val saveMerchant: Boolean? = null
 )
 
 @Serializable
@@ -55,7 +57,9 @@ data class ExpensePartyRequest(
     val name: String,
     val ruc: String? = null,
     val dv: String? = null,
-    val type: String? = null
+    val type: String? = null,
+    val address: String? = null,
+    val phone: String? = null
 )
 
 @Serializable
@@ -111,4 +115,31 @@ data class CategorizeExpenseItemRequest(
     @SerialName("item_id") val itemId: Long? = null,
     @SerialName("line_number") val lineNumber: Int? = null,
     @SerialName("account_id") val accountId: Long
+)
+
+@Serializable
+data class ListMerchantsRequest(
+    val page: Int = 1,
+    @SerialName("page_size") val pageSize: Int = 20,
+    val search: String? = null,
+    @SerialName("include_inactive") val includeInactive: Boolean = false
+)
+
+@Serializable
+data class CreateMerchantRequest(
+    val name: String,
+    val ruc: String? = null,
+    val dv: String? = null,
+    val address: String? = null,
+    val phone: String? = null
+)
+
+@Serializable
+data class UpdateMerchantRequest(
+    val name: String? = null,
+    val ruc: String? = null,
+    val dv: String? = null,
+    val address: String? = null,
+    val phone: String? = null,
+    @SerialName("is_active") val isActive: Boolean? = null
 )
