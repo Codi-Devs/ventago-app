@@ -80,6 +80,9 @@ class CustomerService(
             status = 1,
             invoiceCustomer = if (customer.invoiceCustomer) 1 else 0,
             updatedAt = now().epochSeconds,
+            taxExempt = customer.taxExempt,
+            taxRetentionCode = customer.taxRetentionCode,
+            taxRetentionPercent = customer.taxRetentionPercent,
         )) + customers.items
 
         val newPaged = Paged(
@@ -139,7 +142,16 @@ class CustomerService(
         if (updated) {
             val customers = state.value
             val newItems = customers.items.map { item ->
-                if (item.id == customerId) item.copy(email = request.email ?: item.email) else item
+                if (item.id == customerId) {
+                    item.copy(
+                        email = request.email,
+                        taxExempt = request.taxExempt,
+                        taxRetentionCode = request.taxRetentionCode,
+                        taxRetentionPercent = request.taxRetentionPercent,
+                    )
+                } else {
+                    item
+                }
             }
             val newPaged = customers.copy(items = newItems)
             state.value = newPaged

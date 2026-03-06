@@ -59,6 +59,7 @@ import com.teco.ventago.design_system.theme.labelSmall
 import com.teco.ventago.design_system.theme.titleMediumBold
 import com.teco.ventago.features.customers.domain.models.CustomerAddress
 import com.teco.ventago.features.customers.domain.models.CustomerDetails
+import com.teco.ventago.features.customers.domain.models.CustomerTaxRetentionCatalog
 import com.teco.ventago.features.customers.ui.details.viewmodel.CustomerDetailsUiEvent
 import com.teco.ventago.features.customers.ui.details.viewmodel.CustomerDetailsViewModel
 import com.teco.ventago.utils.DateFormat.getOrdersFormattedDate
@@ -108,6 +109,8 @@ import ventago.composeapp.generated.resources.customers_taxpayer_type_juridical
 import ventago.composeapp.generated.resources.customers_taxpayer_type_natural
 import ventago.composeapp.generated.resources.customers_total_orders
 import ventago.composeapp.generated.resources.customers_legal_name
+import ventago.composeapp.generated.resources.customers_tax_exempt
+import ventago.composeapp.generated.resources.customers_tax_retention
 import ventago.composeapp.generated.resources.customers_retry
 import ventago.composeapp.generated.resources.customers_status
 import ventago.composeapp.generated.resources.customers_update_address_action
@@ -371,6 +374,14 @@ private fun GeneralInfoCard(
             }
             InfoRow(stringResource(Res.string.customers_fe_type), customerTypeLabel(customer.feCustomerType))
             InfoRow(stringResource(Res.string.customers_taxpayer_type), taxpayerTypeLabel(customer.taxpayerType))
+            InfoRow(
+                stringResource(Res.string.customers_tax_exempt),
+                if (customer.taxExempt) "Si" else "No"
+            )
+            InfoRow(
+                stringResource(Res.string.customers_tax_retention),
+                customerRetentionLabel(customer)
+            )
             InfoRow(stringResource(Res.string.email), customer.email ?: "-")
             InfoRow(stringResource(Res.string.phone), customer.phone1 ?: "-")
             InfoRow(
@@ -393,6 +404,13 @@ private fun GeneralInfoCard(
             }
         }
     }
+}
+
+private fun customerRetentionLabel(customer: CustomerDetails): String {
+    val code = CustomerTaxRetentionCatalog.normalizeCode(customer.taxRetentionCode)
+    if (code.isEmpty()) return "-"
+    val rate = customer.taxRetentionPercent ?: CustomerTaxRetentionCatalog.defaultRateForCode(code)
+    return if (rate != null) "$code ($rate%)" else code
 }
 
 @Composable

@@ -1,3 +1,21 @@
+# Customer Tax Presets + CRUD Parity TODO
+
+## Plan
+- [x] Extender contratos, modelos y cache de clientes para soportar `tax_exempt`, `tax_retention_code` y `tax_retention_percent` en create/list/get/update.
+- [x] Actualizar UI/ViewModels de clientes para crear/editar/mostrar presets fiscales de forma consistente.
+- [x] Aplicar presets fiscales del cliente en POS al seleccionar o hidratar clientes registrados sin pisar configuración ya existente cuando el flujo requiera hidratación por ID.
+- [x] Ejecutar verificación enfocada y documentar resultados.
+
+## Verification Gates
+- [x] `./gradlew :composeApp:testDebugUnitTest`
+- [x] `./gradlew :composeApp:compileDebugKotlinAndroid`
+
+## Review Notes
+- Se agregaron serializers/helpers fiscales compartidos para aceptar `camelCase` y `snake_case`, incluyendo `tax_retention_code` como numero o string (`"01"` -> `1`).
+- El CRUD de clientes ahora propaga los presets fiscales en modelos, payloads, cache y UI de create/edit/details; `update` siempre envía `tax_exempt` y puede limpiar retención con `null`.
+- POS ahora aplica los presets del `CustomerListItem` al seleccionar un cliente y rehidrata por `customerId` en flujos que reconstruyen el cliente desde quote/nota para recuperar esos presets sin pisar settings ya presentes.
+- Verificación completada con `testDebugUnitTest` y `compileDebugKotlinAndroid`.
+
 # Orders See More Pagination TODO
 
 ## Plan

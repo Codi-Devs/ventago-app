@@ -15,6 +15,7 @@ import com.teco.ventago.features.customers.domain.models.Customer
 import com.teco.ventago.features.customers.domain.models.CustomerAddress
 import com.teco.ventago.features.customers.domain.models.CustomerDetails
 import com.teco.ventago.features.customers.domain.models.CustomerListItem
+import com.teco.ventago.features.customers.domain.models.CustomerTaxRetentionCatalog
 import com.teco.ventago.features.customers.domain.models.UpdateBillingAddressRequest
 import com.teco.ventago.features.customers.domain.models.UpdateCustomerDetailsRequest
 import com.teco.ventago.features.customers.domain.models.ValidateRucResponse
@@ -65,6 +66,9 @@ class CustomerModelsAndOrdersRequestTest {
               "country_code": "PA",
               "phone1": "6000-0000",
               "email": "facturas@demo.com",
+              "tax_exempt": true,
+              "tax_retention_code": "08",
+              "tax_retention_percent": 35,
               "status": 1
             }
             """.trimIndent()
@@ -74,6 +78,35 @@ class CustomerModelsAndOrdersRequestTest {
         assertEquals(123, details.id)
         assertEquals("01", details.feCustomerType)
         assertEquals("facturas@demo.com", details.email)
+        assertTrue(details.taxExempt)
+        assertEquals(8, details.taxRetentionCode)
+        assertEquals(35, details.taxRetentionPercent)
+    }
+
+    @Test
+    fun parseCustomerListItemAcceptsCamelCaseTaxFields() {
+        val payload = json.parseToJsonElement(
+            """
+            {
+              "id": 12,
+              "name": "Cliente Demo",
+              "email": "cliente@demo.com",
+              "ruc": "15552345",
+              "status": 1,
+              "invoice_customer": 1,
+              "updated_at": 10,
+              "taxExempt": false,
+              "taxRetentionCode": "01",
+              "taxRetentionPercent": 0
+            }
+            """.trimIndent()
+        )
+
+        val customer = json.decodeFromJsonElement<CustomerListItem>(payload)
+        assertEquals(false, customer.taxExempt)
+        assertEquals(1, customer.taxRetentionCode)
+        assertEquals(0, customer.taxRetentionPercent)
+        assertEquals(1, CustomerTaxRetentionCatalog.indexOfCode(customer.taxRetentionCode))
     }
 
     @Test
@@ -177,7 +210,12 @@ class CustomerModelsAndOrdersRequestTest {
         val updateCustomerOk = repository.updateCustomerDetails(
             businessId = 1,
             customerId = 123,
-            request = UpdateCustomerDetailsRequest(email = "nuevo@mail.com")
+            request = UpdateCustomerDetailsRequest(
+                email = "nuevo@mail.com",
+                taxExempt = false,
+                taxRetentionCode = null,
+                taxRetentionPercent = null,
+            )
         )
         val deleteCustomerOk = repository.deleteCustomer(
             businessId = 1,
@@ -230,15 +268,24 @@ class CustomerModelsAndOrdersRequestTest {
         service.updateCustomerDetails(
             businessId = 1,
             customerId = 1,
-            request = UpdateCustomerDetailsRequest(email = "updated@mail.com")
+            request = UpdateCustomerDetailsRequest(
+                email = "updated@mail.com",
+                taxExempt = true,
+                taxRetentionCode = 8,
+                taxRetentionPercent = 35,
+            )
         )
+        val updatedCustomer = service.observe().value.items.first { it.id == 1L }
+        assertTrue(updatedCustomer.taxExempt)
+        assertEquals(8, updatedCustomer.taxRetentionCode)
+        assertEquals(35, updatedCustomer.taxRetentionPercent)
         service.deleteCustomer(
             businessId = 1,
             customerId = 1
         )
 
         repeat(40) {
-            if (cache.savedValues.isNotEmpty()) return@repeat
+            if (cache.savedValues.isNotEmpty() && changes.customersChangedCalls >= 3) return@repeat
             delay(10)
         }
 
@@ -269,7 +316,10 @@ class CustomerModelsAndOrdersRequestTest {
             foreignIdType = null,
             foreignIdNumber = null,
             cedulaCF = null,
-            countryCode = "PA"
+            countryCode = "PA",
+            taxExempt = true,
+            taxRetentionCode = 2,
+            taxRetentionPercent = 50,
         )
     }
 
@@ -336,7 +386,10 @@ class CustomerModelsAndOrdersRequestTest {
                     ruc = "15552345",
                     status = 1,
                     invoiceCustomer = 1,
-                    updatedAt = 1
+                    updatedAt = 1,
+                    taxExempt = false,
+                    taxRetentionCode = null,
+                    taxRetentionPercent = null,
                 )
             )
         )
@@ -371,7 +424,12 @@ class CustomerModelsAndOrdersRequestTest {
         }
 
         override suspend fun getCustomerById(businessId: Int, customerId: Long): CustomerDetails {
-            return CustomerDetails(id = customerId)
+            return CustomerDetails(
+                id = customerId,
+                taxExempt = true,
+                taxRetentionCode = 8,
+                taxRetentionPercent = 35,
+            )
         }
 
         override suspend fun updateCustomerDetails(

@@ -584,6 +584,9 @@
     <string name="customers_taxpayer_type">Tipo de Contribuyente</string>
     <string name="customers_taxpayer_type_natural">Natural</string>
     <string name="customers_taxpayer_type_juridical">Jurídico</string>
+    <string name="customers_tax_exempt">Exento ITBMS</string>
+    <string name="customers_tax_retention">Retención</string>
+    <string name="customers_tax_retention_percent">Porcentaje de retención</string>
     <string name="customers_status">Estado</string>
     <string name="customers_billing_addresses">Direcciones de facturación</string>
     <string name="customers_no_billing_addresses">No hay direcciones de facturación registradas</string>

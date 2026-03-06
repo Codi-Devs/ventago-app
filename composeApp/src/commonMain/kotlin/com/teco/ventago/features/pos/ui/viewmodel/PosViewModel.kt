@@ -12,7 +12,9 @@ import com.teco.ventago.features.branches.domain.model.Branch as BranchModel
 import com.teco.ventago.features.business.domain.BusinessService
 import com.teco.ventago.features.business.domain.model.Business
 import com.teco.ventago.features.customers.domain.CustomerService
+import com.teco.ventago.features.customers.domain.models.CustomerDetails
 import com.teco.ventago.features.customers.domain.models.CustomerListItem
+import com.teco.ventago.features.customers.domain.models.CustomerTaxRetentionCatalog
 import com.teco.ventago.features.financialProfile.domain.FinancialProfileService
 import com.teco.ventago.features.invoicing.domain.models.InvoiceStatus
 import com.teco.ventago.features.orders.domain.models.CustomerSnapshot
@@ -228,6 +230,10 @@ class PosViewModel(
                     )
                 )
             }
+            hydrateSelectedCustomerTaxSettings(
+                customerId = args.customerId.toLong(),
+                applyDefaultsOnlyWhenMissing = true,
+            )
             fetchCustomerAddresses()
         }
 
@@ -467,6 +473,10 @@ class PosViewModel(
                 selectedCustomerAddressId = null,
                 customerAddressesLoading = false
             )
+        }
+        when {
+            customer != null -> applySelectedCustomerTaxDefaults(customer)
+            uiState.value.finalCustomer == false -> clearSelectedCustomerTaxDefaults()
         }
         fetchCustomerAddresses()
     }
@@ -1247,7 +1257,7 @@ class PosViewModel(
         val retentionCode = retentionOption?.code.orEmpty()
         val retentionRate = when {
             retentionCode.isEmpty() -> ""
-            retentionOption?.defaultRate != null -> retentionOption.defaultRate
+            retentionOption?.defaultRate != null -> retentionOption.defaultRate.toString()
             retentionCode == "8" -> state.retentionAmount
             else -> ""
         }
@@ -1578,6 +1588,12 @@ class PosViewModel(
         }
 
         if (!isFinalCustomer) {
+            quote.customerId?.let {
+                hydrateSelectedCustomerTaxSettings(
+                    customerId = it,
+                    applyDefaultsOnlyWhenMissing = true,
+                )
+            }
             fetchCustomerAddresses()
         }
 
@@ -1625,7 +1641,7 @@ class PosViewModel(
                 personalizedItems = emptyMap(),
                 taxExempt = !hasTaxes,
                 finalCustomer = isFinalCustomer,
-                customer = if (isFinalCustomer || quote.customerId == null || customerName.isBlank()) {
+                customer = if (isFinalCustomer || customerName.isBlank()) {
                     null
                 } else {
                     CustomerListItem(
@@ -1658,6 +1674,12 @@ class PosViewModel(
         }
 
         if (!isFinalCustomer) {
+            quote.customerId?.let {
+                hydrateSelectedCustomerTaxSettings(
+                    customerId = it,
+                    applyDefaultsOnlyWhenMissing = true,
+                )
+            }
             fetchCustomerAddresses()
         }
 
@@ -1963,21 +1985,7 @@ class PosViewModel(
 
     /* ---------- Options providers ---------- */
     fun taxpayerTypeOptions(): List<String> = listOf("01 - Natural", "02 - Jurídico")
-    private data class RetentionOption(
-        val code: String,
-        val label: String,
-        val defaultRate: String?
-    )
-
-    private val retentionOptionsList = listOf(
-        RetentionOption("", "Sin retención", null),
-        RetentionOption("1", "Pago por servicio profesional al estado 100%", "100"),
-        RetentionOption("2", "Pago por venta de bienes/servicios al estado 50%", "50"),
-        RetentionOption("3", "Pago o acreditación a no domiciliado o empresa constituida en el exterior 100%", "100"),
-        RetentionOption("4", "Pago o acreditación por compra de bienes/servicios 50%", "50"),
-        RetentionOption("7", "Pago a comercio afiliado a sistema de TC/TD 50%", "50"),
-        RetentionOption("8", " Otros (disminución de la retención)", null)
-    )
+    private val retentionOptionsList = CustomerTaxRetentionCatalog.options
 
     fun retentionOptions(): List<Pair<String, String>> =
         retentionOptionsList.map { it.code to it.label }
@@ -2045,7 +2053,7 @@ class PosViewModel(
         val option = retentionOptionsList.getOrNull(idx) ?: retentionOptionsList.first()
         val nextAmount = when {
             option.code.isEmpty() -> ""
-            option.defaultRate != null -> option.defaultRate
+            option.defaultRate != null -> option.defaultRate.toString()
             option.code == "8" && retentionCodeAt(retentionCodeIndex) == "8" -> retentionAmount
             else -> ""
         }
@@ -2066,6 +2074,80 @@ class PosViewModel(
 
     fun selectedRetentionRequiresAmount(): Boolean =
         retentionCodeAt(uiState.value.retentionCodeIndex) == "8"
+
+    private fun applySelectedCustomerTaxDefaults(customer: CustomerListItem) {
+        val normalizedCode = CustomerTaxRetentionCatalog.normalizeCode(customer.taxRetentionCode)
+        updateState {
+            copy(
+                taxExempt = customer.taxExempt,
+                retentionCodeIndex = CustomerTaxRetentionCatalog.indexOfCode(normalizedCode),
+                retentionAmount = if (normalizedCode == "8") {
+                    customer.taxRetentionPercent?.toString().orEmpty()
+                } else {
+                    ""
+                },
+            )
+        }
+    }
+
+    private fun clearSelectedCustomerTaxDefaults() {
+        updateState {
+            copy(
+                taxExempt = false,
+                retentionCodeIndex = 0,
+                retentionAmount = "",
+            )
+        }
+    }
+
+    private fun hasConfiguredTaxSettings(state: PosState = uiState.value): Boolean {
+        val retentionCode = CustomerTaxRetentionCatalog.normalizeCode(retentionCodeAt(state.retentionCodeIndex))
+        return state.taxExempt || retentionCode.isNotEmpty() || state.retentionAmount.isNotBlank()
+    }
+
+    private fun hydrateSelectedCustomerTaxSettings(
+        customerId: Long,
+        applyDefaultsOnlyWhenMissing: Boolean,
+    ) {
+        val businessId = business?.businessId ?: return
+        viewModelScope.launch {
+            runCatching {
+                withContext(Dispatchers.IO) {
+                    customerService.getCustomerById(businessId = businessId, customerId = customerId)
+                }
+            }.onSuccess { details ->
+                applyHydratedCustomerTaxSettings(
+                    customerId = customerId,
+                    details = details,
+                    applyDefaultsOnlyWhenMissing = applyDefaultsOnlyWhenMissing,
+                )
+            }
+        }
+    }
+
+    private fun applyHydratedCustomerTaxSettings(
+        customerId: Long,
+        details: CustomerDetails,
+        applyDefaultsOnlyWhenMissing: Boolean,
+    ) {
+        val currentCustomer = uiState.value.customer ?: return
+        if (currentCustomer.id != customerId) return
+
+        val hydratedCustomer = currentCustomer.copy(
+            name = details.legalName?.takeIf { it.isNotBlank() } ?: currentCustomer.name,
+            email = details.email ?: currentCustomer.email,
+            ruc = details.rucNumber ?: currentCustomer.ruc,
+            taxExempt = details.taxExempt,
+            taxRetentionCode = details.taxRetentionCode,
+            taxRetentionPercent = details.taxRetentionPercent,
+        )
+
+        val shouldApplyDefaults = !applyDefaultsOnlyWhenMissing || !hasConfiguredTaxSettings()
+        updateState { copy(customer = hydratedCustomer) }
+        if (shouldApplyDefaults) {
+            applySelectedCustomerTaxDefaults(hydratedCustomer)
+        }
+    }
 
     /* ---------- Exportation setters ---------- */
     fun onIncoterm(v: String) = updateState { copy(exportIncoterm = v.uppercase()) }

@@ -43,6 +43,9 @@ data class CustomerFormState(
     val cedulaCF: String = "",
     val foreignIdType: CustomerForeignIdType = CustomerForeignIdType.PASSPORT,
     val foreignIdNumber: String = "",
+    val taxExempt: Boolean = false,
+    val taxRetentionCode: String = "",
+    val taxRetentionPercent: String = "",
 
     val addressLine: String = "",
     val selectedProvince: String? = null,

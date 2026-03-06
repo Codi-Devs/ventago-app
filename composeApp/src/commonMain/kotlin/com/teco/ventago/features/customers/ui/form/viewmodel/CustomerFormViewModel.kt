@@ -5,6 +5,7 @@ import com.teco.ventago.core.BaseViewModel
 import com.teco.ventago.core.location.PanamaLocations
 import com.teco.ventago.features.customers.domain.CustomerService
 import com.teco.ventago.features.customers.domain.models.Customer
+import com.teco.ventago.features.customers.domain.models.CustomerTaxRetentionCatalog
 import com.teco.ventago.features.customers.domain.models.UpdateCustomerDetailsRequest
 import com.teco.ventago.features.financialProfile.domain.FinancialProfileService
 import com.teco.ventago.features.invoicing.domain.models.FeCustomerType
@@ -93,6 +94,9 @@ class CustomerFormViewModel(
                         phone = details.phone1.orEmpty(),
                         ruc = details.rucNumber.orEmpty(),
                         rucCheckDigit = details.rucCheckDigit.orEmpty(),
+                        taxExempt = details.taxExempt,
+                        taxRetentionCode = CustomerTaxRetentionCatalog.normalizeCode(details.taxRetentionCode),
+                        taxRetentionPercent = details.taxRetentionPercent?.toString().orEmpty(),
                         addressLine = details.addressLine.orEmpty(),
                         selectedProvince = details.province,
                         selectedDistrict = details.district,
@@ -136,6 +140,44 @@ class CustomerFormViewModel(
     fun onCedulaChange(value: String) = updateState { copy(cedulaCF = value) }
     fun onAddressLineChange(value: String) = updateState { copy(addressLine = value) }
     fun onForeignIdNumberChange(value: String) = updateState { copy(foreignIdNumber = value) }
+    fun onTaxExemptChange(value: Boolean) = updateState { copy(taxExempt = value) }
+
+    fun taxRetentionLabels(): List<String> = CustomerTaxRetentionCatalog.options.map { it.label }
+
+    fun selectedTaxRetentionIndex(): Int =
+        CustomerTaxRetentionCatalog.indexOfCode(uiState.value.taxRetentionCode)
+
+    fun onTaxRetentionSelected(index: Int) {
+        val option = CustomerTaxRetentionCatalog.options.getOrNull(index)
+            ?: CustomerTaxRetentionCatalog.options.first()
+        updateState {
+            val previousCode = CustomerTaxRetentionCatalog.normalizeCode(taxRetentionCode)
+            val nextPercent = when {
+                option.code.isEmpty() -> ""
+                option.defaultRate != null -> option.defaultRate.toString()
+                option.code == "8" && previousCode == "8" -> taxRetentionPercent
+                else -> ""
+            }
+            copy(
+                taxRetentionCode = option.code,
+                taxRetentionPercent = nextPercent,
+            )
+        }
+    }
+
+    fun onTaxRetentionPercentChange(value: String) {
+        val filtered = value.filter { it.isDigit() }.take(3)
+        val normalized = when {
+            filtered.isEmpty() -> ""
+            (filtered.toIntOrNull() ?: 0) > 100 -> "100"
+            else -> filtered
+        }
+        updateState { copy(taxRetentionPercent = normalized) }
+    }
+
+    fun selectedTaxRetentionRequiresManualPercent(): Boolean {
+        return CustomerTaxRetentionCatalog.normalizeCode(uiState.value.taxRetentionCode) == "8"
+    }
 
     fun onForeignIdTypeChange(value: CustomerForeignIdType) {
         updateState { copy(foreignIdType = value) }
@@ -213,6 +255,9 @@ class CustomerFormViewModel(
         viewModelScope.launch {
             runCatching {
                 withContext(Dispatchers.Default) {
+                    val retentionCode = CustomerTaxRetentionCatalog.normalizeCode(current.taxRetentionCode)
+                        .toIntOrNull()
+                    val retentionPercent = resolveRetentionPercent(current)
                     if (current.isEditMode) {
                         val locationCode = if (current.customerType != FeCustomerType.FOREIGNER) {
                             PanamaLocations.codeFor(
@@ -232,6 +277,9 @@ class CustomerFormViewModel(
                                 phone1 = current.phone.ifBlank { null },
                                 addressLine = current.addressLine.ifBlank { null },
                                 locationCode = locationCode,
+                                taxExempt = current.taxExempt,
+                                taxRetentionCode = retentionCode,
+                                taxRetentionPercent = retentionPercent,
                             )
                         )
                     } else {
@@ -277,6 +325,9 @@ class CustomerFormViewModel(
                                 null
                             },
                             countryCode = current.selectedCountryCode,
+                            taxExempt = current.taxExempt,
+                            taxRetentionCode = retentionCode,
+                            taxRetentionPercent = retentionPercent,
                         )
 
                         customerService.createCustomer(
@@ -292,6 +343,15 @@ class CustomerFormViewModel(
             }.onFailure {
                 showError()
             }
+        }
+    }
+
+    private fun resolveRetentionPercent(state: CustomerFormState): Int? {
+        val normalizedCode = CustomerTaxRetentionCatalog.normalizeCode(state.taxRetentionCode)
+        return when {
+            normalizedCode.isEmpty() -> null
+            normalizedCode == "8" -> state.taxRetentionPercent.toIntOrNull()
+            else -> CustomerTaxRetentionCatalog.defaultRateForCode(normalizedCode)
         }
     }
 }

@@ -14,6 +14,9 @@ data class UpdateCustomerDetailsRequest(
     @SerialName("phone1") val phone1: String? = null,
     @SerialName("address_line") val addressLine: String? = null,
     @SerialName("location_code") val locationCode: String? = null,
+    @SerialName("tax_exempt") val taxExempt: Boolean,
+    @SerialName("tax_retention_code") val taxRetentionCode: Int? = null,
+    @SerialName("tax_retention_percent") val taxRetentionPercent: Int? = null,
 )
 
 @Serializable

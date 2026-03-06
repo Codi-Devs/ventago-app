@@ -1,8 +1,11 @@
 package com.teco.ventago.features.customers.domain.models
 
+import kotlinx.serialization.ExperimentalSerializationApi
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.json.JsonNames
 
+@OptIn(ExperimentalSerializationApi::class)
 @Serializable
 data class CustomerDetails(
     @SerialName("id") val id: Long,
@@ -22,5 +25,17 @@ data class CustomerDetails(
     @SerialName("country_code") val countryCode: String? = null,
     @SerialName("phone1") val phone1: String? = null,
     @SerialName("email") val email: String? = null,
+    @JsonNames("taxExempt")
+    @SerialName("tax_exempt")
+    @Serializable(with = FlexibleBooleanSerializer::class)
+    val taxExempt: Boolean = false,
+    @JsonNames("taxRetentionCode")
+    @SerialName("tax_retention_code")
+    @Serializable(with = FlexibleNullableIntSerializer::class)
+    val taxRetentionCode: Int? = null,
+    @JsonNames("taxRetentionPercent")
+    @SerialName("tax_retention_percent")
+    @Serializable(with = FlexibleNullableIntSerializer::class)
+    val taxRetentionPercent: Int? = null,
     @SerialName("status") val status: Int = 1,
 )

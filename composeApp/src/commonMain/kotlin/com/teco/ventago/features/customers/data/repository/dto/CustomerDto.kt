@@ -25,6 +25,9 @@ data class CreateCustomerDto(
     @SerialName("foreign_id_number") val foreignIdNumber: String?,
     @SerialName("country_other_name") val countryOtherName: String?,
     @SerialName("cedula_cf") val cedulaCF: String?,
+    @SerialName("tax_exempt") val taxExempt: Boolean,
+    @SerialName("tax_retention_code") val taxRetentionCode: Int? = null,
+    @SerialName("tax_retention_percent") val taxRetentionPercent: Int? = null,
 )
 
 @Serializable
@@ -48,4 +51,7 @@ data class CustomerListDto(
     val status: Int,
     @SerialName("invoice_customer") val invoiceCustomer: Int,
     @SerialName("updated_at") val updatedAt: Long,
+    @SerialName("tax_exempt") val taxExempt: Boolean = false,
+    @SerialName("tax_retention_code") val taxRetentionCode: Int? = null,
+    @SerialName("tax_retention_percent") val taxRetentionPercent: Int? = null,
 )

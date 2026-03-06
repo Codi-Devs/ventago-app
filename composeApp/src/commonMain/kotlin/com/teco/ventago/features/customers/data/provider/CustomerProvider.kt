@@ -71,6 +71,14 @@ val json = Json {
     ignoreUnknownKeys = true // Optional: skip unknown fields
     isLenient = true
     encodeDefaults = true
+    explicitNulls = false
+}
+
+private val updateRequestJson = Json {
+    ignoreUnknownKeys = true
+    isLenient = true
+    encodeDefaults = true
+    explicitNulls = true
 }
 
 class CustomerProvider(private val client: HttpClient, private val authService: IAuthService) :
@@ -94,6 +102,9 @@ class CustomerProvider(private val client: HttpClient, private val authService: 
             foreignIdNumber = customer.foreignIdNumber,
             cedulaCF = customer.cedulaCF,
             countryOtherName = null,
+            taxExempt = customer.taxExempt,
+            taxRetentionCode = customer.taxRetentionCode,
+            taxRetentionPercent = customer.taxRetentionPercent,
         )
 
         val requestBody = json.encodeToString(customerDto)
@@ -246,6 +257,7 @@ class CustomerProvider(private val client: HttpClient, private val authService: 
         customerId: Long,
         request: UpdateCustomerDetailsRequest
     ): ApiResponse {
+        val payload = updateRequestJson.encodeToString(UpdateCustomerDetailsRequest.serializer(), request)
         val res = client.put("${Configs.ordersBasePath}/api/v1/customers/$customerId/details") {
             headers {
                 append(HttpHeaders.Accept, "*/*")
@@ -254,7 +266,7 @@ class CustomerProvider(private val client: HttpClient, private val authService: 
                 append("X-Business-ID", "$businessId")
             }
             contentType(ContentType.Application.Json)
-            setBody(request)
+            setBody(payload)
         }
 
         val body = res.body<JsonObject>()

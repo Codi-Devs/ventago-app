@@ -593,6 +593,9 @@
     <string name="customers_taxpayer_type">Taxpayer type</string>
     <string name="customers_taxpayer_type_natural">Natural</string>
     <string name="customers_taxpayer_type_juridical">Juridical</string>
+    <string name="customers_tax_exempt">ITBMS exempt</string>
+    <string name="customers_tax_retention">Retention</string>
+    <string name="customers_tax_retention_percent">Retention percent</string>
     <string name="customers_status">Status</string>
     <string name="customers_billing_addresses">Billing addresses</string>
     <string name="customers_no_billing_addresses">No billing addresses registered</string>

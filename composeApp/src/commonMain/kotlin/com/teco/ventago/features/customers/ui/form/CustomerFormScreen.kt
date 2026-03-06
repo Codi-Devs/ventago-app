@@ -3,6 +3,7 @@ package com.teco.ventago.features.customers.ui.form
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -14,6 +15,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.PersonSearch
+import androidx.compose.material3.Checkbox
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -22,6 +24,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
@@ -54,6 +57,9 @@ import ventago.composeapp.generated.resources.customers_province
 import ventago.composeapp.generated.resources.customers_ruc
 import ventago.composeapp.generated.resources.customers_ruc_prefix
 import ventago.composeapp.generated.resources.customers_save_changes
+import ventago.composeapp.generated.resources.customers_tax_exempt
+import ventago.composeapp.generated.resources.customers_tax_retention
+import ventago.composeapp.generated.resources.customers_tax_retention_percent
 import ventago.composeapp.generated.resources.email
 import ventago.composeapp.generated.resources.name
 import ventago.composeapp.generated.resources.phone
@@ -215,6 +221,40 @@ fun CustomerFormScreen(
             imeAction = ImeAction.Next,
             keyboardType = KeyboardType.Phone,
         )
+
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Checkbox(
+                checked = uiState.taxExempt,
+                onCheckedChange = viewModel::onTaxExemptChange,
+            )
+            Text(
+                text = stringResource(Res.string.customers_tax_exempt),
+                style = MaterialTheme.typography.bodyMedium,
+            )
+        }
+
+        DMDropDownField(
+            label = stringResource(Res.string.customers_tax_retention),
+            items = viewModel.taxRetentionLabels(),
+            selectedIndex = viewModel.selectedTaxRetentionIndex(),
+            onItemSelected = { index, _ -> viewModel.onTaxRetentionSelected(index) },
+            isError = false,
+            modifier = Modifier.fillMaxWidth(),
+        )
+
+        if (viewModel.selectedTaxRetentionRequiresManualPercent()) {
+            DMOutlinedTextField(
+                text = uiState.taxRetentionPercent,
+                label = stringResource(Res.string.customers_tax_retention_percent),
+                onChange = viewModel::onTaxRetentionPercentChange,
+                modifier = Modifier.fillMaxWidth(),
+                imeAction = ImeAction.Next,
+                keyboardType = KeyboardType.Number,
+            )
+        }
 
         if (uiState.customerType != FeCustomerType.FOREIGNER) {
             DMDropDownField(
