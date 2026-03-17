@@ -1,4 +1,225 @@
+# Login Must-Change-Password Hard Block TODO
+
+## Plan
+- [x] Trace login token-claim path and ensure `must_change_password` can be read before any persistence/sign-in side effects.
+- [x] Implement auth-service guard so `must_change_password=true` aborts login before Firebase/token/cache writes.
+- [x] Add blocked login UI state in `LoginScreen` with English copy, password-related vector icon, and a "Back to Login" action.
+- [x] Run focused verification gate and document outcomes.
+
+## Verification Gates
+- [x] `./gradlew :composeApp:testDebugUnitTest --tests com.teco.ventago.core.authz.AuthzJwtDecoderTest`
+- [x] `./gradlew :composeApp:compileDebugKotlinAndroid`
+
+## Review Notes
+- `AuthzJwtDecoder` now extracts `must_change_password` (top-level or nested in `data`) and exposes it via `UserAuthzClaims.mustChangePassword`.
+- `AuthService` now enforces `must_change_password` before Firebase sign-in and before token/cache writes for login/register flows; when true it signs out and throws `MustChangePasswordException`.
+- `LoginViewModel` now handles `MustChangePasswordException` with a dedicated blocked UI state instead of generic auth error handling.
+- `LoginScreen` now shows a blocking English message with a lock vector and a `Back to login` button when the claim requires password change.
+- Added decoder regression coverage for the new claim in `AuthzJwtDecoderTest`.
+- Follow-up copy update: blocked screen text was changed to friendly Spanish wording and removed technical claim/key wording.
+
+# Fresh Login Redirect + Orders Loader Trap TODO
+
+# Products View Category Drill-down Fix TODO
+
+## Plan
+- [x] Trace why `products:view` users cannot open category detail from `CategoriesManageScreen`.
+- [x] Allow category row click to navigate into category items in read-only mode.
+- [x] Keep create-only routes/actions protected while enabling view-only drill-down.
+- [x] Run focused verification gate and document results.
+
+## Verification Gates
+- [x] `./gradlew :composeApp:compileDebugKotlinAndroid`
+
+## Review Notes
+- `CategoriesManageScreen` now navigates on category click for all authorized product users; edit options remain guarded by `canManageCategories`.
+- `CategoriesManageViewModel.selectCategory` now stores selected category for both read-only and manage users.
+- `AuthzNavigation` now maps `EditCategoryScreen` to `RouteKey.PRODUCT_DETAILS` (view/create), while add/modify category screens remain `RouteKey.CATEGORY_MANAGE` (create-only).
+
+# Scopes UI Audit (Quotes/Expenses/Products) TODO
+
+## Plan
+- [x] Audit listed Quotes screens and gate mutation CTAs using quote create/update permissions (create includes modify).
+- [x] Add explicit expenses action permissions in details state/viewmodel and hide detail mutation CTAs (update vs delete).
+- [x] Add runtime guards in expenses viewmodel mutation methods to prevent unauthorized API actions.
+- [x] Gate products app-bar action icons for add category/add item using manage-categories permission.
+- [x] Run focused verification gate and document outcomes.
+
+## Verification Gates
+- [x] `./gradlew :composeApp:compileDebugKotlinAndroid`
+
+## Review Notes
+- `QuoteSuccessScreen` now hides `new_quote` CTA unless `canCreateQuote` is true.
+- Expense details now split mutation permissions in state (`canUpdateExpenseAction`, `canDeleteExpenseAction`) and hide mutation CTAs accordingly (concept edit, payment create/edit/mark, expense edit/duplicate/delete).
+- `ExpenseDetailsViewModel` now enforces runtime guards for update/delete expense actions (payments + categorization + delete) to prevent unauthorized mutations even if UI entry points are bypassed.
+- Product top app-bar add actions are now permission-aware: `CategoriesManageActions` and `EditCategoryActions` render add icons only when `canManageCategories` is true.
+- Product category/item create-edit screens now hide primary save/add buttons when `products:create` is missing, and item save paths are runtime-guarded (`AddItemViewModel` / `EditItemViewModel`) via `canManageItems`.
+- Quote settings editability is now scoped by quote permissions (`ActionKey.QUOTES_UPDATE`) instead of owner settings-modify permission, and quote-settings save is blocked at runtime if that permission is missing.
+
+# Customer Action Scopes Audit TODO
+
+## Plan
+- [x] Hide delete-customer CTA in `CustomerDetailsScreen` when `customer:delete` permission is missing.
+- [x] Audit customer action surfaces mapped by `ScopeKey` and patch missing UI gates in customer views/action bars.
+- [x] Add runtime guards in customer details ViewModel for delete/address mutations to mirror UI gating.
+- [x] Run focused verification gate and document results.
+
+## Verification Gates
+- [x] `./gradlew :composeApp:compileDebugKotlinAndroid`
+
+## Review Notes
+- `CustomerDetailsState/ViewModel` now split action permissions into `canEditCustomerAction` (`customer:create`) and `canDeleteCustomerAction` (`customer:delete`).
+- `CustomerDetailsScreen` now hides the delete customer CTA when delete scope is missing and hides billing-address mutation actions when create scope is missing.
+- `ClientListActions` top app bar now hides the add-customer icon unless the user has customer action access (`create` or `delete`), aligned with customer list/search behavior.
+- Customer details mutation methods (`deleteCustomer`, `createAddress`, `updateAddress`, `deleteAddress`) now have runtime permission guards.
+
+# Customer Details Edit CTA Scope Guard TODO
+
+## Plan
+- [x] Locate the edit customer CTA rendering path in customer details flow.
+- [x] Add a customer-edit permission flag to details state sourced from authz in `CustomerDetailsViewModel`.
+- [x] Hide the "Editar cliente" button in `CustomerDetailsScreen` when create permission is missing.
+- [x] Run focused verification gate and document results.
+
+## Verification Gates
+- [x] `./gradlew :composeApp:compileDebugKotlinAndroid`
+
+## Review Notes
+- `CustomerDetailsState` now includes `canEditCustomerAction`.
+- `CustomerDetailsViewModel` now evaluates `ActionKey.CUSTOMERS_CREATE` from the authenticated user and publishes the flag to UI state.
+- `CustomerDetailsScreen` now conditionally renders the edit customer button only when `uiState.canEditCustomerAction` is true.
+
+# Customer Add Actions Scope Guard TODO
+
+## Plan
+- [x] Confirm where add-customer entry points exist in POS customer search and customers list screens.
+- [x] Wire authz-derived `canAddCustomerAction` state in both customer search/list viewmodels based on `customers:create` or `customers:delete`.
+- [x] Gate add-customer navigation/FAB rendering in UI using that state.
+- [x] Run focused verification gate and document results.
+
+## Verification Gates
+- [x] `./gradlew :composeApp:compileDebugKotlinAndroid`
+
+## Review Notes
+- `SearchCustomerViewModel` and `CustomersListViewModel` now compute `canAddCustomerAction` from shared authz evaluator (`CUSTOMERS_CREATE || CUSTOMERS_DELETE`).
+- `CustomersListScreen` now renders the add FAB only when `uiState.canAddCustomerAction` is true.
+- `SearchCustomerView` now routes `CustomerNotFound` to add-customer only when `canAddCustomerAction` is true; otherwise it opens customers list.
+- `SearchCustomerView` event handling now reads the latest ViewModel state (`viewModel.uiState.value`) to avoid stale permission capture from initial composition.
+
+## Plan
+- [x] Trace fresh-login bootstrap redirect path and confirm why sub-users land on `Orders` instead of `Home`.
+- [x] Change bootstrap redirect behavior so authenticated users always start at `HomeScreen`.
+- [x] Guard route-authz redirect execution until `currentUser` is hydrated to avoid transient wrong-route redirects during login startup.
+- [x] Run focused verification gates and document outcomes.
+
+## Verification Gates
+- [x] `./gradlew :composeApp:testDebugUnitTest --tests com.teco.ventago.core.authz.AuthzEvaluatorTest`
+- [x] `./gradlew :composeApp:compileDebugKotlinAndroid`
+
+## Review Notes
+- Post-login startup redirect in `App.kt` no longer uses `fallbackScreenFor(...)`; for authenticated users with business + invoicing configured it now always targets `HomeScreen`.
+- Route-level authz guard in `App.kt` now waits for non-null `currentUser` before enforcing route permissions, preventing startup redirects based on partial auth state.
+- `OrdersViewModel` now defers its initial `loadOrders()` until a valid `businessId` is available, and reloads when business context changes, avoiding startup fetches with `-1` that could leave the list in a loading trap.
+- Removed temporary `ASDADS` debug prints from `App.kt` that were used to trace redirect behavior.
+- A transient KSP generated-source race occurred when running test + compile in parallel; clean sequential rerun passed both gates.
+
+# Settings Logout Access Fallback TODO
+
+## Plan
+- [x] Confirm root cause: users without `settings:view` cannot reach `SettingsScreen`, which currently contains the only sign-out entry point.
+- [x] Implement minimal-impact authz fix so authenticated users can access settings page/menu while preserving owner-only edit controls.
+- [x] Run focused verification gates and document outcomes.
+
+## Verification Gates
+- [x] `./gradlew :composeApp:testDebugUnitTest --tests com.teco.ventago.core.authz.AuthzEvaluatorTest`
+- [x] `./gradlew :composeApp:compileDebugKotlinAndroid`
+
+## Review Notes
+- `RouteKey.SETTINGS_PAGE` and `MenuKey.SETTINGS` now use `allowAll`, so sub-users without `settings:view` can still open `SettingsScreen` and use sign out.
+- Owner-only mutation controls remain protected by `ActionKey.SETTINGS_MODIFY` / `uiState.canModifySettings`, so this change only restores access for logout/basic read-only options.
+- Updated `AuthzEvaluatorTest` expectations to the current authz model and added explicit coverage for settings route access without `settings:view`.
+
+# Folios Card Owner-Only Visibility TODO
+
+## Plan
+- [x] Restrict folios/invoicing plan card rendering to owner-main users only.
+- [x] Apply the same owner-only gating in both `HomeScreen` and `HomeSummaryScreen` to keep behavior consistent.
+- [x] Run focused verification gate and document results.
+
+## Verification Gates
+- [x] `./gradlew :composeApp:compileDebugKotlinAndroid`
+
+## Review Notes
+- Folios/invoicing plan card now renders only when `uiState.showFolioPurchase` is true (owner-main), so sub-accounts do not see it.
+- The owner-only folios card behavior is aligned in both `HomeScreen` and `HomeSummaryScreen`.
+
+# Home Access + Home Buttons Authz Fix TODO
+
+## Plan
+- [x] Update authz policies so `HomeScreen` is accessible to all authenticated users and `HomeSummaryScreen` is restricted to owner main or `home:dashboard`.
+- [x] Extend `HomeState/HomeViewModel` with explicit UI permissions for customers/expenses/support-card visibility.
+- [x] Refactor Home action cards section (`HomeScreen` quick actions block) to show cards only when corresponding permissions are allowed.
+- [x] Run focused verification gate and document results.
+
+## Verification Gates
+- [x] `./gradlew :composeApp:compileDebugKotlinAndroid`
+
+## Review Notes
+- `RouteKey.HOME` and `MenuKey.HOME` are now allow-all (authenticated), so sub-users no longer lose Home access due missing `home:dashboard`.
+- `RouteKey.HOME_SUMMARY` now allows owner-main or users with `home:dashboard`.
+- Home quick-action cards now render independently by permission: quotes/POS remained scoped as before, and customers/expenses now use dedicated route access flags.
+- `SupportCard` now renders only for owner main accounts.
+
+# POS Cart Edit Product Scope Guard TODO
+
+## Plan
+- [x] Inspect cart item modification entry points (name/price/discount) and current authz state fields.
+- [x] Add `invoice:edit_product` authz state in POS ViewModel/State and gate cart item edit interactions in UI.
+- [x] Add ViewModel runtime guards for price/discount mutation methods used by cart edit flow.
+- [x] Run focused verification gate and document results.
+
+## Verification Gates
+- [x] `./gradlew :composeApp:compileDebugKotlinAndroid`
+
+## Review Notes
+- POS authz state now includes `canEditProduct` sourced from `ActionKey.ORDERS_EDIT_PRODUCT`.
+- Cart item rows no longer open the modify-item sheet when `canEditProduct` is false, preventing product price/discount edits from the cart UI.
+- `PosViewModel` now blocks `updateCartLine`, `setLineOverridePrice`, and `setLineDiscount` when the user lacks `invoice:edit_product`, so price/discount writes are guarded at runtime too.
+
+# POS Payment Scope UI Guard TODO
+
+## Plan
+- [x] Inspect current PaymentScreen action visibility for `invoice:create_draft` vs `invoice:create`.
+- [x] Restrict PaymentScreen UI so invoice-confirm controls require `canCreateInvoice`; draft action requires `canCreateDraft`.
+- [x] Run focused verification gate and document results.
+
+## Verification Gates
+- [x] `./gradlew :composeApp:compileDebugKotlinAndroid`
+
+## Review Notes
+- `PaymentScreen` no longer renders manual payment selectors, installment controls, allocation summary, or "Confirmar cobro" when `canCreateInvoice` is false.
+- "Guardar sin cobrar" now renders only when `canCreateDraft` is true (and still excluded for credit/debit notes), matching scope behavior for draft-only users.
+
 # Customer Tax Presets + CRUD Parity TODO
+
+# KMP Authz Scope Sync TODO
+
+## Plan
+- [x] Add shared authz types/evaluator and extend auth state with JWT-derived scopes + owner/sub-user flags.
+- [x] Wire central route fallback and shell/navigation gating, including a dedicated unauthorized screen.
+- [x] Apply screen/action guards for Home, Orders, Quotes, Expenses, Products category management, and owner-only Settings controls.
+- [x] Add focused unit coverage for JWT authz decoding, evaluator semantics, fallback resolution, and authz-driven UI/viewmodel behavior.
+- [x] Run verification gates and document results.
+
+## Verification Gates
+- [x] `./gradlew :composeApp:testDebugUnitTest`
+- [x] `./gradlew :composeApp:compileDebugKotlinAndroid`
+
+## Review Notes
+- Shared authz now lives in common code (`AuthzJwtDecoder`, `AuthzEvaluator`, route/menu/action policies) and `AuthService` enriches the cached/current `User` from JWT scopes plus owner/sub-user claims on login, refresh, restore, and token rotation.
+- Shell/navigation now resolve allowed destinations before rendering, use beta cache snapshots for gating, hide unauthorized bottom-nav entries, and send fully blocked users to a dedicated unauthorized screen instead of an invalid fallback.
+- Home, Orders, Expenses, Quote details/summary, POS quote/order/custom-product flows, product category management, and owner-only Settings controls now all read from the shared authz model, with runtime guards added to mutation handlers instead of relying on visibility alone.
+- Added common authz regression tests for JWT claim decoding, evaluator semantics/fallback ordering, and authz-driven bottom-nav visibility; both `testDebugUnitTest` and `compileDebugKotlinAndroid` passed.
 
 ## Plan
 - [x] Extender contratos, modelos y cache de clientes para soportar `tax_exempt`, `tax_retention_code` y `tax_retention_percent` en create/list/get/update.

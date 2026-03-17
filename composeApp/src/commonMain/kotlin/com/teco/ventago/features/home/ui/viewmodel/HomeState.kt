@@ -24,6 +24,12 @@ data class HomeState(
     val invoicingEnabled: Boolean = false,
     val invoicingPlanState: InvoicingPlanState? = null,
     val hasQuotesAccess: Boolean = false,
+    val canCreateOrderEntry: Boolean = false,
+    val canCreateExpense: Boolean = false,
+    val canAccessCustomers: Boolean = false,
+    val canAccessExpenses: Boolean = false,
+    val showSupportCard: Boolean = false,
+    val showFolioPurchase: Boolean = false,
 
     override val loadingBottomSheet: LoadingBottomSheetState = LoadingBottomSheetState(),
 ): LoadableState<HomeState> {

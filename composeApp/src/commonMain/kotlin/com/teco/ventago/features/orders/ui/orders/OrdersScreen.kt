@@ -158,14 +158,16 @@ fun OrdersScreenActions(backStackEntry: NavBackStackEntry?) {
         }
     }
 
-    IconButton(onClick = {
-        navController.navigate(PosScreens.POS.name)
-    }) {
-        Icon(
-            imageVector = Icons.Rounded.Add,
-            contentDescription = "New order",
-            tint = MaterialTheme.colorScheme.primary
-        )
+    if (uiState.canCreateOrderEntry) {
+        IconButton(onClick = {
+            navController.navigate(PosScreens.POS.name)
+        }) {
+            Icon(
+                imageVector = Icons.Rounded.Add,
+                contentDescription = "New order",
+                tint = MaterialTheme.colorScheme.primary
+            )
+        }
     }
 
     IconButton(onClick = {

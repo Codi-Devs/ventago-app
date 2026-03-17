@@ -132,7 +132,7 @@ fun HomeSummaryScreen(
             }
         }
 
-        if (uiState.invoicingEnabled && uiState.invoicingPlanState != null) {
+        if (uiState.invoicingEnabled && uiState.invoicingPlanState != null && uiState.showFolioPurchase) {
             InvoicingPlanCard(
                 initialQuota = uiState.invoicingPlanState?.totalDtes ?: 0,
                 remainingQuota = uiState.invoicingPlanState?.availableDtes ?: 0,

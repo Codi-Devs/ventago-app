@@ -8,5 +8,8 @@ data class QuoteDetailsState(
     val isCancelling: Boolean = false,
     val isSendingEmail: Boolean = false,
     val isDownloadingPdf: Boolean = false,
+    val canModifyQuote: Boolean = false,
+    val canCreateOrderFromQuote: Boolean = false,
+    val canCancelQuote: Boolean = false,
     val error: String? = null
 )

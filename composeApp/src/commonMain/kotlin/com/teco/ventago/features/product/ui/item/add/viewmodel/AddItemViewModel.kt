@@ -1,7 +1,10 @@
 package com.teco.ventago.features.product.ui.item.add.viewmodel
 
 import androidx.lifecycle.viewModelScope
+import com.teco.ventago.core.authz.ActionKey
+import com.teco.ventago.core.authz.AuthzEvaluator
 import com.teco.ventago.core.camera.SharedImage
+import com.teco.ventago.features.auth.domain.IAuthService
 import com.teco.ventago.features.orders.domain.models.requests.NameValue
 import com.teco.ventago.features.product.domain.ProductService
 import com.teco.ventago.features.product.domain.model.AdditionalInfoCatalog
@@ -27,11 +30,21 @@ import ventago.composeapp.generated.resources.Res
 import kotlin.ranges.coerceIn
 
 class AddItemViewModel(
+    private val authService: IAuthService,
     private val productService: ProductService
 ) : ItemViewModel(productService) {
 
     init {
         loadGoodsCsv()
+        updateState {
+            copy(
+                canManageItems = AuthzEvaluator.canAction(
+                    ActionKey.PRODUCTS_UPDATE,
+                    authService.getUserSync(),
+                    emptySet()
+                )
+            )
+        }
         if ((productService.state.value?.categories?.size ?: 0) > 0) {
             // Check if there's a selected category from navigation
             val selectedCategory = productService.selectedCategoryId?.let { categoryId ->
@@ -75,6 +88,16 @@ class AddItemViewModel(
     }
 
     override fun saveItem(image: SharedImage?) {
+        if (!uiState.value.canManageItems) {
+            showError()
+            return
+        }
+        if (uiState.value.isPersonalizedProduct &&
+            !AuthzEvaluator.canAction(ActionKey.ORDERS_CUSTOM_PRODUCT, authService.getUserSync(), emptySet())
+        ) {
+            showError()
+            return
+        }
         if (uiState.value.name.isBlank()) {
             updateState { copy(wrongName = true) }
             return

@@ -619,23 +619,25 @@ fun AddItemScreen(
             )
         }
 
-        ButtonM(
-            onClick = {
-                analytics.logEvent("add_item")
-                viewModel.saveItem(sharedImage)
-            },
-            modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
-        ) {
-            Text(
-                text = stringResource(Res.string.add), style = TextStyle(
-                    fontSize = 16.sp,
-                    lineHeight = 24.sp,
-                    color = MaterialTheme.colorScheme.onPrimary,
-                    fontFamily = latoFontFamily(),
-                    fontWeight = FontWeight.W700,
-                    letterSpacing = 0.02.sp,
+        if (uiState.canManageItems) {
+            ButtonM(
+                onClick = {
+                    analytics.logEvent("add_item")
+                    viewModel.saveItem(sharedImage)
+                },
+                modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+            ) {
+                Text(
+                    text = stringResource(Res.string.add), style = TextStyle(
+                        fontSize = 16.sp,
+                        lineHeight = 24.sp,
+                        color = MaterialTheme.colorScheme.onPrimary,
+                        fontFamily = latoFontFamily(),
+                        fontWeight = FontWeight.W700,
+                        letterSpacing = 0.02.sp,
+                    )
                 )
-            )
+            }
         }
     }
 

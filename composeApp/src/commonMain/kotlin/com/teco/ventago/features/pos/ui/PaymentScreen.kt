@@ -331,7 +331,9 @@ fun PaymentScreenContent(
                 }
             },
             // Disable save draft for credit/debit notes
-            saveDraftEnabled = hasPositiveAmount && !isCreditOrDebitNote
+            saveDraftEnabled = hasPositiveAmount && !isCreditOrDebitNote,
+            canCreateInvoice = ui.canCreateInvoice,
+            canCreateDraft = ui.canCreateDraft,
         )
         // HIDDEN: PaymentLinkSection temporarily disabled (backend bug)
 //        } else {
@@ -435,7 +437,9 @@ private fun ManualAndInstallmentsSection(
     onInstallmentDate: (Int, String) -> Unit,
     onConfirm: () -> Unit,
     onSaveDraft: () -> Unit,
-    saveDraftEnabled: Boolean
+    saveDraftEnabled: Boolean,
+    canCreateInvoice: Boolean,
+    canCreateDraft: Boolean,
 ) {
     val ui by viewModel.uiState.collectAsState()
 
@@ -447,184 +451,188 @@ private fun ManualAndInstallmentsSection(
         )
     ) {
         Column(Modifier.padding(16.dp)) {
-            Text("Pagos manuales", style = MaterialTheme.typography.titleMedium)
-            Spacer(Modifier.height(8.dp))
-
-            fun allocatedNowCents(): Long =
-                ui.charged.values.sum() + ui.installments.sumOf { it.amountCents }
-
-            // Method chips
-            FlowRow() {
-                methodOptions.forEach { (code, label) ->
-                    val selected = ui.charged.containsKey(code)
-                    FilterChip(
-                        modifier = Modifier.padding(end = 4.dp),
-                        selected = selected,
-                        onClick = {
-                            val newSelected = !selected
-                            if (newSelected) {
-                                // Prefill with REMAINING at the moment of selection.
-                                // Example: total 2000, already allocated 1500 → prefill 500.
-                                val remainingForPrefill =
-                                    (totalToCharge - allocatedNowCents()).coerceAtLeast(0L)
-
-                                onToggleMethod(code, true)
-                                onAmountChange(code, remainingForPrefill)
-                            } else {
-                                // Turning OFF: just toggle off, no amount change needed
-                                onToggleMethod(code, false)
-                            }
-                        },
-                        label = { Text(label) }
-                    )
-                }
-            }
-
-            // Amount inputs for selected methods
-            ui.charged.keys.sorted().forEach { code ->
+            if (canCreateInvoice) {
+                Text("Pagos manuales", style = MaterialTheme.typography.titleMedium)
                 Spacer(Modifier.height(8.dp))
-                Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                    Text(methodOptions.find { it.first == code }?.second ?: code.toString())
-                    Spacer(Modifier.weight(1f).width(8.dp))
-                    DMMoneyOutlinedTextField(
-                        text = (ui.charged[code] ?: 0L).toString(),
-                        label = "Monto",
-                        onChange = { digits ->
-                            val cents = digits.filter(Char::isDigit).toLongOrNull() ?: 0L
-                            onAmountChange(code, cents)
-                        },
-                        modifier = Modifier.widthIn(min = 160.dp).padding(start = 8.dp),
-                        leadingIcon = null,
-                        maxLines = 1,
-                        imeAction = ImeAction.Done
-                    )
-                }
-                if (code == 11) {
-                    DMOutlinedTextField(
-                        text = ui.otherPaymentDescription,
-                        label = "Descripción (requerida para 'Otro')",
-                        onChange = onOtherDesc,
-                        modifier = Modifier.fillMaxWidth().padding(top = 6.dp),
-                        maxLines = 2
-                    )
-                } else if (code == 2) {
-                    Text(
-                        "Se permite exceso de pago (se calculará cambio)",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                }
-            }
 
-            Divider(Modifier.padding(vertical = 12.dp))
+                fun allocatedNowCents(): Long =
+                    ui.charged.values.sum() + ui.installments.sumOf { it.amountCents }
 
-            // Installments
-            Text("Crédito/Plazo", style = MaterialTheme.typography.titleMedium)
-            Spacer(Modifier.height(8.dp))
-            ui.installments.forEachIndexed { idx, inst ->
-                ElevatedCard(
-                    modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
-                    shape = RoundedCornerShape(12.dp)
-                ) {
-                    Column(Modifier.padding(12.dp)) {
-                        Row(
-                            Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.SpaceBetween
-                        ) {
-                            Text("Cuota ${idx + 1}")
-                            IconButton(onClick = { onRemoveInstallment(idx) }) {
-                                Icon(
-                                    Icons.Rounded.Delete,
-                                    contentDescription = null,
-                                    tint = MaterialTheme.colorScheme.error
-                                )
-                            }
-                        }
-                        DMMoneyOutlinedTextField(
-                            text = if (inst.amountCents == 0L) "" else inst.amountCents.toString(),
-                            label = "Monto",
-                            onChange = { raw ->
-                                // Filter digits only
-                                val digits = raw.filter(Char::isDigit)
-                                
-                                // Handle empty input or remove leading zeros: "02" -> "2", "002" -> "2"
-                                val cleanedDigits = digits.trimStart('0')
-                                val cents = if (cleanedDigits.isEmpty()) {
-                                    0L
+                // Method chips
+                FlowRow() {
+                    methodOptions.forEach { (code, label) ->
+                        val selected = ui.charged.containsKey(code)
+                        FilterChip(
+                            modifier = Modifier.padding(end = 4.dp),
+                            selected = selected,
+                            onClick = {
+                                val newSelected = !selected
+                                if (newSelected) {
+                                    // Prefill with REMAINING at the moment of selection.
+                                    // Example: total 2000, already allocated 1500 → prefill 500.
+                                    val remainingForPrefill =
+                                        (totalToCharge - allocatedNowCents()).coerceAtLeast(0L)
+
+                                    onToggleMethod(code, true)
+                                    onAmountChange(code, remainingForPrefill)
                                 } else {
-                                    cleanedDigits.toLongOrNull() ?: 0L
+                                    // Turning OFF: just toggle off, no amount change needed
+                                    onToggleMethod(code, false)
                                 }
-                                
-                                onInstallmentAmount(idx, cents)
                             },
+                            label = { Text(label) }
+                        )
+                    }
+                }
+
+                // Amount inputs for selected methods
+                ui.charged.keys.sorted().forEach { code ->
+                    Spacer(Modifier.height(8.dp))
+                    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                        Text(methodOptions.find { it.first == code }?.second ?: code.toString())
+                        Spacer(Modifier.weight(1f).width(8.dp))
+                        DMMoneyOutlinedTextField(
+                            text = (ui.charged[code] ?: 0L).toString(),
+                            label = "Monto",
+                            onChange = { digits ->
+                                val cents = digits.filter(Char::isDigit).toLongOrNull() ?: 0L
+                                onAmountChange(code, cents)
+                            },
+                            modifier = Modifier.widthIn(min = 160.dp).padding(start = 8.dp),
                             leadingIcon = null,
-                            modifier = Modifier.fillMaxWidth(),
                             maxLines = 1,
-                            imeAction = ImeAction.Next
-                        )
-                        InstallmentDueDateFieldKmp(
-                            valueIso = inst.dueDateIso,
-                            onDatePickedIso = { picked -> onInstallmentDate(idx, picked) },
-                            modifier = Modifier.fillMaxWidth()
+                            imeAction = ImeAction.Done
                         )
                     }
-                }
-            }
-            TextButton(
-                onClick = onAddInstallment,
-                colors = ButtonDefaults.textButtonColors(contentColor = MaterialTheme.colorScheme.secondary)
-            ) { Text("Añadir cuota") }
-
-            Spacer(Modifier.height(12.dp))
-            // Allocation summary
-            val allocated = ui.charged.values.sum() + ui.installments.sumOf { it.amountCents }
-            val change = remember(ui) { viewModel.calculateChange() }
-            val canConfirm = totalToCharge > 0L && allocated >= totalToCharge
-
-            Column {
-                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                    Text("Asignado")
-                    Text(formatNumberToMoney((allocated / 100.0).toString()))
-                }
-
-                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                    Text("Restante")
-                    Text(formatNumberToMoney((remaining / 100.0).toString()))
-                }
-
-                if (change > 0) {
-                    Spacer(Modifier.height(4.dp))
-                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                        Text("Cambio", color = MaterialTheme.colorScheme.secondary)
+                    if (code == 11) {
+                        DMOutlinedTextField(
+                            text = ui.otherPaymentDescription,
+                            label = "Descripción (requerida para 'Otro')",
+                            onChange = onOtherDesc,
+                            modifier = Modifier.fillMaxWidth().padding(top = 6.dp),
+                            maxLines = 2
+                        )
+                    } else if (code == 2) {
                         Text(
-                            formatNumberToMoney((change / 100.0).toString()),
-                            style = bodyMediumBold(color = MaterialTheme.colorScheme.secondary)
+                            "Se permite exceso de pago (se calculará cambio)",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                     }
                 }
-            }
 
-            Spacer(Modifier.height(12.dp))
+                Divider(Modifier.padding(vertical = 12.dp))
 
-            // Determine button text based on document type
-            val confirmButtonText = when (selectedDocType) {
-                "04" -> "Generar nota de crédito"
-                "05" -> "Generar nota de débito"
-                else -> "Confirmar cobro"
-            }
+                // Installments
+                Text("Crédito/Plazo", style = MaterialTheme.typography.titleMedium)
+                Spacer(Modifier.height(8.dp))
+                ui.installments.forEachIndexed { idx, inst ->
+                    ElevatedCard(
+                        modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
+                        shape = RoundedCornerShape(12.dp)
+                    ) {
+                        Column(Modifier.padding(12.dp)) {
+                            Row(
+                                Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween
+                            ) {
+                                Text("Cuota ${idx + 1}")
+                                IconButton(onClick = { onRemoveInstallment(idx) }) {
+                                    Icon(
+                                        Icons.Rounded.Delete,
+                                        contentDescription = null,
+                                        tint = MaterialTheme.colorScheme.error
+                                    )
+                                }
+                            }
+                            DMMoneyOutlinedTextField(
+                                text = if (inst.amountCents == 0L) "" else inst.amountCents.toString(),
+                                label = "Monto",
+                                onChange = { raw ->
+                                    // Filter digits only
+                                    val digits = raw.filter(Char::isDigit)
 
-            ButtonM(
-                onClick = onConfirm,
-                enabled = canConfirm,
-            ) {
-                Text(
-                    confirmButtonText,
-                    style = labelLarge().copy(color = MaterialTheme.colorScheme.onPrimary)
-                )
+                                    // Handle empty input or remove leading zeros: "02" -> "2", "002" -> "2"
+                                    val cleanedDigits = digits.trimStart('0')
+                                    val cents = if (cleanedDigits.isEmpty()) {
+                                        0L
+                                    } else {
+                                        cleanedDigits.toLongOrNull() ?: 0L
+                                    }
+
+                                    onInstallmentAmount(idx, cents)
+                                },
+                                leadingIcon = null,
+                                modifier = Modifier.fillMaxWidth(),
+                                maxLines = 1,
+                                imeAction = ImeAction.Next
+                            )
+                            InstallmentDueDateFieldKmp(
+                                valueIso = inst.dueDateIso,
+                                onDatePickedIso = { picked -> onInstallmentDate(idx, picked) },
+                                modifier = Modifier.fillMaxWidth()
+                            )
+                        }
+                    }
+                }
+                TextButton(
+                    onClick = onAddInstallment,
+                    colors = ButtonDefaults.textButtonColors(contentColor = MaterialTheme.colorScheme.secondary)
+                ) { Text("Añadir cuota") }
+
+                Spacer(Modifier.height(12.dp))
+                // Allocation summary
+                val allocated = ui.charged.values.sum() + ui.installments.sumOf { it.amountCents }
+                val change = remember(ui) { viewModel.calculateChange() }
+                val canConfirm = totalToCharge > 0L && allocated >= totalToCharge
+
+                Column {
+                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                        Text("Asignado")
+                        Text(formatNumberToMoney((allocated / 100.0).toString()))
+                    }
+
+                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                        Text("Restante")
+                        Text(formatNumberToMoney((remaining / 100.0).toString()))
+                    }
+
+                    if (change > 0) {
+                        Spacer(Modifier.height(4.dp))
+                        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                            Text("Cambio", color = MaterialTheme.colorScheme.secondary)
+                            Text(
+                                formatNumberToMoney((change / 100.0).toString()),
+                                style = bodyMediumBold(color = MaterialTheme.colorScheme.secondary)
+                            )
+                        }
+                    }
+                }
+
+                Spacer(Modifier.height(12.dp))
+
+                // Determine button text based on document type
+                val confirmButtonText = when (selectedDocType) {
+                    "04" -> "Generar nota de crédito"
+                    "05" -> "Generar nota de débito"
+                    else -> "Confirmar cobro"
+                }
+
+                ButtonM(
+                    onClick = onConfirm,
+                    enabled = canConfirm,
+                ) {
+                    Text(
+                        confirmButtonText,
+                        style = labelLarge().copy(color = MaterialTheme.colorScheme.onPrimary)
+                    )
+                }
             }
             // Only show save draft button for regular invoices, not credit/debit notes
-            if (selectedDocType != "04" && selectedDocType != "05") {
-                Spacer(Modifier.height(12.dp))
+            if (canCreateDraft && selectedDocType != "04" && selectedDocType != "05") {
+                if (canCreateInvoice) {
+                    Spacer(Modifier.height(12.dp))
+                }
 
                 TextButtonM(
                     label = "Guardar sin cobrar",

@@ -1,7 +1,10 @@
 package com.teco.ventago.features.product.ui.item.edit
 
 import androidx.lifecycle.viewModelScope
+import com.teco.ventago.core.authz.ActionKey
+import com.teco.ventago.core.authz.AuthzEvaluator
 import com.teco.ventago.core.camera.SharedImage
+import com.teco.ventago.features.auth.domain.IAuthService
 import com.teco.ventago.features.product.domain.ProductService
 import com.teco.ventago.features.product.domain.model.AdditionalInfoCatalog
 import com.teco.ventago.features.product.domain.model.AdditionalInfoKey
@@ -29,12 +32,22 @@ import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.JsonPrimitive
 
 class EditItemViewModel (
+    private val authService: IAuthService,
     private val productService: ProductService,
 ) : ItemViewModel(productService) {
 
     private val itemId: Int?
 
     init {
+        updateState {
+            copy(
+                canManageItems = AuthzEvaluator.canAction(
+                    ActionKey.PRODUCTS_UPDATE,
+                    authService.getUserSync(),
+                    emptySet()
+                )
+            )
+        }
         loadGoodsCsv()
         val selectedCategoryId = productService.selectedCategoryId
         itemId = productService.selectedItemId
@@ -132,6 +145,10 @@ class EditItemViewModel (
     }
 
     override fun saveItem(image: SharedImage?) {
+        if (!uiState.value.canManageItems) {
+            showError()
+            return
+        }
         if (uiState.value.name.isBlank()) {
             updateState { copy(wrongName = true) }
             return

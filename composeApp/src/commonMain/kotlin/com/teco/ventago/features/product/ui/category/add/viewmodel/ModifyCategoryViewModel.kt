@@ -2,7 +2,10 @@ package com.teco.ventago.features.product.ui.category.add.viewmodel
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.teco.ventago.core.authz.ActionKey
+import com.teco.ventago.core.authz.AuthzEvaluator
 import com.teco.ventago.design_system.organism.LoadingState
+import com.teco.ventago.features.auth.domain.IAuthService
 import com.teco.ventago.features.product.domain.ProductService
 import com.teco.ventago.features.product.domain.model.Category
 import kotlinx.coroutines.Dispatchers
@@ -13,11 +16,19 @@ import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.launch
 //import utils.AnalyticsHelper
 
-class ModifyCategoryViewModel(private val productService: ProductService): ViewModel()  {
+class ModifyCategoryViewModel(
+    private val authService: IAuthService,
+    private val productService: ProductService
+): ViewModel()  {
     val state = AddCategoryState()
     var selectedCategory: Category? = null
 
     init {
+        state.canManageCategories.value = AuthzEvaluator.canAction(
+            ActionKey.PRODUCTS_MANAGE_CATEGORIES,
+            authService.getUserSync(),
+            emptySet()
+        )
         val selectedCategoryId = productService.selectedCategoryId
         if (selectedCategoryId == null) {
             state.goBack.value = true
@@ -56,6 +67,9 @@ class ModifyCategoryViewModel(private val productService: ProductService): ViewM
     }
 
     fun saveCategory() {
+        if (!AuthzEvaluator.canAction(ActionKey.PRODUCTS_MANAGE_CATEGORIES, authService.getUserSync(), emptySet())) {
+            return
+        }
         val name = state.name.value
         val desc = state.description.value
         if (name.isBlank()) {

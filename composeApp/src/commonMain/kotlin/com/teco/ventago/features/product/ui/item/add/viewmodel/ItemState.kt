@@ -42,6 +42,7 @@ data class ItemState(
     val active: Boolean = true,
     val selectedCategory: Category? = null,
     val selectedItem: Item? = null,
+    val canManageItems: Boolean = false,
 
     val wrongName: Boolean = false,
     val wrongPrice: Boolean = false,

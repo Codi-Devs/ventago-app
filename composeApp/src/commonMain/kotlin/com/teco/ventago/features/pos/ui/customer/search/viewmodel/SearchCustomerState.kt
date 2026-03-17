@@ -9,6 +9,7 @@ data class SearchCustomerState(
     val rucSearch: String = "",
     val nameSearch: String = "",
     val emailSearch: String = "",
+    val canAddCustomerAction: Boolean = false,
     override val loadingBottomSheet: LoadingBottomSheetState = LoadingBottomSheetState(),
 ) : LoadableState<SearchCustomerState>{
     override fun withLoading(state: LoadingBottomSheetState): SearchCustomerState {

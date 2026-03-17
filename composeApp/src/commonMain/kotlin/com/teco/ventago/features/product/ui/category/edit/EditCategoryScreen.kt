@@ -67,15 +67,20 @@ import ventago.composeapp.generated.resources.search
 
 
 @Composable
-fun EditCategoryActions(navigate: (PosScreens) -> Unit) {
-    IconButton(onClick = {
-        navigate(PosScreens.AddItemScreen)
-    }) {
-        Icon(
-            imageVector = Icons.Rounded.Add,
-            contentDescription = "",
-            tint = MaterialTheme.colorScheme.primary
-        )
+fun EditCategoryActions(
+    navigate: (PosScreens) -> Unit,
+    viewModel: EditCategoryViewModel = koinViewModel<EditCategoryViewModel>(),
+) {
+    if (viewModel.state.canManageCategories.value) {
+        IconButton(onClick = {
+            navigate(PosScreens.AddItemScreen)
+        }) {
+            Icon(
+                imageVector = Icons.Rounded.Add,
+                contentDescription = "",
+                tint = MaterialTheme.colorScheme.primary
+            )
+        }
     }
 }
 
@@ -116,14 +121,16 @@ fun EditCategoryScreen(
             Text(
                 text = viewModel.state.selectedCategory.value?.name ?: "", style = titleLarge()
             )
-            IconButton(onClick = {
-                navigate(PosScreens.ModifyCategoryScreen)
-            }) {
-                Icon(
-                    imageVector = Icons.Outlined.Edit,
-                    contentDescription = "",
-                    tint = MaterialTheme.colorScheme.primary,
-                )
+            if (viewModel.state.canManageCategories.value) {
+                IconButton(onClick = {
+                    navigate(PosScreens.ModifyCategoryScreen)
+                }) {
+                    Icon(
+                        imageVector = Icons.Outlined.Edit,
+                        contentDescription = "",
+                        tint = MaterialTheme.colorScheme.primary,
+                    )
+                }
             }
         }
 
@@ -156,12 +163,16 @@ fun EditCategoryScreen(
                     ),
                     reordering = false,
                     onClick = {
-                        viewModel.selectItem(item.itemId)
-                        navigate(PosScreens.EditItemScreen)
+                        if (viewModel.state.canManageCategories.value) {
+                            viewModel.selectItem(item.itemId)
+                            navigate(PosScreens.EditItemScreen)
+                        }
                     },
                     onOptionsClick = {
-                        selectedItem = item
-                        showItemEdit = true
+                        if (viewModel.state.canManageCategories.value) {
+                            selectedItem = item
+                            showItemEdit = true
+                        }
                     })
             }
         }

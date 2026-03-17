@@ -2,6 +2,9 @@ package com.teco.ventago.features.customers.ui.details.viewmodel
 
 import androidx.lifecycle.viewModelScope
 import com.teco.ventago.core.BaseViewModel
+import com.teco.ventago.core.authz.ActionKey
+import com.teco.ventago.core.authz.AuthzEvaluator
+import com.teco.ventago.features.auth.domain.IAuthService
 import com.teco.ventago.features.customers.domain.CustomerService
 import com.teco.ventago.features.customers.domain.models.CreateBillingAddressRequest
 import com.teco.ventago.features.customers.domain.models.UpdateBillingAddressRequest
@@ -15,6 +18,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
 class CustomerDetailsViewModel(
+    private val authService: IAuthService,
     private val customerService: CustomerService,
     private val orderService: OrderService,
     private val financialProfileService: FinancialProfileService,
@@ -24,6 +28,21 @@ class CustomerDetailsViewModel(
     private var pendingCustomerId: Long? = null
 
     init {
+        viewModelScope.launch {
+            authService.getUser().onEach { user ->
+                val canEditCustomerAction =
+                    AuthzEvaluator.canAction(ActionKey.CUSTOMERS_CREATE, user, emptySet())
+                val canDeleteCustomerAction =
+                    AuthzEvaluator.canAction(ActionKey.CUSTOMERS_DELETE, user, emptySet())
+                updateState {
+                    copy(
+                        canEditCustomerAction = canEditCustomerAction,
+                        canDeleteCustomerAction = canDeleteCustomerAction
+                    )
+                }
+            }.launchIn(this)
+        }
+
         viewModelScope.launch {
             financialProfileService.observe().onEach { profile ->
                 val newBusinessId = profile?.businessId ?: -1
@@ -122,6 +141,7 @@ class CustomerDetailsViewModel(
     }
 
     fun deleteCustomer() {
+        if (!uiState.value.canDeleteCustomerAction) return
         val customerId = uiState.value.customerId ?: return
         if (businessId <= 0) return
 
@@ -142,6 +162,7 @@ class CustomerDetailsViewModel(
     }
 
     fun createAddress(addressLine: String, locationCode: String?, email: String?) {
+        if (!uiState.value.canEditCustomerAction) return
         val customerId = uiState.value.customerId ?: return
         if (businessId <= 0) return
         val normalizedEmail = email?.trim()?.takeIf { it.isNotEmpty() }
@@ -171,6 +192,7 @@ class CustomerDetailsViewModel(
     }
 
     fun updateAddress(addressId: Long, addressLine: String, locationCode: String?, email: String?) {
+        if (!uiState.value.canEditCustomerAction) return
         val customerId = uiState.value.customerId ?: return
         if (businessId <= 0) return
         val normalizedEmail = email?.trim()?.takeIf { it.isNotEmpty() }
@@ -201,6 +223,7 @@ class CustomerDetailsViewModel(
     }
 
     fun deleteAddress(addressId: Long) {
+        if (!uiState.value.canEditCustomerAction) return
         val customerId = uiState.value.customerId ?: return
         if (businessId <= 0) return
 

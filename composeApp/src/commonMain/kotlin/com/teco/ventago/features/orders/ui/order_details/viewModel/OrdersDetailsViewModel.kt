@@ -4,6 +4,8 @@ import androidx.compose.runtime.Composable
 import androidx.lifecycle.viewModelScope
 import com.teco.ventago.core.BaseViewModel
 import com.teco.ventago.core.PdfSharer
+import com.teco.ventago.core.authz.ActionKey
+import com.teco.ventago.core.authz.AuthzEvaluator
 import com.teco.ventago.features.auth.domain.IAuthService
 import com.teco.ventago.features.business.domain.BusinessService
 import com.teco.ventago.features.business.domain.model.Business
@@ -20,6 +22,7 @@ import com.teco.ventago.viewModels
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.IO
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.flow.launchIn
 import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.launch
@@ -53,6 +56,19 @@ class OrdersDetailsViewModel(
     var business: Business? = null
 
     init {
+        viewModelScope.launch {
+            authService.getUser().collect { user ->
+                updateState {
+                    copy(
+                        canMarkPaid = AuthzEvaluator.canAction(
+                            ActionKey.ORDERS_MARK_PAID,
+                            user,
+                            emptySet()
+                        )
+                    )
+                }
+            }
+        }
         viewModelScope.launch {
             financialProfileService.observe().onEach { profile ->
                 profile?.let {
@@ -133,6 +149,7 @@ class OrdersDetailsViewModel(
     }
 
     fun getOrderPaymentLink() {
+        if (!uiState.value.canMarkPaid) return
         val order = uiState.value.order ?: return
         order.paymentLink?.let { link ->
             updateState {
@@ -288,6 +305,7 @@ class OrdersDetailsViewModel(
 
     /// Payment methods sheet handling
     fun showManualPaymentSheet(show: Boolean) {
+        if (show && !uiState.value.canMarkPaid) return
         val orderTotalCents = uiState.value.order?.totalAmount?.toLongCents()
         val current = uiState.value.manualPayment
         updateState {
@@ -357,6 +375,7 @@ class OrdersDetailsViewModel(
     /* ---------- Confirm action ---------- */
 
     fun onConfirmManualPayment() {
+        if (!uiState.value.canMarkPaid) return
         val state = _uiState.value
         val order = state.order ?: return
         val mp = state.manualPayment

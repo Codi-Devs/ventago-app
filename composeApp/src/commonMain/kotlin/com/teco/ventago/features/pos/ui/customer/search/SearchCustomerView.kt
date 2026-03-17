@@ -56,7 +56,11 @@ fun SearchCustomerView(
             when (event) {
                 SearchCustomerStateUiEvent.CustomerNotCreated -> TODO()
                 SearchCustomerStateUiEvent.CustomerNotFound -> {
-                    navigate(PosScreens.AddCustomerScreen)
+                    if (viewModel.uiState.value.canAddCustomerAction) {
+                        navigate(PosScreens.AddCustomerScreen)
+                    } else {
+                        navigate(PosScreens.CustomersScreen)
+                    }
                 }
                 is SearchCustomerStateUiEvent.CustomersFound -> {
                     navigate(PosScreens.CustomersScreen)

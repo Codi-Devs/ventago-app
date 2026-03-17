@@ -3,10 +3,13 @@ package com.teco.ventago.features.expenses.ui.details
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.teco.ventago.core.PdfSharer
+import com.teco.ventago.core.authz.ActionKey
+import com.teco.ventago.core.authz.AuthzEvaluator
 import com.teco.ventago.core.beta.BetaFeature
 import com.teco.ventago.core.beta.BetaService
 import com.teco.ventago.design_system.organism.LoadingState
 import com.teco.ventago.design_system.organism.LoadingBottomSheetState
+import com.teco.ventago.features.auth.domain.IAuthService
 import com.teco.ventago.features.expenses.domain.ExpenseConceptMode
 import com.teco.ventago.features.expenses.domain.ExpensesSelectionStore
 import com.teco.ventago.features.expenses.domain.ExpensesService
@@ -22,6 +25,7 @@ import com.teco.ventago.features.expenses.domain.models.requests.UpsertExpensePa
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.IO
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -33,20 +37,34 @@ import kotlinx.coroutines.withContext
 class ExpenseDetailsViewModel(
     private val expensesService: ExpensesService,
     private val pdfSharer: PdfSharer,
-    private val betaService: BetaService
+    private val betaService: BetaService,
+    private val authService: IAuthService,
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(ExpenseDetailsState())
     val uiState: StateFlow<ExpenseDetailsState> = _uiState.asStateFlow()
 
     init {
-        viewModelScope.launch {
-            betaService.accessFlow(BetaFeature.EXPENSES_QR)
-                .onEach { hasAccess ->
-                    _uiState.value = _uiState.value.copy(hasExpensesQr = hasAccess)
-                }
-                .launchIn(this)
-        }
+        authService.getUser()
+            .combine(betaService.features()) { user, betaResponse ->
+                val betaSnapshot = betaResponse?.features.orEmpty()
+                    .mapNotNull(BetaFeature::fromKey)
+                    .toSet()
+                Triple(
+                    AuthzEvaluator.canAction(ActionKey.EXPENSES_UPDATE, user, betaSnapshot),
+                    AuthzEvaluator.canAction(ActionKey.EXPENSES_DELETE, user, betaSnapshot),
+                    AuthzEvaluator.canAction(ActionKey.EXPENSES_UPDATE, user, betaSnapshot) &&
+                        BetaFeature.EXPENSES_QR in betaSnapshot
+                )
+            }
+            .onEach { (canUpdateExpenseAction, canDeleteExpenseAction, hasExpensesQr) ->
+                _uiState.value = _uiState.value.copy(
+                    canUpdateExpenseAction = canUpdateExpenseAction,
+                    canDeleteExpenseAction = canDeleteExpenseAction,
+                    hasExpensesQr = hasExpensesQr
+                )
+            }
+            .launchIn(viewModelScope)
     }
 
     fun loadExpense(expenseId: Long? = null, openCategorization: Boolean = false) {
@@ -72,6 +90,7 @@ class ExpenseDetailsViewModel(
     }
 
     fun deleteExpense() {
+        if (!canDeleteAction()) return
         val expenseId = _uiState.value.expense?.id ?: return
         viewModelScope.launch {
             _uiState.value = _uiState.value.copy(isDeleting = true, error = null)
@@ -102,6 +121,7 @@ class ExpenseDetailsViewModel(
         proofFileUrl: String? = null,
         proofFile: ExpenseProofFile? = null
     ) {
+        if (!canUpdateAction()) return
         val expenseId = _uiState.value.expense?.id ?: return
         viewModelScope.launch {
             _uiState.value = _uiState.value.copy(isSubmittingPayment = true, paymentError = null)
@@ -137,6 +157,7 @@ class ExpenseDetailsViewModel(
     }
 
     fun deletePayment(paymentId: Long) {
+        if (!canDeleteAction()) return
         val expenseId = _uiState.value.expense?.id ?: return
         viewModelScope.launch {
             try {
@@ -154,6 +175,7 @@ class ExpenseDetailsViewModel(
     }
 
     fun markPaymentAsPaid(payment: ExpensePayment) {
+        if (!canUpdateAction()) return
         val expenseId = _uiState.value.expense?.id ?: return
         val paymentId = payment.id ?: return
         viewModelScope.launch {
@@ -183,6 +205,7 @@ class ExpenseDetailsViewModel(
     }
 
     fun setEditingPayment(payment: ExpensePayment?) {
+        if (payment != null && !canUpdateAction()) return
         _uiState.value = _uiState.value.copy(editingPayment = payment)
     }
 
@@ -198,6 +221,7 @@ class ExpenseDetailsViewModel(
         proofFileUrl: String? = null,
         proofFile: ExpenseProofFile? = null
     ) {
+        if (!canUpdateAction()) return
         val expenseId = _uiState.value.expense?.id ?: return
         viewModelScope.launch {
             _uiState.value = _uiState.value.copy(isSubmittingPayment = true, paymentError = null)
@@ -256,10 +280,12 @@ class ExpenseDetailsViewModel(
     }
 
     fun setConceptSheetVisible(visible: Boolean) {
+        if (visible && !canUpdateAction()) return
         _uiState.value = _uiState.value.copy(showConceptSheet = visible, conceptError = null)
     }
 
     fun setConceptDefaultAccount(accountId: Long?, accountName: String?) {
+        if (!canUpdateAction()) return
         val editor = _uiState.value.conceptEditorState
         _uiState.value = _uiState.value.copy(
             conceptEditorState = editor.copy(
@@ -271,6 +297,7 @@ class ExpenseDetailsViewModel(
     }
 
     fun setConceptPerItem(enabled: Boolean) {
+        if (!canUpdateAction()) return
         val editor = _uiState.value.conceptEditorState
         _uiState.value = _uiState.value.copy(
             conceptEditorState = editor.copy(applyConceptPerItem = enabled),
@@ -279,6 +306,7 @@ class ExpenseDetailsViewModel(
     }
 
     fun setConceptItemAccount(index: Int, accountId: Long?, accountName: String?) {
+        if (!canUpdateAction()) return
         val editor = _uiState.value.conceptEditorState
         if (index !in editor.items.indices) return
         val updatedItems = editor.items.toMutableList()
@@ -293,6 +321,7 @@ class ExpenseDetailsViewModel(
     }
 
     fun applyConceptToAllItems() {
+        if (!canUpdateAction()) return
         val state = _uiState.value
         val editor = state.conceptEditorState
         val accountId = editor.defaultAccountId
@@ -315,6 +344,7 @@ class ExpenseDetailsViewModel(
     }
 
     fun saveConcepts() {
+        if (!canUpdateAction()) return
         val expense = _uiState.value.expense ?: return
         val editor = _uiState.value.conceptEditorState
 
@@ -385,6 +415,10 @@ class ExpenseDetailsViewModel(
             }
         }
     }
+
+    private fun canUpdateAction(): Boolean = _uiState.value.canUpdateExpenseAction
+
+    private fun canDeleteAction(): Boolean = _uiState.value.canDeleteExpenseAction
 
     fun consumeSnackbar() {
         _uiState.value = _uiState.value.copy(snackbarMessage = null)

@@ -119,6 +119,7 @@ fun ItemScreenActions(backStackEntry: NavBackStackEntry?) {
     val uiState by viewModel.uiState.collectAsState()
 
     if (!uiState.showScanner) {
+        if (!uiState.canManageItems) return
         Switch(checked = uiState.active, onCheckedChange = {
             viewModel.onActiveChange(it)
         })
@@ -520,23 +521,25 @@ fun ItemScreenContent(
             )
         }
 
-        ButtonM(
-            onClick = {
-                analytics.logEvent("edit_item")
+        if (uiState.canManageItems) {
+            ButtonM(
+                onClick = {
+                    analytics.logEvent("edit_item")
                     viewModel.saveItem(sharedImage)
-            },
-            modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
-        ) {
-            Text(
-                text = buttonActionTitle, style = TextStyle(
-                    fontSize = 16.sp,
-                    lineHeight = 24.sp,
-                    color = MaterialTheme.colorScheme.onPrimary,
-                    fontFamily = latoFontFamily(),
-                    fontWeight = FontWeight.W700,
-                    letterSpacing = 0.02.sp,
+                },
+                modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+            ) {
+                Text(
+                    text = buttonActionTitle, style = TextStyle(
+                        fontSize = 16.sp,
+                        lineHeight = 24.sp,
+                        color = MaterialTheme.colorScheme.onPrimary,
+                        fontFamily = latoFontFamily(),
+                        fontWeight = FontWeight.W700,
+                        letterSpacing = 0.02.sp,
+                    )
                 )
-            )
+            }
         }
     }
 

@@ -9,6 +9,8 @@ import com.teco.ventago.features.orders.domain.models.Order
 data class CustomerDetailsState(
     val customerId: Long? = null,
     val customer: CustomerDetails? = null,
+    val canEditCustomerAction: Boolean = false,
+    val canDeleteCustomerAction: Boolean = false,
     val addresses: List<CustomerAddress> = emptyList(),
     val recentOrders: List<Order> = emptyList(),
     val ordersCount: Long = 0,

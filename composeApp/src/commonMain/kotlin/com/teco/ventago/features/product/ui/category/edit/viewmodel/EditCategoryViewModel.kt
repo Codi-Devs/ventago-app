@@ -2,6 +2,8 @@ package com.teco.ventago.features.product.ui.category.edit.viewmodel
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.teco.ventago.core.authz.ActionKey
+import com.teco.ventago.core.authz.AuthzEvaluator
 import com.teco.ventago.design_system.organism.LoadingState
 import com.teco.ventago.features.auth.domain.IAuthService
 import com.teco.ventago.features.business.domain.BusinessService
@@ -32,6 +34,11 @@ class EditCategoryViewModel(
         authJob = viewModelScope.launch {
             authService.getUser().cancellable().collect {
                 state.isPremium.value = it?.premium ?: false
+                state.canManageCategories.value = AuthzEvaluator.canAction(
+                    ActionKey.PRODUCTS_MANAGE_CATEGORIES,
+                    it,
+                    emptySet()
+                )
             }
         }
 
@@ -69,6 +76,7 @@ class EditCategoryViewModel(
     }
 
     fun selectItem(itemId: Int) {
+        if (!state.canManageCategories.value) return
         productService.selectedItemId = itemId
     }
 
@@ -101,6 +109,7 @@ class EditCategoryViewModel(
     }
 
     fun removeItem(itemId: Int) {
+        if (!state.canManageCategories.value) return
         if (itemId <= 0) return
         state.showLoading("Eliminando elemento")
         viewModelScope.launch(Dispatchers.IO) {
@@ -119,6 +128,7 @@ class EditCategoryViewModel(
     }
 
     fun activateItem(itemId: Int, active: Boolean) {
+        if (!state.canManageCategories.value) return
         if (itemId <= 0) return
         val item = state.items.value.firstOrNull { it.itemId == itemId }
         item?.let {

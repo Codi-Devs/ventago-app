@@ -55,6 +55,8 @@ data class SettingsState(
 
     // Quotes
     val hasQuotesAccess: Boolean = false,
+    val canModifySettings: Boolean = false,
+    val canModifyQuoteSettings: Boolean = false,
     val actualDefaultQuoteAdditionalInfo: String = "",
     val defaultQuoteAdditionalInfo: String = "",
     val quoteAdditionalInfoWasEdited: Boolean = false,

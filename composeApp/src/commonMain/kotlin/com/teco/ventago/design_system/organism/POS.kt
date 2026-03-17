@@ -320,13 +320,20 @@ fun CartOrganism(
                 // Items Section
                 item { InverseTicketDivider() }
                 items(uiState.cart, key = { it.lineId }) { cartItem ->
+                    val rowModifier = Modifier
+                        .padding(start = 16.dp, end = 16.dp, top = 16.dp, bottom = 16.dp)
+                        .let { baseModifier ->
+                            if (uiState.canEditProduct) {
+                                baseModifier.clickable(onClick = {
+                                    itemToModify = cartItem
+                                    showModifyItemDialog = true
+                                })
+                            } else {
+                                baseModifier
+                            }
+                        }
                     Row(
-                        modifier = Modifier.padding(
-                            start = 16.dp, end = 16.dp, top = 16.dp, bottom = 16.dp
-                        ).clickable(onClick = {
-                            itemToModify = cartItem
-                            showModifyItemDialog = true
-                        })
+                        modifier = rowModifier
                     ) {
                         Column(
                             modifier = Modifier.weight(1f)
@@ -851,15 +858,17 @@ fun PosListOrganism(
                     .padding(top = 8.dp, bottom = 8.dp),
                 state = lazyListState,
             ) {
-                item(key = "new_product") {
-                    PosPersonalizedProductCard(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(
-                                start = 16.dp, end = 16.dp, top = 8.dp, bottom = 8.dp
-                            ),
-                        onClick = { navigate(PosScreens.AddItemScreen) }
-                    )
+                if (uiState.canUseCustomProduct) {
+                    item(key = "new_product") {
+                        PosPersonalizedProductCard(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(
+                                    start = 16.dp, end = 16.dp, top = 8.dp, bottom = 8.dp
+                                ),
+                            onClick = { navigate(PosScreens.AddItemScreen) }
+                        )
+                    }
                 }
 
                 items(uiState.visibleItems, key = { it.itemId }) { item ->
@@ -892,11 +901,13 @@ fun PosListOrganism(
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
                     verticalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
-                    item(key = "new_product") {
-                        PosPersonalizedProductGridCard(
-                            modifier = Modifier.padding(horizontal = 8.dp),
-                            onClick = { navigate(PosScreens.AddItemScreen) }
-                        )
+                    if (uiState.canUseCustomProduct) {
+                        item(key = "new_product") {
+                            PosPersonalizedProductGridCard(
+                                modifier = Modifier.padding(horizontal = 8.dp),
+                                onClick = { navigate(PosScreens.AddItemScreen) }
+                            )
+                        }
                     }
                     gridItems(uiState.visibleItems, key = { it.itemId }) { item ->
                         PosItemGridCard(

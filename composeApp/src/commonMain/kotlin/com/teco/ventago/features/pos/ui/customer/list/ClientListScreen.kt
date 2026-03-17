@@ -45,17 +45,22 @@ import ventago.composeapp.generated.resources.pos_unlink_client
 @Composable
 fun ClientListActions(
     backStackEntry: NavBackStackEntry?,
-    navigate: (PosScreens) -> Unit) {
+    navigate: (PosScreens) -> Unit,
+    viewModel: ClientListViewModel = koinViewModel(),
+) {
+    val uiState by viewModel.uiState.collectAsState()
 
-    IconButton(onClick = {
-        navigate(PosScreens.AddCustomerScreen)
-    }
-    ) {
-        Icon(
-            imageVector = Icons.Rounded.Add,
-            contentDescription = "",
-            tint = MaterialTheme.colorScheme.primary
-        )
+    if (uiState.canAddCustomerAction) {
+        IconButton(onClick = {
+            navigate(PosScreens.AddCustomerScreen)
+        }
+        ) {
+            Icon(
+                imageVector = Icons.Rounded.Add,
+                contentDescription = "",
+                tint = MaterialTheme.colorScheme.primary
+            )
+        }
     }
 }
 

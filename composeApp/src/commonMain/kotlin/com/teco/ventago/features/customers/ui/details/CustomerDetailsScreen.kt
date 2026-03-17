@@ -202,6 +202,7 @@ fun CustomerDetailsScreen(
 
             BillingAddressesCard(
                 addresses = uiState.addresses,
+                canManageAddresses = uiState.canEditCustomerAction,
                 onAddAddress = {
                     editingAddressId = null
                     addressLineInput = ""
@@ -232,20 +233,24 @@ fun CustomerDetailsScreen(
                 onSeeAllOrders = onSeeAllOrders
             )
 
-            ButtonM(
-                onClick = { onEdit(customer.id) },
-                containerColor = MaterialTheme.colorScheme.secondaryContainer,
-                contentColor = MaterialTheme.colorScheme.onSecondaryContainer
-            ) {
-                Text(stringResource(Res.string.customers_edit_customer))
+            if (uiState.canEditCustomerAction) {
+                ButtonM(
+                    onClick = { onEdit(customer.id) },
+                    containerColor = MaterialTheme.colorScheme.secondaryContainer,
+                    contentColor = MaterialTheme.colorScheme.onSecondaryContainer
+                ) {
+                    Text(stringResource(Res.string.customers_edit_customer))
+                }
             }
 
-            OutlinedButtonM(
-                onClick = { showDeleteDialog = true },
-                border = BorderStroke(1.dp, MaterialTheme.colorScheme.error),
-                contentColor = MaterialTheme.colorScheme.error
-            ) {
-                Text(stringResource(Res.string.customers_delete_customer))
+            if (uiState.canDeleteCustomerAction) {
+                OutlinedButtonM(
+                    onClick = { showDeleteDialog = true },
+                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.error),
+                    contentColor = MaterialTheme.colorScheme.error
+                ) {
+                    Text(stringResource(Res.string.customers_delete_customer))
+                }
             }
         }
     }
@@ -416,6 +421,7 @@ private fun customerRetentionLabel(customer: CustomerDetails): String {
 @Composable
 private fun BillingAddressesCard(
     addresses: List<CustomerAddress>,
+    canManageAddresses: Boolean,
     onAddAddress: () -> Unit,
     onEditAddress: (CustomerAddress) -> Unit,
     onDeleteAddress: (Long) -> Unit,
@@ -443,6 +449,7 @@ private fun BillingAddressesCard(
                 addresses.forEachIndexed { index, address ->
                     AddressRow(
                         address = address,
+                        canManageAddresses = canManageAddresses,
                         onEdit = { onEditAddress(address) },
                         onDelete = { onDeleteAddress(address.id) }
                     )
@@ -456,8 +463,10 @@ private fun BillingAddressesCard(
             }
 
             Spacer(modifier = Modifier.height(4.dp))
-            ButtonM(onClick = onAddAddress) {
-                Text(stringResource(Res.string.customers_add_address))
+            if (canManageAddresses) {
+                ButtonM(onClick = onAddAddress) {
+                    Text(stringResource(Res.string.customers_add_address))
+                }
             }
         }
     }
@@ -466,6 +475,7 @@ private fun BillingAddressesCard(
 @Composable
 private fun AddressRow(
     address: CustomerAddress,
+    canManageAddresses: Boolean,
     onEdit: () -> Unit,
     onDelete: () -> Unit,
 ) {
@@ -530,19 +540,21 @@ private fun AddressRow(
             }
         }
 
-        Row {
-            IconButton(onClick = onEdit) {
-                Icon(
-                    imageVector = Icons.Rounded.Edit,
-                    contentDescription = stringResource(Res.string.edit)
-                )
-            }
-            IconButton(onClick = onDelete) {
-                Icon(
-                    imageVector = Icons.Rounded.Delete,
-                    contentDescription = stringResource(Res.string.delete),
-                    tint = MaterialTheme.colorScheme.error
-                )
+        if (canManageAddresses) {
+            Row {
+                IconButton(onClick = onEdit) {
+                    Icon(
+                        imageVector = Icons.Rounded.Edit,
+                        contentDescription = stringResource(Res.string.edit)
+                    )
+                }
+                IconButton(onClick = onDelete) {
+                    Icon(
+                        imageVector = Icons.Rounded.Delete,
+                        contentDescription = stringResource(Res.string.delete),
+                        tint = MaterialTheme.colorScheme.error
+                    )
+                }
             }
         }
     }

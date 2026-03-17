@@ -94,10 +94,12 @@ fun PosScreen(
             QuoteSelectionStore.startOrderFlowFromQuote = false
             QuoteSelectionStore.startQuoteFlow = false
 
-            viewModel.resetForNewSale()
-            viewModel.setFlowMode(FlowMode.SALE, quoteId = null)
-            if (quoteId != null) {
-                viewModel.startSaleFromQuote(quoteId)
+            if (uiState.canCreateInvoice || uiState.canCreateDraft) {
+                viewModel.resetForNewSale()
+                viewModel.setFlowMode(FlowMode.SALE, quoteId = null)
+                if (quoteId != null) {
+                    viewModel.startSaleFromQuote(quoteId)
+                }
             }
             return@LaunchedEffect
         }

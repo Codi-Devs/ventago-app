@@ -3,16 +3,14 @@ package com.teco.ventago.features.auth.ui.login.viewmodel
 import androidx.lifecycle.viewModelScope
 import com.teco.ventago.core.BaseViewModel
 import com.teco.ventago.core.firebase.AnalyticsService
-import com.teco.ventago.design_system.organism.LoadingState
 import com.teco.ventago.features.auth.data.provider.getGoogleAuthProvider
 import com.teco.ventago.features.auth.domain.IAuthService
 import com.teco.ventago.features.auth.domain.model.requests.EmailLoginRequest
-import com.teco.ventago.features.auth.ui.login.LoginScreen
 import com.teco.ventago.utils.ApiError
 import com.teco.ventago.utils.AuthException
+import com.teco.ventago.utils.MustChangePasswordException
 import com.teco.ventago.utils.emailRegex
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.IO
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -40,6 +38,16 @@ class LoginViewModel(
         updateState { copy(showPassword = !this.showPassword) }
     }
 
+    fun backToLogin() {
+        updateState {
+            copy(
+                mustChangePasswordBlocked = false,
+                password = "",
+                invalidPassword = false
+            )
+        }
+    }
+
     fun googleLogin(idToken: String) {
         showLoading()
         viewModelScope.launch {
@@ -60,6 +68,17 @@ class LoginViewModel(
                             emitEvent(LoginUiEvent.MissingBusiness)
                         } else {
                             emitEvent(LoginUiEvent.MakingLoginSuccess)
+                        }
+                    }
+                } catch (_: MustChangePasswordException) {
+                    withContext(Dispatchers.Main) {
+                        hideLoading()
+                        updateState {
+                            copy(
+                                mustChangePasswordBlocked = true,
+                                password = "",
+                                invalidPassword = false
+                            )
                         }
                     }
                 } catch (e: AuthException) {
@@ -119,6 +138,17 @@ class LoginViewModel(
                         analytics.setUserId(response.userId)
                         analytics.setDefaultEventParameters(analytics.defaultBundle(response))
                         analytics.logEvent("user_login", analytics.authBundle(response, false))
+                    }
+                } catch (_: MustChangePasswordException) {
+                    withContext(Dispatchers.Main) {
+                        hideLoading()
+                        updateState {
+                            copy(
+                                mustChangePasswordBlocked = true,
+                                password = "",
+                                invalidPassword = false
+                            )
+                        }
                     }
                 } catch (e: AuthException) {
                     handleAuthException(e)

@@ -2,6 +2,8 @@ package com.teco.ventago.features.product.ui.category.add.viewmodel
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.teco.ventago.core.authz.ActionKey
+import com.teco.ventago.core.authz.AuthzEvaluator
 import com.teco.ventago.design_system.organism.LoadingState
 import com.teco.ventago.features.auth.domain.IAuthService
 import com.teco.ventago.features.business.domain.BusinessService
@@ -19,6 +21,14 @@ class AddCategoryViewModel(
 
     val state = AddCategoryState()
 
+    init {
+        state.canManageCategories.value = AuthzEvaluator.canAction(
+            ActionKey.PRODUCTS_MANAGE_CATEGORIES,
+            authService.getUserSync(),
+            emptySet()
+        )
+    }
+
     fun loadingDone() {
         state.loadingState.value = state.loadingState.value.copy(state = LoadingState.HIDDEN)
     }
@@ -33,6 +43,9 @@ class AddCategoryViewModel(
     }
 
     fun createCategory() {
+        if (!AuthzEvaluator.canAction(ActionKey.PRODUCTS_MANAGE_CATEGORIES, authService.getUserSync(), emptySet())) {
+            return
+        }
         val name = state.name.value
         val desc = state.description.value
         if (name.isBlank()) {

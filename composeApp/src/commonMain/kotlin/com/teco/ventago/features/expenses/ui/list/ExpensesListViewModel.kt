@@ -2,8 +2,11 @@ package com.teco.ventago.features.expenses.ui.list
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.teco.ventago.core.authz.ActionKey
+import com.teco.ventago.core.authz.AuthzEvaluator
 import com.teco.ventago.core.beta.BetaFeature
 import com.teco.ventago.core.beta.BetaService
+import com.teco.ventago.features.auth.domain.IAuthService
 import com.teco.ventago.features.expenses.domain.ExpensesService
 import com.teco.ventago.features.expenses.domain.models.Expense
 import com.teco.ventago.features.expenses.domain.buildExpenseConceptLabel
@@ -12,6 +15,7 @@ import com.teco.ventago.features.expenses.domain.models.ExpenseMerchant
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.IO
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -25,6 +29,7 @@ import kotlinx.serialization.json.Json
 
 class ExpensesListViewModel(
     private val expensesService: ExpensesService,
+    private val authService: IAuthService,
     private val betaService: BetaService
 ) : ViewModel() {
 
@@ -34,10 +39,23 @@ class ExpensesListViewModel(
 
     init {
         viewModelScope.launch {
-            betaService.accessFlow(BetaFeature.EXPENSES_QR)
-                .onEach { hasAccess ->
-                    _uiState.value = _uiState.value.copy(hasExpensesQr = hasAccess)
-                    if (hasAccess) loadCrawlJobs()
+            authService.getUser()
+                .combine(betaService.features()) { user, betaResponse ->
+                    val betaSnapshot = betaResponse?.features.orEmpty()
+                        .mapNotNull(BetaFeature::fromKey)
+                        .toSet()
+                    val canCreateExpense = AuthzEvaluator.canAction(ActionKey.EXPENSES_CREATE, user, betaSnapshot)
+                    Pair(
+                        canCreateExpense,
+                        canCreateExpense && BetaFeature.EXPENSES_QR in betaSnapshot
+                    )
+                }
+                .onEach { (canCreateExpense, hasQrImportAccess) ->
+                    _uiState.value = _uiState.value.copy(
+                        canCreateExpense = canCreateExpense,
+                        hasExpensesQr = hasQrImportAccess
+                    )
+                    if (hasQrImportAccess) loadCrawlJobs()
                 }
                 .launchIn(this)
         }

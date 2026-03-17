@@ -411,12 +411,14 @@ fun OrderDetailsScreen(
                             Text("Generar factura electrónica")
                         }
                     } else {
-                        ButtonM(onClick = {
-                            viewModel.showManualPaymentSheet(true)
-                        }) {
-                            Text("Registrar pago manual")
+                        if (uiState.canMarkPaid) {
+                            ButtonM(onClick = {
+                                viewModel.showManualPaymentSheet(true)
+                            }) {
+                                Text("Registrar pago manual")
+                            }
                         }
-                        if (!order.paymentLink.isNullOrBlank()) {
+                        if (!order.paymentLink.isNullOrBlank() && uiState.canMarkPaid) {
                             if (uiState.loadingPaymentLink) {
                                 Box(
                                     modifier = Modifier

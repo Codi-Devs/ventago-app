@@ -449,10 +449,16 @@
     <string name="resend_email">Resend email</string>
     <string name="google" translatable="false">Google</string>
     <string name="prompt_password">Password</string>
+    <string name="login_must_change_password_title">Necesitas cambiar tu contraseña</string>
+    <string name="login_must_change_password_description">Tu cuenta tiene una contraseña temporal. Para continuar, inicia sesión en la versión web de VentaGo y cambia tu contraseña. Luego vuelve a la app e inicia sesión nuevamente.</string>
+    <string name="login_back_to_login">Volver al inicio de sesión</string>
     <string name="go_register">Go to register</string>
     <string name="email_not_found">The email %1$s do not exists in VentaGo app. Do you want to register instead of?</string>
     <string name="sign_out">Sign Out</string>
     <string name="delete_account">Delete Account</string>
+    <string name="retry">Retry</string>
+    <string name="authz_access_denied_title">Access restricted</string>
+    <string name="authz_access_denied_message">Your account does not have permission to open any available screen in the app right now.</string>
 
     <!--String Activity forgot password-->
     <string name="recover_password">Recover password</string>

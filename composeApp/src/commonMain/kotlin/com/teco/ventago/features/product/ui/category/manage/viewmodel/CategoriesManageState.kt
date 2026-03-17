@@ -9,6 +9,7 @@ import kotlinx.coroutines.withContext
 
 class CategoriesManageState {
     val categories = mutableStateOf(listOf<Category>())
+    val canManageCategories = mutableStateOf(false)
 
     val loadingState = mutableStateOf(LoadingBottomSheetState())
 

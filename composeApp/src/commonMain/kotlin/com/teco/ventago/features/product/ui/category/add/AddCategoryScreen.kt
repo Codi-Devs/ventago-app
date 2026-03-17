@@ -92,20 +92,22 @@ fun AddCategoryScreen(
                 showHelpDialog = true
             })
 
-        ButtonM(onClick = {
-            analytics.logEvent("add_category")
-            viewModel.createCategory()
-        }) {
-            Text(
-                text = stringResource(Res.string.add_new_category), style = TextStyle(
-                    fontSize = 16.sp,
-                    lineHeight = 24.sp,
-                    color = MaterialTheme.colorScheme.onPrimary,
-                    fontFamily = latoFontFamily(),
-                    fontWeight = FontWeight.W700,
-                    letterSpacing = 0.02.sp,
+        if (viewModel.state.canManageCategories.value) {
+            ButtonM(onClick = {
+                analytics.logEvent("add_category")
+                viewModel.createCategory()
+            }) {
+                Text(
+                    text = stringResource(Res.string.add_new_category), style = TextStyle(
+                        fontSize = 16.sp,
+                        lineHeight = 24.sp,
+                        color = MaterialTheme.colorScheme.onPrimary,
+                        fontFamily = latoFontFamily(),
+                        fontWeight = FontWeight.W700,
+                        letterSpacing = 0.02.sp,
+                    )
                 )
-            )
+            }
         }
 
     }
@@ -144,4 +146,3 @@ fun AddCategoryScreen(
         }
     }
 }
-

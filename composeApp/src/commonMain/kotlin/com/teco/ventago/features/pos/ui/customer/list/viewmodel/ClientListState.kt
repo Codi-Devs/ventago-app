@@ -8,6 +8,7 @@ import com.teco.ventago.features.customers.domain.models.CustomerListItem
 data class ClientListState(
     val customers: Paged<CustomerListItem> = Paged(0, 0, 0, emptyList()),
     val selectedCustomer: CustomerListItem? = null,
+    val canAddCustomerAction: Boolean = false,
     val invoicingEnabled: Boolean = false,
     val isLoading: Boolean = true,
     override val loadingBottomSheet: LoadingBottomSheetState = LoadingBottomSheetState(),

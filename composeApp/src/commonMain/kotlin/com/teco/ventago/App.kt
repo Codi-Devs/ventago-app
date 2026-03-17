@@ -59,6 +59,9 @@ import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import com.teco.ventago.core.SnackbarService
 import com.teco.ventago.core.LocalStorage
+import com.teco.ventago.core.authz.AuthzEvaluator
+import com.teco.ventago.core.beta.BetaFeature
+import com.teco.ventago.core.beta.BetaService
 import com.teco.ventago.core.flags.IFlagsService
 import com.teco.ventago.core.firebase.AnalyticsService
 import com.teco.ventago.design_system.molecules.AppChromeState
@@ -68,14 +71,19 @@ import com.teco.ventago.design_system.molecules.flags.MaintenanceModeOverlay
 import com.teco.ventago.design_system.molecules.rememberAppChromeState
 import com.teco.ventago.design_system.theme.DigitalMenuTheme
 import com.teco.ventago.design_system.theme.cardContainerColor
+import com.teco.ventago.features.auth.domain.IAuthService
 import com.teco.ventago.features.pos.ui.viewmodel.FlowMode
 import com.teco.ventago.features.pos.ui.viewmodel.PosState
 import com.teco.ventago.features.pos.ui.viewmodel.PosViewModel
 import com.teco.ventago.features.payments.ui.yappy.viewmodel.YappyViewModel
+import com.teco.ventago.navigation.BottomNavKey
 import com.teco.ventago.navigation.LocalNavController
 import com.teco.ventago.navigation.Navigation
 import com.teco.ventago.navigation.PosScreens
+import com.teco.ventago.navigation.fallbackScreenFor
+import com.teco.ventago.navigation.routeKeyForScreen
 import com.teco.ventago.navigation.toPosScreenOrNull
+import com.teco.ventago.navigation.visibleBottomNavKeys
 import io.ktor.util.reflect.instanceOf
 import org.jetbrains.compose.resources.stringResource
 import org.jetbrains.compose.ui.tooling.preview.Preview
@@ -108,13 +116,24 @@ fun App(
     snackbarService.hostState = snackbarHostState
     val backStackEntry by navController.currentBackStackEntryAsState()
     val currentRoute = backStackEntry?.destination?.route
-    println("ASDADS currentRoute: $currentRoute")
     val currentScreen = currentRoute?.toPosScreenOrNull() ?: PosScreens.LoginScreen
-    println("ASDADS currentScreen: $currentScreen")
     val appChrome = rememberAppChromeState()
     val flagsService = koinInject<IFlagsService>()
+    val authService = koinInject<IAuthService>()
+    val betaService = koinInject<BetaService>()
     val localStorage: LocalStorage = koinInject()
     val flagsState by flagsService.flags().collectAsState()
+    val currentUser by authService.getUser().collectAsState(initial = null)
+    val betaResponse by betaService.features().collectAsState()
+    val betaSnapshot = remember(betaResponse) {
+        betaResponse?.features.orEmpty()
+            .mapNotNull(BetaFeature::fromKey)
+            .toSet()
+    }
+    val bottomNavKeys = remember(currentUser, betaSnapshot) {
+        visibleBottomNavKeys(currentUser, betaSnapshot)
+    }
+    val currentRouteKey = remember(currentScreen) { routeKeyForScreen(currentScreen) }
     val summaryHintSeenKey = remember(mainState.business?.businessId, mainState.isAuthenticated) {
         if (mainState.isAuthenticated) {
             "$SUMMARY_TAB_HINT_SEEN_KEY_PREFIX:${mainState.business?.businessId ?: "default"}"
@@ -160,7 +179,6 @@ fun App(
             lastBucket = currentBucket
             didInitialRedirect = true
 
-            println("ASDADS invoiceActive ${currentBucket.invoiceActive}")
             val target = if (currentBucket.authed && currentBucket.hasBusiness && currentBucket.invoiceActive) {
                 PosScreens.HomeScreen.name
             } else if (currentBucket.authed && !currentBucket.hasBusiness) {
@@ -174,7 +192,6 @@ fun App(
             // Only jump if we're not already there
             val currentRoute = backStackEntry?.destination?.route
             if (currentRoute != target) {
-                println("ASDADS navigating to $target")
                 navController.navigate(target) {
                     // Clear the stack to the start of the graph (safe alternative to popUpTo(0))
                     popUpTo(navController.graph.findStartDestination().id) { inclusive = true }
@@ -187,8 +204,10 @@ fun App(
     LaunchedEffect(mainState.isAuthenticated) {
         if (mainState.isAuthenticated) {
             flagsService.initialize()
+            betaService.getFeatures()
         } else {
             flagsService.destroy()
+            betaService.clear()
         }
     }
 
@@ -196,6 +215,28 @@ fun App(
         if (currentScreen == PosScreens.SummaryScreen && showSummaryHintDot) {
             localStorage.set(summaryHintSeenKey, true)
             showSummaryHintDot = false
+        }
+    }
+
+    LaunchedEffect(graphReady, currentRoute, currentRouteKey, currentUser, betaSnapshot, currentBucket) {
+        if (!graphReady || !currentBucket.authed || !currentBucket.hasBusiness || !currentBucket.invoiceActive) {
+            return@LaunchedEffect
+        }
+        if (currentUser == null) {
+            return@LaunchedEffect
+        }
+        val routeKey = currentRouteKey ?: return@LaunchedEffect
+        if (AuthzEvaluator.canRoute(routeKey, currentUser, betaSnapshot)) {
+            return@LaunchedEffect
+        }
+        val fallback = fallbackScreenFor(currentUser, betaSnapshot) ?: PosScreens.UnauthorizedScreen
+        if (currentRoute == fallback.name) {
+            return@LaunchedEffect
+        }
+        val popTarget = navController.currentDestination?.id ?: navController.graph.findStartDestination().id
+        navController.navigate(fallback.name) {
+            popUpTo(popTarget) { inclusive = true }
+            launchSingleTop = true
         }
     }
 
@@ -358,11 +399,8 @@ fun App(
                         }
 
                     }?: run {
-                        if (currentScreen != PosScreens.HomeScreen
-                            && currentScreen != PosScreens.SummaryScreen
-                            && currentScreen != PosScreens.CategoriesManageScreen
-                            && currentScreen != PosScreens.SettingsScreen
-                            && currentScreen != PosScreens.OrdersScreen)
+                        val visibleBottomScreens = bottomNavKeys.map(BottomNavKey::selectedScreen)
+                        if (currentScreen !in visibleBottomScreens || bottomNavKeys.isEmpty())
                             return@Scaffold
 
                         NavigationBar(
@@ -374,107 +412,92 @@ fun App(
                             tonalElevation = 8.dp,
 
                             ) {
-                            NavigationBarItem(
-                                selected = currentScreen == PosScreens.HomeScreen,
-                                onClick = {
-                                    if (currentScreen != PosScreens.HomeScreen) {
-                                        navController.navigate(PosScreens.HomeScreen.name)
-                                    }
-                                },
-                                icon = {
-                                    Icon(
-                                        imageVector = if (currentScreen == PosScreens.HomeScreen)
-                                            Icons.Filled.Home else Icons.Outlined.Home,
-                                        contentDescription = "Home"
-                                    )
-                                },
-                                label = {
-                                    Text("Home")
-                                }
-                            )
-                            NavigationBarItem(
-                                selected = currentScreen == PosScreens.SummaryScreen,
-                                onClick = {
-                                    if (currentScreen != PosScreens.SummaryScreen) {
-                                        navController.navigate(PosScreens.SummaryScreen.name)
-                                    }
-                                },
-                                icon = {
-                                    BadgedBox(
-                                        badge = {
-                                            if (showSummaryHintDot) {
-                                                Badge(
-                                                    containerColor = MaterialTheme.colorScheme.secondary,
-                                                    contentColor = MaterialTheme.colorScheme.secondary
+                            bottomNavKeys.forEach { item ->
+                                NavigationBarItem(
+                                    selected = currentScreen == item.selectedScreen,
+                                    onClick = {
+                                        if (currentScreen != item.selectedScreen) {
+                                            navController.navigate(item.destinationScreen.name)
+                                        }
+                                    },
+                                    icon = {
+                                        when (item) {
+                                            BottomNavKey.HOME -> {
+                                                Icon(
+                                                    imageVector = if (currentScreen == item.selectedScreen) {
+                                                        Icons.Filled.Home
+                                                    } else {
+                                                        Icons.Outlined.Home
+                                                    },
+                                                    contentDescription = "Home"
+                                                )
+                                            }
+                                            BottomNavKey.SUMMARY -> {
+                                                BadgedBox(
+                                                    badge = {
+                                                        if (showSummaryHintDot) {
+                                                            Badge(
+                                                                containerColor = MaterialTheme.colorScheme.secondary,
+                                                                contentColor = MaterialTheme.colorScheme.secondary
+                                                            )
+                                                        }
+                                                    }
+                                                ) {
+                                                    Icon(
+                                                        imageVector = if (currentScreen == item.selectedScreen) {
+                                                            Icons.Filled.Assessment
+                                                        } else {
+                                                            Icons.Outlined.Assessment
+                                                        },
+                                                        contentDescription = "Resumen"
+                                                    )
+                                                }
+                                            }
+                                            BottomNavKey.ORDERS -> {
+                                                Icon(
+                                                    imageVector = if (currentScreen == item.selectedScreen) {
+                                                        Icons.Filled.ReceiptLong
+                                                    } else {
+                                                        Icons.Outlined.ReceiptLong
+                                                    },
+                                                    contentDescription = "Facturas"
+                                                )
+                                            }
+                                            BottomNavKey.PRODUCTS -> {
+                                                Icon(
+                                                    imageVector = if (currentScreen == item.selectedScreen) {
+                                                        Icons.Filled.Inventory
+                                                    } else {
+                                                        Icons.Outlined.Inventory
+                                                    },
+                                                    contentDescription = "Productos"
+                                                )
+                                            }
+                                            BottomNavKey.SETTINGS -> {
+                                                Icon(
+                                                    imageVector = if (currentScreen == item.selectedScreen) {
+                                                        Icons.Filled.Settings
+                                                    } else {
+                                                        Icons.Outlined.Settings
+                                                    },
+                                                    contentDescription = "Settings"
                                                 )
                                             }
                                         }
-                                    ) {
-                                        Icon(
-                                            imageVector = if (currentScreen == PosScreens.SummaryScreen)
-                                                Icons.Filled.Assessment else Icons.Outlined.Assessment,
-                                            contentDescription = "Resumen"
+                                    },
+                                    label = {
+                                        Text(
+                                            when (item) {
+                                                BottomNavKey.HOME -> "Home"
+                                                BottomNavKey.SUMMARY -> stringResource(Res.string.home_summary_tab)
+                                                BottomNavKey.ORDERS -> "Facturas"
+                                                BottomNavKey.PRODUCTS -> "Productos"
+                                                BottomNavKey.SETTINGS -> "Opciones"
+                                            }
                                         )
                                     }
-                                },
-                                label = {
-                                    Text(stringResource(Res.string.home_summary_tab))
-                                }
-                            )
-                            NavigationBarItem(
-                                selected = currentScreen == PosScreens.OrdersScreen,
-                                onClick = {
-                                    if (currentScreen != PosScreens.OrdersScreen) {
-                                        navController.navigate(PosScreens.Orders.name)
-                                    }
-                                },
-                                icon = {
-                                    Icon(
-                                        imageVector = if (currentScreen == PosScreens.OrdersScreen)
-                                            Icons.Filled.ReceiptLong else Icons.Outlined.ReceiptLong,
-                                        contentDescription = "Home"
-                                    )
-                                },
-                                label = {
-                                    Text("Facturas")
-                                }
-                            )
-                            NavigationBarItem(
-                                selected = currentScreen == PosScreens.CategoriesManageScreen,
-                                onClick = {
-                                    if (currentScreen != PosScreens.CategoriesManageScreen) {
-                                        navController.navigate(PosScreens.ProductsManage.name)
-                                    }
-                                },
-                                icon = {
-                                    Icon(
-                                        imageVector = if (currentScreen == PosScreens.CategoriesManageScreen)
-                                            Icons.Filled.Inventory else Icons.Outlined.Inventory,
-                                        contentDescription = "Productos"
-                                    )
-                                },
-                                label = {
-                                    Text("Productos")
-                                }
-                            )
-                            NavigationBarItem(
-                                selected = currentScreen == PosScreens.SettingsScreen,
-                                onClick = {
-                                    if (currentScreen != PosScreens.SettingsScreen) {
-                                        navController.navigate(PosScreens.Settings.name)
-                                    }
-                                },
-                                icon = {
-                                    Icon(
-                                        imageVector = if (currentScreen == PosScreens.SettingsScreen)
-                                            Icons.Filled.Settings else Icons.Outlined.Settings,
-                                        contentDescription = "Settings"
-                                    )
-                                },
-                                label = {
-                                    Text("Opciones")
-                                }
-                            )
+                                )
+                            }
 
                         }
                     }

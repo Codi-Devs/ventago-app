@@ -1,8 +1,8 @@
 package com.teco.ventago.features.auth.domain
 
-import androidx.compose.ui.input.key.Key.Companion.Menu
 import com.teco.ventago.Configs
 import com.teco.ventago.core.SecureStorage
+import com.teco.ventago.core.authz.AuthzJwtDecoder
 import com.teco.ventago.core.cache.ICacheService
 import com.teco.ventago.core.changes.IChangesManager
 import com.teco.ventago.features.auth.data.repository.IAuthRepository
@@ -17,6 +17,7 @@ import com.teco.ventago.features.user.data.repository.IUserRepository
 import com.teco.ventago.utils.ApiError
 import com.teco.ventago.utils.ApiResponse
 import com.teco.ventago.utils.AuthException
+import com.teco.ventago.utils.MustChangePasswordException
 import com.teco.ventago.utils.base64.base64Decoded
 import com.teco.ventago.utils.base64.base64UrlDecoded
 import io.ktor.client.HttpClient
@@ -62,18 +63,19 @@ class AuthService(
     init {
         CoroutineScope(Dispatchers.IO+ SupervisorJob()).launch {
             cache.getCache(User::class)?.let {
-                if (it.missingBusiness) {
+                val cachedUser = enrichUserWithCurrentToken(it)
+                if (cachedUser.missingBusiness) {
                     user.tryEmit(null)
                     signOut()
                 } else {
-                    user.tryEmit(it)
-                    user = MutableStateFlow(it)
+                    user.tryEmit(cachedUser)
+                    user = MutableStateFlow(cachedUser)
                     val business = cache.getCache(Business::class)
                     val products = cache.getCache(Products::class)
                     if (business != null && products != null) {
                         val businessId = business.businessId
                         val productsId = products.id
-                        changesManager.initialize(businessId, productsId, it.userId)
+                        changesManager.initialize(businessId, productsId, cachedUser.userId)
                         listenUserChanges()
                     }
                 }
@@ -93,7 +95,7 @@ class AuthService(
                 if (it != 1) {
                     try {
                         val res = userRepository.getUserData(getJwtToken() ?: "")
-                        val userData = User.fromAuthResponse(res)
+                        val userData = enrichUserWithCurrentToken(User.fromAuthResponse(res))
                         cache.saveCache(userData)
                         user.update {
                             userData
@@ -103,7 +105,7 @@ class AuthService(
                             refreshToken(client)
                             try {
                                 val res = userRepository.getUserData(getJwtToken() ?: "")
-                                val userData = User.fromAuthResponse(res)
+                                val userData = enrichUserWithCurrentToken(User.fromAuthResponse(res))
                                 cache.saveCache(userData)
                                 user.update {
                                     userData
@@ -157,6 +159,7 @@ class AuthService(
             val refreshToken = it["refresh_token"]!!.jsonPrimitive.content
             saveJwt(accessToken)
             saveJwt(refreshToken, true)
+            updateCurrentUserAuthz(accessToken)
         } ?: throw Exception("No data in response")
     }
 
@@ -166,11 +169,12 @@ class AuthService(
             if (res.providerToken.isBlank()) {
                 throw AuthException(ApiError.F_AUTH_007)
             }
+            validateAccessTokenClaimsBeforeLogin(res.accessToken)
             val firebaseResponse = firebase.signInWithCustomToken(res.providerToken)
             if (firebaseResponse.success) {
                 saveJwt(res.accessToken)
                 saveJwt(res.refreshToken, true)
-                val userData = User.fromAuthResponse(res)
+                val userData = enrichUserWithCurrentToken(User.fromAuthResponse(res), res.accessToken)
                 cache.saveCache(userData)
 
                 user.update {
@@ -196,11 +200,12 @@ class AuthService(
             if (res.providerToken.isBlank()) {
                 throw AuthException(ApiError.F_AUTH_007)
             }
+            validateAccessTokenClaimsBeforeLogin(res.accessToken)
             val firebaseResponse = firebase.signInWithCustomToken(res.providerToken)
             if (firebaseResponse.success) {
                 saveJwt(res.accessToken)
                 saveJwt(res.refreshToken, true)
-                val userData = User.fromAuthResponse(res)
+                val userData = enrichUserWithCurrentToken(User.fromAuthResponse(res), res.accessToken)
                 cache.saveCache(userData)
                 user.update {
                     userData
@@ -224,11 +229,12 @@ class AuthService(
             if (res.providerToken.isBlank()) {
                 throw AuthException(ApiError.F_AUTH_007)
             }
+            validateAccessTokenClaimsBeforeLogin(res.accessToken)
             val firebaseResponse = firebase.signInWithCustomToken(res.providerToken)
             if (firebaseResponse.success) {
                 saveJwt(res.accessToken)
                 saveJwt(res.refreshToken, true)
-                val userData = User.fromAuthResponse(res)
+                val userData = enrichUserWithCurrentToken(User.fromAuthResponse(res), res.accessToken)
                 cache.saveCache(userData)
 
                 user.update {
@@ -277,9 +283,10 @@ class AuthService(
     override suspend fun businessRegistered() {
         val userModel = user.value
         userModel?.let { newUser ->
-            cache.saveCache(newUser.copy(missingBusiness = false))
+            val updatedUser = enrichUserWithCurrentToken(newUser.copy(missingBusiness = false))
+            cache.saveCache(updatedUser)
             user.update {
-                newUser.copy(missingBusiness = false)
+                updatedUser
             }
         }
     }
@@ -290,10 +297,11 @@ class AuthService(
         userModel?.let { newUser ->
             CoroutineScope(Dispatchers.IO + SupervisorJob()).launch {
                 userRepository.setPremium(premium)
-                cache.saveCache(newUser.copy(premium = premium))
+                val updatedUser = enrichUserWithCurrentToken(newUser.copy(premium = premium))
+                cache.saveCache(updatedUser)
                 withContext(Dispatchers.Main) {
                     user.update {
-                        newUser.copy(premium = premium)
+                        updatedUser
                     }
                 }
             }
@@ -339,6 +347,33 @@ class AuthService(
             if (!refresh) SecureConstants.JWT_TOKEN else SecureConstants.REFRESH_JWT_TOKEN,
             token
         )
+    }
+
+    private fun enrichUserWithCurrentToken(userModel: User, accessToken: String? = getJwtToken()): User {
+        val claims = AuthzJwtDecoder.decode(accessToken) ?: return userModel
+        return userModel.copy(
+            scopes = claims.scopes,
+            isSubUser = claims.isSubUser,
+            isOwnerMain = claims.isOwnerMain
+        )
+    }
+
+    private fun updateCurrentUserAuthz(accessToken: String) {
+        val currentUser = user.value ?: return
+        val enrichedUser = enrichUserWithCurrentToken(currentUser, accessToken)
+        if (enrichedUser == currentUser) return
+        CoroutineScope(Dispatchers.IO + SupervisorJob()).launch {
+            cache.saveCache(enrichedUser)
+        }
+        user.update { enrichedUser }
+    }
+
+    private suspend fun validateAccessTokenClaimsBeforeLogin(accessToken: String) {
+        val claims = AuthzJwtDecoder.decode(accessToken) ?: return
+        if (claims.mustChangePassword) {
+            signOut()
+            throw MustChangePasswordException()
+        }
     }
 }
 

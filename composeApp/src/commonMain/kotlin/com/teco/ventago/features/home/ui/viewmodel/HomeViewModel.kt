@@ -2,8 +2,12 @@ package com.teco.ventago.features.home.ui.viewmodel
 
 import androidx.lifecycle.viewModelScope
 import com.teco.ventago.core.BaseViewModel
+import com.teco.ventago.core.authz.ActionKey
+import com.teco.ventago.core.authz.AuthzEvaluator
+import com.teco.ventago.core.authz.RouteKey
 import com.teco.ventago.core.beta.BetaFeature
 import com.teco.ventago.core.beta.BetaService
+import com.teco.ventago.features.auth.domain.IAuthService
 import com.teco.ventago.features.business.domain.BusinessService
 import com.teco.ventago.features.financialProfile.domain.FinancialProfileService
 import com.teco.ventago.features.home.domain.HomeSummaryService
@@ -20,6 +24,7 @@ import kotlinx.datetime.TimeZone
 import kotlinx.datetime.toLocalDateTime
 
 class HomeViewModel(
+    private val authService: IAuthService,
     private val businessService: BusinessService,
     private val productService: ProductService,
     private val financialProfileService: FinancialProfileService,
@@ -35,8 +40,34 @@ class HomeViewModel(
         }
 
         viewModelScope.launch {
-            betaService.accessFlow(BetaFeature.QUOTES)
-                .onEach { hasAccess -> updateState { copy(hasQuotesAccess = hasAccess) } }
+            authService.getUser()
+                .combine(betaService.features()) { user, betaResponse ->
+                    val betaSnapshot = betaResponse?.features.orEmpty()
+                        .mapNotNull(BetaFeature::fromKey)
+                        .toSet()
+                    AuthzUiState(
+                        canCreateOrderEntry = AuthzEvaluator.canAction(ActionKey.ORDERS_OPEN_CREATE, user, betaSnapshot),
+                        hasQuotesAccess = AuthzEvaluator.canAction(ActionKey.QUOTES_CREATE, user, betaSnapshot),
+                        canCreateExpense = AuthzEvaluator.canAction(ActionKey.EXPENSES_CREATE, user, betaSnapshot),
+                        canAccessCustomers = AuthzEvaluator.canRoute(RouteKey.CUSTOMERS_LIST, user, betaSnapshot),
+                        canAccessExpenses = AuthzEvaluator.canRoute(RouteKey.EXPENSES_LIST, user, betaSnapshot),
+                        showSupportCard = user?.isOwnerMain == true,
+                        showFolioPurchase = user?.isOwnerMain == true
+                    )
+                }
+                .onEach { authz ->
+                    updateState {
+                        copy(
+                            canCreateOrderEntry = authz.canCreateOrderEntry,
+                            hasQuotesAccess = authz.hasQuotesAccess,
+                            canCreateExpense = authz.canCreateExpense,
+                            canAccessCustomers = authz.canAccessCustomers,
+                            canAccessExpenses = authz.canAccessExpenses,
+                            showSupportCard = authz.showSupportCard,
+                            showFolioPurchase = authz.showFolioPurchase
+                        )
+                    }
+                }
                 .launchIn(this)
             betaService.getFeatures()
 
@@ -109,6 +140,16 @@ class HomeViewModel(
             }.launchIn(this)
         }
     }
+
+    private data class AuthzUiState(
+        val canCreateOrderEntry: Boolean,
+        val hasQuotesAccess: Boolean,
+        val canCreateExpense: Boolean,
+        val canAccessCustomers: Boolean,
+        val canAccessExpenses: Boolean,
+        val showSupportCard: Boolean,
+        val showFolioPurchase: Boolean,
+    )
 
     private fun isEmptyData(): Boolean {
         return uiState.value.business == null || uiState.value.products == null

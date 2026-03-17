@@ -4,6 +4,10 @@ import androidx.lifecycle.viewModelScope
 import com.teco.ventago.core.BaseViewModel
 import com.teco.ventago.core.LocalStorage
 import com.teco.ventago.core.PdfSharer
+import com.teco.ventago.core.authz.ActionKey
+import com.teco.ventago.core.authz.AuthzEvaluator
+import com.teco.ventago.core.beta.BetaFeature
+import com.teco.ventago.core.beta.BetaService
 import com.teco.ventago.design_system.molecules.pos.DiscountMode
 import com.teco.ventago.design_system.molecules.pos.GlobalDiscountMode
 import com.teco.ventago.features.auth.domain.IAuthService
@@ -73,6 +77,7 @@ import com.teco.ventago.utils.toLongCents
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.IO
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.launchIn
 import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.Job
@@ -112,6 +117,7 @@ class PosViewModel(
     private val quotesService: QuotesService,
     private val pdfSharer: PdfSharer,
     private val localStorage: LocalStorage,
+    private val betaService: BetaService,
 ) : BaseViewModel<PosState, PosStateUiEvent>(PosState()) {
     private companion object {
         const val DEFAULT_QUOTE_BRANCH_CODE = "0000"
@@ -125,8 +131,45 @@ class PosViewModel(
     private var pendingQuoteBranchCode: String? = null
     private var customerAddressesJob: Job? = null
 
+    private data class PosAuthzState(
+        val canCreateInvoice: Boolean,
+        val canCreateDraft: Boolean,
+        val canCreateQuote: Boolean,
+        val canUpdateQuote: Boolean,
+        val canUseCustomProduct: Boolean,
+        val canEditProduct: Boolean,
+    )
+
     init {
         viewModelScope.launch {
+            authService.getUser()
+                .combine(betaService.features()) { user, betaResponse ->
+                    val betaSnapshot = betaResponse?.features.orEmpty()
+                        .mapNotNull(BetaFeature::fromKey)
+                        .toSet()
+                    PosAuthzState(
+                        canCreateInvoice = AuthzEvaluator.canAction(ActionKey.ORDERS_CREATE, user, betaSnapshot),
+                        canCreateDraft = AuthzEvaluator.canAction(ActionKey.ORDERS_CREATE_DRAFT, user, betaSnapshot),
+                        canCreateQuote = AuthzEvaluator.canAction(ActionKey.QUOTES_CREATE, user, betaSnapshot),
+                        canUpdateQuote = AuthzEvaluator.canAction(ActionKey.QUOTES_UPDATE, user, betaSnapshot),
+                        canUseCustomProduct = AuthzEvaluator.canAction(ActionKey.ORDERS_CUSTOM_PRODUCT, user, betaSnapshot),
+                        canEditProduct = AuthzEvaluator.canAction(ActionKey.ORDERS_EDIT_PRODUCT, user, betaSnapshot),
+                    )
+                }
+                .onEach { authz ->
+                    updateState {
+                        copy(
+                            canCreateInvoice = authz.canCreateInvoice,
+                            canCreateDraft = authz.canCreateDraft,
+                            canCreateQuote = authz.canCreateQuote,
+                            canUpdateQuote = authz.canUpdateQuote,
+                            canUseCustomProduct = authz.canUseCustomProduct,
+                            canEditProduct = authz.canEditProduct
+                        )
+                    }
+                }
+                .launchIn(this)
+            betaService.getFeatures()
 
             productService.observe().onEach { products ->
                 products?.let {
@@ -183,6 +226,20 @@ class PosViewModel(
                 }
             }.launchIn(this)
         }
+    }
+
+    private fun betaSnapshot(): Set<BetaFeature> {
+        return betaService.features().value?.features.orEmpty()
+            .mapNotNull(BetaFeature::fromKey)
+            .toSet()
+    }
+
+    private fun canAction(actionKey: ActionKey): Boolean {
+        return AuthzEvaluator.canAction(actionKey, authService.getUserSync(), betaSnapshot())
+    }
+
+    private fun canEditProduct(): Boolean {
+        return canAction(ActionKey.ORDERS_EDIT_PRODUCT)
     }
 
 
@@ -607,7 +664,12 @@ class PosViewModel(
         customUnitPrice: Money? = null,   // null -> use base price
         deltaQty: Int = 1,
         tax: Tax? = null
-    ) = updateState {
+    ) {
+        if (item.itemId < 0 && !canAction(ActionKey.ORDERS_CUSTOM_PRODUCT)) {
+            showError()
+            return
+        }
+        updateState {
         val priceCents = customUnitPrice
         val baseCents = item.price.toLongCents()
 
@@ -660,6 +722,7 @@ class PosViewModel(
             copy(cart = cart + newLine, personalizedItems = newPersonalizedItems)
         }
     }
+    }
 
     fun updateCartLine(
         lineId: String,
@@ -672,6 +735,10 @@ class PosViewModel(
         pharmaBatchNumber: String?,
         pharmaBatchQty: Int?
     ) {
+        if (!canEditProduct()) {
+            showError()
+            return
+        }
         setLineQty(lineId, quantity)
         setLineOverridePrice(lineId, unitPriceCents)
         when (discountMode) {
@@ -696,10 +763,12 @@ class PosViewModel(
     }
 
     fun setLineOverridePrice(lineId: String, price: Money?) = updateState {
+        if (!canEditProduct()) return@updateState this
         copy(cart = cart.map { if (it.lineId == lineId) it.copy(overrideUnitPrice = price) else it })
     }
 
     fun setLineDiscount(lineId: String, discount: Discount?) = updateState {
+        if (!canEditProduct()) return@updateState this
         copy(cart = cart.map { if (it.lineId == lineId) it.copy(discount = discount) else it })
     }
 
@@ -824,6 +893,15 @@ class PosViewModel(
 
 
     fun createOrder(createPaymentLink: Boolean = false, saveAsDraft: Boolean) {
+        val allowed = if (saveAsDraft) {
+            canAction(ActionKey.ORDERS_CREATE_DRAFT)
+        } else {
+            canAction(ActionKey.ORDERS_CREATE)
+        }
+        if (!allowed) {
+            showError()
+            return
+        }
         showLoading()
         viewModelScope.launch {
             withContext(Dispatchers.IO) {
@@ -1468,6 +1546,17 @@ class PosViewModel(
     }
 
     fun setFlowMode(mode: FlowMode, quoteId: Long? = null) {
+        if (mode == FlowMode.QUOTE) {
+            val allowed = if (quoteId == null) {
+                canAction(ActionKey.QUOTES_CREATE)
+            } else {
+                canAction(ActionKey.QUOTES_UPDATE)
+            }
+            if (!allowed) {
+                showError()
+                return
+            }
+        }
         updateState {
             copy(
                 flowMode = mode,
@@ -1485,6 +1574,10 @@ class PosViewModel(
     }
 
     fun startSaleFromQuote(quoteId: Long) {
+        if (!canAction(ActionKey.ORDERS_OPEN_CREATE)) {
+            showError()
+            return
+        }
         viewModelScope.launch {
             try {
                 val quote = withContext(Dispatchers.IO) {
@@ -1772,6 +1865,7 @@ class PosViewModel(
     }
 
     suspend fun createQuote(): Quote = withContext(Dispatchers.IO) {
+        check(canAction(ActionKey.QUOTES_CREATE)) { "No autorizado para crear cotizaciones." }
         val request = buildQuoteRequest().copy(quoteId = null)
         val quote = quotesService.createQuote(request)
         updateState { copy(lastQuoteId = quote.id, lastQuoteNumber = quote.displayNumberOrQuoteNumber) }
@@ -1779,6 +1873,7 @@ class PosViewModel(
     }
 
     suspend fun updateQuote(): Quote = withContext(Dispatchers.IO) {
+        check(canAction(ActionKey.QUOTES_UPDATE)) { "No autorizado para editar cotizaciones." }
         val state = uiState.value
         val createReq = buildQuoteRequest().copy(quoteId = state.quoteId ?: 0)
         val updateReq = com.teco.ventago.features.quotes.domain.models.requests.UpdateQuoteRequest(

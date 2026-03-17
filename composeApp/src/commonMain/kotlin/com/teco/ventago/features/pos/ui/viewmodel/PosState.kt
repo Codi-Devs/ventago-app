@@ -53,6 +53,12 @@ data class PosState(
     val customerQuery: String = "",
     val paymentsConfigured: Boolean = false,
     val invoicingEnabled: Boolean = false,
+    val canCreateInvoice: Boolean = false,
+    val canCreateDraft: Boolean = false,
+    val canCreateQuote: Boolean = false,
+    val canUpdateQuote: Boolean = false,
+    val canUseCustomProduct: Boolean = false,
+    val canEditProduct: Boolean = false,
 
     val branches: List<Branch> = listOf(),
     val selectedBranchIndex: Int = 0,

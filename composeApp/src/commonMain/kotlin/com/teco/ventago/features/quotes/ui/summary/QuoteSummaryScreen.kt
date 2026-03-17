@@ -282,8 +282,10 @@ fun QuoteSummaryScreen(
         )
 
         Spacer(Modifier.height(24.dp))
+        val canSubmitQuote = if (uiState.quoteId == null) uiState.canCreateQuote else uiState.canUpdateQuote
         ButtonM(
             modifier = Modifier.fillMaxWidth(),
+            enabled = canSubmitQuote,
             onClick = {
                 scope.launch {
                     viewModel.showLoading()

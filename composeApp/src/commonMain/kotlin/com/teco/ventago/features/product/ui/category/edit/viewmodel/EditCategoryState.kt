@@ -19,6 +19,7 @@ class EditCategoryState {
     val goBack = mutableStateOf(false)
 
     val isPremium = mutableStateOf(false)
+    val canManageCategories = mutableStateOf(false)
 
     fun showLoading(title: String) {
         loadingState.value = loadingState.value.copy(state = LoadingState.LOADING, title = title)

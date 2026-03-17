@@ -63,15 +63,20 @@ import ventago.composeapp.generated.resources.inactive
 
 
 @Composable
-fun CategoriesManageActions(navigate: (PosScreens) -> Unit) {
-    IconButton(onClick = {
-        navigate(PosScreens.AddCategoryScreen)
-    }) {
-        Icon(
-            imageVector = Icons.Rounded.Add,
-            contentDescription = "",
-            tint = MaterialTheme.colorScheme.primary
-        )
+fun CategoriesManageActions(
+    navigate: (PosScreens) -> Unit,
+    viewModel: CategoriesManageViewModel = koinViewModel<CategoriesManageViewModel>(),
+) {
+    if (viewModel.state.canManageCategories.value) {
+        IconButton(onClick = {
+            navigate(PosScreens.AddCategoryScreen)
+        }) {
+            Icon(
+                imageVector = Icons.Rounded.Add,
+                contentDescription = "",
+                tint = MaterialTheme.colorScheme.primary
+            )
+        }
     }
 }
 
@@ -116,8 +121,10 @@ fun CategoriesManageScreen(
                     viewModel.selectCategory(item)
                     navigate(PosScreens.EditCategoryScreen)
                 }, onOptionsClick = {
-                    selectedCategory = item
-                    showCategoryEdit = true
+                    if (viewModel.state.canManageCategories.value) {
+                        selectedCategory = item
+                        showCategoryEdit = true
+                    }
                 })
             }
         }

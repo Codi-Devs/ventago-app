@@ -174,15 +174,17 @@ fun CustomersListScreen(
                 }
             }
 
-            FloatingActionButton(
-                onClick = onCreateCustomer,
-                modifier = Modifier
-                    .align(Alignment.BottomEnd)
-                    .padding(16.dp),
-                containerColor = MaterialTheme.colorScheme.primary,
-                contentColor = MaterialTheme.colorScheme.onPrimary
-            ) {
-                Icon(imageVector = Icons.Rounded.Add, contentDescription = null)
+            if (uiState.canAddCustomerAction) {
+                FloatingActionButton(
+                    onClick = onCreateCustomer,
+                    modifier = Modifier
+                        .align(Alignment.BottomEnd)
+                        .padding(16.dp),
+                    containerColor = MaterialTheme.colorScheme.primary,
+                    contentColor = MaterialTheme.colorScheme.onPrimary
+                ) {
+                    Icon(imageVector = Icons.Rounded.Add, contentDescription = null)
+                }
             }
         }
     }

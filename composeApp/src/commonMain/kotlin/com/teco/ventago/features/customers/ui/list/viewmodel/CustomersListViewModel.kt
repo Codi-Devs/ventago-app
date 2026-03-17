@@ -2,6 +2,9 @@ package com.teco.ventago.features.customers.ui.list.viewmodel
 
 import androidx.lifecycle.viewModelScope
 import com.teco.ventago.core.BaseViewModel
+import com.teco.ventago.core.authz.ActionKey
+import com.teco.ventago.core.authz.AuthzEvaluator
+import com.teco.ventago.features.auth.domain.IAuthService
 import com.teco.ventago.features.customers.domain.CustomerService
 import com.teco.ventago.features.financialProfile.domain.FinancialProfileService
 import kotlinx.coroutines.Dispatchers
@@ -11,6 +14,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
 class CustomersListViewModel(
+    private val authService: IAuthService,
     private val customerService: CustomerService,
     private val financialProfileService: FinancialProfileService,
 ) : BaseViewModel<CustomersListState, CustomersListUiEvent>(CustomersListState()) {
@@ -18,6 +22,15 @@ class CustomersListViewModel(
     private var businessId: Int = -1
 
     init {
+        viewModelScope.launch {
+            authService.getUser().onEach { user ->
+                val canAddCustomerAction =
+                    AuthzEvaluator.canAction(ActionKey.CUSTOMERS_CREATE, user, emptySet()) ||
+                        AuthzEvaluator.canAction(ActionKey.CUSTOMERS_DELETE, user, emptySet())
+                updateState { copy(canAddCustomerAction = canAddCustomerAction) }
+            }.launchIn(this)
+        }
+
         viewModelScope.launch {
             financialProfileService.observe().onEach { profile ->
                 val newBusinessId = profile?.businessId ?: -1

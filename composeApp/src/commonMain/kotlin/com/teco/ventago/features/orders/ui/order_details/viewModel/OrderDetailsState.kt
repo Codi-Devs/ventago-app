@@ -19,6 +19,7 @@ data class OrderDetailsState(
     val showPaymentLinkSheet: Boolean = false,
     val havePaymentsConfigured: Boolean = false,
     val invoicingEnabled: Boolean = false,
+    val canMarkPaid: Boolean = false,
     val loadingPaymentLink: Boolean = false,
     val paymentLink: String? = null,
     val errorLoadingPaymentLink: Boolean = false,

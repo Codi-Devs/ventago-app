@@ -309,15 +309,17 @@ fun ExpensesListScreen(
                         )
                     }
                 }
-                FloatingActionButton(
-                    onClick = { navigate(PosScreens.NewExpenseScreen) },
-                    containerColor = MaterialTheme.colorScheme.primary
-                ) {
-                    Icon(
-                        imageVector = Icons.Rounded.Add,
-                        contentDescription = "Nuevo gasto",
-                        tint = MaterialTheme.colorScheme.onPrimary
-                    )
+                if (uiState.canCreateExpense) {
+                    FloatingActionButton(
+                        onClick = { navigate(PosScreens.NewExpenseScreen) },
+                        containerColor = MaterialTheme.colorScheme.primary
+                    ) {
+                        Icon(
+                            imageVector = Icons.Rounded.Add,
+                            contentDescription = "Nuevo gasto",
+                            tint = MaterialTheme.colorScheme.onPrimary
+                        )
+                    }
                 }
             }
         }

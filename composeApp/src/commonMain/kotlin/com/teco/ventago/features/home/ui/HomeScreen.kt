@@ -194,7 +194,7 @@ fun HomeScreen(
             )
         }
 
-        if (uiState.invoicingEnabled && uiState.invoicingPlanState != null) {
+        if (uiState.invoicingEnabled && uiState.invoicingPlanState != null && uiState.showFolioPurchase) {
             InvoicingPlanCard(
                 modifier = Modifier.padding(top = 16.dp),
                 initialQuota = uiState.invoicingPlanState?.totalDtes ?: 0,
@@ -237,7 +237,7 @@ fun HomeScreen(
 
 
         val actionRowPadding = Modifier.padding(top = 16.dp, start = 16.dp, end = 16.dp)
-        if (uiState.hasQuotesAccess) {
+        if (uiState.hasQuotesAccess && uiState.canCreateOrderEntry) {
             Row(
                 modifier = actionRowPadding.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(12.dp),
@@ -313,7 +313,52 @@ fun HomeScreen(
                     }
                 }
             }
-        } else {
+        } else if (uiState.hasQuotesAccess) {
+            Card(
+                modifier = actionRowPadding.fillMaxWidth().height(90.dp),
+                elevation = CardDefaults.cardElevation(4.dp),
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primary),
+                onClick = {
+                    if (!hasShownQuotesWelcome) {
+                        showQuotesWelcomeSheet = true
+                        return@Card
+                    }
+                    storage.set(QuotesOnboarding.KEY_HAS_ENTERED_QUOTES, true)
+                    com.teco.ventago.features.quotes.domain.QuoteSelectionStore.selected = null
+                    com.teco.ventago.features.quotes.domain.QuoteSelectionStore.startQuoteFlow = true
+                    navigate(PosScreens.POSScreen)
+                }
+            ) {
+                Box(modifier = Modifier.fillMaxSize()) {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .padding(12.dp),
+                        verticalArrangement = Arrangement.Center,
+                        horizontalAlignment = Alignment.CenterHorizontally
+                    ) {
+                        Icon(
+                            imageVector = Icons.Rounded.Description,
+                            contentDescription = "",
+                            modifier = Modifier.size(28.dp),
+                            tint = MaterialTheme.colorScheme.onPrimary
+                        )
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Text(
+                            text = stringResource(Res.string.pos_new_quote),
+                            style = bodyMediumBold(color = MaterialTheme.colorScheme.onPrimary)
+                        )
+                    }
+
+                    QuotesFeatureBadge(
+                        isNew = !hasEnteredQuotes,
+                        modifier = Modifier
+                            .align(Alignment.TopEnd)
+                            .padding(top = 8.dp, end = 8.dp)
+                    )
+                }
+            }
+        } else if (uiState.canCreateOrderEntry) {
             Card(
                 modifier = actionRowPadding.fillMaxWidth().height(90.dp),
                 elevation = CardDefaults.cardElevation(4.dp),
@@ -341,47 +386,22 @@ fun HomeScreen(
         }
 
 
-        Row(
-            modifier = Modifier
-                .padding(top = 12.dp, start = 16.dp, end = 16.dp)
-                .fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(12.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Card(
-                modifier = Modifier.weight(1f).height(90.dp),
-                elevation = CardDefaults.cardElevation(4.dp),
-                colors = CardDefaults.cardColors(containerColor = cardContainerColor()),
-                onClick = { navigate(PosScreens.CustomersManage) }
+        val canAccessCustomers = uiState.canAccessCustomers
+        val canAccessExpenses = uiState.canAccessExpenses
+        if (canAccessCustomers && canAccessExpenses) {
+            Row(
+                modifier = Modifier
+                    .padding(top = 12.dp, start = 16.dp, end = 16.dp)
+                    .fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(12.dp),
+                verticalAlignment = Alignment.CenterVertically
             ) {
-                Column(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .padding(12.dp),
-                    verticalArrangement = Arrangement.Center,
-                    horizontalAlignment = Alignment.CenterHorizontally
+                Card(
+                    modifier = Modifier.weight(1f).height(90.dp),
+                    elevation = CardDefaults.cardElevation(4.dp),
+                    colors = CardDefaults.cardColors(containerColor = cardContainerColor()),
+                    onClick = { navigate(PosScreens.CustomersManage) }
                 ) {
-                    Icon(
-                        imageVector = Icons.Rounded.Person,
-                        contentDescription = null,
-                        tint = MaterialTheme.colorScheme.primary,
-                        modifier = Modifier.size(28.dp)
-                    )
-                    Spacer(modifier = Modifier.height(8.dp))
-                    Text(
-                        text = stringResource(Res.string.pos_clients),
-                        style = bodyMediumBold(color = MaterialTheme.colorScheme.primary)
-                    )
-                }
-            }
-
-            Card(
-                modifier = Modifier.weight(1f).height(90.dp),
-                elevation = CardDefaults.cardElevation(4.dp),
-                colors = CardDefaults.cardColors(containerColor = cardContainerColor()),
-                onClick = { navigate(PosScreens.Expenses) }
-            ) {
-                Box(modifier = Modifier.fillMaxSize()) {
                     Column(
                         modifier = Modifier
                             .fillMaxSize()
@@ -390,32 +410,153 @@ fun HomeScreen(
                         horizontalAlignment = Alignment.CenterHorizontally
                     ) {
                         Icon(
-                            imageVector = Icons.Rounded.ReceiptLong,
+                            imageVector = Icons.Rounded.Person,
                             contentDescription = null,
-                            tint = MaterialTheme.colorScheme.secondary,
+                            tint = MaterialTheme.colorScheme.primary,
                             modifier = Modifier.size(28.dp)
                         )
                         Spacer(modifier = Modifier.height(8.dp))
                         Text(
-                            text = stringResource(Res.string.expenses),
-                            style = bodyMediumBold(color = MaterialTheme.colorScheme.secondary)
+                            text = stringResource(Res.string.pos_clients),
+                            style = bodyMediumBold(color = MaterialTheme.colorScheme.primary)
                         )
                     }
+                }
 
-                    Box(
+                Card(
+                    modifier = Modifier.weight(1f).height(90.dp),
+                    elevation = CardDefaults.cardElevation(4.dp),
+                    colors = CardDefaults.cardColors(containerColor = cardContainerColor()),
+                    onClick = { navigate(PosScreens.Expenses) }
+                ) {
+                    Box(modifier = Modifier.fillMaxSize()) {
+                        Column(
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .padding(12.dp),
+                            verticalArrangement = Arrangement.Center,
+                            horizontalAlignment = Alignment.CenterHorizontally
+                        ) {
+                            Icon(
+                                imageVector = Icons.Rounded.ReceiptLong,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.secondary,
+                                modifier = Modifier.size(28.dp)
+                            )
+                            Spacer(modifier = Modifier.height(8.dp))
+                            Text(
+                                text = stringResource(Res.string.expenses),
+                                style = bodyMediumBold(color = MaterialTheme.colorScheme.secondary)
+                            )
+                        }
+
+                        if (uiState.canCreateExpense) {
+                            Box(
+                                modifier = Modifier
+                                    .align(Alignment.TopEnd)
+                                    .padding(top = 8.dp, end = 8.dp)
+                                    .clip(RoundedCornerShape(50))
+                                    .background(shimmeringSecondaryBrush())
+                                    .padding(horizontal = 10.dp, vertical = 4.dp),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Text(
+                                    text = "Nuevo",
+                                    style = labelSmall(color = MaterialTheme.colorScheme.onSecondary),
+                                    maxLines = 1
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+        } else if (canAccessCustomers) {
+            Row(
+                modifier = Modifier
+                    .padding(top = 12.dp, start = 16.dp, end = 16.dp)
+                    .fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(12.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Card(
+                    modifier = Modifier.fillMaxWidth().height(90.dp),
+                    elevation = CardDefaults.cardElevation(4.dp),
+                    colors = CardDefaults.cardColors(containerColor = cardContainerColor()),
+                    onClick = { navigate(PosScreens.CustomersManage) }
+                ) {
+                    Column(
                         modifier = Modifier
-                            .align(Alignment.TopEnd)
-                            .padding(top = 8.dp, end = 8.dp)
-                            .clip(RoundedCornerShape(50))
-                            .background(shimmeringSecondaryBrush())
-                            .padding(horizontal = 10.dp, vertical = 4.dp),
-                        contentAlignment = Alignment.Center
+                            .fillMaxSize()
+                            .padding(12.dp),
+                        verticalArrangement = Arrangement.Center,
+                        horizontalAlignment = Alignment.CenterHorizontally
                     ) {
-                        Text(
-                            text = "Nuevo",
-                            style = labelSmall(color = MaterialTheme.colorScheme.onSecondary),
-                            maxLines = 1
+                        Icon(
+                            imageVector = Icons.Rounded.Person,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier.size(28.dp)
                         )
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Text(
+                            text = stringResource(Res.string.pos_clients),
+                            style = bodyMediumBold(color = MaterialTheme.colorScheme.primary)
+                        )
+                    }
+                }
+            }
+        } else if (canAccessExpenses) {
+            Row(
+                modifier = Modifier
+                    .padding(top = 12.dp, start = 16.dp, end = 16.dp)
+                    .fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(12.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Card(
+                    modifier = Modifier.fillMaxWidth().height(90.dp),
+                    elevation = CardDefaults.cardElevation(4.dp),
+                    colors = CardDefaults.cardColors(containerColor = cardContainerColor()),
+                    onClick = { navigate(PosScreens.Expenses) }
+                ) {
+                    Box(modifier = Modifier.fillMaxSize()) {
+                        Column(
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .padding(12.dp),
+                            verticalArrangement = Arrangement.Center,
+                            horizontalAlignment = Alignment.CenterHorizontally
+                        ) {
+                            Icon(
+                                imageVector = Icons.Rounded.ReceiptLong,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.secondary,
+                                modifier = Modifier.size(28.dp)
+                            )
+                            Spacer(modifier = Modifier.height(8.dp))
+                            Text(
+                                text = stringResource(Res.string.expenses),
+                                style = bodyMediumBold(color = MaterialTheme.colorScheme.secondary)
+                            )
+                        }
+
+                        if (uiState.canCreateExpense) {
+                            Box(
+                                modifier = Modifier
+                                    .align(Alignment.TopEnd)
+                                    .padding(top = 8.dp, end = 8.dp)
+                                    .clip(RoundedCornerShape(50))
+                                    .background(shimmeringSecondaryBrush())
+                                    .padding(horizontal = 10.dp, vertical = 4.dp),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Text(
+                                    text = "Nuevo",
+                                    style = labelSmall(color = MaterialTheme.colorScheme.onSecondary),
+                                    maxLines = 1
+                                )
+                            }
+                        }
                     }
                 }
             }
@@ -426,8 +567,10 @@ fun HomeScreen(
 
 
 
-        SupportCard(uiState.unreadCount) {
-            platformState.openEmailIntent("soporte@tecodigi.com")
+        if (uiState.showSupportCard) {
+            SupportCard(uiState.unreadCount) {
+                platformState.openEmailIntent("soporte@tecodigi.com")
+            }
         }
 
     }

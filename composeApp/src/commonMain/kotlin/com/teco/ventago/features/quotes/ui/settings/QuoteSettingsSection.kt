@@ -79,6 +79,7 @@ fun QuoteSettingsSection(
     additionalInfo: String,
     style: String,
     quotePrefix: String,
+    enabled: Boolean = true,
     onAdditionalInfoChange: (String) -> Unit,
     onStyleChange: (String) -> Unit,
     onQuotePrefixChange: (String) -> Unit,
@@ -141,26 +142,31 @@ fun QuoteSettingsSection(
             ) {
                 FormatToggleButton(
                     selected = isBold,
+                    enabled = enabled,
                     onClick = { richTextState.toggleSpanStyle(SpanStyle(fontWeight = FontWeight.Bold)) },
                     icon = { Icon(Icons.Filled.FormatBold, contentDescription = "Bold") }
                 )
                 FormatToggleButton(
                     selected = isItalic,
+                    enabled = enabled,
                     onClick = { richTextState.toggleSpanStyle(SpanStyle(fontStyle = FontStyle.Italic)) },
                     icon = { Icon(Icons.Filled.FormatItalic, contentDescription = "Italic") }
                 )
                 FormatToggleButton(
                     selected = isUnderline,
+                    enabled = enabled,
                     onClick = { richTextState.toggleSpanStyle(SpanStyle(textDecoration = TextDecoration.Underline)) },
                     icon = { Icon(Icons.Filled.FormatUnderlined, contentDescription = "Underline") }
                 )
                 FormatToggleButton(
                     selected = isUnorderedList,
+                    enabled = enabled,
                     onClick = { richTextState.toggleUnorderedList() },
                     icon = { Icon(Icons.Filled.FormatListBulleted, contentDescription = "Bullet list") }
                 )
                 FormatToggleButton(
                     selected = isOrderedList,
+                    enabled = enabled,
                     onClick = { richTextState.toggleOrderedList() },
                     icon = { Icon(Icons.Filled.FormatListNumbered, contentDescription = "Numbered list") }
                 )
@@ -180,7 +186,8 @@ fun QuoteSettingsSection(
                     },
                 supportingText = { Text(additionalInfoHint) },
                 minLines = 4,
-                maxLines = 8
+                maxLines = 8,
+                enabled = enabled
             )
 
             Spacer(Modifier.height(12.dp))
@@ -193,7 +200,8 @@ fun QuoteSettingsSection(
                 },
                 keyboardType = KeyboardType.Text,
                 imeAction = ImeAction.Done,
-                isError = false
+                isError = false,
+                enabled = enabled
             )
 
             Spacer(Modifier.height(12.dp))
@@ -203,11 +211,13 @@ fun QuoteSettingsSection(
                 items = styleOptions.map { it.label },
                 selectedIndex = selectedStyleIndex,
                 modifier = Modifier.fillMaxWidth(),
-                onItemSelected = { index, _ -> onStyleChange(styleOptions[index].key) }
+                onItemSelected = { index, _ -> onStyleChange(styleOptions[index].key) },
+                enabled = enabled
             )
 
             TextButton(
                 modifier = Modifier.fillMaxWidth(),
+                enabled = enabled,
                 onClick = { showPreview = true }
             ) {
                 Text(text = stringResource(Res.string.preview_quote_styles))
@@ -291,11 +301,12 @@ fun QuoteSettingsSection(
 @Composable
 fun FormatToggleButton(
     selected: Boolean,
+    enabled: Boolean = true,
     onClick: () -> Unit,
     icon: @Composable () -> Unit
 ) {
     val tint = if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
-    IconButton(onClick = onClick) {
+    IconButton(onClick = onClick, enabled = enabled) {
         CompositionLocalProvider(LocalContentColor provides tint) {
             icon()
         }

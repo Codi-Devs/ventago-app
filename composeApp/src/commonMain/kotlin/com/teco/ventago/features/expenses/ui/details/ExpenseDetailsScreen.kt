@@ -186,6 +186,7 @@ fun ExpenseDetailsScreen(
 
             ConceptSummaryCard(
                 expense = expense,
+                canEditConcepts = uiState.canUpdateExpenseAction,
                 onEditConcepts = { viewModel.setConceptSheetVisible(true) }
             )
 
@@ -202,6 +203,7 @@ fun ExpenseDetailsScreen(
                 expense = expense,
                 isPaid = expense.paymentStatus == "paid",
                 hasCreditLock = creditLockPayment != null,
+                canManagePayments = uiState.canUpdateExpenseAction,
                 onRegisterPayment = {
                     paymentSheetMode = PaymentSheetMode.REGISTER
                     viewModel.setEditingPayment(null)
@@ -220,6 +222,8 @@ fun ExpenseDetailsScreen(
             if (!expense.payments.isNullOrEmpty()) {
                 PaymentsListCard(
                     payments = expense.payments,
+                    canUpdatePayments = uiState.canUpdateExpenseAction,
+                    canDeletePayments = uiState.canDeleteExpenseAction,
                     onMarkPaid = { payment ->
                         if (payment.paymentMethod == PaymentMethod.CREDIT.value && payment.paymentStatus != "paid") {
                             paymentSheetMode = PaymentSheetMode.MARK_AS_PAID
@@ -277,6 +281,8 @@ fun ExpenseDetailsScreen(
             ActionsSection(
                 expense = expense,
                 isDeleting = uiState.isDeleting,
+                canEditExpense = uiState.canUpdateExpenseAction,
+                canDeleteExpense = uiState.canDeleteExpenseAction,
                 onEdit = onEdit,
                 onDuplicate = onDuplicate,
                 onDelete = { viewModel.deleteExpense() },
@@ -435,6 +441,7 @@ fun ExpenseDetailsScreen(
 @Composable
 private fun ConceptSummaryCard(
     expense: Expense,
+    canEditConcepts: Boolean,
     onEditConcepts: () -> Unit
 ) {
     val statusLabel = when (expense.categorizationStatus) {
@@ -456,8 +463,10 @@ private fun ConceptSummaryCard(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Text("Concepto", style = bodyMediumBold())
-                TextButton(onClick = onEditConcepts) {
-                    Text("Editar conceptos")
+                if (canEditConcepts) {
+                    TextButton(onClick = onEditConcepts) {
+                        Text("Editar conceptos")
+                    }
                 }
             }
             InfoRow("Estado", statusLabel)
@@ -827,6 +836,7 @@ private fun PaymentSummaryCard(
     expense: Expense,
     isPaid: Boolean,
     hasCreditLock: Boolean,
+    canManagePayments: Boolean,
     onRegisterPayment: () -> Unit,
     onMarkCreditAsPaid: () -> Unit
 ) {
@@ -887,7 +897,7 @@ private fun PaymentSummaryCard(
                 )
             }
 
-            if (!isPaid) {
+            if (!isPaid && canManagePayments) {
                 if (hasCreditLock) {
                     Text(
                         text = "Existe un crédito pendiente por el total. Debe marcarlo como pagado para cerrar el gasto.",
@@ -926,6 +936,8 @@ private fun PaymentSummaryCard(
 @Composable
 private fun PaymentsListCard(
     payments: List<ExpensePayment>,
+    canUpdatePayments: Boolean,
+    canDeletePayments: Boolean,
     onMarkPaid: (ExpensePayment) -> Unit,
     onEdit: (ExpensePayment) -> Unit,
     onDelete: (ExpensePayment) -> Unit,
@@ -952,7 +964,15 @@ private fun PaymentsListCard(
             }
             Spacer(modifier = Modifier.height(8.dp))
             payments.forEachIndexed { index, payment ->
-                PaymentRow(payment, onMarkPaid, onEdit, onDelete, onDownloadProof)
+                PaymentRow(
+                    payment = payment,
+                    canUpdatePayments = canUpdatePayments,
+                    canDeletePayments = canDeletePayments,
+                    onMarkPaid = onMarkPaid,
+                    onEdit = onEdit,
+                    onDelete = onDelete,
+                    onDownloadProof = onDownloadProof
+                )
                 if (index < payments.lastIndex) {
                     Divider(modifier = Modifier.padding(vertical = 4.dp))
                 }
@@ -1003,6 +1023,8 @@ private fun SummaryItem(label: String, value: String, color: Color) {
 @Composable
 private fun PaymentRow(
     payment: ExpensePayment,
+    canUpdatePayments: Boolean,
+    canDeletePayments: Boolean,
     onMarkPaid: (ExpensePayment) -> Unit,
     onEdit: (ExpensePayment) -> Unit,
     onDelete: (ExpensePayment) -> Unit,
@@ -1094,7 +1116,7 @@ private fun PaymentRow(
                         )
                     }
                 }
-                if (payment.paymentStatus != "paid") {
+                if (canUpdatePayments && payment.paymentStatus != "paid") {
                     IconButton(onClick = { onMarkPaid(payment) }, modifier = Modifier.size(28.dp)) {
                         Icon(
                             imageVector = Icons.Rounded.CheckCircle,
@@ -1104,21 +1126,25 @@ private fun PaymentRow(
                         )
                     }
                 }
-                IconButton(onClick = { onEdit(payment) }, modifier = Modifier.size(28.dp)) {
-                    Icon(
-                        imageVector = Icons.Rounded.Edit,
-                        contentDescription = "Editar",
-                        tint = MaterialTheme.colorScheme.primary,
-                        modifier = Modifier.size(18.dp)
-                    )
+                if (canUpdatePayments) {
+                    IconButton(onClick = { onEdit(payment) }, modifier = Modifier.size(28.dp)) {
+                        Icon(
+                            imageVector = Icons.Rounded.Edit,
+                            contentDescription = "Editar",
+                            tint = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier.size(18.dp)
+                        )
+                    }
                 }
-                IconButton(onClick = { onDelete(payment) }, modifier = Modifier.size(28.dp)) {
-                    Icon(
-                        imageVector = Icons.Rounded.Delete,
-                        contentDescription = "Eliminar",
-                        tint = MaterialTheme.colorScheme.error,
-                        modifier = Modifier.size(18.dp)
-                    )
+                if (canDeletePayments) {
+                    IconButton(onClick = { onDelete(payment) }, modifier = Modifier.size(28.dp)) {
+                        Icon(
+                            imageVector = Icons.Rounded.Delete,
+                            contentDescription = "Eliminar",
+                            tint = MaterialTheme.colorScheme.error,
+                            modifier = Modifier.size(18.dp)
+                        )
+                    }
                 }
             }
         }
@@ -1148,6 +1174,8 @@ private fun formatPaymentDate(raw: String): String {
 private fun ActionsSection(
     expense: Expense,
     isDeleting: Boolean,
+    canEditExpense: Boolean,
+    canDeleteExpense: Boolean,
     onEdit: () -> Unit,
     onDuplicate: () -> Unit,
     onDelete: () -> Unit,
@@ -1162,7 +1190,7 @@ private fun ActionsSection(
         verticalArrangement = Arrangement.spacedBy(8.dp)
     ) {
         // Edit button (manual only)
-        if (expense.isManual) {
+        if (expense.isManual && canEditExpense) {
             ButtonM(onClick = onEdit) {
                 Icon(
                     imageVector = Icons.Rounded.Edit,
@@ -1175,7 +1203,7 @@ private fun ActionsSection(
         }
 
         // Duplicate button (manual only)
-        if (expense.isManual) {
+        if (expense.isManual && canEditExpense) {
             OutlinedButtonM(onClick = onDuplicate) {
                 Icon(
                     imageVector = Icons.Rounded.ContentCopy,
@@ -1215,26 +1243,28 @@ private fun ActionsSection(
         }
 
         // Delete button
-        OutlinedButtonM(
-            onClick = { showDeleteDialog = true },
-            enabled = !isDeleting
-        ) {
-            if (isDeleting) {
-                CircularProgressIndicator(modifier = Modifier.size(16.dp), strokeWidth = 2.dp)
-                Spacer(modifier = Modifier.width(8.dp))
-            } else {
-                Icon(
-                    imageVector = Icons.Rounded.Delete,
-                    contentDescription = null,
-                    tint = MaterialTheme.colorScheme.error,
-                    modifier = Modifier.size(18.dp)
+        if (canDeleteExpense) {
+            OutlinedButtonM(
+                onClick = { showDeleteDialog = true },
+                enabled = !isDeleting
+            ) {
+                if (isDeleting) {
+                    CircularProgressIndicator(modifier = Modifier.size(16.dp), strokeWidth = 2.dp)
+                    Spacer(modifier = Modifier.width(8.dp))
+                } else {
+                    Icon(
+                        imageVector = Icons.Rounded.Delete,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.error,
+                        modifier = Modifier.size(18.dp)
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                }
+                Text(
+                    "Eliminar Gasto",
+                    color = MaterialTheme.colorScheme.error
                 )
-                Spacer(modifier = Modifier.width(8.dp))
             }
-            Text(
-                "Eliminar Gasto",
-                color = MaterialTheme.colorScheme.error
-            )
         }
     }
 

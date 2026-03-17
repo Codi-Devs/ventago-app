@@ -2,8 +2,12 @@ package com.teco.ventago.features.orders.ui.orders.viewmodel
 
 import androidx.lifecycle.viewModelScope
 import com.teco.ventago.core.BaseViewModel
+import com.teco.ventago.core.authz.ActionKey
+import com.teco.ventago.core.authz.AuthzEvaluator
+import com.teco.ventago.core.authz.RouteKey
 import com.teco.ventago.core.beta.BetaFeature
 import com.teco.ventago.core.beta.BetaService
+import com.teco.ventago.features.auth.domain.IAuthService
 import com.teco.ventago.features.business.domain.BusinessService
 import com.teco.ventago.features.business.domain.model.Business
 import com.teco.ventago.features.orders.domain.OrderService
@@ -12,6 +16,8 @@ import com.teco.ventago.features.orders.domain.models.OrderStatus
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.IO
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.collect
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.launchIn
 import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.launch
@@ -21,6 +27,7 @@ import ventago.composeapp.generated.resources.Res
 import ventago.composeapp.generated.resources.*
 
 class OrdersViewModel(
+    private val authService: IAuthService,
     private val orderService: OrderService,
     private val businessService: BusinessService,
     private val betaService: BetaService,
@@ -28,6 +35,7 @@ class OrdersViewModel(
 
     var businessId: Int = businessService.business.value?.businessId ?: -1
     var business: Business? = null
+    private var hasLoadedInitialOrders = false
 
     override fun onCleared() {
         orderService.clear()
@@ -35,16 +43,33 @@ class OrdersViewModel(
     }
 
     init {
-        println("ASDADS: viewmodel instance: $this")
         updateState { copy(isLoadingOrders = true) }
-        loadOrders()
+        if (businessId > 0) {
+            hasLoadedInitialOrders = true
+            loadOrders()
+        }
         viewModelScope.launch {
             betaService.getFeatures()
         }
         viewModelScope.launch {
-            betaService.accessFlow(BetaFeature.QUOTES).collect { hasAccess ->
-                updateState { copy(hasQuotesAccess = hasAccess) }
-            }
+            authService.getUser()
+                .combine(betaService.features()) { user, betaResponse ->
+                    val betaSnapshot = betaResponse?.features.orEmpty()
+                        .mapNotNull(BetaFeature::fromKey)
+                        .toSet()
+                    Pair(
+                        AuthzEvaluator.canRoute(RouteKey.QUOTES_LIST, user, betaSnapshot),
+                        AuthzEvaluator.canAction(ActionKey.ORDERS_OPEN_CREATE, user, betaSnapshot)
+                    )
+                }
+                .collect { (hasQuotesAccess, canCreateOrderEntry) ->
+                    updateState {
+                        copy(
+                            hasQuotesAccess = hasQuotesAccess,
+                            canCreateOrderEntry = canCreateOrderEntry
+                        )
+                    }
+                }
         }
         viewModelScope.launch {
             orderService.observe().onEach { orders ->
@@ -61,8 +86,13 @@ class OrdersViewModel(
         viewModelScope.launch {
             businessService.getBusiness().collect { businessData ->
                 businessData?.let {
+                    val previousBusinessId = businessId
                     business = businessData
                     businessId = it.businessId
+                    if (businessId > 0 && (!hasLoadedInitialOrders || previousBusinessId != businessId)) {
+                        hasLoadedInitialOrders = true
+                        loadOrders()
+                    }
                 }
             }
         }
@@ -274,7 +304,6 @@ class OrdersViewModel(
     }
 
     fun showScanner(showScanner: Boolean) {
-        println("ASDADS: viewmodel instance: $this")
         updateState { copy(showScanner = showScanner) }
     }
 

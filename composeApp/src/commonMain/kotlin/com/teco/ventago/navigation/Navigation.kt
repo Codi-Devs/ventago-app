@@ -6,6 +6,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.Modifier
 import androidx.navigation.NavBackStackEntry
@@ -106,6 +107,7 @@ import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
+import kotlinx.coroutines.launch
 import org.jetbrains.compose.resources.StringResource
 import org.koin.compose.koinInject
 import org.koin.compose.viewmodel.koinViewModel
@@ -115,6 +117,7 @@ import ventago.composeapp.generated.resources.action_settings
 import ventago.composeapp.generated.resources.add_address
 import ventago.composeapp.generated.resources.add_image
 import ventago.composeapp.generated.resources.add_new_category
+import ventago.composeapp.generated.resources.authz_access_denied_title
 import ventago.composeapp.generated.resources.bank_transfer
 import ventago.composeapp.generated.resources.billing_points
 import ventago.composeapp.generated.resources.branch
@@ -187,6 +190,7 @@ enum class PosScreens(
         true
     ),
     Greetings(Res.string.pos),
+    UnauthorizedScreen(Res.string.authz_access_denied_title, showBackButton = false),
     HomeScreen(Res.string.home, false, showBackButton = false),
     SummaryScreen(Res.string.home_summary_tab, true, showBackButton = false),
 
@@ -373,6 +377,19 @@ fun Navigation(
 
         composable(route = PosScreens.Greetings.name) {
             Greetings()
+        }
+
+        composable(route = PosScreens.UnauthorizedScreen.name) {
+            val authService: com.teco.ventago.features.auth.domain.IAuthService = koinInject()
+            val scope = rememberCoroutineScope()
+            UnauthorizedScreen(
+                onRetry = {
+                    navController.navigateUp()
+                },
+                onSignOut = {
+                    scope.launch { authService.signOut() }
+                }
+            )
         }
 
         addProductsNavigation(navController, analyticsService)

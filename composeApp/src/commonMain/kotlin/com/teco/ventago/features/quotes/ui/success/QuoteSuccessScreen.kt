@@ -225,24 +225,26 @@ fun QuoteSuccessScreen(
                 ) {
                     Text(text = stringResource(Res.string.view_quotes))
                 }
-                Spacer(Modifier.height(12.dp))
-                ButtonM(
-                    modifier = Modifier.fillMaxWidth(),
-                    containerColor = MaterialTheme.colorScheme.secondary,
-                    contentColor = MaterialTheme.colorScheme.onSecondary,
-                    onClick = {
-                        viewModel.resetForNewSale()
-                        viewModel.setFlowMode(FlowMode.QUOTE, quoteId = null)
-                        QuoteSelectionStore.selected = null
-                        QuoteSelectionStore.startQuoteFlow = true
-                        QuoteSelectionStore.startOrderFlowFromQuote = false
-                        navigate(PosScreens.POSScreen) {
-                            popUpTo(PosScreens.HomeScreen.name) { inclusive = false }
-                            launchSingleTop = true
+                if (uiState.canCreateQuote) {
+                    Spacer(Modifier.height(12.dp))
+                    ButtonM(
+                        modifier = Modifier.fillMaxWidth(),
+                        containerColor = MaterialTheme.colorScheme.secondary,
+                        contentColor = MaterialTheme.colorScheme.onSecondary,
+                        onClick = {
+                            viewModel.resetForNewSale()
+                            viewModel.setFlowMode(FlowMode.QUOTE, quoteId = null)
+                            QuoteSelectionStore.selected = null
+                            QuoteSelectionStore.startQuoteFlow = true
+                            QuoteSelectionStore.startOrderFlowFromQuote = false
+                            navigate(PosScreens.POSScreen) {
+                                popUpTo(PosScreens.HomeScreen.name) { inclusive = false }
+                                launchSingleTop = true
+                            }
                         }
+                    ) {
+                        Text(text = stringResource(Res.string.new_quote))
                     }
-                ) {
-                    Text(text = stringResource(Res.string.new_quote))
                 }
             }
         }

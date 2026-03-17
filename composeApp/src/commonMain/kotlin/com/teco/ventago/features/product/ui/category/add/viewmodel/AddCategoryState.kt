@@ -9,6 +9,7 @@ import kotlinx.coroutines.withContext
 class AddCategoryState {
     val name = mutableStateOf("")
     val description = mutableStateOf("")
+    val canManageCategories = mutableStateOf(false)
     val showHelpDialog = mutableStateOf(false)
     val wrongName = mutableStateOf(false)
     val loadingState = mutableStateOf(LoadingBottomSheetState())

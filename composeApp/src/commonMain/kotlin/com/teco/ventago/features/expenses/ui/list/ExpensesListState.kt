@@ -30,6 +30,7 @@ data class ExpensesListState(
     val searchQuery: String = "",
     // Feature flags
     val hasExpensesQr: Boolean = false,
+    val canCreateExpense: Boolean = false,
     // Crawl jobs summary
     val crawlJobs: List<CrawlJob> = emptyList(),
     val isLoadingCrawlJobs: Boolean = false

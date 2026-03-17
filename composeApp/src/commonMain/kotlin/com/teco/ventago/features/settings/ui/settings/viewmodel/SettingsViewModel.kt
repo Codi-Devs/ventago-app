@@ -2,6 +2,9 @@ package com.teco.ventago.features.settings.ui.settings.viewmodel
 
 import androidx.lifecycle.viewModelScope
 import com.teco.ventago.core.BaseViewModel
+import com.teco.ventago.core.authz.ActionKey
+import com.teco.ventago.core.authz.AuthzEvaluator
+import com.teco.ventago.core.authz.RouteKey
 import com.teco.ventago.core.camera.SharedImage
 import com.teco.ventago.core.logger.ILoggerService
 import com.teco.ventago.core.logger.Log
@@ -65,7 +68,7 @@ class SettingsViewModel(
     }
 
     fun isQuoteSettingsDirty(state: SettingsState = uiState.value): Boolean {
-        if (!state.hasQuotesAccess) return false
+        if (!state.hasQuotesAccess || !state.canModifyQuoteSettings) return false
         val currentInfo = normalizeHtmlForComparison(state.defaultQuoteAdditionalInfo)
         val actualInfo = normalizeHtmlForComparison(state.actualDefaultQuoteAdditionalInfo)
         val infoDirty = state.quoteAdditionalInfoWasEdited && currentInfo != actualInfo
@@ -78,11 +81,28 @@ class SettingsViewModel(
     init {
         observeQuoteSettings()
         viewModelScope.launch {
-            betaService.accessFlow(BetaFeature.QUOTES).collect { hasQuotes ->
-                updateState { copy(hasQuotesAccess = hasQuotes) }
-                if (hasQuotes) {
-                    refreshQuoteSettingsInBackground()
+            authService.getUser()
+                .combine(betaService.features()) { user, betaResponse ->
+                    val betaSnapshot = betaResponse?.features.orEmpty()
+                        .mapNotNull(BetaFeature::fromKey)
+                        .toSet()
+                    Triple(
+                        AuthzEvaluator.canRoute(RouteKey.QUOTES_LIST, user, betaSnapshot),
+                        AuthzEvaluator.canAction(ActionKey.SETTINGS_MODIFY, user, betaSnapshot),
+                        AuthzEvaluator.canAction(ActionKey.QUOTES_UPDATE, user, betaSnapshot)
+                    )
                 }
+                .collect { (hasQuotesAccess, canModifySettings, canModifyQuoteSettings) ->
+                    updateState {
+                        copy(
+                            hasQuotesAccess = hasQuotesAccess,
+                            canModifySettings = canModifySettings,
+                            canModifyQuoteSettings = canModifyQuoteSettings
+                        )
+                    }
+                    if (hasQuotesAccess) {
+                        refreshQuoteSettingsInBackground()
+                    }
             }
         }
         viewModelScope.launch {
@@ -208,6 +228,8 @@ class SettingsViewModel(
         return !phone.isNullOrBlank() && Regex("^\\+?[0-9]{7,15}$").matches(phone)
     }
 
+    fun canModifySettings(): Boolean = uiState.value.canModifySettings
+
     fun hasMorePaymentMethods(): Boolean {
         if (uiState.value.availablePaymentMethods.isEmpty()) {
             return false
@@ -314,6 +336,7 @@ class SettingsViewModel(
 
     private suspend fun updateQuoteSettings(): Boolean? {
         val state = uiState.value
+        if (!state.canModifyQuoteSettings) return null
         if (!isQuoteSettingsDirty(state)) return null
         val infoDirty = state.quoteAdditionalInfoWasEdited &&
             normalizeHtmlForComparison(state.defaultQuoteAdditionalInfo) != normalizeHtmlForComparison(state.actualDefaultQuoteAdditionalInfo)

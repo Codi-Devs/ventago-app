@@ -11,7 +11,10 @@ data class User(
     val active: Boolean,
     val missingBusiness: Boolean,
     val userId: Int,
-    val businessIds: List<BusinessIds>
+    val businessIds: List<BusinessIds>,
+    val scopes: Set<String> = emptySet(),
+    val isSubUser: Boolean = false,
+    val isOwnerMain: Boolean = false,
 ) {
     companion object {
         fun fromAuthResponse(authResponse: AuthResponse): User {

@@ -10,6 +10,8 @@ data class ExpenseDetailsState(
     val isLoading: Boolean = false,
     val isDeleting: Boolean = false,
     val isDeleted: Boolean = false,
+    val canUpdateExpenseAction: Boolean = false,
+    val canDeleteExpenseAction: Boolean = false,
     val error: String? = null,
     // Payment submission
     val isSubmittingPayment: Boolean = false,

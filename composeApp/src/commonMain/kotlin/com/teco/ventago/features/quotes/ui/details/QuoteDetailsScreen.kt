@@ -139,6 +139,9 @@ fun QuoteDetailsScreen(
                 quote = uiState.quote!!,
                 isCancelling = uiState.isCancelling,
                 errorMessage = uiState.error,
+                canModifyQuote = uiState.canModifyQuote,
+                canCreateOrderFromQuote = uiState.canCreateOrderFromQuote,
+                canCancelQuote = uiState.canCancelQuote,
                 onCancel = { reason -> viewModel.cancel(reason) },
                 onModify = onModify,
                 onCreateOrder = onCreateOrder
@@ -184,6 +187,9 @@ private fun QuoteDetailsContent(
     quote: Quote,
     isCancelling: Boolean,
     errorMessage: String?,
+    canModifyQuote: Boolean,
+    canCreateOrderFromQuote: Boolean,
+    canCancelQuote: Boolean,
     onCancel: (String) -> Unit,
     onModify: () -> Unit,
     onCreateOrder: () -> Unit
@@ -265,27 +271,33 @@ private fun QuoteDetailsContent(
 
         // Action buttons
         if (!showLimitedActions) {
-            ButtonM(
-                onClick = onCreateOrder,
-                containerColor = MaterialTheme.colorScheme.secondaryContainer,
-                contentColor = MaterialTheme.colorScheme.onSecondaryContainer
-            ) {
-                Text(text = stringResource(Res.string.create_order))
+            if (canCreateOrderFromQuote) {
+                ButtonM(
+                    onClick = onCreateOrder,
+                    containerColor = MaterialTheme.colorScheme.secondaryContainer,
+                    contentColor = MaterialTheme.colorScheme.onSecondaryContainer
+                ) {
+                    Text(text = stringResource(Res.string.create_order))
+                }
             }
-            OutlinedButtonM(
-                onClick = onModify,
-                contentColor = MaterialTheme.colorScheme.secondary,
-                border = BorderStroke(1.dp, MaterialTheme.colorScheme.secondary)
-            ) {
-                Text(text = stringResource(Res.string.modify_quote))
+            if (canModifyQuote) {
+                OutlinedButtonM(
+                    onClick = onModify,
+                    contentColor = MaterialTheme.colorScheme.secondary,
+                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.secondary)
+                ) {
+                    Text(text = stringResource(Res.string.modify_quote))
+                }
             }
-            OutlinedButtonM(
-                onClick = { showCancelSheet = true },
-                containerColor = MaterialTheme.colorScheme.errorContainer,
-                contentColor = MaterialTheme.colorScheme.error,
-                border = BorderStroke(1.dp, MaterialTheme.colorScheme.error)
-            ) {
-                Text(text = stringResource(Res.string.cancel_quote))
+            if (canCancelQuote) {
+                OutlinedButtonM(
+                    onClick = { showCancelSheet = true },
+                    containerColor = MaterialTheme.colorScheme.errorContainer,
+                    contentColor = MaterialTheme.colorScheme.error,
+                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.error)
+                ) {
+                    Text(text = stringResource(Res.string.cancel_quote))
+                }
             }
         }
 

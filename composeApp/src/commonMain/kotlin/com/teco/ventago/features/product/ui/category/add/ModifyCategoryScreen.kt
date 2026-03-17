@@ -72,19 +72,21 @@ fun ModifyCategoryScreen(
             },
             isError = false)
 
-        ButtonM(onClick = {
-            viewModel.saveCategory()
-        }) {
-            Text(
-                text = stringResource(Res.string.edit), style = TextStyle(
-                    fontSize = 16.sp,
-                    lineHeight = 24.sp,
-                    color = MaterialTheme.colorScheme.onPrimary,
-                    fontFamily = latoFontFamily(),
-                    fontWeight = FontWeight.W700,
-                    letterSpacing = 0.02.sp,
+        if (viewModel.state.canManageCategories.value) {
+            ButtonM(onClick = {
+                viewModel.saveCategory()
+            }) {
+                Text(
+                    text = stringResource(Res.string.edit), style = TextStyle(
+                        fontSize = 16.sp,
+                        lineHeight = 24.sp,
+                        color = MaterialTheme.colorScheme.onPrimary,
+                        fontFamily = latoFontFamily(),
+                        fontWeight = FontWeight.W700,
+                        letterSpacing = 0.02.sp,
+                    )
                 )
-            )
+            }
         }
 
     }

@@ -63,7 +63,6 @@ import com.teco.ventago.core.SnackbarService
 import com.teco.ventago.core.camera.PermissionCallback
 import com.teco.ventago.core.camera.PermissionStatus
 import com.teco.ventago.core.camera.PermissionType
-import com.teco.ventago.core.camera.SharedImage
 import com.teco.ventago.core.camera.createPermissionsManager
 import com.teco.ventago.core.camera.rememberCameraManager
 import com.teco.ventago.core.camera.rememberGalleryManager
@@ -212,7 +211,11 @@ fun SettingsScreen(
         modifier = Modifier
             .fillMaxSize()
     ) {
-        val isDirty  = rememberIsDirty(uiState, viewModel, uiState.sharedImage)
+        val generalSettingsDirty = rememberGeneralSettingsDirty(uiState)
+        val quoteSettingsDirty = viewModel.isQuoteSettingsDirty(uiState)
+        val canPersistGeneralSettings = uiState.canModifySettings && (generalSettingsDirty || uiState.sharedImage != null)
+        val canPersistQuoteSettings = uiState.canModifyQuoteSettings && quoteSettingsDirty
+        val showSaveBar = canPersistGeneralSettings || canPersistQuoteSettings
 //        val canSave  = rememberCanSave(uiState, viewModel)
         Column (modifier = Modifier.verticalScroll(rememberScrollState()).fillMaxWidth()) {
             // Profile Card
@@ -235,7 +238,9 @@ fun SettingsScreen(
                         .padding( vertical = 8.dp)
                 ) {
                     BusinessImage(uiState.imgUrl, uiState.imageBitmap) {
-                        viewModel.showUploadImageSheet(true)
+                        if (uiState.canModifySettings) {
+                            viewModel.showUploadImageSheet(true)
+                        }
                     }
                 }
 
@@ -250,7 +255,7 @@ fun SettingsScreen(
                     keyboardType = KeyboardType.Text,
                     imeAction = ImeAction.Done,
                     isError = (uiState.newName.isBlank() || uiState.newName.length < 3) && uiState.newName != uiState.actualName,
-                    readOnly = uiState.invoicingEnabled
+                    readOnly = uiState.invoicingEnabled || !uiState.canModifySettings
                 )
 
                 // Business Phone
@@ -265,6 +270,7 @@ fun SettingsScreen(
                     imeAction = ImeAction.Next,
                     isError = (uiState.newPhone.isBlank() || uiState.newPhone.length < 3
                             || !viewModel.isValidPhone(uiState.newPhone)) && uiState.newPhone != uiState.actualPhone,
+                    readOnly = !uiState.canModifySettings
                 )
 
                 DMOutlinedTextField(
@@ -278,6 +284,7 @@ fun SettingsScreen(
                     imeAction = ImeAction.Next,
                     isError = (uiState.newEmail.isBlank() || uiState.newEmail.length < 3
                             || !viewModel.isValidPhone(uiState.newEmail)) && uiState.newEmail != uiState.actualEmail,
+                    readOnly = !uiState.canModifySettings
                 )
 
                 DMOutlinedTextField(
@@ -304,6 +311,7 @@ fun SettingsScreen(
                     },
                     keyboardType = KeyboardType.Text,
                     imeAction = ImeAction.Done,
+                    readOnly = !uiState.canModifySettings
                 )
 
                 // Business Address
@@ -353,32 +361,34 @@ fun SettingsScreen(
 
                     }
                 }
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(bottom = 16.dp),
-                    horizontalArrangement = Arrangement.Center,
-                ) {
-                    TextButtonS(
-                        modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp),
-                        label = if (!uiState.isAddressFilled) {
-                            stringResource(Res.string.set_address)
-                        } else {
-                            stringResource(Res.string.change_business_address)
-                        }
-
+                if (uiState.canModifySettings) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(bottom = 16.dp),
+                        horizontalArrangement = Arrangement.Center,
                     ) {
-                        try {
-                            launchAutocompleteWidget(
-                                onAddressSelected = { selected ->
-                                    viewModel.setAddress(selected)
-                                },
-                                onCancelled = {
-                                    viewModel.noAddressSelected()
-                                }
-                            )
-                        } catch (e: Exception) {
-                            e.printStackTrace()
+                        TextButtonS(
+                            modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp),
+                            label = if (!uiState.isAddressFilled) {
+                                stringResource(Res.string.set_address)
+                            } else {
+                                stringResource(Res.string.change_business_address)
+                            }
+
+                        ) {
+                            try {
+                                launchAutocompleteWidget(
+                                    onAddressSelected = { selected ->
+                                        viewModel.setAddress(selected)
+                                    },
+                                    onCancelled = {
+                                        viewModel.noAddressSelected()
+                                    }
+                                )
+                            } catch (e: Exception) {
+                                e.printStackTrace()
+                            }
                         }
                     }
                 }
@@ -387,14 +397,17 @@ fun SettingsScreen(
             // HIDDEN: Payments Card temporarily disabled (backend bug)
             // See tasks/restore-payment-links.md for full restore instructions
 
-            QuoteSettingsSection(
-                additionalInfo = uiState.defaultQuoteAdditionalInfo,
-                style = uiState.defaultQuoteStyle,
-                quotePrefix = uiState.quotePrefix,
-                onAdditionalInfoChange = { viewModel.setDefaultQuoteAdditionalInfo(it) },
-                onStyleChange = { viewModel.setDefaultQuoteStyle(it) },
-                onQuotePrefixChange = { viewModel.setQuotePrefix(it) }
-            )
+            if (uiState.hasQuotesAccess) {
+                QuoteSettingsSection(
+                    additionalInfo = uiState.defaultQuoteAdditionalInfo,
+                    style = uiState.defaultQuoteStyle,
+                    quotePrefix = uiState.quotePrefix,
+                    enabled = uiState.canModifyQuoteSettings,
+                    onAdditionalInfoChange = { viewModel.setDefaultQuoteAdditionalInfo(it) },
+                    onStyleChange = { viewModel.setDefaultQuoteStyle(it) },
+                    onQuotePrefixChange = { viewModel.setQuotePrefix(it) }
+                )
+            }
 
             Card(modifier = Modifier.fillMaxWidth().padding(all = 16.dp),
                 elevation = CardDefaults.elevatedCardElevation(4.dp),
@@ -404,7 +417,7 @@ fun SettingsScreen(
                 shape = RoundedCornerShape(10.dp),
                 onClick = {})
             {
-                if (uiState.invoicingEnabled) {
+                if (uiState.invoicingEnabled && uiState.canModifySettings) {
                     SettingsTextButton(
                         label = "Sucursales",
                         onClick = {
@@ -414,12 +427,14 @@ fun SettingsScreen(
                 }
 
 
-                SettingsTextButton(
-                    label = "Conceptos de gasto",
-                    onClick = {
-                        navigate(PosScreens.ExpenseAccountsSettingsScreen)
-                    }
-                )
+                if (uiState.canModifySettings) {
+                    SettingsTextButton(
+                        label = "Conceptos de gasto",
+                        onClick = {
+                            navigate(PosScreens.ExpenseAccountsSettingsScreen)
+                        }
+                    )
+                }
 
                 SettingsTextButton(
                     label = stringResource(Res.string.terms_and_conditions),
@@ -447,7 +462,7 @@ fun SettingsScreen(
 
 
 
-            if (isDirty) {
+            if (showSaveBar) {
                 Spacer(Modifier.height(80.dp)) // to avoid last item being hidden by the SaveChangesBar
             }
 
@@ -456,7 +471,7 @@ fun SettingsScreen(
         // ===== Sticky Save Bar overlay =====
         val navBarHeightPadding = 4.dp // keep above bottom NavigationBar (tune if needed)
         SaveChangesBar(
-            visible = isDirty || uiState.sharedImage != null,
+            visible = showSaveBar,
             canSave = true,
             onSave = {
                 viewModel.saveChanges()
@@ -536,18 +551,14 @@ fun SettingsScreen(
 }
 
 @Composable
-private fun rememberIsDirty(uiState: SettingsState, viewModel: SettingsViewModel, image: SharedImage?): Boolean {
-    // Example validations; adapt to your uiState names
+private fun rememberGeneralSettingsDirty(uiState: SettingsState): Boolean {
     return remember(uiState) {
-        val quoteSettingsDirty = viewModel.isQuoteSettingsDirty(uiState)
         uiState.newName != uiState.actualName ||
                 uiState.newPhone != uiState.actualPhone ||
                 uiState.newRuc != uiState.actualRuc ||
                 uiState.newEmail != uiState.actualEmail ||
                 uiState.newWeb != uiState.actualWeb ||
-                uiState.newAddress?.placeAddress != null ||
-                image != null ||
-                quoteSettingsDirty
+                uiState.newAddress?.placeAddress != null
     }
 }
 

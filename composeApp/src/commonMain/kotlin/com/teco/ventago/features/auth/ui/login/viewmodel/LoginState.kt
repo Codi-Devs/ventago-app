@@ -10,6 +10,7 @@ data class LoginState(
     val showPassword: Boolean = false,
     val invalidEmail: Boolean = false,
     val invalidPassword: Boolean = false,
+    val mustChangePasswordBlocked: Boolean = false,
     val email: String = "",
     val password: String = "",
     val forgotEmail: String = "",
