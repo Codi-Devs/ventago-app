@@ -82,7 +82,7 @@ data class OrderItem(
     val code: String,
     val name: String,
     @SerialName("unit_measure") val unitMeasure: String,
-    val quantity: Int,
+    val quantity: String,
     @SerialName("base_unit_price") val baseUnitPrice: String,
     @SerialName("override_unit_price") val overrideUnitPrice: String? = null,
     @SerialName("discounts") val orderItemDiscounts: List<OrderItemDiscount> = emptyList(),

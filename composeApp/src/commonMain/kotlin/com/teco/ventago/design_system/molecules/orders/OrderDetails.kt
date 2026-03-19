@@ -36,6 +36,7 @@ import com.teco.ventago.features.orders.domain.models.Order
 import com.teco.ventago.features.orders.domain.models.OrderLineDto
 import com.teco.ventago.utils.DateFormat
 import com.teco.ventago.utils.formatNumberToMoney
+import com.teco.ventago.utils.toQuantityUiString
 import org.jetbrains.compose.resources.painterResource
 import org.jetbrains.compose.resources.stringResource
 import ventago.composeapp.generated.resources.Res
@@ -206,7 +207,7 @@ fun OrderDetailsItem(orderItem: OrderLineDto) {
                 modifier = Modifier.padding(bottom = 4.dp),
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
-                text = "${orderItem.quantity}x",
+                text = "${orderItem.quantity.toQuantityUiString()}x",
                 style = bodyMediumBold()
             )
         }

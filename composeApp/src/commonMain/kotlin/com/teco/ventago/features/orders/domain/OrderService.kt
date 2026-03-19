@@ -16,6 +16,7 @@ import com.teco.ventago.features.orders.domain.models.requests.RegisterManualPay
 import com.teco.ventago.features.orders.domain.models.requests.RetryInvoiceResponse
 import com.teco.ventago.features.orders.domain.models.responses.InvoiceDocsDto
 import com.teco.ventago.utils.toDecimalString
+import com.teco.ventago.utils.toQuantityUiString
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -308,7 +309,7 @@ class OrderService(private val repository: IOrdersRepository) {
         sb.appendLine()
 
         order.lines.forEach { item ->
-            sb.appendLine("*${item.quantity}x ${item.itemName} $currency ${item.baseUnitPrice}")
+            sb.appendLine("*${item.quantity.toQuantityUiString()}x ${item.itemName} $currency ${item.baseUnitPrice}")
         }
 
         sb.appendLine()

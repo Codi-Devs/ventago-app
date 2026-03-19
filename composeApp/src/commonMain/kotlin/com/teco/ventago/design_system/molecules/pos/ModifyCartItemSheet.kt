@@ -66,8 +66,12 @@ import com.teco.ventago.design_system.theme.Online
 import com.teco.ventago.design_system.theme.RedLight
 import com.teco.ventago.design_system.theme.WarningAmber
 import com.teco.ventago.utils.formatNumberToMoney
+import com.teco.ventago.utils.multiplyCentsByQuantity
+import com.teco.ventago.utils.normalizeQuantity
+import com.teco.ventago.utils.sanitizeQuantityInput
 import com.teco.ventago.utils.toLongCents
-import kotlin.math.max
+import com.teco.ventago.utils.toNormalizedQuantityOrNull
+import com.teco.ventago.utils.toQuantityUiString
 import kotlin.math.roundToInt
 
 @Stable
@@ -83,7 +87,7 @@ fun ModifyCartItemSheet(
     onDismiss: () -> Unit,
     onApply: (
         newUnitPriceCents: Long,    // BEFORE discount
-        qty: Int,
+        qty: Double,
         discountMode: DiscountMode,
         discountValue: Long,        // PERCENT: 0..100, FIXED: cents, NONE: 0
         itemShippingCents: Long?,   // NEW: null if not set / disabled
@@ -99,8 +103,8 @@ fun ModifyCartItemSheet(
     fun rawTextToCents(raw: String): Long = raw.filter(Char::isDigit).toLongOrNull() ?: 0L
 
     // --- initial values from line ---
-    var qty by remember { mutableStateOf(kotlin.math.max(1, itemToModify.quantity)) }
-    var qtyText by rememberSaveable { mutableStateOf(kotlin.math.max(1, itemToModify.quantity).toString()) }
+    var qty by remember { mutableStateOf(normalizeQuantity(itemToModify.quantity, minValue = 0.0001)) }
+    var qtyText by rememberSaveable { mutableStateOf(normalizeQuantity(itemToModify.quantity, minValue = 0.0001).toQuantityUiString()) }
     val initialUnitPriceCents = itemToModify.overrideUnitPrice ?: itemToModify.baseUnitPrice
     var unitPriceRaw by rememberSaveable { mutableStateOf(centsToRawText(initialUnitPriceCents)) }
     var fixedRaw by rememberSaveable { mutableStateOf("") }
@@ -200,7 +204,7 @@ fun ModifyCartItemSheet(
         (unitPriceCents - discountPerUnit).coerceAtLeast(0L)
     }
     // Line total = discounted unit price × quantity
-    val lineTotalCents = discountedUnitCents * qty
+    val lineTotalCents = multiplyCentsByQuantity(discountedUnitCents, qty)
 
     ModalBottomSheet(
         containerColor = cardContainerColor(),
@@ -278,9 +282,9 @@ fun ModifyCartItemSheet(
                     Text("Cantidad", style = labelMedium(), modifier = Modifier.weight(1f))
                     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                         IconButton(onClick = {
-                            val newQty = kotlin.math.max(1, qty - 1)
+                            val newQty = normalizeQuantity(qty - 1.0, minValue = 0.0001)
                             qty = newQty
-                            qtyText = newQty.toString()
+                            qtyText = newQty.toQuantityUiString()
                         }) {
                             Icon(Icons.Rounded.Remove, contentDescription = "Disminuir")
                         }
@@ -288,17 +292,19 @@ fun ModifyCartItemSheet(
                             text = qtyText,
                             label = "",
                             onChange = {
-                                qtyText = it.filter(Char::isDigit).take(6)
-                                qty = qtyText.toIntOrNull()?.coerceAtLeast(1) ?: 1
+                                val sanitized = sanitizeQuantityInput(it)
+                                qtyText = sanitized
+                                qty = sanitized.toNormalizedQuantityOrNull(minValue = 0.0001) ?: qty
                             },
-                            keyboardType = KeyboardType.Number,
+                            keyboardType = KeyboardType.Decimal,
                             imeAction = ImeAction.Done,
                             modifier = Modifier.width(80.dp),
                             maxLines = 1
                         )
                         IconButton(onClick = {
-                            qty += 1
-                            qtyText = qty.toString()
+                            val newQty = normalizeQuantity(qty + 1.0, minValue = 0.0001)
+                            qty = newQty
+                            qtyText = newQty.toQuantityUiString()
                         }) {
                             Icon(Icons.Rounded.Add, contentDescription = "Incrementar")
                         }
@@ -414,7 +420,7 @@ fun ModifyCartItemSheet(
                     modifier = Modifier.padding(top = 4.dp, bottom = 4.dp)
                 )
                 Text(
-                    text = "$currencySymbol${formatNumberToMoney((discountedUnitCents / 100.0).toString())} × $qty",
+                    text = "$currencySymbol${formatNumberToMoney((discountedUnitCents / 100.0).toString())} × ${qty.toQuantityUiString()}",
                     style = bodyMedium()
                 )
                 Text(
@@ -444,10 +450,11 @@ fun ModifyCartItemSheet(
                             val batchNumOut =
                                 if (isPharma && batchNumber.isNotBlank()) batchNumber else null
                             val batchQtyOut = if (isPharma) batchQty else null
+                            val quantityOut = qtyText.toNormalizedQuantityOrNull(minValue = 0.0001) ?: qty
 
                             onApply(
                                 unitPriceCents,
-                                qty,
+                                quantityOut,
                                 mode,
                                 discountValue,
                                 shippingCents,

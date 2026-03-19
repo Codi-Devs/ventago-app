@@ -132,6 +132,7 @@ import com.teco.ventago.utils.generateQR
 import com.teco.ventago.utils.openWhatsappMessage
 import com.teco.ventago.utils.shareLink
 import com.teco.ventago.utils.toDecimalString
+import com.teco.ventago.utils.toQuantityUiString
 import io.github.alexzhirkevich.compottie.LottieCompositionSpec
 import io.github.alexzhirkevich.compottie.animateLottieCompositionAsState
 import io.github.alexzhirkevich.compottie.rememberLottieComposition
@@ -378,7 +379,7 @@ fun CartOrganism(
                         ) {
                             Icon(
                                 modifier = Modifier.clickable {
-                                    viewModel.setLineQty(cartItem.lineId, cartItem.quantity + 1)
+                                    viewModel.setLineQty(cartItem.lineId, cartItem.quantity + 1.0)
                                 },
                                 imageVector = Icons.Outlined.Add,
                                 contentDescription = "",
@@ -386,18 +387,19 @@ fun CartOrganism(
                             )
 
                             Text(
-                                text = cartItem.quantity.toString(),
+                                text = cartItem.quantity.toQuantityUiString(),
                                 style = bodyLargeBold(),
                                 modifier = Modifier.padding(start = 12.dp, end = 12.dp)
                             )
 
                             Icon(
                                 modifier = Modifier.clickable {
-                                    if (cartItem.quantity <= 1) {
+                                    val newQuantity = cartItem.quantity - 1.0
+                                    if (newQuantity <= 0.0) {
                                         viewModel.removeLine(cartItem.lineId)
                                     } else {
                                         viewModel.setLineQty(
-                                            cartItem.lineId, cartItem.quantity - 1
+                                            cartItem.lineId, newQuantity
                                         )
                                     }
                                 },

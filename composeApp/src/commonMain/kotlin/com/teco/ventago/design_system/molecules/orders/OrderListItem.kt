@@ -95,7 +95,7 @@ import ventago.composeapp.generated.resources.rejected
 @Composable
 fun OrderListItem(order: Order, onClick: () -> Unit, statusOnClick: () -> Unit) {
 
-    val totalItems = order.lines.sumOf { it.quantity }
+    val totalItems = order.lines.size
 
     val (icon, tint) = getOrderStatusIcon(
         order.status,

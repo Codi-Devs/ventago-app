@@ -5,6 +5,10 @@ import kotlin.math.pow
 import kotlin.math.roundToInt
 import kotlin.math.roundToLong
 
+private const val QUANTITY_SCALE_FACTOR = 10_000L
+private const val QUANTITY_MIN_VALUE = 0.0001
+private const val QUANTITY_ROUNDING_HALF = QUANTITY_SCALE_FACTOR / 2
+
 fun isNumeric(toCheck: String): Boolean {
     return toCheck.toDoubleOrNull() != null
 }
@@ -36,6 +40,83 @@ fun Long.toDecimalString(): String {
     // Ensure fractional part is always 2 digits (e.g., 5 becomes "05")
     val fractionalString = fractionalPart.absoluteValue.toString().padStart(2, '0')
     return "$integerPart.$fractionalString"
+}
+
+fun sanitizeQuantityInput(raw: String): String {
+    if (raw.isBlank()) return ""
+    val normalizedRaw = raw.trim().replace(',', '.')
+    val builder = StringBuilder()
+    var hasSeparator = false
+
+    normalizedRaw.forEach { ch ->
+        when {
+            ch.isDigit() -> builder.append(ch)
+            ch == '.' && !hasSeparator -> {
+                if (builder.isEmpty()) builder.append('0')
+                builder.append('.')
+                hasSeparator = true
+            }
+        }
+    }
+
+    val sanitized = builder.toString()
+    if (sanitized.isEmpty()) return ""
+
+    val parts = sanitized.split('.', limit = 2)
+    val integerPart = parts[0]
+    val decimalPart = parts.getOrNull(1)?.take(4).orEmpty()
+
+    return if (hasSeparator) {
+        "$integerPart.$decimalPart"
+    } else {
+        integerPart
+    }
+}
+
+fun normalizeQuantity(value: Double, minValue: Double = QUANTITY_MIN_VALUE): Double {
+    if (!value.isFinite()) return minValue
+    val scaled = (value * QUANTITY_SCALE_FACTOR).roundToLong()
+    val quantized = scaled / QUANTITY_SCALE_FACTOR.toDouble()
+    return quantized.coerceAtLeast(minValue)
+}
+
+fun String.toNormalizedQuantityOrNull(minValue: Double = QUANTITY_MIN_VALUE): Double? {
+    val sanitized = sanitizeQuantityInput(this)
+    if (sanitized.isBlank()) return null
+    val parsed = sanitized.toDoubleOrNull() ?: return null
+    return normalizeQuantity(parsed, minValue)
+}
+
+fun Double.toQuantityUiString(): String {
+    val safeValue = if (this.isFinite()) this.coerceAtLeast(0.0) else 0.0
+    val scaled = (safeValue * QUANTITY_SCALE_FACTOR).roundToLong()
+    val integerPart = scaled / QUANTITY_SCALE_FACTOR
+    val decimalPart = (scaled % QUANTITY_SCALE_FACTOR).absoluteValue
+        .toString()
+        .padStart(4, '0')
+        .trimEnd('0')
+    return if (decimalPart.isEmpty()) integerPart.toString() else "$integerPart.$decimalPart"
+}
+
+fun Double.toQuantityRequestString(): String {
+    val normalized = normalizeQuantity(this)
+    val scaled = (normalized * QUANTITY_SCALE_FACTOR).roundToLong()
+    val integerPart = scaled / QUANTITY_SCALE_FACTOR
+    val decimalPart = (scaled % QUANTITY_SCALE_FACTOR).absoluteValue.toString().padStart(4, '0')
+    return "$integerPart.$decimalPart"
+}
+
+fun multiplyCentsByQuantity(cents: Long, quantity: Double): Long {
+    if (cents == 0L) return 0L
+    val normalized = normalizeQuantity(quantity)
+    val quantityScaled = (normalized * QUANTITY_SCALE_FACTOR).roundToLong().coerceAtLeast(1L)
+    val numerator = cents * quantityScaled
+    val adjusted = if (numerator >= 0L) {
+        numerator + QUANTITY_ROUNDING_HALF
+    } else {
+        numerator - QUANTITY_ROUNDING_HALF
+    }
+    return adjusted / QUANTITY_SCALE_FACTOR
 }
 
 /**

@@ -190,7 +190,7 @@ fun QuoteSummaryScreen(
             Column(Modifier.padding(16.dp)) {
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
                     Text(stringResource(Res.string.quote_items_label))
-                    Text(uiState.cart.sumOf { it.quantity }.toString())
+                    Text(uiState.cart.size.toString())
                 }
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
                     Text(stringResource(Res.string.quote_subtotal_label))

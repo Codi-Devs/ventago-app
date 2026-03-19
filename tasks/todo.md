@@ -636,3 +636,32 @@
 - Added localized strings in both `values/strings.xml` and `values-es/strings.xml` for the new customer screens, and removed debug prints introduced in customer provider/repository/service flow.
 - Added/expanded common tests (`CustomerModelsAndOrdersRequestTest`) for customer details/address parsing, orders request `customer_id` include/omit, repository mutation success on `error == null`, and customer service create/update/delete state/cache updates.
 - Android compile and unit tests pass. iOS simulator compile is still blocked by pre-existing unrelated files (`features/expenses/ui/cufe/CufeImportViewModel.kt`, `features/quotes/ui/preview/PdfPreview.ios.kt`).
+
+# POS/Quote Decimal Quantity 4dp TODO
+
+## Plan
+- [x] Add quantity utility helpers (sanitize/normalize/display/request + cents multiplication) in `NumberUtils`.
+- [x] Migrate cart quantity model and math from `Int` to decimal and update viewmodel qty APIs.
+- [x] Update POS quantity UI (`ModifyCartItemSheet` and cart row actions/displays) to support 4dp input and 1.0 step buttons.
+- [x] Update order/quote request contracts to send `items[].quantity` as fixed-4 decimal string and keep `totals.quantity_items` as line count.
+- [x] Harden order/quote quantity parsing/display compatibility for decimal quantities.
+- [x] Add focused unit tests for quantity helpers, cart math with fractional qty, and request builder quantity serialization.
+- [x] Run verification gates and record outcomes.
+
+## Verification Gates
+- [x] `./gradlew :composeApp:testDebugUnitTest --tests com.teco.ventago.utils.NumberUtilsTest`
+- [x] `./gradlew :composeApp:testDebugUnitTest --tests com.teco.ventago.features.pos.domain.models.CartLineTest`
+- [x] `./gradlew :composeApp:testDebugUnitTest --tests com.teco.ventago.features.quotes.domain.QuoteRequestBuilderTest`
+- [x] `./gradlew :composeApp:compileDebugKotlinAndroid`
+
+## Review Notes
+- Quantity now supports decimal values up to 4dp across POS cart state and edit flow (`CartLine.quantity` moved to `Double`, with normalization and decimal-safe cents math).
+- Added quantity helpers in `NumberUtils` for sanitize/normalize/display/request formatting and cents-by-quantity half-up rounding.
+- `ModifyCartItemSheet` now accepts decimal keyboard input (`.`/`,`), enforces max 4dp, keeps min `0.0001`, and applies `+/- 1.0` stepping.
+- Order/quote request payloads now send `items[].quantity` as fixed-4 decimal string (`"x.xxxx"`), and `totals.quantity_items` now uses `cart.size`.
+- Quote edit hydration no longer truncates quantity to int (`toInt()` removed), preserving decimal quantities.
+- Order-line compatibility hardening added by switching `OrderLineDto.quantity` to a flexible `Double` serializer and rendering quantity with decimal-aware UI formatting in order/POS screens.
+- Added tests:
+  - `NumberUtilsTest` (sanitize/normalize/format/multiply behavior),
+  - `CartLineTest` (fractional quantity totals/discount/tax rounding),
+  - `QuoteRequestBuilderTest` (quote quantity serialization + order DTO quantity string contract).

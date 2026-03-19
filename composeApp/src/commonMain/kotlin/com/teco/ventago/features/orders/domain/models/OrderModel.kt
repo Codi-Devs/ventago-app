@@ -1,9 +1,21 @@
 package com.teco.ventago.features.orders.domain.models
 
 import com.teco.ventago.features.invoicing.domain.models.InvoiceStatus
+import kotlinx.serialization.KSerializer
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.descriptors.PrimitiveKind
+import kotlinx.serialization.descriptors.PrimitiveSerialDescriptor
+import kotlinx.serialization.descriptors.SerialDescriptor
+import kotlinx.serialization.encoding.Decoder
+import kotlinx.serialization.encoding.Encoder
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonDecoder
+import kotlinx.serialization.json.JsonNull
+import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.doubleOrNull
+import kotlinx.serialization.json.intOrNull
+import kotlinx.serialization.json.longOrNull
 
 @Serializable
 data class Order(
@@ -54,7 +66,8 @@ data class OrderLineDto(
     @SerialName("item_name") val itemName: String,
     @SerialName("base_unit_price") val baseUnitPrice: String,
     @SerialName("override_unit_price") val overrideUnitPrice: String? = null,
-    val quantity: Int,
+    @Serializable(with = FlexibleDoubleSerializer::class)
+    val quantity: Double,
     @SerialName("discount_mode") val discountMode: Int,
     @SerialName("discount_value") val discountValue: String,
     @SerialName("tax_name") val taxName: String,
@@ -119,3 +132,30 @@ fun String.moneyToCents(): Long = try {
         else -> 0L
     }
 } catch (_: Throwable) { 0L }
+
+object FlexibleDoubleSerializer : KSerializer<Double> {
+    override val descriptor: SerialDescriptor =
+        PrimitiveSerialDescriptor("FlexibleDouble", PrimitiveKind.DOUBLE)
+
+    override fun serialize(encoder: Encoder, value: Double) {
+        encoder.encodeDouble(value)
+    }
+
+    override fun deserialize(decoder: Decoder): Double {
+        if (decoder !is JsonDecoder) return decoder.decodeDouble()
+
+        val element = decoder.decodeJsonElement()
+        if (element is JsonNull) return 0.0
+        val primitive = element as? JsonPrimitive ?: return 0.0
+
+        primitive.doubleOrNull?.let { return it }
+        primitive.longOrNull?.let { return it.toDouble() }
+        primitive.intOrNull?.let { return it.toDouble() }
+
+        return primitive.content
+            .trim()
+            .replace(',', '.')
+            .toDoubleOrNull()
+            ?: 0.0
+    }
+}

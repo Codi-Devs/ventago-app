@@ -17,6 +17,7 @@ import com.teco.ventago.features.quotes.domain.models.requests.CreateQuoteReques
 import com.teco.ventago.features.quotes.domain.models.requests.QuoteFinalCustomerInfo
 import com.teco.ventago.features.quotes.domain.models.requests.QuoteTotalsRequest
 import com.teco.ventago.utils.toDecimalString
+import com.teco.ventago.utils.toQuantityRequestString
 import kotlinx.serialization.json.JsonElement
 
 /**
@@ -122,7 +123,7 @@ object QuoteRequestBuilder {
                 code = product?.barcode ?: "0001",
                 name = line.name,
                 unitMeasure = product?.unitMeasureCode ?: "und",
-                quantity = line.quantity,
+                quantity = line.quantity.toQuantityRequestString(),
                 baseUnitPrice = line.unitPrice().toDecimalString(),
                 overrideUnitPrice = line.overrideUnitPrice?.toDecimalString(),
                 orderItemDiscounts = orderItemDiscounts,
@@ -174,7 +175,7 @@ object QuoteRequestBuilder {
         }
 
         val totals = QuoteTotalsRequest(
-            quantityItems = state.cart.sumOf { it.quantity },
+            quantityItems = state.cart.size,
             charges = charges,
             discounts = discounts,
             subtotal = summary.subtotal.toDecimalString(),

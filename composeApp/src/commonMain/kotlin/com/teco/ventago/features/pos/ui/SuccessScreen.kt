@@ -62,6 +62,7 @@ import com.teco.ventago.utils.generateBarcodeImage
 import com.teco.ventago.utils.getImageRequest
 import com.teco.ventago.utils.openFileInGallery
 import com.teco.ventago.utils.shareInvoice
+import com.teco.ventago.utils.toQuantityUiString
 import kotlinx.coroutines.launch
 import org.jetbrains.compose.resources.stringResource
 import ventago.composeapp.generated.resources.Res
@@ -354,7 +355,10 @@ fun InvoiceContent(modifier: Modifier = Modifier, order: Order, business: Busine
                     horizontalArrangement = Arrangement.SpaceBetween
                 ) {
                     Text(text = item.itemName, fontSize = 16.sp)
-                    Text(text = "${item.quantity} x ${formatNumberToMoney(item.baseUnitPrice)}", fontSize = 16.sp)
+                    Text(
+                        text = "${item.quantity.toQuantityUiString()} x ${formatNumberToMoney(item.baseUnitPrice)}",
+                        fontSize = 16.sp
+                    )
                 }
                 Spacer(modifier = Modifier.height(4.dp))
             }

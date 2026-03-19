@@ -184,7 +184,7 @@ sealed class PosStateUiEvent {
 }
 
 fun List<CartLine>.totalItems(): Int {
-    return this.sumOf { it.quantity }
+    return this.size
 }
 
 object CartCalc {

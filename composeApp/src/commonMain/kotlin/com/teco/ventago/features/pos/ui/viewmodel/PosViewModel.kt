@@ -71,9 +71,11 @@ import com.teco.ventago.navigation.PosNoteRoute
 import com.teco.ventago.features.orders.domain.models.OrderLineDto
 import kotlinx.serialization.json.Json as KotlinJson
 import com.teco.ventago.utils.dbFormat
+import com.teco.ventago.utils.normalizeQuantity
 import com.teco.ventago.utils.randomUUID
 import com.teco.ventago.utils.toDecimalString
 import com.teco.ventago.utils.toLongCents
+import com.teco.ventago.utils.toQuantityRequestString
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.IO
 import kotlinx.coroutines.delay
@@ -337,7 +339,7 @@ class PosViewModel(
                     overrideUnitPrice = if (orderLine.overrideUnitPrice != null) {
                         orderLine.overrideUnitPrice.toDoubleOrNull()?.toLongCents()
                     } else null,
-                    quantity = orderLine.quantity.coerceAtLeast(1),
+                    quantity = normalizeQuantity(orderLine.quantity, minValue = 0.0001),
                     tax = tax,
                     discount = discount,
                     costCents = existingItem.cost?.toLongCents(),
@@ -389,7 +391,7 @@ class PosViewModel(
                     overrideUnitPrice = if (orderLine.overrideUnitPrice != null) {
                         orderLine.overrideUnitPrice.toDoubleOrNull()?.toLongCents()
                     } else null,
-                    quantity = orderLine.quantity.coerceAtLeast(1),
+                    quantity = normalizeQuantity(orderLine.quantity, minValue = 0.0001),
                     tax = tax,
                     discount = discount,
                 )
@@ -690,13 +692,13 @@ class PosViewModel(
         if (idx >= 0) {
             // Merge: bump quantity (and drop the line if it goes to 0)
             val cur = cart[idx]
-            val newQty = (cur.quantity + deltaQty).coerceAtLeast(0)
+            val newQty = cur.quantity + deltaQty.toDouble()
             val newCart = cart.toMutableList()
-            if (newQty == 0) {
+            if (newQty <= 0.0) {
                 newCart.removeAt(idx)
                 copy(cart = newCart)
             } else {
-                newCart[idx] = cur.copy(quantity = newQty)
+                newCart[idx] = cur.copy(quantity = normalizeQuantity(newQty, minValue = 0.0001))
                 copy(cart = newCart)
             }
         } else {
@@ -708,7 +710,7 @@ class PosViewModel(
                 name = item.name,
                 baseUnitPrice = baseCents,
                 overrideUnitPrice = customUnitPrice, // keep Money? so totals can choose override if present
-                quantity = deltaQty.coerceAtLeast(1),
+                quantity = normalizeQuantity(deltaQty.toDouble().coerceAtLeast(1.0), minValue = 0.0001),
                 tax = tax,
                 discount = null,
                 costCents = item.cost?.toLongCents(),
@@ -727,7 +729,7 @@ class PosViewModel(
     fun updateCartLine(
         lineId: String,
         unitPriceCents: Long,         // manual unit price before discount (cents)
-        quantity: Int,
+        quantity: Double,
         discountMode: DiscountMode,
         discountValue: Long,
         itemShippingCents: Long?,
@@ -758,8 +760,12 @@ class PosViewModel(
         setLinePharma(lineId, pharmaBatchNumber, pharmaBatchQty)
     }
 
-    fun setLineQty(lineId: String, qty: Int) = updateState {
-        copy(cart = cart.map { if (it.lineId == lineId) it.copy(quantity = qty.coerceAtLeast(1)) else it })
+    fun setLineQty(lineId: String, qty: Double) = updateState {
+        copy(
+            cart = cart.map {
+                if (it.lineId == lineId) it.copy(quantity = normalizeQuantity(qty, minValue = 0.0001)) else it
+            }
+        )
     }
 
     fun setLineOverridePrice(lineId: String, price: Money?) = updateState {
@@ -1167,7 +1173,7 @@ class PosViewModel(
                 code = product.barcode ?: "0001",
                 name = item.name,
                 unitMeasure = product.unitMeasureCode,
-                quantity = item.quantity,
+                quantity = item.quantity.toQuantityRequestString(),
                 baseUnitPrice = item.baseUnitPrice.toDecimalString(),
                 overrideUnitPrice = item.overrideUnitPrice?.toDecimalString(),
                 orderItemDiscounts = orderItemDiscounts,
@@ -1237,7 +1243,7 @@ class PosViewModel(
         }
 
         val totals = CreateOrderTotals(
-            quantityItems = state.cart.sumOf { it.quantity },
+            quantityItems = state.cart.size,
             charges = charges,
             discounts = globalDiscounts,
             subtotal = cartSummary.subtotal.toDecimalString(),
@@ -1797,7 +1803,7 @@ class PosViewModel(
         return quote.lines.orEmpty().map { line ->
             val itemId = (line.itemId ?: 0L).toInt()
             val product = products.firstOrNull { it.itemId == itemId }
-            val quantity = line.quantity?.toInt()?.coerceAtLeast(1) ?: 1
+            val quantity = normalizeQuantity(line.quantity ?: 1.0, minValue = 0.0001)
             val unitPriceCents = line.unitPrice?.toLongCents() ?: 0L
             val baseUnitPrice = product?.price?.toLongCents() ?: unitPriceCents
             val overrideUnitPrice = if (product != null && unitPriceCents > 0 && unitPriceCents != baseUnitPrice) {

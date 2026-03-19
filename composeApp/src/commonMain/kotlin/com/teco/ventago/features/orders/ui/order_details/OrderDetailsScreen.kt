@@ -136,6 +136,7 @@ import com.teco.ventago.utils.openSms
 import com.teco.ventago.utils.openWhatsappMessage
 import com.teco.ventago.utils.shareLink
 import com.teco.ventago.utils.toLongCents
+import com.teco.ventago.utils.toQuantityUiString
 import kotlinx.datetime.Clock
 import kotlinx.datetime.Instant
 import kotlinx.serialization.encodeToString
@@ -772,7 +773,7 @@ private fun OrderItemsCard(order: Order) {
                     Text(
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
-                        text = "${item.quantity}x",
+                        text = "${item.quantity.toQuantityUiString()}x",
                         style = bodyMediumBold()
                     )
                 }

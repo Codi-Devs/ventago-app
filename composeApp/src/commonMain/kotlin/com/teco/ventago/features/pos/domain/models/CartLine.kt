@@ -1,5 +1,8 @@
 package com.teco.ventago.features.pos.domain.models
 
+import com.teco.ventago.utils.multiplyCentsByQuantity
+import com.teco.ventago.utils.normalizeQuantity
+
 typealias Money = Long
 
 private const val BPS_DENOMINATOR = 10_000L
@@ -24,7 +27,7 @@ data class CartLine(
     val name: String,
 
     val baseUnitPrice: Money,         // from catalog
-    val quantity: Int = 1,
+    val quantity: Double = 1.0,
     val overrideUnitPrice: Money? = null, // custom unit price (replaces baseUnitPrice)
 
     val discount: Discount? = null,   // per-unit discount (stored as per-unit value)
@@ -41,12 +44,13 @@ data class CartLine(
     val costCents: Money? = null,         // cost from catalog (cents), used for margin display
 ) {
     fun unitPrice(): Money = overrideUnitPrice ?: baseUnitPrice
+    fun normalizedQuantity(): Double = normalizeQuantity(quantity)
 
     /**
      * Returns the subtotal BEFORE discounts (unitPrice × quantity).
      * This is used for calculating totals and taxes.
      */
-    fun lineSubtotalBeforeDiscount(): Money = unitPrice() * quantity
+    fun lineSubtotalBeforeDiscount(): Money = multiplyCentsByQuantity(unitPrice(), normalizedQuantity())
 
     /**
      * Calculates the discount amount PER UNIT (not total).
@@ -75,7 +79,7 @@ data class CartLine(
      */
     fun discountAmount(): Money {
         val perUnit = discountPerUnit()
-        return perUnit * quantity
+        return multiplyCentsByQuantity(perUnit, normalizedQuantity())
     }
 
     /**
@@ -87,7 +91,7 @@ data class CartLine(
         val unitPrice = unitPrice()
         val discountPerUnit = discountPerUnit()
         val discountedUnitPrice = (unitPrice - discountPerUnit).coerceAtLeast(0L)
-        return discountedUnitPrice * quantity
+        return multiplyCentsByQuantity(discountedUnitPrice, normalizedQuantity())
     }
 
     fun lineCharges(): Long = (shippingCents ?: 0L) + (insuranceCents ?: 0L)
