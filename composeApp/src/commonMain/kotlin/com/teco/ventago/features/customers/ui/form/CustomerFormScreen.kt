@@ -15,10 +15,12 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.PersonSearch
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -49,6 +51,7 @@ import ventago.composeapp.generated.resources.customers_address_line
 import ventago.composeapp.generated.resources.customers_cedula
 import ventago.composeapp.generated.resources.customers_corregimiento
 import ventago.composeapp.generated.resources.customers_customer_type
+import ventago.composeapp.generated.resources.customers_duplicate_dialog_title
 import ventago.composeapp.generated.resources.customers_district
 import ventago.composeapp.generated.resources.customers_dv
 import ventago.composeapp.generated.resources.customers_foreign_document_number
@@ -64,6 +67,7 @@ import ventago.composeapp.generated.resources.email
 import ventago.composeapp.generated.resources.name
 import ventago.composeapp.generated.resources.phone
 import ventago.composeapp.generated.resources.pos_add_client
+import ventago.composeapp.generated.resources.understood
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -168,6 +172,8 @@ fun CustomerFormScreen(
                 onChange = viewModel::onCedulaChange,
                 modifier = Modifier.fillMaxWidth(),
                 imeAction = ImeAction.Next,
+                isError = uiState.cedulaError != null,
+                supportingText = uiState.cedulaError ?: "",
             )
         }
 
@@ -311,9 +317,6 @@ fun CustomerFormScreen(
             )
         }
 
-        uiState.errorMessage?.let { error ->
-            Text(text = error, color = MaterialTheme.colorScheme.error)
-        }
     }
 
     if (uiState.loadingBottomSheet.isLoading()) {
@@ -321,6 +324,19 @@ fun CustomerFormScreen(
             state = uiState.loadingBottomSheet,
             sheetState = loadingSheetState,
             onDismissRequest = viewModel::hideLoading
+        )
+    }
+
+    uiState.errorMessage?.let { error ->
+        AlertDialog(
+            onDismissRequest = viewModel::clearErrorMessage,
+            title = { Text(text = stringResource(Res.string.customers_duplicate_dialog_title)) },
+            text = { Text(text = error) },
+            confirmButton = {
+                TextButton(onClick = viewModel::clearErrorMessage) {
+                    Text(text = stringResource(Res.string.understood))
+                }
+            }
         )
     }
 }

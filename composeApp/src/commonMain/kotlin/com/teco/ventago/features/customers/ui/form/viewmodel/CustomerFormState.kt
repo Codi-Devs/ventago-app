@@ -41,6 +41,7 @@ data class CustomerFormState(
     val rucCheckDigit: String = "",
     val legalName: String = "",
     val cedulaCF: String = "",
+    val cedulaError: String? = null,
     val foreignIdType: CustomerForeignIdType = CustomerForeignIdType.PASSPORT,
     val foreignIdNumber: String = "",
     val taxExempt: Boolean = false,

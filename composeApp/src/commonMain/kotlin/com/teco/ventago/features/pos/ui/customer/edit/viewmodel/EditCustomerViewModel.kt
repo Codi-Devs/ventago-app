@@ -9,6 +9,8 @@ import com.teco.ventago.core.logger.LogLevel
 import com.teco.ventago.features.customers.domain.CustomerService
 import com.teco.ventago.features.financialProfile.domain.FinancialProfileService
 import com.teco.ventago.features.invoicing.domain.models.FeCustomerType
+import com.teco.ventago.utils.isValidPanamaCedula
+import com.teco.ventago.utils.normalizePanamaCedula
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.IO
 import kotlinx.coroutines.flow.launchIn
@@ -20,6 +22,9 @@ class EditCustomerViewModel(
     private val customerService: CustomerService,
     private val logger: ILoggerService
 ) : BaseViewModel<EditCustomerState, EditCustomerStateUiEvent>(EditCustomerState()) {
+
+    private val invalidCedulaMessage =
+        "Cedula invalida. Revise el formato (ej: 1-1234-12345, 8-88-8456, PE-123-12345, E-1234-12345, N-12345-1234, 1AV1234-12345, 1PI-1234-1234)."
 
     var businessId = -1
 
@@ -102,8 +107,9 @@ class EditCustomerViewModel(
                 ruc = "",
                 legalName = "",
                 name = "",
-
-                )
+                cfCedula = "",
+                cfCedulaError = null,
+            )
         }
     }
 
@@ -142,6 +148,19 @@ class EditCustomerViewModel(
         updateState { copy(addressLine = addressLine) }
     }
 
+    fun onCedulaChanges(cedula: String) {
+        val normalizedCedula = normalizePanamaCedula(cedula)
+        updateState {
+            copy(
+                cfCedula = normalizedCedula,
+                cfCedulaError = getCedulaValidationError(
+                    customerType = customerType,
+                    cedula = normalizedCedula
+                )
+            )
+        }
+    }
+
 
     fun onTagsChange(tags: List<String>) {
         updateState { copy(tags = tags) }
@@ -176,6 +195,17 @@ class EditCustomerViewModel(
                 )
                 showError()
             }
+        }
+    }
+
+    private fun getCedulaValidationError(customerType: FeCustomerType, cedula: String): String? {
+        if (customerType != FeCustomerType.FINAL_CONSUMER || cedula.isBlank()) {
+            return null
+        }
+        return if (isValidPanamaCedula(cedula)) {
+            null
+        } else {
+            invalidCedulaMessage
         }
     }
 }

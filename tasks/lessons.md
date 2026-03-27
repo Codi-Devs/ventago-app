@@ -1,5 +1,7 @@
 # Lessons Learned
 
+- Para validaciones de cédula panameña, no asumir un único formato "regular" por documentación inicial; cubrir con tests los ejemplos reales (`8-888-8456`, `8-888-846`) además del formato largo.
+- Cuando el negocio confirme nuevos ejemplos válidos de cédula (grupos más cortos o guiones opcionales por prefijo), actualizar regex + tests en el mismo cambio y normalizar dentro del validador para admitir entradas en minúsculas.
 - En bugs de contratos API, no asumir que el problema está en el builder lógico; primero registrar el payload JSON final ya normalizado que sale por HTTP y contrastarlo con el ejemplo esperado del backend.
 - Si un endpoint serializado con `encodeToJsonElement(request)` muestra un body vacío o inconsistente, forzar el serializer explícito del request (`Type.serializer()`) y cubrirlo con un test de serialización.
 - Si un contrato crítico sigue saliendo mal aun con serializer explícito, construir el `JsonObject` del provider con claves tipadas y testear ese shape exacto; no insistir con magia de serialización.

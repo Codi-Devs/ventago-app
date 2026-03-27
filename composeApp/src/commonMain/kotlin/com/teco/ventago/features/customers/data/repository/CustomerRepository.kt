@@ -17,6 +17,7 @@ import com.teco.ventago.features.customers.domain.models.UpdateCustomerDetailsRe
 import com.teco.ventago.features.customers.domain.models.ValidateRucResponse
 import com.teco.ventago.utils.ApiError
 import com.teco.ventago.utils.BadRequestException
+import com.teco.ventago.utils.DuplicateCustomerException
 import com.teco.ventago.utils.InvalidRucException
 import com.teco.ventago.utils.isError
 import kotlinx.serialization.json.JsonArray
@@ -73,6 +74,10 @@ class CustomerRepository(
         try {
             val response = provider.createCustomer(customer, businessId)
             if (response.error.isError()) {
+                if (response.error == ApiError.CUSTOMER_ALREADY_EXISTS) {
+                    val duplicateMessage = "Customer with name '${customer.name}' and RUC '${customer.ruc.orEmpty()}' already exists."
+                    throw DuplicateCustomerException(duplicateMessage)
+                }
                 if (response.error == ApiError.INVALID_RUC || response.error == ApiError.RUC_NOT_FOUND) {
                     throw InvalidRucException()
                 }

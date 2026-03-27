@@ -26,6 +26,7 @@ import com.teco.ventago.features.orders.domain.models.requests.AdditionalAddress
 import com.teco.ventago.features.orders.domain.models.Order
 import com.teco.ventago.utils.ApiError
 import com.teco.ventago.utils.ApiResponse
+import com.teco.ventago.utils.DuplicateCustomerException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.IO
@@ -35,6 +36,7 @@ import kotlinx.coroutines.flow.emptyFlow
 import kotlinx.coroutines.runBlocking
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFailsWith
 import kotlin.test.assertTrue
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonNull
@@ -246,6 +248,25 @@ class CustomerModelsAndOrdersRequestTest {
     }
 
     @Test
+    fun repositoryThrowsDuplicateCustomerExceptionForCu004() {
+        runBlocking {
+            val provider = FakeCustomerProvider(
+                createCustomerResponse = ApiResponse(
+                    successful = false,
+                    data = JsonNull,
+                    error = ApiError.CUSTOMER_ALREADY_EXISTS,
+                    errorCode = "CU_004",
+                )
+            )
+            val repository = CustomerRepository(provider = provider, logger = FakeLogger())
+
+            assertFailsWith<DuplicateCustomerException> {
+                repository.createCustomer(sampleCustomer(name = "Cliente Demo"), businessId = 1)
+            }
+        }
+    }
+
+    @Test
     fun serviceUpdatesStateAndCacheAfterCreateUpdateDelete() = runBlocking {
         val repository = FakeCustomerRepository()
         val cache = FakeCacheService()
@@ -323,14 +344,22 @@ class CustomerModelsAndOrdersRequestTest {
         )
     }
 
-    private class FakeCustomerProvider : ICustomerProvider {
-        private val successResponse = ApiResponse(
-            successful = false,
-            data = JsonNull,
-            error = ApiError.NO_ERROR
-        )
+    private class FakeCustomerProvider(
+        private val createCustomerResponse: ApiResponse = defaultSuccessResponse
+    ) : ICustomerProvider {
+        private val successResponse = defaultSuccessResponse
 
-        override suspend fun createCustomer(customer: Customer, businessId: Int): ApiResponse = successResponse
+        override suspend fun createCustomer(customer: Customer, businessId: Int): ApiResponse =
+            createCustomerResponse
+
+        companion object {
+            private val defaultSuccessResponse = ApiResponse(
+                successful = false,
+                data = JsonNull,
+                error = ApiError.NO_ERROR
+            )
+        }
+
         override suspend fun listCustomers(
             businessId: Int,
             page: Int,

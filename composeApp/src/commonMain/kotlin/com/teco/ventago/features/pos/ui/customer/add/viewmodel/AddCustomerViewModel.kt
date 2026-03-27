@@ -11,8 +11,10 @@ import com.teco.ventago.features.customers.domain.models.Customer
 import com.teco.ventago.features.financialProfile.domain.FinancialProfileService
 import com.teco.ventago.features.invoicing.domain.TaxPayerType
 import com.teco.ventago.features.invoicing.domain.models.FeCustomerType
-import com.teco.ventago.features.pos.domain.PosService
+import com.teco.ventago.utils.DuplicateCustomerException
 import com.teco.ventago.utils.InvalidRucException
+import com.teco.ventago.utils.isValidPanamaCedula
+import com.teco.ventago.utils.normalizePanamaCedula
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.IO
 import kotlinx.coroutines.delay
@@ -26,6 +28,9 @@ class AddCustomerViewModel(
     private val customerService: CustomerService,
     private val logger: ILoggerService
 ) : BaseViewModel<AddCustomerState, AddCustomerStateUiEvent>(AddCustomerState()) {
+
+    private val invalidCedulaMessage =
+        "Cedula invalida. Revise el formato (ej: 1-1234-12345, 8-88-8456, PE-123-12345, E-1234-12345, N-12345-1234, 1AV1234-12345, 1PI-1234-1234)."
 
     var businessId = -1
 
@@ -218,8 +223,9 @@ class AddCustomerViewModel(
                 ruc = "",
                 legalName = "",
                 name = "",
-
-                )
+                cfCedula = "",
+                cfCedulaError = null,
+            )
         }
     }
 
@@ -253,8 +259,15 @@ class AddCustomerViewModel(
     }
 
     fun onCedulaChanges(cedula: String) {
+        val normalizedCedula = normalizePanamaCedula(cedula)
         updateState {
-            copy(cfCedula = cedula)
+            copy(
+                cfCedula = normalizedCedula,
+                cfCedulaError = getCedulaValidationError(
+                    customerType = customerType,
+                    cedula = normalizedCedula
+                )
+            )
         }
     }
 
@@ -312,6 +325,29 @@ class AddCustomerViewModel(
 
     fun createCustomer() {
         val state = uiState.value
+        val normalizedCedula = normalizePanamaCedula(state.cfCedula.orEmpty())
+        val cedulaError = getCedulaValidationError(
+            customerType = state.customerType,
+            cedula = normalizedCedula
+        )
+        if (cedulaError != null) {
+            updateState {
+                copy(
+                    cfCedula = normalizedCedula,
+                    cfCedulaError = cedulaError
+                )
+            }
+            return
+        }
+
+        updateState {
+            copy(
+                cfCedula = normalizedCedula,
+                cfCedulaError = null,
+                errorMessage = null,
+            )
+        }
+
         viewModelScope.launch(Dispatchers.IO) {
 
             var foreignIdType: String? = null
@@ -337,7 +373,11 @@ class AddCustomerViewModel(
                 foreignIdType = foreignIdType,
                 foreignIdNumber = state.foreignIdNumber,
                 countryCode = state.selectedCountryCode,
-                cedulaCF = state.cfCedula,
+                cedulaCF = if (state.customerType == FeCustomerType.FINAL_CONSUMER) {
+                    normalizedCedula.ifBlank { null }
+                } else {
+                    null
+                },
                 locationCode = PanamaLocations.codeFor(
                     state.selectedProvince,
                     state.selectedDistrict,
@@ -370,7 +410,19 @@ class AddCustomerViewModel(
                         message = "Invalid RUC number: ${e.message ?: "UNKNOWN"}"
                     )
                 )
-                emitEvent(AddCustomerStateUiEvent.InvalidRucNumber)
+                updateState { copy(errorMessage = "El RUC ingresado no es valido. Verifica el numero e intentalo nuevamente.") }
+                hideLoading()
+            } catch (e: DuplicateCustomerException) {
+                val duplicateMessage = duplicateCustomerMessage(state.name, state.ruc)
+                logger.sendLog(
+                    Log(
+                        level = LogLevel.WARNING,
+                        flow = "AddClientViewModel::createCustomer",
+                        message = "Duplicate customer on create. businessId: $businessId, name: ${state.name}, ruc: ${state.ruc}"
+                    )
+                )
+                updateState { copy(errorMessage = duplicateMessage) }
+                hideLoading()
             } catch (e: Exception) {
                 e.printStackTrace()
                 logger.sendLog(
@@ -380,10 +432,32 @@ class AddCustomerViewModel(
                         message = "Error creating reduced customer. Error: ${e.message ?: "UNKNOWN"}"
                     )
                 )
-                showError()
+                updateState { copy(errorMessage = "No se pudo crear el cliente. Intentalo nuevamente.") }
+                hideLoading()
             }
         }
 
+    }
+
+    fun clearErrorMessage() {
+        updateState { copy(errorMessage = null) }
+    }
+
+    private fun getCedulaValidationError(customerType: FeCustomerType, cedula: String): String? {
+        if (customerType != FeCustomerType.FINAL_CONSUMER || cedula.isBlank()) {
+            return null
+        }
+        return if (isValidPanamaCedula(cedula)) {
+            null
+        } else {
+            invalidCedulaMessage
+        }
+    }
+
+    private fun duplicateCustomerMessage(name: String, ruc: String?): String {
+        val formattedName = name.ifBlank { "-" }
+        val formattedRuc = ruc?.ifBlank { "-" } ?: "-"
+        return "Ya existe un cliente con nombre \"$formattedName\" y RUC \"$formattedRuc\"."
     }
 
 }

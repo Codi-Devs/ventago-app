@@ -36,6 +36,8 @@ data class EditCustomerState(
 
     val foreignIdType: String? = null, // passport, identity_card, drivers_license, other
     val foreignIdNumber: String? = null,
+    val cfCedula: String? = null,
+    val cfCedulaError: String? = null,
     val countryCode: String = "PA", // ISO 3166-1 alpha-2 country code
 
     val invoicingEnabled: Boolean = false,

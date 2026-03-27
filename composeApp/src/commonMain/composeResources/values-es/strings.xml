@@ -582,6 +582,7 @@
     <string name="customers_address_email_optional">Correo de facturación (opcional)</string>
     <string name="customers_save_changes">Guardar cambios</string>
     <string name="customers_create_customer">Crear cliente</string>
+    <string name="customers_duplicate_dialog_title">Cliente ya existe</string>
     <string name="customers_fe_type">Tipo de Cliente FE</string>
     <string name="customers_fe_type_contributing">FE Contribuyente</string>
     <string name="customers_fe_type_final_consumer">FE Consumidor Final</string>

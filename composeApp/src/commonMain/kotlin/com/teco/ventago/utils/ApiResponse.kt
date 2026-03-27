@@ -84,6 +84,7 @@ enum class ApiError(val error: String?){
     UNDEFINED("U_001"),
     INVALID_RUC("CU_001"),
     RUC_NOT_FOUND("CU_002"),
+    CUSTOMER_ALREADY_EXISTS("CU_004"),
     NO_ERROR(null);
 
     companion object{
@@ -105,6 +106,7 @@ enum class ApiError(val error: String?){
                 "F_AUTH_006" -> F_AUTH_006   // UNDEFINED
                 "F_AUTH_007" -> F_AUTH_007  // Firebase auth expection
                 "O_RP_002" -> O_RP_002
+                "CU_004" -> CUSTOMER_ALREADY_EXISTS
                 else -> NO_ERROR
             }
         }
@@ -114,4 +116,3 @@ enum class ApiError(val error: String?){
 fun ApiError?.isError(): Boolean {
     return this != ApiError.NO_ERROR
 }
-

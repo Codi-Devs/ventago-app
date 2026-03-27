@@ -31,9 +31,6 @@ import com.teco.ventago.design_system.textfields.DMOutlinedTextField
 import com.teco.ventago.design_system.textfields.helpers.DMDropDownField
 import com.teco.ventago.features.invoicing.domain.models.FeCustomerType
 import com.teco.ventago.features.invoicing.domain.models.rucNeeded
-import com.teco.ventago.features.pos.ui.customer.add.FullAddCustomerScreen
-import com.teco.ventago.features.pos.ui.customer.add.ReducedAddCustomerScreen
-import com.teco.ventago.features.pos.ui.customer.add.viewmodel.AddCustomerViewModel
 import com.teco.ventago.features.pos.ui.customer.edit.viewmodel.EditCustomerViewModel
 import org.jetbrains.compose.resources.stringResource
 import org.koin.compose.viewmodel.koinViewModel
@@ -255,6 +252,17 @@ fun FullAddCustomerScreen(viewModel: EditCustomerViewModel, navigateBack: () -> 
                 onChange = {
 
                 }
+            )
+        } else if (uiState.customerType == FeCustomerType.FINAL_CONSUMER) {
+            DMOutlinedTextField(
+                text = uiState.cfCedula ?: "",
+                label = "Cedula",
+                modifier = Modifier.padding(start = 16.dp, end = 16.dp, bottom = 0.dp, top = 16.dp),
+                onChange = {
+                    viewModel.onCedulaChanges(it)
+                },
+                isError = uiState.cfCedulaError != null,
+                supportingText = uiState.cfCedulaError ?: "",
             )
         }
 

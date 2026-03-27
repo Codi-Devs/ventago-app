@@ -10,9 +10,11 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.PersonSearch
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -36,11 +38,13 @@ import com.teco.ventago.features.pos.ui.customer.add.viewmodel.AddCustomerViewMo
 import org.jetbrains.compose.resources.stringResource
 import org.koin.compose.viewmodel.koinViewModel
 import ventago.composeapp.generated.resources.Res
+import ventago.composeapp.generated.resources.customers_duplicate_dialog_title
 import ventago.composeapp.generated.resources.name
 import ventago.composeapp.generated.resources.phone
 import ventago.composeapp.generated.resources.pos_clients_email
 import ventago.composeapp.generated.resources.pos_clients_ruc
 import ventago.composeapp.generated.resources.pos_clients_tag
+import ventago.composeapp.generated.resources.understood
 
 @Composable
 fun AddCustomerScreen(viewModel: AddCustomerViewModel = koinViewModel(), navigateBack: () -> Unit) {
@@ -54,8 +58,7 @@ fun AddCustomerScreen(viewModel: AddCustomerViewModel = koinViewModel(), navigat
                 }
 
                 is AddCustomerStateUiEvent.InvalidRucNumber -> {
-                    // Show some error
-                    // TODO Oscar show error message
+                    // Error is rendered from state.errorMessage
                 }
             }
         }
@@ -65,6 +68,19 @@ fun AddCustomerScreen(viewModel: AddCustomerViewModel = koinViewModel(), navigat
         FullAddCustomerScreen(viewModel, navigateBack)
     } else {
         ReducedAddCustomerScreen(viewModel, navigateBack)
+    }
+
+    uiState.errorMessage?.let { error ->
+        AlertDialog(
+            onDismissRequest = viewModel::clearErrorMessage,
+            title = { Text(text = stringResource(Res.string.customers_duplicate_dialog_title)) },
+            text = { Text(text = error) },
+            confirmButton = {
+                TextButton(onClick = viewModel::clearErrorMessage) {
+                    Text(text = stringResource(Res.string.understood))
+                }
+            }
+        )
     }
 }
 
@@ -279,7 +295,9 @@ fun FullAddCustomerScreen(viewModel: AddCustomerViewModel, navigateBack: () -> U
                 modifier = Modifier.padding(start = 16.dp, end = 16.dp, bottom = 0.dp, top = 16.dp),
                 onChange = {
                     viewModel.onCedulaChanges(it)
-                }
+                },
+                isError = uiState.cfCedulaError != null,
+                supportingText = uiState.cfCedulaError ?: "",
             )
         }
 

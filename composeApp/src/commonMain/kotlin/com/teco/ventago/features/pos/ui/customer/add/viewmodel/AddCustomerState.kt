@@ -55,11 +55,13 @@ data class AddCustomerState(
     val countryCode: String = "PA", // ISO 3166-1 alpha-2 country code
 
     val cfCedula: String? = null,
+    val cfCedulaError: String? = null,
 
     val countryOptions: List<CountryOption> = emptyList(),
     val selectedCountryCode: String = "PA", // default Panama
 
     val invoicingEnabled: Boolean = false,
+    val errorMessage: String? = null,
     override val loadingBottomSheet: LoadingBottomSheetState = LoadingBottomSheetState(),
 ) : LoadableState<AddCustomerState> {
     override fun withLoading(state: LoadingBottomSheetState): AddCustomerState {

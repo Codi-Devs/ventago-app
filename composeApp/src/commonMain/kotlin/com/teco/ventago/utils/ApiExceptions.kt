@@ -5,5 +5,6 @@ class MustChangePasswordException : Exception()
 class NoInternetException : Exception()
 class BadRequestException(override val message: String) : Exception()
 class InvalidRucException : Exception()
+class DuplicateCustomerException(override val message: String) : Exception()
 
 class DomainInUseException(override val message: String) : Exception()

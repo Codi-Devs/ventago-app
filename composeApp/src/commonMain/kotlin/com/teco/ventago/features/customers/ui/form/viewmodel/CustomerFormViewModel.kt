@@ -10,6 +10,9 @@ import com.teco.ventago.features.customers.domain.models.UpdateCustomerDetailsRe
 import com.teco.ventago.features.financialProfile.domain.FinancialProfileService
 import com.teco.ventago.features.invoicing.domain.models.FeCustomerType
 import com.teco.ventago.features.invoicing.domain.models.rucNeeded
+import com.teco.ventago.utils.DuplicateCustomerException
+import com.teco.ventago.utils.isValidPanamaCedula
+import com.teco.ventago.utils.normalizePanamaCedula
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.launchIn
@@ -21,6 +24,9 @@ class CustomerFormViewModel(
     private val customerService: CustomerService,
     private val financialProfileService: FinancialProfileService,
 ) : BaseViewModel<CustomerFormState, CustomerFormUiEvent>(CustomerFormState()) {
+
+    private val invalidCedulaMessage =
+        "Cedula invalida. Revise el formato (ej: 1-1234-12345, 8-88-8456, PE-123-12345, E-1234-12345, N-12345-1234, 1AV1234-12345, 1PI-1234-1234)."
 
     private var businessId: Int = -1
     private var pendingEditCustomerId: Long? = null
@@ -94,6 +100,8 @@ class CustomerFormViewModel(
                         phone = details.phone1.orEmpty(),
                         ruc = details.rucNumber.orEmpty(),
                         rucCheckDigit = details.rucCheckDigit.orEmpty(),
+                        cedulaCF = details.cedulaCf.orEmpty(),
+                        cedulaError = null,
                         taxExempt = details.taxExempt,
                         taxRetentionCode = CustomerTaxRetentionCatalog.normalizeCode(details.taxRetentionCode),
                         taxRetentionPercent = details.taxRetentionPercent?.toString().orEmpty(),
@@ -128,6 +136,7 @@ class CustomerFormViewModel(
                 legalName = "",
                 name = if (value.rucNeeded()) "" else name,
                 cedulaCF = if (value == FeCustomerType.FINAL_CONSUMER) cedulaCF else "",
+                cedulaError = null,
                 foreignIdNumber = if (value == FeCustomerType.FOREIGNER) foreignIdNumber else "",
             )
         }
@@ -137,7 +146,19 @@ class CustomerFormViewModel(
     fun onEmailChange(value: String) = updateState { copy(email = value) }
     fun onPhoneChange(value: String) = updateState { copy(phone = value) }
     fun onRucChange(value: String) = updateState { copy(ruc = value) }
-    fun onCedulaChange(value: String) = updateState { copy(cedulaCF = value) }
+    fun onCedulaChange(value: String) {
+        val normalizedCedula = normalizePanamaCedula(value)
+        updateState {
+            copy(
+                cedulaCF = normalizedCedula,
+                cedulaError = getCedulaValidationError(
+                    mode = mode,
+                    customerType = customerType,
+                    cedula = normalizedCedula
+                )
+            )
+        }
+    }
     fun onAddressLineChange(value: String) = updateState { copy(addressLine = value) }
     fun onForeignIdNumberChange(value: String) = updateState { copy(foreignIdNumber = value) }
     fun onTaxExemptChange(value: Boolean) = updateState { copy(taxExempt = value) }
@@ -243,12 +264,39 @@ class CustomerFormViewModel(
     fun saveCustomer() {
         if (businessId <= 0) return
         val current = uiState.value
+        val normalizedCedula = normalizePanamaCedula(current.cedulaCF)
 
         if (current.mode == CustomerFormMode.CREATE && current.name.isBlank()) {
             viewModelScope.launch {
                 emitEvent(CustomerFormUiEvent.ValidationError("El nombre es requerido"))
             }
             return
+        }
+
+        val cedulaError = getCedulaValidationError(
+            mode = current.mode,
+            customerType = current.customerType,
+            cedula = normalizedCedula
+        )
+        if (cedulaError != null) {
+            updateState {
+                copy(
+                    cedulaCF = normalizedCedula,
+                    cedulaError = cedulaError
+                )
+            }
+            viewModelScope.launch {
+                emitEvent(CustomerFormUiEvent.ValidationError(cedulaError))
+            }
+            return
+        }
+
+        updateState {
+            copy(
+                cedulaCF = normalizedCedula,
+                cedulaError = null,
+                errorMessage = null,
+            )
         }
 
         showLoading()
@@ -320,7 +368,7 @@ class CustomerFormViewModel(
                                 null
                             },
                             cedulaCF = if (current.customerType == FeCustomerType.FINAL_CONSUMER) {
-                                current.cedulaCF.ifBlank { null }
+                                normalizedCedula.ifBlank { null }
                             } else {
                                 null
                             },
@@ -340,10 +388,27 @@ class CustomerFormViewModel(
                 showSuccess()
                 delay(700)
                 emitEvent(CustomerFormUiEvent.Saved)
-            }.onFailure {
+            }.onFailure { throwable ->
+                if (throwable is DuplicateCustomerException) {
+                    updateState {
+                        copy(errorMessage = duplicateCustomerMessage(current.name, current.ruc))
+                    }
+                    hideLoading()
+                    return@onFailure
+                }
                 showError()
             }
         }
+    }
+
+    fun clearErrorMessage() {
+        updateState { copy(errorMessage = null) }
+    }
+
+    private fun duplicateCustomerMessage(name: String, ruc: String): String {
+        val formattedName = name.ifBlank { "-" }
+        val formattedRuc = ruc.ifBlank { "-" }
+        return "Ya existe un cliente con nombre \"$formattedName\" y RUC \"$formattedRuc\"."
     }
 
     private fun resolveRetentionPercent(state: CustomerFormState): Int? {
@@ -352,6 +417,21 @@ class CustomerFormViewModel(
             normalizedCode.isEmpty() -> null
             normalizedCode == "8" -> state.taxRetentionPercent.toIntOrNull()
             else -> CustomerTaxRetentionCatalog.defaultRateForCode(normalizedCode)
+        }
+    }
+
+    private fun getCedulaValidationError(
+        mode: CustomerFormMode,
+        customerType: FeCustomerType,
+        cedula: String
+    ): String? {
+        if (mode != CustomerFormMode.CREATE || customerType != FeCustomerType.FINAL_CONSUMER || cedula.isBlank()) {
+            return null
+        }
+        return if (isValidPanamaCedula(cedula)) {
+            null
+        } else {
+            invalidCedulaMessage
         }
     }
 }

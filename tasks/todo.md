@@ -1,3 +1,115 @@
+# Cedula Pattern Expansion (User-Confirmed Valid Cases) TODO
+
+## Plan
+- [x] Expand Panama cédula regex rules to accept all user-confirmed valid examples for regular/prefix variants.
+- [x] Move the nine user-confirmed examples from invalid to valid in cédula unit tests and keep a reduced truly-invalid set.
+- [x] Make validator case-insensitive via normalization inside `isValidPanamaCedula`.
+- [x] Update inline validation copy examples to match expanded accepted inputs.
+- [x] Run focused verification gates and document outcomes.
+
+## Verification Gates
+- [x] `./gradlew :composeApp:testDebugUnitTest --tests '*Cedula*'`
+- [x] `./gradlew :composeApp:compileDebugKotlinAndroid`
+
+## Review Notes
+- Expanded regex coverage in `PanamaCedulaUtils` to accept the user-confirmed valid numeric and prefix variants, including shorter numeric groups where required.
+- `isValidPanamaCedula` now validates normalized input (`trim + uppercase`), making lowercase prefixed values (for example `pe-...`) valid.
+- Updated `PanamaCedulaUtilsTest` so the nine user-provided samples are asserted as valid and kept only truly-invalid shapes in the invalid list.
+- Updated inline cédula validation examples in add/edit/customer-form viewmodels to match accepted inputs.
+- Verification passed: `./gradlew :composeApp:testDebugUnitTest --tests '*Cedula*'` and `./gradlew :composeApp:compileDebugKotlinAndroid`.
+
+# Cedula Regex Follow-up (3-digit Suffix) TODO
+
+## Plan
+- [x] Extend regular cédula regex to accept `8-888-846` while preserving previously accepted regular variants.
+- [x] Add regression coverage for `8-888-846` as valid and near-shape invalid cases.
+- [x] Update inline validation copy examples to include the new valid shape.
+- [x] Run focused verification gates and document outcomes.
+
+## Verification Gates
+- [x] `./gradlew :composeApp:testDebugUnitTest --tests '*Cedula*'`
+- [x] `./gradlew :composeApp:compileDebugKotlinAndroid`
+
+## Review Notes
+- Updated regular numeric cédula regex to accept `...-...` suffix for the regular branch (`8-888-846`) while keeping prior accepted regular variants.
+- Added test coverage for `8-888-846` as valid and `8-888-84` as invalid, preserving the previous invalid-shape checks.
+- Updated validation help copy in all three customer form/viewmodel flows to include `8-888-846`.
+
+# Customer Duplicate Dialog UX TODO
+
+## Plan
+- [x] Replace inline duplicate-customer error rendering with modal dialog UX in customer create screens.
+- [x] Add ViewModel clear-error actions so dialog dismissal closes the error state cleanly.
+- [x] Reuse localized `understood` action text and add a specific duplicate-customer dialog title string.
+- [x] Run Android compile verification and document results.
+
+## Verification Gates
+- [x] `./gradlew :composeApp:compileDebugKotlinAndroid`
+
+## Review Notes
+- `CustomerFormScreen` and POS `AddCustomerScreen` now present API error messages inside an `AlertDialog` instead of inline red text.
+- Dialog confirm action uses localized `Res.string.understood` and dismiss/confirm both clear ViewModel error state via `clearErrorMessage()`.
+- Added localized title `customers_duplicate_dialog_title` in `values/strings.xml` and `values-es/strings.xml`.
+- For duplicate-customer errors, ViewModels now stop loading state (`hideLoading()`) and rely on the dialog as the primary feedback UX.
+- Verification: `./gradlew :composeApp:compileDebugKotlinAndroid` passed.
+
+# Customer Duplicate Error Mapping TODO
+
+## Plan
+- [x] Add typed duplicate-customer error mapping for customer create responses (`CU_004` / 409 path) in shared API/repository flow.
+- [x] Handle duplicate-customer exception in customer create viewmodels (`CustomerFormViewModel` and POS `AddCustomerViewModel`) with explicit message including customer name and RUC.
+- [x] Surface duplicate message in customer create UI flows and remove existing no-op error handling.
+- [x] Add focused test coverage for repository duplicate mapping and run verification gate(s).
+
+## Verification Gates
+- [x] `./gradlew :composeApp:testDebugUnitTest --tests com.teco.ventago.features.customers.CustomerModelsAndOrdersRequestTest`
+- [x] `./gradlew :composeApp:compileDebugKotlinAndroid`
+
+## Review Notes
+- Added `ApiError.CUSTOMER_ALREADY_EXISTS` (`CU_004`) mapping and `DuplicateCustomerException` so the repository can distinguish duplicate-customer create failures from generic bad requests.
+- `CustomerRepository.createCustomer` now throws `DuplicateCustomerException` for `CU_004` before fallback `BadRequestException` handling.
+- `CustomerFormViewModel` and POS `AddCustomerViewModel` now catch duplicate errors and publish a clear message: `Ya existe un cliente con nombre "<name>" y RUC "<ruc>".`
+- POS add-customer UI now renders `errorMessage` in both reduced/full forms and removed the previous no-op TODO branch for invalid RUC feedback.
+- Added repository regression coverage: `repositoryThrowsDuplicateCustomerExceptionForCu004`.
+- Verification: focused customer unit test and `compileDebugKotlinAndroid` both pass.
+
+# Cedula Regex Follow-up (Regular Format) TODO
+
+## Plan
+- [x] Adjust regular Panama cédula regex to accept the user-reported valid format `8-888-8456` while keeping existing accepted formats.
+- [x] Update cédula validator tests to cover the new valid format and nearby invalid variants.
+- [x] Update inline validation copy to include the new valid regular example.
+- [x] Run focused verification gates and document outcomes.
+
+## Verification Gates
+- [x] `./gradlew :composeApp:testDebugUnitTest --tests '*Cedula*'`
+- [x] `./gradlew :composeApp:compileDebugKotlinAndroid`
+
+## Review Notes
+- Updated regular regex to accept both regular numeric shapes: `1-1234-12345` and `8-888-8456`.
+- Added `8-888-8456` as valid test input and added nearby invalid variants (`8-88-8456`, `8-8888-8456`) to prevent over-broad matches.
+- Updated all inline validation messages to include the new valid regular example.
+
+# Final Consumer Cedula Validation (POS + Customer Form) TODO
+
+## Plan
+- [x] Add shared Panama cédula validator utility (`normalizePanamaCedula`, `isValidPanamaCedula`) with the six accepted regex patterns.
+- [x] Wire cédula normalization + inline validation state into POS add flow (`AddCustomerState`, `AddCustomerViewModel`, `AddCustomerScreen`) and block submit on invalid non-empty final-consumer cédula.
+- [x] Wire cédula state + inline validation rendering into POS legacy edit flow (`EditCustomerState`, `EditCustomerViewModel`, `EditCustomerScreen`) without backend payload changes.
+- [x] Wire same validator into active customers form flow (`CustomerFormState`, `CustomerFormViewModel`, `CustomerFormScreen`) and block create save on invalid non-empty final-consumer cédula.
+- [x] Add focused validator unit tests and run verification gates.
+
+## Verification Gates
+- [x] `./gradlew :composeApp:testDebugUnitTest --tests '*Cedula*'`
+- [x] `./gradlew :composeApp:compileDebugKotlinAndroid`
+
+## Review Notes
+- Added shared validator (`PanamaCedulaUtils`) with exact accepted regex patterns and explicit normalization via `trim + uppercase`.
+- POS add flow now normalizes cédula on input, surfaces inline error in cédula field, and blocks `createCustomer()` when `FINAL_CONSUMER` cédula is non-empty and invalid.
+- POS legacy edit flow now has `cfCedula` + `cfCedulaError` state and renders a final-consumer cédula field with the same inline validation behavior (no backend update payload changes).
+- `CustomerForm` create flow now normalizes cédula, displays inline cédula error state, and blocks save when final-consumer cédula is non-empty and invalid.
+- Added `PanamaCedulaUtilsTest` coverage for all accepted patterns, invalid samples (`00-00-0000` etc.), and normalization behavior.
+
 # Login Must-Change-Password Hard Block TODO
 
 ## Plan

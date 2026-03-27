@@ -591,6 +591,7 @@
     <string name="customers_address_email_optional">Billing email (Optional)</string>
     <string name="customers_save_changes">Save changes</string>
     <string name="customers_create_customer">Create customer</string>
+    <string name="customers_duplicate_dialog_title">Customer already exists</string>
     <string name="customers_fe_type">FE customer type</string>
     <string name="customers_fe_type_contributing">FE Contributing</string>
     <string name="customers_fe_type_final_consumer">FE Final consumer</string>
