@@ -46,6 +46,7 @@ data class Order(
 
     @SerialName("order_histories") val orderHistories: List<OrderHistoryDto> = emptyList(),
     @SerialName("order_payments")  val orderPayments:  List<OrderPaymentDto> = emptyList(),
+    @SerialName("receivable_terms") val receivableTerms: List<ReceivableTermDto> = emptyList(),
 
     @SerialName("payment_link") val paymentLink: String? = null,
 
@@ -59,6 +60,19 @@ data class Order(
         return internalNumber.substringAfterLast('-')
     }
 }
+
+@Serializable
+data class ReceivableTermDto(
+    val id: Long,
+    @SerialName("source_order_term_id") val sourceOrderTermId: Long? = null,
+    @SerialName("term_number") val termNumber: Int,
+    @SerialName("due_date") val dueDateUnixSeconds: Long,
+    @SerialName("original_amount") val originalAmount: String,
+    @SerialName("open_amount") val openAmount: String,
+    val status: Int = PaymentStatus.UNPAID.id,
+    @SerialName("term_kind") val termKind: String,
+    val notes: String? = null
+)
 
 @Serializable
 data class OrderLineDto(
@@ -79,20 +93,28 @@ data class OrderLineDto(
 
 @Serializable
 data class OrderHistoryDto(
-    @SerialName("status_id") val statusId: Int,
-    val note: String,
-    @SerialName("changed_by") val changedBy: String,
-    @SerialName("created_at") val createdAt: String // ISO8601
+    @SerialName("status_id") val statusId: Int = 0,
+    val note: String = "",
+    @SerialName("changed_by") val changedBy: String = "",
+    @SerialName("created_at") val createdAt: String = "" // ISO8601
 )
 
 @Serializable
 data class OrderPaymentDto(
-    @SerialName("payment_intent_id") val paymentIntentId: String,
-    @SerialName("payment_method_id") val paymentMethod: PaymentMethodDto,
-    @SerialName("payment_status_str") val paymentStatusStr: String,
-    @SerialName("total_amount") val totalAmount: String,
-    val charged: String,
-    val refunded: String
+    val id: Long? = null,
+    @SerialName("payment_intent_id") val paymentIntentId: String = "",
+    @SerialName("payment_method_id") val paymentMethod: PaymentMethodDto = PaymentMethodDto(
+        id = 0,
+        name = "N/A",
+        description = ""
+    ),
+    @SerialName("payment_status_str") val paymentStatusStr: String = "",
+    @SerialName("payment_date") val paymentDate: String? = null,
+    @SerialName("voided_at") val voidedAt: String? = null,
+    @SerialName("void_reason") val voidReason: String? = null,
+    @SerialName("total_amount") val totalAmount: String = "0.00",
+    val charged: String = "0.00",
+    val refunded: String = "0.00"
 )
 
 @Serializable

@@ -11,7 +11,7 @@ data class ListExpensesRequest(
     @SerialName("start_date") val startDate: String? = null,
     @SerialName("end_date") val endDate: String? = null,
     val source: String? = null,
-    @SerialName("payment_status") val paymentStatus: List<String>? = null,
+    @SerialName("payment_status") val paymentStatus: String? = null,
     @SerialName("issuer_name") val issuerName: String? = null,
     @SerialName("issuer_ruc") val issuerRuc: String? = null,
     @SerialName("invoice_number") val invoiceNumber: String? = null,

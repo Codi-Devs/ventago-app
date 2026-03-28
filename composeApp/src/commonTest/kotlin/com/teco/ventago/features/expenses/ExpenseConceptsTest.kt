@@ -16,6 +16,7 @@ import com.teco.ventago.features.expenses.domain.models.ExpenseItem
 import com.teco.ventago.features.expenses.domain.models.requests.CategorizeExpenseItemRequest
 import com.teco.ventago.features.expenses.domain.models.requests.CategorizeExpenseRequest
 import com.teco.ventago.features.expenses.domain.models.requests.ExpenseItemRequest
+import com.teco.ventago.features.expenses.domain.models.requests.ListExpensesRequest
 import com.teco.ventago.features.expenses.domain.models.requests.ExpensePartyRequest
 import com.teco.ventago.features.expenses.domain.models.requests.UpsertExpenseRequest
 import com.teco.ventago.features.expenses.domain.resolveExpenseConceptMode
@@ -270,6 +271,23 @@ class ExpenseConceptsTest {
         assertEquals(1, payload["items"]?.jsonArray?.size)
         assertEquals(163L, payload["items"]?.jsonArray?.first()?.jsonObject?.get("item_id")?.jsonPrimitive?.content?.toLong())
         assertEquals(39L, payload["items"]?.jsonArray?.first()?.jsonObject?.get("account_id")?.jsonPrimitive?.content?.toLong())
+    }
+
+    @Test
+    fun listExpensesRequestSerializesPaymentStatusAsString() {
+        val request = ListExpensesRequest(
+            businessId = 4,
+            page = 1,
+            pageSize = 10,
+            paymentStatus = "not_paid"
+        )
+
+        val encoded = json.encodeToJsonElement(ListExpensesRequest.serializer(), request).jsonObject
+
+        assertEquals(4, encoded["business_id"]?.jsonPrimitive?.content?.toInt())
+        assertEquals(1, encoded["page"]?.jsonPrimitive?.content?.toInt())
+        assertEquals(10, encoded["page_size"]?.jsonPrimitive?.content?.toInt())
+        assertEquals("not_paid", encoded["payment_status"]?.jsonPrimitive?.content)
     }
 
     @Test

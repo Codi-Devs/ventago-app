@@ -465,7 +465,10 @@ private fun ConceptSummaryCard(
                 Text("Concepto", style = bodyMediumBold())
                 if (canEditConcepts) {
                     TextButton(onClick = onEditConcepts) {
-                        Text("Editar conceptos")
+                        Text(
+                            text = "Editar conceptos",
+                            color = MaterialTheme.colorScheme.secondary
+                        )
                     }
                 }
             }
@@ -708,10 +711,13 @@ private fun ExpenseConceptSheet(
             isLoading = editor.isLoadingAccounts,
             leafOnly = true,
             emptyOptionLabel = "Sin concepto de gasto",
+            clickHintLabel = "Toca para asignar el concepto de gasto",
+            selectedTextColor = MaterialTheme.colorScheme.secondary,
+            placeholderTextColor = MaterialTheme.colorScheme.secondary,
             hint = if (editor.applyConceptPerItem) {
-                "Selecciona un concepto y presiona \"Aplicar a todos\" para asignarlo a cada item."
+                "Toca el selector para elegir un concepto y luego presiona \"Aplicar a todos\" para asignarlo a cada item."
             } else {
-                "Al guardar en este modo, se aplicara el mismo concepto a todos los items."
+                "Toca el selector para elegir un concepto. Al guardar en este modo, se aplicara el mismo concepto a todos los items."
             },
             onSelected = onDefaultAccountSelected
         )
@@ -749,6 +755,9 @@ private fun ExpenseConceptSheet(
                             isLoading = editor.isLoadingAccounts,
                             leafOnly = true,
                             emptyOptionLabel = "Sin concepto",
+                            clickHintLabel = "Toca para asignar concepto",
+                            selectedTextColor = MaterialTheme.colorScheme.secondary,
+                            placeholderTextColor = MaterialTheme.colorScheme.secondary,
                             onSelected = { accountId, accountName ->
                                 onItemAccountSelected(index, accountId, accountName)
                             }
@@ -1225,7 +1234,7 @@ private fun ActionsSection(
                     modifier = Modifier.size(18.dp)
                 )
                 Spacer(modifier = Modifier.width(8.dp))
-                Text("Descargar Archivo")
+                Text("Descargar factura")
             }
         }
 

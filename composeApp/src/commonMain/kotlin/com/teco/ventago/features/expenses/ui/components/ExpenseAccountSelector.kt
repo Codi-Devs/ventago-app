@@ -9,18 +9,22 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.Close
+import androidx.compose.material.icons.rounded.KeyboardArrowDown
 import androidx.compose.material.icons.rounded.KeyboardArrowRight
+import androidx.compose.material.icons.rounded.Search
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Divider
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Text
@@ -35,6 +39,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import com.teco.ventago.design_system.textfields.DMOutlinedTextField
 import com.teco.ventago.design_system.theme.bodyMedium
 import com.teco.ventago.design_system.theme.bodyMediumBold
 import com.teco.ventago.design_system.theme.cardContainerColor
@@ -42,6 +47,8 @@ import com.teco.ventago.design_system.theme.labelSmall
 import com.teco.ventago.features.expenses.domain.ExpenseAccountTreeNode
 import com.teco.ventago.features.expenses.domain.buildExpenseAccountsTree
 import com.teco.ventago.features.expenses.domain.models.ExpenseAccount
+
+private val ConceptSearchWhitespaceRegex = "\\s+".toRegex()
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -56,6 +63,9 @@ fun ExpenseAccountSelectorField(
     modifier: Modifier = Modifier,
     enabled: Boolean = true,
     hint: String? = null,
+    clickHintLabel: String? = null,
+    selectedTextColor: Color = MaterialTheme.colorScheme.onSurface,
+    placeholderTextColor: Color = MaterialTheme.colorScheme.onSurfaceVariant,
     onSelected: (Long?, String?) -> Unit
 ) {
     var showSheet by remember { mutableStateOf(false) }
@@ -70,12 +80,16 @@ fun ExpenseAccountSelectorField(
     ) {
         Column(modifier = Modifier.padding(16.dp)) {
             Text(label, style = bodyMediumBold())
+            clickHintLabel?.takeIf { it.isNotBlank() }?.let {
+                Spacer(modifier = Modifier.height(4.dp))
+                Text(it, style = labelSmall(color = MaterialTheme.colorScheme.secondary))
+            }
             Spacer(modifier = Modifier.height(6.dp))
             Text(
                 text = selectedText.ifBlank { placeholder },
                 style = bodyMedium(
-                    if (selectedText.isBlank()) MaterialTheme.colorScheme.onSurfaceVariant
-                    else MaterialTheme.colorScheme.onSurface
+                    if (selectedText.isBlank()) placeholderTextColor
+                    else selectedTextColor
                 ),
                 maxLines = 2,
                 overflow = TextOverflow.Ellipsis
@@ -116,6 +130,20 @@ fun ExpenseAccountPickerSheetContent(
     onSelected: (Long?, String?) -> Unit
 ) {
     val tree = remember(accounts) { buildExpenseAccountsTree(accounts) }
+    var searchQuery by remember { mutableStateOf("") }
+    val normalizedSearchQuery = remember(searchQuery) { searchQuery.normalizeConceptSearchTerm() }
+    val filteredTree = remember(tree, normalizedSearchQuery) {
+        filterExpenseAccountTree(tree, normalizedSearchQuery)
+    }
+    var expandedParentIds by remember(tree) { mutableStateOf(collectExpandableParentIds(tree)) }
+    val expandedSearchParentIds = remember(filteredTree, normalizedSearchQuery) {
+        if (normalizedSearchQuery.isBlank()) emptySet() else collectExpandableParentIds(filteredTree)
+    }
+    val visibleExpandedParentIds = if (normalizedSearchQuery.isBlank()) {
+        expandedParentIds
+    } else {
+        expandedSearchParentIds
+    }
 
     Column(
         modifier = Modifier
@@ -124,6 +152,15 @@ fun ExpenseAccountPickerSheetContent(
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
         Text("Selecciona un concepto", style = bodyMediumBold())
+        DMOutlinedTextField(
+            text = searchQuery,
+            label = "Buscar por nombre",
+            modifier = Modifier.fillMaxWidth(),
+            onChange = { searchQuery = it },
+            leadingIcon = Icons.Rounded.Search,
+            trailingIcon = if (searchQuery.isNotBlank()) Icons.Rounded.Close else null,
+            trailingIconClick = { searchQuery = "" }
+        )
 
         if (isLoading) {
             Row(
@@ -150,14 +187,30 @@ fun ExpenseAccountPickerSheetContent(
 
         LazyColumn {
             item {
-                tree.forEachIndexed { index, node ->
-                    ExpenseAccountTreeNodeView(
-                        node = node,
-                        leafOnly = leafOnly,
-                        onSelected = onSelected
+                if (filteredTree.isEmpty()) {
+                    Text(
+                        text = "No se encontraron conceptos",
+                        style = labelSmall(color = MaterialTheme.colorScheme.onSurfaceVariant),
+                        modifier = Modifier.padding(vertical = 12.dp)
                     )
-                    if (index < tree.lastIndex) {
-                        Divider()
+                } else {
+                    filteredTree.forEachIndexed { index, node ->
+                        ExpenseAccountTreeNodeView(
+                            node = node,
+                            leafOnly = leafOnly,
+                            expandedParentIds = visibleExpandedParentIds,
+                            onToggleParent = { accountId ->
+                                expandedParentIds = if (expandedParentIds.contains(accountId)) {
+                                    expandedParentIds - accountId
+                                } else {
+                                    expandedParentIds + accountId
+                                }
+                            },
+                            onSelected = onSelected
+                        )
+                        if (index < filteredTree.lastIndex) {
+                            Divider()
+                        }
                     }
                 }
             }
@@ -171,24 +224,41 @@ fun ExpenseAccountPickerSheetContent(
 private fun ExpenseAccountTreeNodeView(
     node: ExpenseAccountTreeNode,
     leafOnly: Boolean,
+    expandedParentIds: Set<Long>,
+    onToggleParent: (Long) -> Unit,
     onSelected: (Long?, String?) -> Unit
 ) {
+    val isParent = node.children.isNotEmpty()
+    val isExpanded = !isParent || expandedParentIds.contains(node.account.id)
     val enabled = if (leafOnly) node.isLeaf else true
     AccountOptionRow(
         title = node.account.name,
-        subtitle = if (node.isLeaf) null else "Cuenta padre",
+        subtitle = if (isParent) "Cuenta padre" else null,
         depth = node.depth,
         enabled = enabled,
-        isParent = !node.isLeaf,
-        onClick = { onSelected(node.account.id, node.account.name) }
+        isParent = isParent,
+        isExpanded = isExpanded,
+        onClick = {
+            when {
+                enabled -> onSelected(node.account.id, node.account.name)
+                isParent -> onToggleParent(node.account.id)
+            }
+        },
+        onToggleParent = if (isParent) {
+            { onToggleParent(node.account.id) }
+        } else {
+            null
+        }
     )
 
-    if (node.children.isNotEmpty()) {
+    if (isParent && isExpanded) {
         Spacer(modifier = Modifier.height(4.dp))
         node.children.forEachIndexed { index, child ->
             ExpenseAccountTreeNodeView(
                 node = child,
                 leafOnly = leafOnly,
+                expandedParentIds = expandedParentIds,
+                onToggleParent = onToggleParent,
                 onSelected = onSelected
             )
             if (index < node.children.lastIndex) {
@@ -205,10 +275,13 @@ private fun AccountOptionRow(
     depth: Int,
     enabled: Boolean,
     isParent: Boolean,
-    onClick: () -> Unit
+    isExpanded: Boolean = false,
+    onClick: () -> Unit,
+    onToggleParent: (() -> Unit)? = null
 ) {
+    val rowClickable = enabled || onToggleParent != null
     val titleColor = when {
-        enabled -> MaterialTheme.colorScheme.onSurface
+        rowClickable -> MaterialTheme.colorScheme.onSurface
         else -> MaterialTheme.colorScheme.onSurfaceVariant
     }
     val backgroundColor = if (isParent) {
@@ -221,7 +294,7 @@ private fun AccountOptionRow(
         modifier = Modifier
             .fillMaxWidth()
             .background(backgroundColor, RoundedCornerShape(10.dp))
-            .clickable(enabled = enabled, onClick = onClick)
+            .clickable(enabled = rowClickable, onClick = onClick)
             .padding(start = (depth * 16).dp, top = 12.dp, end = 8.dp, bottom = 12.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
@@ -237,13 +310,66 @@ private fun AccountOptionRow(
                 Text(it, style = labelSmall(color = MaterialTheme.colorScheme.onSurfaceVariant))
             }
         }
-        if (isParent) {
+        if (isParent && onToggleParent != null) {
             Spacer(modifier = Modifier.width(8.dp))
-            Icon(
-                imageVector = Icons.Rounded.KeyboardArrowRight,
-                contentDescription = null,
-                tint = MaterialTheme.colorScheme.onSurfaceVariant
-            )
+            IconButton(
+                onClick = onToggleParent,
+                modifier = Modifier.size(28.dp)
+            ) {
+                Icon(
+                    imageVector = if (isExpanded) {
+                        Icons.Rounded.KeyboardArrowDown
+                    } else {
+                        Icons.Rounded.KeyboardArrowRight
+                    },
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
         }
     }
+}
+
+private fun String.normalizeConceptSearchTerm(): String {
+    return lowercase().replace(ConceptSearchWhitespaceRegex, "")
+}
+
+private fun filterExpenseAccountTree(
+    nodes: List<ExpenseAccountTreeNode>,
+    normalizedSearchQuery: String
+): List<ExpenseAccountTreeNode> {
+    if (normalizedSearchQuery.isBlank()) return nodes
+    return nodes.mapNotNull { node ->
+        filterExpenseAccountNode(node, normalizedSearchQuery)
+    }
+}
+
+private fun filterExpenseAccountNode(
+    node: ExpenseAccountTreeNode,
+    normalizedSearchQuery: String
+): ExpenseAccountTreeNode? {
+    val filteredChildren = node.children.mapNotNull { child ->
+        filterExpenseAccountNode(child, normalizedSearchQuery)
+    }
+    val nameMatches = node.account.name.normalizeConceptSearchTerm().contains(normalizedSearchQuery)
+
+    return when {
+        nameMatches -> node
+        filteredChildren.isNotEmpty() -> node.copy(children = filteredChildren, isLeaf = false)
+        else -> null
+    }
+}
+
+private fun collectExpandableParentIds(nodes: List<ExpenseAccountTreeNode>): Set<Long> {
+    val ids = mutableSetOf<Long>()
+
+    fun traverse(node: ExpenseAccountTreeNode) {
+        if (node.children.isNotEmpty()) {
+            ids.add(node.account.id)
+            node.children.forEach(::traverse)
+        }
+    }
+
+    nodes.forEach(::traverse)
+    return ids
 }

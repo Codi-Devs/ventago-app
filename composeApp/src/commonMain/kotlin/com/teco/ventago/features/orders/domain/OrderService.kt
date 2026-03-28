@@ -11,12 +11,21 @@ import com.teco.ventago.features.orders.domain.models.OrderStatus
 import com.teco.ventago.features.orders.domain.models.requests.CancelOrderRequest
 import com.teco.ventago.features.orders.domain.models.requests.DeleteOrderRequest
 import com.teco.ventago.features.orders.domain.models.requests.ManualPaymentItemRequest
+import com.teco.ventago.features.orders.domain.models.requests.PaymentApplicationRequest
+import com.teco.ventago.features.orders.domain.models.requests.RescheduleReceivableTermRequest
+import com.teco.ventago.features.orders.domain.models.requests.RescheduleReceivablesRequest
+import com.teco.ventago.features.orders.domain.models.requests.RescheduleReceivablesResponse
 import com.teco.ventago.features.orders.domain.models.requests.RegisterManualPaymentsDataResponse
 import com.teco.ventago.features.orders.domain.models.requests.RegisterManualPaymentsRequest
 import com.teco.ventago.features.orders.domain.models.requests.RetryInvoiceResponse
+import com.teco.ventago.features.orders.domain.models.requests.VoidOrderPaymentRequest
+import com.teco.ventago.features.orders.domain.models.requests.VoidOrderPaymentResponse
 import com.teco.ventago.features.orders.domain.models.responses.InvoiceDocsDto
 import com.teco.ventago.utils.toDecimalString
 import com.teco.ventago.utils.toQuantityUiString
+import kotlinx.datetime.Clock
+import kotlinx.datetime.TimeZone
+import kotlinx.datetime.toLocalDateTime
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -26,6 +35,24 @@ import kotlinx.coroutines.sync.withLock
 
 data class PaymentAllocation(
     val methodCode: Int,
+    val amountCents: Long
+)
+
+data class ReceivableApplicationAllocation(
+    val receivableTermId: Long,
+    val amountCents: Long
+)
+
+data class OrderPaymentSubmission(
+    val methodCode: Int,
+    val amountCents: Long,
+    val paymentDateIso: String,
+    val otherDescription: String? = null,
+    val applications: List<ReceivableApplicationAllocation> = emptyList()
+)
+
+data class ReceivableRescheduleTerm(
+    val dueDateIso: String,
     val amountCents: Long
 )
 
@@ -173,35 +200,105 @@ class OrderService(private val repository: IOrdersRepository) {
         otherDescription: String?, // not used by this endpoint
         issueInvoice: Boolean      // not used by this endpoint
     ): RegisterManualPaymentsDataResponse {
+        val payments = allocations.map { allocation ->
+            OrderPaymentSubmission(
+                methodCode = allocation.methodCode,
+                amountCents = allocation.amountCents,
+                paymentDateIso = currentPanamaDateTimeIso(),
+                otherDescription = otherDescription
+            )
+        }
+        return registerOrderPayments(
+            businessId = businessId,
+            orderId = orderId,
+            payments = payments
+        )
+    }
 
-        // Map cents -> "0.00" strings
-        val items = allocations
+    suspend fun registerOrderPayments(
+        businessId: Int,
+        orderId: Int,
+        payments: List<OrderPaymentSubmission>
+    ): RegisterManualPaymentsDataResponse {
+        val items = payments
             .filter { it.amountCents > 0L }
-            .map { alloc ->
-                if (alloc.methodCode == ManualPaymentMethodOption.OTHER_SPECIFY.id && !otherDescription.isNullOrBlank()) {
-                    // Other specified
-                    ManualPaymentItemRequest(
-                        type = alloc.methodCode,
-                        amount = alloc.amountCents.toDecimalString(),
-                        description = otherDescription
-                    )
-                } else {
-                    ManualPaymentItemRequest(
-                        type = alloc.methodCode,
-                        amount = alloc.amountCents.toDecimalString()
-                    )
-                }
+            .map { payment ->
+                val applications = payment.applications
+                    .filter { it.amountCents > 0L }
+                    .takeIf { it.isNotEmpty() }
+                    ?.map { app ->
+                        PaymentApplicationRequest(
+                            receivableTermId = app.receivableTermId,
+                            amount = app.amountCents.toDecimalString()
+                        )
+                    }
+
+                ManualPaymentItemRequest(
+                    type = payment.methodCode,
+                    amount = payment.amountCents.toDecimalString(),
+                    paymentDate = payment.paymentDateIso,
+                    description = if (
+                        payment.methodCode == ManualPaymentMethodOption.OTHER_SPECIFY.id &&
+                        !payment.otherDescription.isNullOrBlank()
+                    ) payment.otherDescription else null,
+                    applications = applications
+                )
             }
 
         val req = RegisterManualPaymentsRequest(payments = items)
-
-        val result = repository.registerManualPayments(
+        return repository.registerManualPayments(
             businessId = businessId,
             orderId = orderId,
             request = req
         )
+    }
 
-        return result
+    suspend fun rescheduleOrderReceivables(
+        businessId: Int,
+        orderId: Int,
+        sourceTermIds: List<Long>,
+        newTerms: List<ReceivableRescheduleTerm>
+    ): RescheduleReceivablesResponse {
+        val request = RescheduleReceivablesRequest(
+            sourceTermIds = sourceTermIds,
+            newTerms = newTerms.map { term ->
+                RescheduleReceivableTermRequest(
+                    dueDate = term.dueDateIso,
+                    amount = term.amountCents.toDecimalString(),
+                    notes = ""
+                )
+            },
+            note = ""
+        )
+
+        return repository.rescheduleOrderReceivables(
+            businessId = businessId,
+            orderId = orderId,
+            request = request
+        )
+    }
+
+    suspend fun voidOrderPayment(
+        businessId: Int,
+        paymentId: Long,
+        reason: String
+    ): VoidOrderPaymentResponse {
+        return repository.voidOrderPayment(
+            businessId = businessId,
+            paymentId = paymentId,
+            request = VoidOrderPaymentRequest(reason = reason)
+        )
+    }
+
+    private fun currentPanamaDateTimeIso(): String {
+        val dateTime = Clock.System.now().toLocalDateTime(TimeZone.of("America/Panama"))
+        val year = dateTime.year.toString().padStart(4, '0')
+        val month = dateTime.monthNumber.toString().padStart(2, '0')
+        val day = dateTime.dayOfMonth.toString().padStart(2, '0')
+        val hour = dateTime.hour.toString().padStart(2, '0')
+        val minute = dateTime.minute.toString().padStart(2, '0')
+        val second = dateTime.second.toString().padStart(2, '0')
+        return "$year-$month-${day}T$hour:$minute:$second-05:00"
     }
 
     suspend fun retryElectronicInvoice(
@@ -212,8 +309,7 @@ class OrderService(private val repository: IOrdersRepository) {
     }
 
     suspend fun refreshOrder(businessId: Int, orderId: Int): Order {
-        val order = findOrderById(orderId)
-        val fresh = repository.findOrderByOrderNumber(businessId, order!!.internalNumber)
+        val fresh = repository.findOrderById(businessId, orderId)
         upsertAndEmit(fresh)
         selectedOrder.value = fresh
         return fresh

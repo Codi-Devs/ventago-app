@@ -8,6 +8,8 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Image
+import androidx.compose.foundation.background
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -37,6 +39,7 @@ import androidx.compose.material.icons.rounded.Business
 import androidx.compose.material.icons.rounded.Cancel
 import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material.icons.rounded.ContentCopy
+import androidx.compose.material.icons.rounded.HelpOutline
 import androidx.compose.material.icons.rounded.Inventory2
 import androidx.compose.material.icons.rounded.MoreVert
 import androidx.compose.material.icons.rounded.Payment
@@ -94,6 +97,7 @@ import com.teco.ventago.design_system.buttons.OutlinedButtonM
 import com.teco.ventago.design_system.buttons.TextButtonM
 import com.teco.ventago.design_system.buttons.TextButtonS
 import com.teco.ventago.design_system.molecules.orders.OrderStatusChip
+import com.teco.ventago.design_system.molecules.InstallmentDueDateFieldKmp
 import com.teco.ventago.design_system.organism.LoadingSheet
 import com.teco.ventago.design_system.textfields.DMMoneyOutlinedTextField
 import com.teco.ventago.design_system.textfields.DMOutlinedTextField
@@ -109,6 +113,7 @@ import com.teco.ventago.design_system.theme.ProcessingContainer
 import com.teco.ventago.design_system.theme.ProcessingLabel
 import com.teco.ventago.design_system.theme.bodyMedium
 import com.teco.ventago.design_system.theme.bodyMediumBold
+import com.teco.ventago.design_system.theme.bodySmall
 import com.teco.ventago.design_system.theme.cardContainerColor
 import com.teco.ventago.design_system.theme.labelLarge
 import com.teco.ventago.design_system.theme.labelSmall
@@ -120,9 +125,15 @@ import com.teco.ventago.features.orders.domain.models.ManualPaymentMethodOption
 import com.teco.ventago.features.orders.domain.models.Order
 import com.teco.ventago.features.orders.domain.models.OrderStatus
 import com.teco.ventago.features.orders.domain.models.PaymentStatus
+import com.teco.ventago.features.orders.domain.models.ReceivableTermDto
 import com.teco.ventago.features.orders.ui.order_details.viewModel.OrderDetailsState
 import com.teco.ventago.features.orders.ui.order_details.viewModel.OrderDetailsUiEvent
 import com.teco.ventago.features.orders.ui.order_details.viewModel.OrdersDetailsViewModel
+import com.teco.ventago.features.orders.ui.order_details.viewModel.OrderCxcValidators
+import com.teco.ventago.features.orders.ui.order_details.viewModel.RegisterPaymentMode
+import com.teco.ventago.features.orders.ui.order_details.viewModel.RegisterPaymentState
+import com.teco.ventago.features.orders.ui.order_details.viewModel.RescheduleState
+import com.teco.ventago.features.orders.ui.order_details.viewModel.VoidPaymentState
 import com.teco.ventago.navigation.PosNoteRoute
 import com.teco.ventago.navigation.PosScreens
 import com.teco.ventago.utils.DateFormat
@@ -139,6 +150,8 @@ import com.teco.ventago.utils.toLongCents
 import com.teco.ventago.utils.toQuantityUiString
 import kotlinx.datetime.Clock
 import kotlinx.datetime.Instant
+import kotlinx.datetime.TimeZone
+import kotlinx.datetime.toLocalDateTime
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 import org.jetbrains.compose.resources.painterResource
@@ -181,6 +194,7 @@ import ventago.composeapp.generated.resources.total
 import ventago.composeapp.generated.resources.unpaid
 import ventago.composeapp.generated.resources.yappy
 import kotlin.time.Duration.Companion.days
+import kotlin.math.abs
 
 
 @Composable
@@ -318,7 +332,9 @@ fun OrderDetailsScreen(
     val loadingSheetState = rememberModalBottomSheetState(confirmValueChange = { false })
     val linkSheetState = rememberModalBottomSheetState()
     val shareSheetState = rememberModalBottomSheetState()
-    val markAsPaidSheetState = rememberModalBottomSheetState()
+    val registerPaymentSheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+    val rescheduleSheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+    val voidPaymentSheetState = rememberModalBottomSheetState()
 
     LaunchedEffect(Unit) {
         viewModel.events.collect { event ->
@@ -371,9 +387,19 @@ fun OrderDetailsScreen(
         // Items card
         OrderItemsCard(order = order)
 
-        // Payment info card
+        // Receivables card
         if (order.status != OrderStatus.CANCELLED) {
-            OrderPaymentCard(order = order)
+            OrderReceivablesCard(
+                order = order,
+                pendingCents = viewModel.totalOpenReceivableCents(order),
+                overdueCents = viewModel.totalOverdueReceivableCents(order),
+                terms = viewModel.nonCancelledReceivableTerms(order),
+                onReschedule = { viewModel.openRescheduleSheet() }
+            )
+            RegisteredPaymentsCard(
+                order = order,
+                onVoidPayment = { paymentId -> viewModel.openVoidPaymentSheet(paymentId) }
+            )
         }
 
         // Invoicing card
@@ -398,6 +424,15 @@ fun OrderDetailsScreen(
                     }) {
                         Text("Ver factura PDF")
                     }
+                    if (uiState.canMarkPaid && viewModel.totalOpenReceivableCents(order) > 0L) {
+                        OutlinedButtonM(
+                            onClick = { viewModel.openRegisterPaymentSheet() },
+                            contentColor = MaterialTheme.colorScheme.secondary,
+                            border = BorderStroke(1.dp, MaterialTheme.colorScheme.secondary)
+                        ) {
+                            Text("Registrar pago")
+                        }
+                    }
                 }
 
                 InvoiceStatus.FAILED.id -> {
@@ -405,20 +440,21 @@ fun OrderDetailsScreen(
                 }
 
                 InvoiceStatus.NONE.id, InvoiceStatus.PENDING.id -> {
-                    if (order.paymentStatus == PaymentStatus.PAID.id &&
+                    if (viewModel.canInvoiceDraftOrder(order)) {
+                        ButtonM(
+                            onClick = { viewModel.showManualPaymentSheet(true) },
+                            containerColor = Color(0xFF2E7D32),
+                            contentColor = Color.White
+                        ) {
+                            Text("Facturar")
+                        }
+                    } else if (order.paymentStatus == PaymentStatus.PAID.id &&
                         order.invoiceStatus == InvoiceStatus.PENDING.id
                     ) {
-                        ButtonM(onClick = { }) {
+                        ButtonM(onClick = { viewModel.retryElectronicInvoice() }) {
                             Text("Generar factura electrónica")
                         }
                     } else {
-                        if (uiState.canMarkPaid) {
-                            ButtonM(onClick = {
-                                viewModel.showManualPaymentSheet(true)
-                            }) {
-                                Text("Registrar pago manual")
-                            }
-                        }
                         if (!order.paymentLink.isNullOrBlank() && uiState.canMarkPaid) {
                             if (uiState.loadingPaymentLink) {
                                 Box(
@@ -560,6 +596,33 @@ fun OrderDetailsScreen(
             }
         }
 
+        if (uiState.manualPayment.showSheet) {
+            OrderScreenManualPaymentBottomSheetHost(
+                uiState = uiState,
+                order = order,
+                showSheet = uiState.manualPayment.showSheet,
+                onDismissSheet = {
+                    viewModel.resetManualPaymentFields()
+                    viewModel.showManualPaymentSheet(false)
+                },
+                methodOptions = ManualPaymentMethodOption.getAllOptionsPairs(),
+                charged = uiState.manualPayment.charged,
+                otherPaymentDescription = uiState.manualPayment.otherPaymentDescription,
+                onToggleMethod = { code, selected ->
+                    viewModel.onToggleMethod(code, selected)
+                },
+                onAmountChange = { code, amount ->
+                    viewModel.onAmountChange(code, amount)
+                },
+                onOtherDesc = { desc ->
+                    viewModel.onOtherDescription(desc)
+                },
+                onConfirmManualPayment = {
+                    viewModel.onConfirmManualPayment()
+                }
+            )
+        }
+
         if (showCancelDialog) {
             AlertDialog(
                 onDismissRequest = { showCancelDialog = false },
@@ -626,38 +689,78 @@ fun OrderDetailsScreen(
             )
         }
 
-        if (uiState.manualPayment.showSheet) {
+        if (uiState.registerPaymentState.showSheet) {
             ModalBottomSheet(
                 containerColor = MaterialTheme.colorScheme.background,
                 onDismissRequest = {
-                    viewModel.resetManualPaymentFields()
-                    viewModel.showManualPaymentSheet(false)
+                    viewModel.closeRegisterPaymentSheet()
                 },
-                sheetState = markAsPaidSheetState,
+                sheetState = registerPaymentSheetState,
             ) {
-                OrderScreenManualPaymentBottomSheetHost(
-                    uiState = uiState,
-                    order = order,
-                    showSheet = uiState.manualPayment.showSheet,
-                    onDismissSheet = {
-                        viewModel.resetManualPaymentFields()
-                        viewModel.showManualPaymentSheet(false)
+                RegisterPaymentsBottomSheet(
+                    state = uiState.registerPaymentState,
+                    receivableTerms = viewModel.openReceivableTerms(order),
+                    openBalanceCents = viewModel.totalOpenReceivableCents(order),
+                    onDismiss = { viewModel.closeRegisterPaymentSheet() },
+                    onModeSelected = { viewModel.setRegisterPaymentMode(it) },
+                    onAddPayment = { viewModel.addRegisterPaymentRow() },
+                    onRemovePayment = { viewModel.removeRegisterPaymentRow(it) },
+                    onPaymentMethodChanged = { rowId, methodCode ->
+                        viewModel.updateRegisterPaymentMethod(rowId, methodCode)
                     },
-                    methodOptions = ManualPaymentMethodOption.getAllOptionsPairs(),
-                    charged = uiState.manualPayment.charged,
-                    otherPaymentDescription = uiState.manualPaymentDescription,
-                    onToggleMethod = { code, selected ->
-                        viewModel.onToggleMethod(code, selected)
+                    onPaymentAmountChanged = { rowId, amount ->
+                        viewModel.updateRegisterPaymentAmount(rowId, amount)
                     },
-                    onAmountChange = { code, amount ->
-                        viewModel.onAmountChange(code, amount)
+                    onPaymentDateChanged = { rowId, dateIso ->
+                        viewModel.updateRegisterPaymentDate(rowId, dateIso)
                     },
-                    onOtherDesc = { desc ->
-                        viewModel.onOtherDescription(desc)
+                    onAddApplication = { rowId -> viewModel.addRegisterPaymentApplication(rowId) },
+                    onRemoveApplication = { rowId, appId ->
+                        viewModel.removeRegisterPaymentApplication(rowId, appId)
                     },
-                    onConfirmManualPayment = {
-                        viewModel.onConfirmManualPayment()
-                    }
+                    onApplicationTermChanged = { rowId, appId, termId ->
+                        viewModel.updateRegisterPaymentApplicationTerm(rowId, appId, termId)
+                    },
+                    onApplicationAmountChanged = { rowId, appId, amount ->
+                        viewModel.updateRegisterPaymentApplicationAmount(rowId, appId, amount)
+                    },
+                    onSubmit = { viewModel.submitRegisterPayments() }
+                )
+            }
+        }
+
+        if (uiState.rescheduleState.showSheet) {
+            ModalBottomSheet(
+                containerColor = MaterialTheme.colorScheme.background,
+                onDismissRequest = { viewModel.closeRescheduleSheet() },
+                sheetState = rescheduleSheetState,
+            ) {
+                RescheduleTermsBottomSheet(
+                    state = uiState.rescheduleState,
+                    totalOpenCents = viewModel.totalOpenReceivableCents(order),
+                    onDismiss = { viewModel.closeRescheduleSheet() },
+                    onAddTerm = { viewModel.addRescheduleTerm() },
+                    onRemoveTerm = { termId -> viewModel.removeRescheduleTerm(termId) },
+                    onTermDateChanged = { termId, dateIso -> viewModel.updateRescheduleTermDate(termId, dateIso) },
+                    onTermAmountChanged = { termId, amount -> viewModel.updateRescheduleTermAmount(termId, amount) },
+                    onConfirmRequest = { viewModel.requestRescheduleConfirmation() },
+                    onDismissConfirmDialog = { viewModel.dismissRescheduleConfirmation() },
+                    onConfirmReschedule = { viewModel.confirmReschedule() }
+                )
+            }
+        }
+
+        if (uiState.voidPaymentState.showSheet) {
+            ModalBottomSheet(
+                containerColor = MaterialTheme.colorScheme.background,
+                onDismissRequest = { viewModel.closeVoidPaymentSheet() },
+                sheetState = voidPaymentSheetState,
+            ) {
+                VoidPaymentBottomSheet(
+                    state = uiState.voidPaymentState,
+                    onReasonChange = { viewModel.onVoidReasonChanged(it) },
+                    onDismiss = { viewModel.closeVoidPaymentSheet() },
+                    onSubmit = { viewModel.confirmVoidPayment() }
                 )
             }
         }
@@ -786,60 +889,199 @@ private fun OrderItemsCard(order: Order) {
 }
 
 @Composable
-private fun OrderPaymentCard(order: Order) {
+private fun OrderReceivablesCard(
+    order: Order,
+    pendingCents: Long,
+    overdueCents: Long,
+    terms: List<ReceivableTermDto>,
+    onReschedule: () -> Unit
+) {
+    if (terms.isEmpty()) return
+
     Card(
         modifier = Modifier.fillMaxWidth(),
         elevation = CardDefaults.cardElevation(2.dp),
         colors = CardDefaults.cardColors(containerColor = cardContainerColor())
     ) {
         Column(modifier = Modifier.padding(16.dp)) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Icon(
-                        imageVector = Icons.Rounded.Payment,
-                        contentDescription = null,
-                        tint = MaterialTheme.colorScheme.primary,
-                        modifier = Modifier.size(20.dp)
-                    )
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Text(text = "Métodos de pago", style = bodyMediumBold())
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Icon(
+                    imageVector = Icons.Rounded.Payment,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.size(20.dp)
+                )
+                Spacer(modifier = Modifier.width(8.dp))
+                Text(text = "Cuotas de pago", style = bodyMediumBold())
+            }
+
+            Spacer(modifier = Modifier.height(8.dp))
+            InfoRow("Pendiente", formatDollarFromCents(pendingCents))
+            Spacer(modifier = Modifier.height(4.dp))
+            InfoRow("Vencido", formatDollarFromCents(overdueCents))
+            Spacer(modifier = Modifier.height(8.dp))
+            Divider()
+            Spacer(modifier = Modifier.height(8.dp))
+
+            TermsTableHeader()
+            Spacer(modifier = Modifier.height(6.dp))
+            terms.forEachIndexed { index, term ->
+                TermTableRow(term = term)
+                if (index < terms.lastIndex) {
+                    Divider(modifier = Modifier.padding(vertical = 6.dp))
                 }
-                val shipColors = paymentStatusChipColors(order.paymentStatus)
-                SuggestionChip(
-                    modifier = Modifier.heightIn(min = 23.dp),
-                    onClick = { },
-                    colors = SuggestionChipDefaults.suggestionChipColors(
-                        containerColor = shipColors.first,
-                        labelColor = shipColors.second,
-                    ),
-                    border = SuggestionChipDefaults.suggestionChipBorder(
-                        enabled = true,
-                        borderColor = shipColors.first,
-                        disabledBorderColor = shipColors.first,
-                        borderWidth = 1.dp
-                    ),
-                    label = {
-                        Text(
-                            text = if (!order.paymentLink.isNullOrBlank() && order.paymentStatus == PaymentStatus.UNPAID.id) "Esperando pago por enlace" else paymentStatusLabel(
-                                order.paymentStatus
-                            ),
-                            maxLines = 2,
-                            overflow = TextOverflow.Ellipsis
-                        )
-                    },
+            }
+
+            if (pendingCents > 0L && order.invoiceStatus == InvoiceStatus.ISSUED.id) {
+                Spacer(modifier = Modifier.height(10.dp))
+                OutlinedButtonM(
+                    modifier = Modifier.fillMaxWidth(),
+                    onClick = onReschedule
+                ) {
+                    Text("Reprogramar cuotas")
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun TermsTableHeader() {
+    var showStatusHelp by remember { mutableStateOf(false) }
+
+    Row(modifier = Modifier.fillMaxWidth()) {
+        Text("#", style = labelSmall(MaterialTheme.colorScheme.onSurfaceVariant), modifier = Modifier.weight(0.6f))
+        Text("Vence", style = labelSmall(MaterialTheme.colorScheme.onSurfaceVariant), modifier = Modifier.weight(1.3f))
+        Text("Monto", style = labelSmall(MaterialTheme.colorScheme.onSurfaceVariant), modifier = Modifier.weight(1.1f), textAlign = TextAlign.End)
+        Text("Adeudado", style = labelSmall(MaterialTheme.colorScheme.onSurfaceVariant), modifier = Modifier.weight(1.2f), textAlign = TextAlign.End)
+        Text("Pagado", style = labelSmall(MaterialTheme.colorScheme.onSurfaceVariant), modifier = Modifier.weight(1.1f), textAlign = TextAlign.End)
+        Box(modifier = Modifier.weight(0.7f), contentAlignment = Alignment.CenterEnd) {
+            IconButton(
+                onClick = { showStatusHelp = true },
+                modifier = Modifier.size(18.dp)
+            ) {
+                Icon(
+                    imageVector = Icons.Rounded.HelpOutline,
+                    contentDescription = "Estados de cuota",
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.size(14.dp)
                 )
             }
-            if (order.orderPayments.isNotEmpty()) {
-                Spacer(modifier = Modifier.height(8.dp))
-                Divider()
-                Spacer(modifier = Modifier.height(8.dp))
-                for (payment in order.orderPayments) {
-                    InfoRow(payment.paymentMethod.name, formatNumberToMoney(payment.totalAmount))
-                    Spacer(modifier = Modifier.height(4.dp))
+        }
+    }
+
+    if (showStatusHelp) {
+        AlertDialog(
+            onDismissRequest = { showStatusHelp = false },
+            title = { Text("Estado de cuota") },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    Text("Verde: Pagado")
+                    Text("Azul: Parcial")
+                    Text("Naranja: Pendiente")
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = { showStatusHelp = false }) { Text("Entendido") }
+            }
+        )
+    }
+}
+
+@Composable
+private fun TermTableRow(term: ReceivableTermDto) {
+    val originalCents = term.originalAmount.toLongCents()
+    val openCents = term.openAmount.toLongCents()
+    val paidCents = (originalCents - openCents).coerceAtLeast(0L)
+    val statusColor = when {
+        openCents <= 0L -> Color(0xFF2E7D32)
+        openCents < originalCents -> Color(0xFF1976D2)
+        else -> Color(0xFFFF9800)
+    }
+
+    Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+        Text(term.termNumber.toString(), style = bodyMedium(), modifier = Modifier.weight(0.6f))
+        Text(formatUnixSecondsDate(term.dueDateUnixSeconds), style = bodyMedium(), modifier = Modifier.weight(1.3f))
+        Text(formatDollarFromCents(originalCents), style = bodyMedium(), modifier = Modifier.weight(1.1f), textAlign = TextAlign.End)
+        Text(formatDollarFromCents(openCents), style = bodyMedium(), modifier = Modifier.weight(1.2f), textAlign = TextAlign.End)
+        Text(formatDollarFromCents(paidCents), style = bodyMedium(), modifier = Modifier.weight(1.1f), textAlign = TextAlign.End)
+        Box(modifier = Modifier.weight(0.7f), contentAlignment = Alignment.CenterEnd) {
+            Box(
+                modifier = Modifier
+                    .size(10.dp)
+                    .background(statusColor, CircleShape)
+            )
+        }
+    }
+}
+
+@Composable
+private fun RegisteredPaymentsCard(
+    order: Order,
+    onVoidPayment: (Long) -> Unit
+) {
+    if (order.orderPayments.size < 2) return
+
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        elevation = CardDefaults.cardElevation(2.dp),
+        colors = CardDefaults.cardColors(containerColor = cardContainerColor())
+    ) {
+        Column(modifier = Modifier.padding(16.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Icon(
+                    imageVector = Icons.Rounded.Payment,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.size(20.dp)
+                )
+                Spacer(modifier = Modifier.width(8.dp))
+                Text(text = "Pagos registrados", style = bodyMediumBold())
+            }
+            Spacer(modifier = Modifier.height(8.dp))
+
+            order.orderPayments.forEachIndexed { index, payment ->
+                val paymentDate = formatRfc3339DateOnly(payment.paymentDate)
+                val isVoided = !payment.voidedAt.isNullOrBlank()
+                val badgeLabel = if (isVoided) "Anulado" else "Aplicado"
+                val badgeBg = if (isVoided) Color(0xFFFFEBEE) else Color(0xFFE8F5E9)
+                val badgeFg = if (isVoided) Color(0xFFD32F2F) else Color(0xFF2E7D32)
+
+                Column {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Text(payment.paymentMethod.name.ifBlank { "N/A" }, style = bodyMediumBold())
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text(
+                                text = badgeLabel,
+                                style = labelSmall(color = badgeFg),
+                                modifier = Modifier
+                                    .background(badgeBg, RoundedCornerShape(50))
+                                    .padding(horizontal = 8.dp, vertical = 2.dp)
+                            )
+                        }
+                        Text(formatDollarFromCents(payment.totalAmount.toLongCents()), style = bodyMediumBold())
+                    }
+                    Spacer(modifier = Modifier.height(2.dp))
+                    Text(
+                        text = paymentDate,
+                        style = labelSmall(color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    )
+                    if (!isVoided && payment.id != null && order.invoiceStatus == InvoiceStatus.ISSUED.id) {
+                        TextButtonS(
+                            label = "Anular pago",
+                            color = MaterialTheme.colorScheme.error
+                        ) {
+                            onVoidPayment(payment.id)
+                        }
+                    }
+                }
+                if (index < order.orderPayments.lastIndex) {
+                    Divider(modifier = Modifier.padding(vertical = 8.dp))
                 }
             }
         }
@@ -1067,6 +1309,338 @@ private fun InfoRow(label: String, value: String, maxLines: Int = 1) {
 }
 
 @Composable
+private fun RegisterPaymentsBottomSheet(
+    state: RegisterPaymentState,
+    receivableTerms: List<ReceivableTermDto>,
+    openBalanceCents: Long,
+    onDismiss: () -> Unit,
+    onModeSelected: (RegisterPaymentMode) -> Unit,
+    onAddPayment: () -> Unit,
+    onRemovePayment: (Int) -> Unit,
+    onPaymentMethodChanged: (Int, Int) -> Unit,
+    onPaymentAmountChanged: (Int, String) -> Unit,
+    onPaymentDateChanged: (Int, String) -> Unit,
+    onAddApplication: (Int) -> Unit,
+    onRemoveApplication: (Int, Int) -> Unit,
+    onApplicationTermChanged: (Int, Int, Long?) -> Unit,
+    onApplicationAmountChanged: (Int, Int, String) -> Unit,
+    onSubmit: () -> Unit
+) {
+    val today = remember { Clock.System.now().toLocalDateTime(TimeZone.currentSystemDefault()).date }
+    val methods = remember { ManualPaymentMethodOption.getAllOptions() }
+
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .verticalScroll(rememberScrollState())
+            .navigationBarsPadding()
+            .imePadding()
+            .padding(16.dp),
+        verticalArrangement = Arrangement.spacedBy(12.dp)
+    ) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text("Registrar pago", style = titleMediumBold())
+            Spacer(Modifier.weight(1f))
+            IconButton(onClick = onDismiss) {
+                Icon(Icons.Rounded.Close, contentDescription = "Cerrar")
+            }
+        }
+
+        Text("Saldo a cobrar: ${formatDollarFromCents(openBalanceCents)}", style = bodyMediumBold())
+
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            FilterChip(
+                selected = state.mode == RegisterPaymentMode.AUTOMATIC,
+                onClick = { onModeSelected(RegisterPaymentMode.AUTOMATIC) },
+                label = { Text("Aplicar automáticamente") }
+            )
+            FilterChip(
+                selected = state.mode == RegisterPaymentMode.MANUAL,
+                onClick = { onModeSelected(RegisterPaymentMode.MANUAL) },
+                label = { Text("Aplicar manualmente") }
+            )
+        }
+
+        Text(
+            if (state.mode == RegisterPaymentMode.AUTOMATIC) {
+                "El sistema distribuye por orden de vencimiento hasta cubrir el monto."
+            } else {
+                "Reparte cada pago entre cuotas."
+            },
+            style = labelSmall(color = MaterialTheme.colorScheme.onSurfaceVariant)
+        )
+
+        state.rows.forEachIndexed { index, row ->
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                colors = CardDefaults.cardColors(containerColor = cardContainerColor()),
+                elevation = CardDefaults.cardElevation(1.dp)
+            ) {
+                Column(modifier = Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text("Pago ${index + 1}", style = bodyMediumBold())
+                        Spacer(Modifier.weight(1f))
+                        if (state.rows.size > 1) {
+                            TextButtonS(label = "Eliminar", color = MaterialTheme.colorScheme.error) {
+                                onRemovePayment(row.id)
+                            }
+                        }
+                    }
+
+                    val selectedMethodIndex = methods.indexOfFirst { it.id == row.paymentMethodCode }
+                        .takeIf { it >= 0 } ?: 0
+                    com.teco.ventago.design_system.textfields.helpers.DMDropDownField(
+                        label = "Método",
+                        items = methods,
+                        selectedIndex = selectedMethodIndex,
+                        onItemSelected = { _, method ->
+                            onPaymentMethodChanged(row.id, method.id)
+                        },
+                        selectedItemToString = { it.displayName },
+                        modifier = Modifier.fillMaxWidth()
+                    )
+
+                    InstallmentDueDateFieldKmp(
+                        valueIso = row.paymentDateIso,
+                        onDatePickedIso = { onPaymentDateChanged(row.id, it) },
+                        label = "Fecha de pago",
+                        modifier = Modifier.fillMaxWidth(),
+                        maxSelectableDate = today
+                    )
+
+                    DMMoneyOutlinedTextField(
+                        text = row.amountInput,
+                        label = "Monto",
+                        onChange = { onPaymentAmountChanged(row.id, it) },
+                        leadingIcon = null,
+                        modifier = Modifier.fillMaxWidth(),
+                        maxLines = 1,
+                        imeAction = ImeAction.Done
+                    )
+
+                    if (state.mode == RegisterPaymentMode.MANUAL) {
+                        Text("Aplicaciones", style = bodyMediumBold())
+                        row.applications.forEach { app ->
+                            Card(
+                                modifier = Modifier.fillMaxWidth(),
+                                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.35f))
+                            ) {
+                                Column(modifier = Modifier.padding(10.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                                    val selectedIndex = receivableTerms.indexOfFirst { it.id == app.receivableTermId }
+                                    com.teco.ventago.design_system.textfields.helpers.DMDropDownField(
+                                        label = "Cuota",
+                                        items = receivableTerms,
+                                        selectedIndex = if (selectedIndex >= 0) selectedIndex else -1,
+                                        onItemSelected = { _, term ->
+                                            onApplicationTermChanged(row.id, app.id, term.id)
+                                        },
+                                        selectedItemToString = {
+                                            "Cuota ${it.termNumber} - Adeudado ${formatDollarFromCents(it.openAmount.toLongCents())}"
+                                        },
+                                        modifier = Modifier.fillMaxWidth()
+                                    )
+
+                                    DMMoneyOutlinedTextField(
+                                        text = app.amountInput,
+                                        label = "Monto aplicado",
+                                        onChange = { onApplicationAmountChanged(row.id, app.id, it) },
+                                        leadingIcon = null,
+                                        modifier = Modifier.fillMaxWidth(),
+                                        maxLines = 1,
+                                        imeAction = ImeAction.Done
+                                    )
+
+                                    TextButtonS(label = "Eliminar cuota", color = MaterialTheme.colorScheme.error) {
+                                        onRemoveApplication(row.id, app.id)
+                                    }
+                                }
+                            }
+                        }
+                        TextButtonS(label = "Agregar cuota", color = MaterialTheme.colorScheme.primary) {
+                            onAddApplication(row.id)
+                        }
+                    }
+                }
+            }
+        }
+
+        TextButtonS(label = "Agregar pago", color = MaterialTheme.colorScheme.primary) {
+            onAddPayment()
+        }
+
+        val allocated = state.rows.sumOf { OrderCxcValidators.parseCents(it.amountInput) }
+        val remaining = (openBalanceCents - allocated).coerceAtLeast(0L)
+        InfoRow("Total asignado", formatDollarFromCents(allocated))
+        InfoRow("Total restante", formatDollarFromCents(remaining))
+
+        state.errorMessage?.let {
+            Text(it, color = MaterialTheme.colorScheme.error, style = bodySmall())
+        }
+
+        ButtonM(
+            modifier = Modifier.fillMaxWidth(),
+            onClick = onSubmit
+        ) {
+            Text("Registrar pago")
+        }
+    }
+}
+
+@Composable
+private fun RescheduleTermsBottomSheet(
+    state: RescheduleState,
+    totalOpenCents: Long,
+    onDismiss: () -> Unit,
+    onAddTerm: () -> Unit,
+    onRemoveTerm: (Int) -> Unit,
+    onTermDateChanged: (Int, String) -> Unit,
+    onTermAmountChanged: (Int, String) -> Unit,
+    onConfirmRequest: () -> Unit,
+    onDismissConfirmDialog: () -> Unit,
+    onConfirmReschedule: () -> Unit
+) {
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .verticalScroll(rememberScrollState())
+            .navigationBarsPadding()
+            .imePadding()
+            .padding(16.dp),
+        verticalArrangement = Arrangement.spacedBy(12.dp)
+    ) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text("Reprogramar cuotas de pago", style = titleMediumBold())
+            Spacer(Modifier.weight(1f))
+            IconButton(onClick = onDismiss) {
+                Icon(Icons.Rounded.Close, contentDescription = "Cerrar")
+            }
+        }
+
+        Text("Saldo adeudado total: ${formatDollarFromCents(totalOpenCents)}", style = bodyMediumBold())
+        Text("Nuevos vencimientos", style = bodyMediumBold())
+
+        state.terms.forEachIndexed { index, term ->
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                colors = CardDefaults.cardColors(containerColor = cardContainerColor()),
+                elevation = CardDefaults.cardElevation(1.dp)
+            ) {
+                Column(modifier = Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text("Cuota ${index + 1}", style = bodyMediumBold())
+                        Spacer(Modifier.weight(1f))
+                        if (state.terms.size > 1) {
+                            TextButtonS(label = "Eliminar", color = MaterialTheme.colorScheme.error) {
+                                onRemoveTerm(term.id)
+                            }
+                        }
+                    }
+                    InstallmentDueDateFieldKmp(
+                        valueIso = term.dueDateIso,
+                        onDatePickedIso = { onTermDateChanged(term.id, it) },
+                        label = "Fecha de vencimiento",
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                    DMMoneyOutlinedTextField(
+                        text = term.amountInput,
+                        label = "Monto",
+                        onChange = { onTermAmountChanged(term.id, it) },
+                        leadingIcon = null,
+                        modifier = Modifier.fillMaxWidth(),
+                        maxLines = 1,
+                        imeAction = ImeAction.Done
+                    )
+                }
+            }
+        }
+
+        TextButtonS(label = "Agregar cuota", color = MaterialTheme.colorScheme.primary) {
+            onAddTerm()
+        }
+
+        val assigned = state.terms.sumOf { OrderCxcValidators.parseCents(it.amountInput) }
+        InfoRow("Total adeudado por asignar a cuotas", formatDollarFromCents((totalOpenCents - assigned).coerceAtLeast(0L)))
+
+        state.errorMessage?.let {
+            Text(it, color = MaterialTheme.colorScheme.error, style = bodySmall())
+        }
+
+        TextButtonS(
+            modifier = Modifier.fillMaxWidth(),
+            label = "Reprogramar cuotas",
+            color = MaterialTheme.colorScheme.secondary
+        ) {
+            onConfirmRequest()
+        }
+    }
+
+    if (state.showConfirmDialog) {
+        AlertDialog(
+            onDismissRequest = onDismissConfirmDialog,
+            title = { Text("Confirmar reprogramación") },
+            text = {
+                Text("Esta acción cancela todas las cuotas existentes y crea una nueva programación de pago.")
+            },
+            confirmButton = {
+                ButtonM(onClick = onConfirmReschedule) { Text("Confirmar") }
+            },
+            dismissButton = {
+                TextButton(onClick = onDismissConfirmDialog) { Text("Cancelar") }
+            }
+        )
+    }
+}
+
+@Composable
+private fun VoidPaymentBottomSheet(
+    state: VoidPaymentState,
+    onReasonChange: (String) -> Unit,
+    onDismiss: () -> Unit,
+    onSubmit: () -> Unit
+) {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(16.dp)
+            .navigationBarsPadding()
+            .imePadding(),
+        verticalArrangement = Arrangement.spacedBy(12.dp)
+    ) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text("Anular pago", style = titleMediumBold())
+            Spacer(Modifier.weight(1f))
+            IconButton(onClick = onDismiss) {
+                Icon(Icons.Rounded.Close, contentDescription = "Cerrar")
+            }
+        }
+
+        DMOutlinedTextField(
+            text = state.reason,
+            label = "Razón",
+            onChange = onReasonChange,
+            modifier = Modifier.fillMaxWidth(),
+            maxLines = 4
+        )
+
+        state.errorMessage?.let {
+            Text(it, color = MaterialTheme.colorScheme.error, style = bodySmall())
+        }
+
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            OutlinedButtonM(onClick = onDismiss, modifier = Modifier.weight(1f)) {
+                Text("Cancelar")
+            }
+            ButtonM(onClick = onSubmit, modifier = Modifier.weight(1f)) {
+                Text("Anular")
+            }
+        }
+    }
+}
+
+@Composable
 fun OrderScreenManualPaymentBottomSheetHost(
     uiState: OrderDetailsState,
     order: Order,
@@ -1254,6 +1828,37 @@ fun ManualPaymentBottomSheet(
             }
 
             Spacer(Modifier.height(8.dp))
+        }
+    }
+}
+
+private fun formatDollarFromCents(cents: Long): String {
+    val sign = if (cents < 0) "-" else ""
+    val absolute = abs(cents)
+    val units = absolute / 100
+    val decimals = (absolute % 100).toString().padStart(2, '0')
+    return "$sign$$units.$decimals"
+}
+
+private fun formatUnixSecondsDate(unixSeconds: Long): String {
+    return runCatching {
+        val date = Instant.fromEpochSeconds(unixSeconds).toLocalDateTime(TimeZone.of("America/Panama")).date
+        "${date.dayOfMonth.toString().padStart(2, '0')}/${date.monthNumber.toString().padStart(2, '0')}/${date.year}"
+    }.getOrElse { "--/--/----" }
+}
+
+private fun formatRfc3339DateOnly(raw: String?): String {
+    if (raw.isNullOrBlank()) return "--/--/----"
+    return runCatching {
+        val instant = Instant.parse(raw)
+        val date = instant.toLocalDateTime(TimeZone.of("America/Panama")).date
+        "${date.dayOfMonth.toString().padStart(2, '0')}/${date.monthNumber.toString().padStart(2, '0')}/${date.year}"
+    }.getOrElse {
+        val prefix = raw.take(10)
+        if (prefix.matches(Regex("\\d{4}-\\d{2}-\\d{2}"))) {
+            "${prefix.substring(8, 10)}/${prefix.substring(5, 7)}/${prefix.substring(0, 4)}"
+        } else {
+            "--/--/----"
         }
     }
 }

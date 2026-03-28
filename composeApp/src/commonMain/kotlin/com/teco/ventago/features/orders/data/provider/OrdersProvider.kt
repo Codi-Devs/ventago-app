@@ -6,10 +6,12 @@ import com.teco.ventago.features.orders.domain.models.Order
 import com.teco.ventago.features.orders.domain.models.requests.CancelOrderRequest
 import com.teco.ventago.features.orders.domain.models.requests.CreateOrderRequest
 import com.teco.ventago.features.orders.domain.models.requests.DeleteOrderRequest
+import com.teco.ventago.features.orders.domain.models.requests.FindOrderByIdRequest
+import com.teco.ventago.features.orders.domain.models.requests.RescheduleReceivablesRequest
 import com.teco.ventago.features.orders.domain.models.requests.RegisterManualPaymentsRequest
+import com.teco.ventago.features.orders.domain.models.requests.VoidOrderPaymentRequest
 import com.teco.ventago.utils.ApiError
 import com.teco.ventago.utils.ApiResponse
-import com.teco.ventago.utils.BadRequestException
 import io.ktor.client.HttpClient
 import io.ktor.client.call.body
 import io.ktor.client.request.get
@@ -137,6 +139,64 @@ class OrdersProvider(private val client: HttpClient, private val authService: IA
         return response
     }
 
+    override suspend fun rescheduleOrderReceivables(
+        businessId: Int,
+        orderId: Int,
+        request: RescheduleReceivablesRequest
+    ): ApiResponse {
+        val res = client.post(Configs.ordersBasePath + "/api/v1/orders/$orderId/receivables/reschedule") {
+            headers {
+                append(HttpHeaders.Accept, "*/*")
+                append(HttpHeaders.Authorization, "Bearer ${authService.getJwtToken()}")
+                append(HttpHeaders.ContentType, "application/json")
+                append("X-Business-ID", "$businessId")
+            }
+            contentType(ContentType.Application.Json)
+            setBody(json.encodeToString(request))
+        }
+
+        val body = res.body<JsonObject>()
+        val response = ApiResponse.fromJson(body)
+        if (response.error == ApiError.AUTH_001 || res.status == HttpStatusCode.Unauthorized) {
+            return try {
+                authService.refreshToken(client)
+                rescheduleOrderReceivables(businessId, orderId, request)
+            } catch (e: Exception) {
+                response
+            }
+        }
+        return response
+    }
+
+    override suspend fun voidOrderPayment(
+        businessId: Int,
+        paymentId: Long,
+        request: VoidOrderPaymentRequest
+    ): ApiResponse {
+        val res = client.post(Configs.ordersBasePath + "/api/v1/orders/payments/$paymentId/void") {
+            headers {
+                append(HttpHeaders.Accept, "*/*")
+                append(HttpHeaders.Authorization, "Bearer ${authService.getJwtToken()}")
+                append(HttpHeaders.ContentType, "application/json")
+                append("X-Business-ID", "$businessId")
+            }
+            contentType(ContentType.Application.Json)
+            setBody(json.encodeToString(request))
+        }
+
+        val body = res.body<JsonObject>()
+        val response = ApiResponse.fromJson(body)
+        if (response.error == ApiError.AUTH_001 || res.status == HttpStatusCode.Unauthorized) {
+            return try {
+                authService.refreshToken(client)
+                voidOrderPayment(businessId, paymentId, request)
+            } catch (e: Exception) {
+                response
+            }
+        }
+        return response
+    }
+
     override suspend fun retryElectronicInvoice(
         businessId: Int,
         orderId: Int,
@@ -241,6 +301,31 @@ class OrdersProvider(private val client: HttpClient, private val authService: IA
             return try {
                 authService.refreshToken(client)
                 findOrderByOrderNumber(businessId, orderNumber)
+            } catch (e: Exception) {
+                response
+            }
+        }
+        return response
+    }
+
+    override suspend fun findOrderById(businessId: Int, orderId: Int): ApiResponse {
+        val res = client.post(Configs.ordersBasePath + "/api/v1/orders/find/order-id") {
+            headers {
+                append(HttpHeaders.Accept, "*/*")
+                append(HttpHeaders.Authorization, "Bearer ${authService.getJwtToken()}")
+                append(HttpHeaders.ContentType, "application/json")
+                append("X-Business-ID", "$businessId")
+            }
+            contentType(ContentType.Application.Json)
+            setBody(json.encodeToString(FindOrderByIdRequest(orderId = orderId)))
+        }
+
+        val body = res.body<JsonObject>()
+        val response = ApiResponse.fromJson(body)
+        if (response.error == ApiError.AUTH_001 || res.status == HttpStatusCode.Unauthorized) {
+            return try {
+                authService.refreshToken(client)
+                findOrderById(businessId, orderId)
             } catch (e: Exception) {
                 response
             }

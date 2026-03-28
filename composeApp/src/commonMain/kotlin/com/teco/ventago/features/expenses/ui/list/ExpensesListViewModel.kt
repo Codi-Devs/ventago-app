@@ -225,7 +225,7 @@ class ExpensesListViewModel(
             startDate = state.startDate?.let { formatStartDate(it) },
             endDate = state.endDate?.let { formatEndDate(it) },
             source = state.source,
-            paymentStatus = state.paymentStatuses.takeIf { it.isNotEmpty() },
+            paymentStatus = state.paymentStatuses.firstOrNull(),
             issuerName = state.issuerName.ifBlank { null },
             issuerRuc = state.issuerRuc.ifBlank { null },
             invoiceNumber = state.searchQuery.ifBlank {

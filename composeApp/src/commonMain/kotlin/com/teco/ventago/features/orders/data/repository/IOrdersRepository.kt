@@ -6,9 +6,13 @@ import com.teco.ventago.features.orders.domain.models.Order
 import com.teco.ventago.features.orders.domain.models.requests.CancelOrderRequest
 import com.teco.ventago.features.orders.domain.models.requests.CreateOrderRequest
 import com.teco.ventago.features.orders.domain.models.requests.DeleteOrderRequest
+import com.teco.ventago.features.orders.domain.models.requests.RescheduleReceivablesRequest
+import com.teco.ventago.features.orders.domain.models.requests.RescheduleReceivablesResponse
 import com.teco.ventago.features.orders.domain.models.requests.RegisterManualPaymentsDataResponse
 import com.teco.ventago.features.orders.domain.models.requests.RegisterManualPaymentsRequest
 import com.teco.ventago.features.orders.domain.models.requests.RetryInvoiceResponse
+import com.teco.ventago.features.orders.domain.models.requests.VoidOrderPaymentRequest
+import com.teco.ventago.features.orders.domain.models.requests.VoidOrderPaymentResponse
 import com.teco.ventago.features.orders.domain.models.responses.CreateOrderResponse
 import com.teco.ventago.features.orders.domain.models.responses.InvoiceDocsDto
 import com.teco.ventago.core.Paged
@@ -61,6 +65,16 @@ interface IOrdersRepository {
         orderId: Int,
         request: RegisterManualPaymentsRequest
     ): RegisterManualPaymentsDataResponse
+    suspend fun rescheduleOrderReceivables(
+        businessId: Int,
+        orderId: Int,
+        request: RescheduleReceivablesRequest
+    ): RescheduleReceivablesResponse
+    suspend fun voidOrderPayment(
+        businessId: Int,
+        paymentId: Long,
+        request: VoidOrderPaymentRequest
+    ): VoidOrderPaymentResponse
 
     suspend fun retryElectronicInvoice(
         businessId: Int,
@@ -81,6 +95,7 @@ interface IOrdersRepository {
     ): Boolean
 
     suspend fun findOrderByOrderNumber(businessId: Int, orderNumber: String): Order
+    suspend fun findOrderById(businessId: Int, orderId: Int): Order
 
     suspend fun findOrderByCUFE(businessId: Int, cufe: String): Order
 }

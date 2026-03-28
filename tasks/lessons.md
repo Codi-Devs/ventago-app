@@ -1,5 +1,7 @@
 # Lessons Learned
 
+- Si ya existe un modal operativo para captura de pagos (ej. `OrderScreenManualPaymentBottomSheetHost`), reutilízalo para `Facturar` en borradores en lugar de crear un sheet nuevo paralelo.
+- En `OrderDetailsScreen`, nunca dejar CTAs de facturación con `onClick = { }`: para pedidos en borrador (`OrderStatus.DRAFT`) debe existir una acción real (ej. `Facturar`) conectada al endpoint manual de pagos y con `LoadingSheet` de éxito/error.
 - Para validaciones de cédula panameña, no asumir un único formato "regular" por documentación inicial; cubrir con tests los ejemplos reales (`8-888-8456`, `8-888-846`) además del formato largo.
 - Cuando el negocio confirme nuevos ejemplos válidos de cédula (grupos más cortos o guiones opcionales por prefijo), actualizar regex + tests en el mismo cambio y normalizar dentro del validador para admitir entradas en minúsculas.
 - En bugs de contratos API, no asumir que el problema está en el builder lógico; primero registrar el payload JSON final ya normalizado que sale por HTTP y contrastarlo con el ejemplo esperado del backend.
@@ -20,9 +22,14 @@
 - En bootstrap de login, no uses fallback de rutas con permisos para decidir pantalla inicial; fuerza `HomeScreen` para usuarios autenticados y espera `currentUser` no nulo antes de aplicar guardas de authz por ruta para evitar redirecciones incorrectas durante hidratación.
 - En ViewModels que cargan data dependiente de negocio (`businessId`), no disparar fetch inicial con `-1`/placeholder; esperar ID válido o reaccionar al stream de negocio antes de activar loaders de lista.
 - En `LaunchedEffect(Unit)` que consume eventos de ViewModel, evitar usar flags de permisos capturados desde composición inicial; leer el valor actual desde `viewModel.uiState.value` (o `rememberUpdatedState`) para no tomar decisiones de navegación con estado stale.
+- Nunca dejar `TODO()` dentro de collectors de eventos UI (`viewModel.events.collect`): en producción eso se convierte en `NotImplementedError` en el hilo principal. Si no hay UX definida aún, manejar explícitamente con `Unit` o logging seguro.
+- En DTOs de listas (`orders`) con objetos anidados del backend (`receivable_terms`, `order_histories`), no asumir presencia total de campos: usar defaults en propiedades no críticas para evitar que un campo faltante tumbe toda la pantalla.
+- En flujos con símbolo de moneda fijo (`$`), no concatenar símbolo encima de formatters de plataforma (`formatNumberToMoney`) porque pueden incluir moneda ya formateada (`$$100.00`). Formatear desde centavos en un helper único o normalizar antes de renderizar.
 - En pantallas de detalle, no asumir que el permiso de ver implica editar: publicar un flag de acción explícito desde ViewModel (ej. `canEditCustomerAction`) y usarlo para renderizar/ocultar CTAs de mutación.
 - En dominios con rutas compartidas por scopes mixtos (ej. `customer:view|create|delete`), separar flags por acción (`canEdit...`, `canDelete...`) y aplicarlos también en AppBar actions para evitar CTAs inválidas aunque la ruta sea accesible.
 - Si una sección funcional vive dentro de `SettingsScreen` (ej. configuración de cotizaciones), no heredar automáticamente el permiso global de settings owner-only; usar el scope del dominio (`quotes:create`/update) para habilitar edición y guardado.
 - En acciones de AppBar (`...Actions`) también hay que aplicar authz explícito; ocultar iconos de agregar/editar ahí evita rutas inválidas aunque la pantalla principal ya tenga guardas internas.
 - En composables compartidos de edición (`ItemScreenContent`/`ItemScreenActions`), exponer un flag de permiso en el estado (`canManageItems`) y ocultar CTAs allí; no basta con guardas en pantallas contenedoras.
 - Cuando una pantalla mezcla modo lectura y edición (ej. categorías de productos), separar authz por ruta de detalle (`view|create`) vs rutas de mutación (`create`), y no reutilizar un `RouteKey` de escritura para navegación de solo lectura.
+- En ajustes visuales de CTAs en pantallas de detalle, respetar explícitamente la jerarquía solicitada por negocio: acciones secundarias deben usar `TextButtonS` o `OutlinedButtonM` con `MaterialTheme.colorScheme.secondary` (texto y borde) para evitar ambigüedad de prioridad.
+- En flujos de edición donde el backend recrea hijos (ej. `items`) durante `update`, nunca encadenar mutaciones usando IDs del estado previo: primero refrescar el recurso (`getExpense`) y construir payloads siguientes con los IDs nuevos del backend.

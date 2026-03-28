@@ -1,3 +1,151 @@
+# Draft Invoice Payment Method Sheet TODO
+
+## Plan
+- [x] Remove the draft-specific invoice sheet additions and keep a single payment-capture modal path.
+- [x] Rewire `Facturar` to open `OrderScreenManualPaymentBottomSheetHost` for multi-method allocation before invoicing.
+- [x] Ensure manual payment sheet seeds payable total correctly from open balance (fallback to order total).
+- [x] Run compile verification gate and document outcomes.
+
+## Verification Gates
+- [x] `./gradlew :composeApp:compileDebugKotlinAndroid`
+
+## Review Notes
+- Reverted the new draft-specific payment sheet and reused `OrderScreenManualPaymentBottomSheetHost` / `ManualPaymentBottomSheet` as requested.
+- `Facturar` now opens the existing multi-payment modal so users can select all payment methods/amounts before invoicing.
+- `showManualPaymentSheet(true)` now seeds `totalToChargeCents` with open receivable balance when available (fallback to order total), so invoice payment allocation targets pending balance.
+- Verification passed on March 28, 2026: `./gradlew :composeApp:compileDebugKotlinAndroid`.
+
+# Order Details Draft Invoice CTA TODO
+
+## Plan
+- [x] Trace current draft-order action gating in `OrderDetailsScreen` and identify why draft orders cannot be invoiced.
+- [x] Add a draft-order invoicing action in `OrdersDetailsViewModel` that posts to manual payments endpoint with typed payload and loading feedback.
+- [x] Show a primary `Facturar` button for eligible draft orders in `OrderDetailsScreen` and wire it to the new ViewModel action.
+- [x] Run compile verification gate and document outcomes.
+
+## Verification Gates
+- [x] `./gradlew :composeApp:compileDebugKotlinAndroid`
+
+## Review Notes
+- Root cause: `OrderDetailsScreen` had no actionable draft-invoice CTA; the `Generar factura electrónica` branch used `onClick = { }`, so draft orders could not trigger invoicing.
+- Added `canInvoiceDraftOrder()` + `invoiceDraftOrder()` in `OrdersDetailsViewModel`. The new flow sends a typed manual payment payload to `/api/v1/orders/{id}/payments/manual` using method type `3` (tarjeta crédito), order total amount, and Panama date-time, then refreshes the order and shows loading success/error feedback.
+- Updated `OrderDetailsScreen` to show a primary success-style `Facturar` button for eligible draft orders and wired pending+paid invoices to `retryElectronicInvoice()` instead of a no-op.
+- Verification passed on March 28, 2026: `./gradlew :composeApp:compileDebugKotlinAndroid`.
+
+# Expenses UI Copy + Badge Color TODO
+
+## Plan
+- [x] Update `ExpenseDetailsScreen` action label from `Descargar Archivo` to `Descargar factura`.
+- [x] Update free-limited-time badge text color in expense update/create form to light white text.
+- [x] Run compile verification gate and document outcomes.
+
+## Verification Gates
+- [x] `./gradlew :composeApp:compileDebugKotlinAndroid`
+
+## Review Notes
+- Updated expense details download CTA copy to `Descargar factura`.
+- Updated `Gratis por tiempo limitado` badge text color to white in the expense form view.
+- Verification passed on March 28, 2026: `./gradlew :composeApp:compileDebugKotlinAndroid`.
+
+# Expense Edit Categorization Fresh Item IDs TODO
+
+## Plan
+- [x] Trace edit submit flow and confirm where stale pre-update item IDs are used for categorization payload.
+- [x] Update edit flow to fetch refreshed expense detail after `updateExpense` and before `categorizeExpense`.
+- [x] Map concept selections to refreshed items and build categorization payload with backend item IDs.
+- [x] Run compile verification gate and document results.
+
+## Verification Gates
+- [x] `./gradlew :composeApp:compileDebugKotlinAndroid`
+
+## Review Notes
+- Root cause: `saveEditedExpense` built categorization payload from `state.items` right after `updateExpense`, so it could send stale pre-update `item_id` values.
+- Fix: after `updateExpense`, the flow now fetches refreshed expense detail (`getExpense(expenseId)`) before building categorization payload.
+- Added remapping helper that aligns selected concepts to refreshed backend items by `lineNumber` (fallback by index) and sends refreshed `item_id` values in `items[]`.
+- Verification passed on March 28, 2026: `./gradlew :composeApp:compileDebugKotlinAndroid`.
+
+# Expense Details Concept Selector UX TODO
+
+## Plan
+- [x] Review current `ExpenseDetailsScreen` concept sheet + selector component and define minimal-impact changes.
+- [x] Add search input in concept selector bottom sheet with normalized matching (ignore spaces + case).
+- [x] Add collapsible parent/folder behavior in concept selector tree to expand/collapse child branches.
+- [x] Update concept selector card copy/color in `ExpenseDetailsScreen` to indicate it is clickable for assigning concepts.
+- [x] Run compile verification gate and document outcomes.
+
+## Verification Gates
+- [x] `./gradlew :composeApp:compileDebugKotlinAndroid`
+
+## Review Notes
+- Updated `ExpenseAccountSelectorField` with a top search input and normalized filtering (`lowercase` + whitespace removed) so concept-name search ignores spaces and case.
+- Added folder-like parent branch collapsing/expanding in `ExpenseAccountPickerSheetContent`, including parent toggle affordance and collapsed child rendering.
+- Updated expense concept selector cards in `ExpenseDetailsScreen` to show secondary-colored main text and explicit tap labels indicating concept assignment action.
+- Verification passed on March 28, 2026: `./gradlew :composeApp:compileDebugKotlinAndroid`.
+
+# Expense Details Edit Concepts CTA Color TODO
+
+## Plan
+- [x] Locate `Editar conceptos` CTA in `ExpenseDetailsScreen`.
+- [x] Apply secondary color style to the CTA.
+- [x] Run compile verification gate and document result.
+
+## Verification Gates
+- [x] `./gradlew :composeApp:compileDebugKotlinAndroid`
+
+## Review Notes
+- Updated `Editar conceptos` CTA text color to `MaterialTheme.colorScheme.secondary` while preserving existing behavior/layout.
+- Verification passed on March 28, 2026: `./gradlew :composeApp:compileDebugKotlinAndroid`.
+
+# Expenses List Payment Status Payload Fix TODO
+
+## Plan
+- [x] Trace `expenses/list` request construction and confirm current `payment_status` payload shape.
+- [x] Update request model + list ViewModel mapping so `payment_status` is serialized as a single string (not array).
+- [x] Add regression test coverage for serialized request payload.
+- [x] Run verification gate(s) and document outcomes.
+
+## Verification Gates
+- [x] `./gradlew :composeApp:testDebugUnitTest --tests '*ExpenseConceptsTest*'`
+- [x] `./gradlew :composeApp:compileDebugKotlinAndroid`
+
+## Review Notes
+- Root cause: `ListExpensesRequest.paymentStatus` was typed as `List<String>?`, so serialized payload emitted an array (`"payment_status": ["not_paid"]`) instead of backend-required string.
+- Fixed by changing request field to `String?` and mapping from UI filter state with `state.paymentStatuses.firstOrNull()`.
+- Added regression test `listExpensesRequestSerializesPaymentStatusAsString` to lock payload contract.
+- Verified payload contract now serializes as:
+- `{"business_id":4,"page":1,"page_size":10,"payment_status":"not_paid"}`
+
+# Order Details Bottom Sheets Full-Screen Scroll Fix TODO
+
+## Plan
+- [x] Trace current `OrderDetailsScreen` modal sheet configs for register payment and receivables reprogramming.
+- [x] Apply full-screen modal behavior (`skipPartiallyExpanded = true`) to those two sheets.
+- [x] Ensure both sheet contents use full-height, internal vertical scroll so all dynamic rows remain reachable.
+- [x] Run compile verification gate and document result.
+
+## Verification Gates
+- [x] `./gradlew :composeApp:compileDebugKotlinAndroid`
+
+## Review Notes
+- `Register payment` and `Reprogram terms` sheets now use full-screen modal states (`skipPartiallyExpanded = true`) with scrollable full-height content containers to keep long dynamic content reachable.
+- Follow-up UI tune applied per request: order-details `Registrar pago` outlined CTA now uses secondary color/border, and reschedule submit CTA now uses `TextButtonS` with secondary color.
+- Verification passed on March 28, 2026: `./gradlew :composeApp:compileDebugKotlinAndroid`.
+
+# Build Performance Investigation TODO
+
+## Plan
+- [ ] Capture baseline build time and hottest tasks via Gradle profile (`./gradlew :composeApp:assembleDebug --profile`).
+- [x] Review current Gradle/KMP settings for caching, parallelism, KSP, and iOS target config.
+- [ ] Propose/implement low-risk flags (parallel, VFS watch, incremental KSP) and optional iOS-target toggle for local dev (if approved).
+- [ ] Re-run profile and compare results.
+
+## Verification Gates
+- [ ] `./gradlew :composeApp:assembleDebug --profile`
+- [ ] `./gradlew :composeApp:assembleDebug`
+
+## Review Notes
+- Pending baseline build profile and decision on which optimizations to apply.
+
 # Cedula Pattern Expansion (User-Confirmed Valid Cases) TODO
 
 ## Plan
@@ -777,3 +925,112 @@
   - `NumberUtilsTest` (sanitize/normalize/format/multiply behavior),
   - `CartLineTest` (fractional quantity totals/discount/tax rounding),
   - `QuoteRequestBuilderTest` (quote quantity serialization + order DTO quantity string contract).
+
+# CxC Operativa en Order Details (KMP) TODO
+
+## Plan
+- [x] Extender contrato de órdenes (`Order`, DTOs y requests/responses) con `receivable_terms`, `order_payments` extendido y payloads de pago auto/manual, reprogramación y void.
+- [x] Implementar endpoints nuevos/modificados en `IOrdersProvider`/`OrdersProvider` + `IOrdersRepository`/`OrdersRepository` + `OrderService` con logging y rethrow.
+- [x] Reemplazar estado/lógica legacy de `OrderDetailsState` y `OrdersDetailsViewModel` por flujos CxC (registrar pago, reprogramar, anular) con validaciones en centavos y fechas Panamá.
+- [x] Adaptar `OrderDetailsScreen` a card de cuotas operativas, lista de pagos registrados (regla count >=2), y nuevos modales.
+- [x] Aplicar regla de método `Mixto`/único/`N/A` en listado de órdenes.
+- [x] Agregar pruebas unitarias (serialización requests + parseo modelos + validaciones VM) y ejecutar gates.
+
+## Verification Gates
+- [x] `./gradlew :composeApp:testDebugUnitTest --tests com.teco.ventago.features.orders.CxcOrderDetailsContractTest --tests com.teco.ventago.features.orders.ui.order_details.viewModel.OrdersDetailsViewModelCxcTest`
+- [x] `./gradlew :composeApp:compileDebugKotlinAndroid`
+- [ ] `./gradlew :composeApp:compileKotlinIosSimulatorArm64` (bloqueado por errores preexistentes fuera de este alcance: `LoginViewModel` con `Dispatchers.IO` no accesible en iOS y `PdfPreview.ios.kt` con referencias UIKit no resueltas)
+
+## Review Notes
+- Se extendió `Order` para parsear `receivable_terms` y `order_payments` con `id/payment_date/voided_at/void_reason`, manteniendo compatibilidad con payloads previos.
+- Se agregaron contratos tipados para `find/order-id`, reprogramación de receivables y void de pagos, además de soporte `applications[]` en `payments/manual`.
+- `OrdersProvider`, `OrdersRepository` y `OrderService` incorporan los nuevos endpoints y respuestas, con el patrón de manejo de errores del proyecto (try/catch + logging + rethrow).
+- `OrderDetailsState` y `OrdersDetailsViewModel` ahora incluyen estados/acciones CxC para registrar pago (auto/manual con aplicaciones), reprogramar cuotas y anular pagos, con validación en centavos y mapping de error `O_RP_002`.
+- `OrderDetailsScreen` fue adaptado a:
+  - card `Cuotas de pago` con resumen `Pendiente/Vencido`,
+  - tabla `Número/Vence/Monto/Adeudado/Pagado/Estado`,
+  - exclusión de términos cancelados (`status=4`),
+  - lista `Pagos registrados` solo cuando hay 2+ pagos, con fecha sin hora y badge de estado,
+  - modales de registrar/reprogramar/anular.
+- Se aplicó la regla `Mixto/único/N/A` en `OrderListItem` para la lista de órdenes.
+- Tests nuevos:
+  - `CxcOrderDetailsContractTest` (parseo/serialización/envelope error code),
+  - `OrdersDetailsViewModelCxcTest` (validaciones CxC).
+
+# OrdersScreen Crash (NotImplementedError) TODO
+
+## Plan
+- [x] Identificar el origen exacto del `NotImplementedError` reportado en `OrdersScreen.kt`.
+- [x] Reemplazar ramas `TODO()` en el `collect` de eventos por manejo seguro sin crash.
+- [x] Ejecutar gate de compilación Android para validar el fix.
+
+## Verification Gates
+- [x] `./gradlew :composeApp:compileDebugKotlinAndroid`
+
+## Review Notes
+- El crash venía de `LaunchedEffect` en `OrdersScreen` que consumía `viewModel.events` con tres ramas `TODO()` (`LoadingOrdersConnectionError`, `LoadingOrdersError`, `LaunchSettings`).
+- Se reemplazaron esas ramas por `Unit` para evitar `NotImplementedError` en tiempo de ejecución.
+- `LaunchSettings` sigue siendo atendido por `OrdersScreenActions`, que es donde se ejecuta `permissionsManager.launchSettings()`.
+
+# Orders Parse Log Fix (missing fields in nested orders payload) TODO
+
+## Plan
+- [x] Confirmar raíz del log de parseo al cargar órdenes (`ReceivableTermDto.status` ausente).
+- [x] Hacer robusta la deserialización de `ReceivableTermDto` para tolerar `status` faltante.
+- [x] Agregar test de regresión para payload de orden con `receivable_terms` sin `status`.
+- [x] Hacer robusta la deserialización de `OrderHistoryDto` para tolerar `status_id` faltante.
+- [x] Agregar test de regresión para payload de orden con `order_histories` sin `status_id`.
+- [ ] Ejecutar gates de verificación enfocados.
+
+## Verification Gates
+- [ ] `./gradlew :composeApp:testDebugUnitTest --tests com.teco.ventago.features.orders.CxcOrderDetailsContractTest`
+- [ ] `./gradlew :composeApp:compileDebugKotlinAndroid`
+
+## Review Notes
+- El backend en algunos listados está enviando `receivable_terms` sin `status`, lo que rompía la deserialización porque el campo era obligatorio.
+- Se añadió default `status = PaymentStatus.UNPAID.id` en `ReceivableTermDto`.
+- Se agregó test para validar que, si falta `status`, el parseo de `Order` no falla y se aplica valor por defecto.
+- También se observó payload con `order_histories` sin `status_id`; `OrderHistoryDto` ahora tiene defaults defensivos (`statusId/note/changedBy/createdAt`) para evitar fallas de decode por campos faltantes.
+
+# Order Details Currency Symbol Fix ($$ -> $) TODO
+
+## Plan
+- [x] Identificar por qué en `Cuotas de pago` y `Pagos registrados` se renderiza `$$`.
+- [x] Corregir el helper de formato monetario para garantizar símbolo `$` único en este flujo.
+- [x] Validar el cambio por inspección de código (sin ejecutar Gradle por solicitud del usuario).
+
+## Verification Gates
+- [ ] No ejecutados por solicitud explícita del usuario: "Do not run tests".
+
+## Review Notes
+- `formatDollarFromCents` concatenaba manualmente `"$"` sobre `formatNumberToMoney(...)`, que en Android ya devuelve símbolo de moneda, provocando doble símbolo.
+- Se reemplazó por formateo manual desde centavos (`$<units>.<decimals>`) para garantizar salida estable como `$100.00`.
+
+# Cuotas Table Compact Layout TODO
+
+## Plan
+- [x] Reemplazar label de columna `Número` por `#` para reducir ancho.
+- [x] Compactar visual de `Estado` a indicador de color y mover explicación a ayuda contextual (`?`).
+- [x] Ajustar pesos de columnas para mejorar render en pantallas pequeñas.
+- [x] Verificar por inspección de código (sin Gradle por preferencia del usuario).
+
+## Verification Gates
+- [ ] No ejecutados por preferencia del usuario (sin correr Gradle/tests).
+
+## Review Notes
+- En `TermsTableHeader` se cambió `Número` por `#`.
+- La columna `Estado` ahora usa icono `?` que abre un diálogo de ayuda con leyenda de colores.
+- En cada fila se reemplazó el chip de texto de estado por un punto de color (verde/azul/naranja), reduciendo significativamente el ancho usado por esa columna.
+
+# Reprogramar Cuotas Bottom Sheet Scroll TODO
+
+## Plan
+- [x] Hacer scrolleable el contenido del bottom sheet de `Reprogramar cuotas de pago`.
+- [x] Mantener layout y validaciones existentes sin cambios de comportamiento.
+- [x] Verificar por inspección de código (sin Gradle/tests por preferencia del usuario).
+
+## Verification Gates
+- [ ] No ejecutados por preferencia del usuario.
+
+## Review Notes
+- Se agregó `.verticalScroll(rememberScrollState())` al `Column` raíz de `RescheduleTermsBottomSheet`, permitiendo ver todo el contenido al agregar más de 2 cuotas.

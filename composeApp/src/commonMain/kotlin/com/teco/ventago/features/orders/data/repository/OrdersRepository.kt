@@ -10,9 +10,13 @@ import com.teco.ventago.features.orders.domain.models.Order
 import com.teco.ventago.features.orders.domain.models.requests.CancelOrderRequest
 import com.teco.ventago.features.orders.domain.models.requests.CreateOrderRequest
 import com.teco.ventago.features.orders.domain.models.requests.DeleteOrderRequest
+import com.teco.ventago.features.orders.domain.models.requests.RescheduleReceivablesRequest
+import com.teco.ventago.features.orders.domain.models.requests.RescheduleReceivablesResponse
 import com.teco.ventago.features.orders.domain.models.requests.RegisterManualPaymentsDataResponse
 import com.teco.ventago.features.orders.domain.models.requests.RegisterManualPaymentsRequest
 import com.teco.ventago.features.orders.domain.models.requests.RetryInvoiceResponse
+import com.teco.ventago.features.orders.domain.models.requests.VoidOrderPaymentRequest
+import com.teco.ventago.features.orders.domain.models.requests.VoidOrderPaymentResponse
 import com.teco.ventago.features.orders.domain.models.responses.CreateOrderResponse
 import com.teco.ventago.features.orders.domain.models.responses.InvoiceDocsDto
 import com.teco.ventago.core.Paged
@@ -315,6 +319,64 @@ class OrdersRepository(private val provider: IOrdersProvider, private val logger
         }
     }
 
+    override suspend fun rescheduleOrderReceivables(
+        businessId: Int,
+        orderId: Int,
+        request: RescheduleReceivablesRequest
+    ): RescheduleReceivablesResponse {
+        try {
+            val response = provider.rescheduleOrderReceivables(businessId, orderId, request)
+
+            if (response.error.isError()) {
+                throw BadRequestException(response.toJson())
+            }
+
+            if (response.data is JsonObject) {
+                return json.decodeFromJsonElement(response.data)
+            } else {
+                throw BadRequestException(response.toJson())
+            }
+        } catch (e: Exception) {
+            logger.sendLog(
+                Log(
+                    LogLevel.ERROR,
+                    "rescheduleOrderReceivables",
+                    "Error rescheduling receivables. Error: ${e.message ?: "UNKNOWN"}. BusinessId: $businessId, orderId: $orderId"
+                )
+            )
+            throw e
+        }
+    }
+
+    override suspend fun voidOrderPayment(
+        businessId: Int,
+        paymentId: Long,
+        request: VoidOrderPaymentRequest
+    ): VoidOrderPaymentResponse {
+        try {
+            val response = provider.voidOrderPayment(businessId, paymentId, request)
+
+            if (response.error.isError()) {
+                throw BadRequestException(response.toJson())
+            }
+
+            if (response.data is JsonObject) {
+                return json.decodeFromJsonElement(response.data)
+            } else {
+                throw BadRequestException(response.toJson())
+            }
+        } catch (e: Exception) {
+            logger.sendLog(
+                Log(
+                    LogLevel.ERROR,
+                    "voidOrderPayment",
+                    "Error voiding payment. Error: ${e.message ?: "UNKNOWN"}. BusinessId: $businessId, paymentId: $paymentId"
+                )
+            )
+            throw e
+        }
+    }
+
 
     override suspend fun retryElectronicInvoice(
         businessId: Int,
@@ -457,6 +519,30 @@ class OrdersRepository(private val provider: IOrdersProvider, private val logger
                 Log(
                     LogLevel.ERROR, "findOrderByOrderNumber",
                     "Error finding order by order number. Error: ${e.message ?: "UNKNOWN"}, businessId: $businessId, orderNumber: $orderNumber"
+                )
+            )
+            throw e
+        }
+    }
+
+    override suspend fun findOrderById(businessId: Int, orderId: Int): Order {
+        try {
+            val response = provider.findOrderById(businessId, orderId)
+
+            if (response.error.isError()) {
+                throw BadRequestException(response.toJson())
+            }
+
+            if (response.data is JsonObject) {
+                return json.decodeFromJsonElement<Order>(response.data)
+            } else {
+                throw BadRequestException(response.toJson())
+            }
+        } catch (e: Exception) {
+            logger.sendLog(
+                Log(
+                    LogLevel.ERROR, "findOrderById",
+                    "Error finding order by id. Error: ${e.message ?: "UNKNOWN"}, businessId: $businessId, orderId: $orderId"
                 )
             )
             throw e

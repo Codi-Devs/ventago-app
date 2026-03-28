@@ -14,6 +14,7 @@ import com.teco.ventago.features.expenses.domain.ExpensesService
 import com.teco.ventago.features.expenses.domain.buildExpenseCategorizationPayload
 import com.teco.ventago.features.expenses.domain.buildExpenseCreatePayload
 import com.teco.ventago.features.expenses.domain.inferDefaultExpenseAccount
+import com.teco.ventago.features.expenses.domain.ExpenseItemConceptSelection
 import com.teco.ventago.features.expenses.domain.models.Expense
 import com.teco.ventago.features.expenses.domain.models.requests.ExpenseItemRequest
 import com.teco.ventago.features.expenses.domain.models.requests.ExpensePartyRequest
@@ -603,18 +604,34 @@ class NewExpenseViewModel(
         }
 
         val mode = if (state.applyConceptPerItem) ExpenseConceptMode.PER_ITEM else ExpenseConceptMode.GLOBAL
+        val refreshedExpense = expensesService.getExpense(expenseId)
         val payload = buildExpenseCategorizationPayload(
             defaultAccountId = state.defaultExpenseAccountId,
             mode = mode,
-            items = state.items.map {
-                com.teco.ventago.features.expenses.domain.ExpenseItemConceptSelection(
-                    itemId = it.itemId,
-                    lineNumber = it.lineNumber,
-                    accountId = if (mode == ExpenseConceptMode.GLOBAL) state.defaultExpenseAccountId else it.expenseAccountId
-                )
-            }
+            items = buildCategorizationSelections(state, refreshedExpense, mode)
         )
         return expensesService.categorizeExpense(expenseId, payload)
+    }
+
+    private fun buildCategorizationSelections(
+        state: NewExpenseState,
+        refreshedExpense: Expense,
+        mode: ExpenseConceptMode
+    ): List<ExpenseItemConceptSelection> {
+        val stateItemsByLineNumber = state.items.associateBy { it.lineNumber }
+        return refreshedExpense.items.orEmpty().mapIndexed { index, refreshedItem ->
+            val lineNumber = refreshedItem.lineNumber ?: (index + 1)
+            val matchedStateItem = stateItemsByLineNumber[lineNumber] ?: state.items.getOrNull(index)
+            ExpenseItemConceptSelection(
+                itemId = refreshedItem.id,
+                lineNumber = lineNumber,
+                accountId = if (mode == ExpenseConceptMode.GLOBAL) {
+                    state.defaultExpenseAccountId
+                } else {
+                    matchedStateItem?.expenseAccountId
+                }
+            )
+        }
     }
 
     private fun buildCreateRequest(state: NewExpenseState, businessId: Int): UpsertExpenseRequest {

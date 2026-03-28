@@ -88,6 +88,7 @@ import ventago.composeapp.generated.resources.order_cancelled
 import ventago.composeapp.generated.resources.order_completed
 import ventago.composeapp.generated.resources.order_shopping_cart
 import ventago.composeapp.generated.resources.payment_failed
+import ventago.composeapp.generated.resources.pos_mixed
 import ventago.composeapp.generated.resources.ready
 import ventago.composeapp.generated.resources.ready_pickup
 import ventago.composeapp.generated.resources.rejected
@@ -96,6 +97,16 @@ import ventago.composeapp.generated.resources.rejected
 fun OrderListItem(order: Order, onClick: () -> Unit, statusOnClick: () -> Unit) {
 
     val totalItems = order.lines.size
+    val paymentMethodLabel = run {
+        val methods = order.orderPayments
+            .mapNotNull { it.paymentMethod.name.takeIf { name -> name.isNotBlank() } }
+            .distinct()
+        when {
+            methods.size > 1 -> stringResource(Res.string.pos_mixed)
+            methods.size == 1 -> methods.first()
+            else -> "N/A"
+        }
+    }
 
     val (icon, tint) = getOrderStatusIcon(
         order.status,
@@ -155,6 +166,13 @@ fun OrderListItem(order: Order, onClick: () -> Unit, statusOnClick: () -> Unit) 
                     modifier = Modifier.padding(top = 10.dp),
                     text = "$totalItems ${stringResource(Res.string.items)}",
                     textAlign = TextAlign.Center,
+                    style = labelMedium(color = MaterialTheme.colorScheme.onSurfaceVariant),
+                )
+                Text(
+                    modifier = Modifier.padding(top = 4.dp),
+                    text = "Pago: $paymentMethodLabel",
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
                     style = labelMedium(color = MaterialTheme.colorScheme.onSurfaceVariant),
                 )
             }

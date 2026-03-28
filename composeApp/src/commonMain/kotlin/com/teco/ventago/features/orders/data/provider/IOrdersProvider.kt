@@ -4,7 +4,9 @@ import com.teco.ventago.features.orders.domain.models.Order
 import com.teco.ventago.features.orders.domain.models.requests.CancelOrderRequest
 import com.teco.ventago.features.orders.domain.models.requests.CreateOrderRequest
 import com.teco.ventago.features.orders.domain.models.requests.DeleteOrderRequest
+import com.teco.ventago.features.orders.domain.models.requests.RescheduleReceivablesRequest
 import com.teco.ventago.features.orders.domain.models.requests.RegisterManualPaymentsRequest
+import com.teco.ventago.features.orders.domain.models.requests.VoidOrderPaymentRequest
 import com.teco.ventago.utils.ApiResponse
 
 
@@ -14,6 +16,16 @@ interface IOrdersProvider {
     suspend fun cancelOrder(businessId: Int, request: CancelOrderRequest): ApiResponse
     suspend fun deleteOrder(businessId: Int, request: DeleteOrderRequest): ApiResponse
     suspend fun registerManualPayments(businessId: Int, orderId: Int, request: RegisterManualPaymentsRequest): ApiResponse
+    suspend fun rescheduleOrderReceivables(
+        businessId: Int,
+        orderId: Int,
+        request: RescheduleReceivablesRequest
+    ): ApiResponse
+    suspend fun voidOrderPayment(
+        businessId: Int,
+        paymentId: Long,
+        request: VoidOrderPaymentRequest
+    ): ApiResponse
     suspend fun retryElectronicInvoice(
         businessId: Int,
         orderId: Int,
@@ -46,6 +58,7 @@ interface IOrdersProvider {
     suspend fun getOrderPaymentLink(orderID: Int): ApiResponse
 
     suspend fun findOrderByOrderNumber(businessId: Int, orderNumber: String): ApiResponse
+    suspend fun findOrderById(businessId: Int, orderId: Int): ApiResponse
     suspend fun findOrderByCUFE(businessId: Int, cufe: String): ApiResponse
     suspend fun registerManualTransference(businessId: Int, orderNumber: String, paymentReference: String, description: String): ApiResponse
 }

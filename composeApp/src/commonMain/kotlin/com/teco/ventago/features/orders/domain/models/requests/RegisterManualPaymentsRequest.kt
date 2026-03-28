@@ -5,10 +5,18 @@ import kotlinx.serialization.Serializable
 
 
 @Serializable
+data class PaymentApplicationRequest(
+    @SerialName("receivable_term_id") val receivableTermId: Long,
+    @SerialName("amount") val amount: String
+)
+
+@Serializable
 data class ManualPaymentItemRequest(
-    @SerialName("type") val type: Int,              // payment method code
-    @SerialName("amount") val amount: String ,       // decimal string, e.g. "3.00"
-    @SerialName("description") val description: String? = null        // decimal string, e.g. "3.00"
+    @SerialName("type") val type: Int,
+    @SerialName("amount") val amount: String,
+    @SerialName("payment_date") val paymentDate: String,
+    @SerialName("description") val description: String? = null,
+    @SerialName("applications") val applications: List<PaymentApplicationRequest>? = null
 )
 
 @Serializable
@@ -24,5 +32,4 @@ data class RegisterManualPaymentsDataResponse(
     @SerialName("invoice_status") val invoiceStatus: Int,
     @SerialName("invoiced") val invoiced: Boolean
 )
-
 

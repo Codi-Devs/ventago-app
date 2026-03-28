@@ -229,9 +229,9 @@ fun OrdersScreen(
         viewModel.events.collect { event ->
             when (event) {
                 OrdersUiEvent.OpenOrderDetails -> navigate(PosScreens.OrderDetailsScreen, null)
-                OrdersUiEvent.LoadingOrdersConnectionError -> TODO()
-                OrdersUiEvent.LoadingOrdersError -> TODO()
-                OrdersUiEvent.LaunchSettings -> TODO()
+                OrdersUiEvent.LoadingOrdersConnectionError -> Unit
+                OrdersUiEvent.LoadingOrdersError -> Unit
+                OrdersUiEvent.LaunchSettings -> Unit
             }
         }
     }
