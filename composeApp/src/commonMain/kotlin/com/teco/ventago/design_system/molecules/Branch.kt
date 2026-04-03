@@ -4,8 +4,10 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.MoreHoriz
+import androidx.compose.material.icons.rounded.Print
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -57,6 +59,7 @@ fun BranchItem(
 fun FiscalBillingPointItem(
     modifier: Modifier = Modifier,
     billingPoint: FiscalBillingPoint,
+    hasConfiguredPrinter: Boolean = false,
     onClick: (String) -> Unit = {},
     onOptionsClick: (String) -> Unit = {},
 ) {
@@ -88,6 +91,14 @@ fun FiscalBillingPointItem(
         },
         trailingSlot = {
             Spacer(modifier = Modifier.weight(1f, fill = true))
+            if (hasConfiguredPrinter) {
+                Icon(
+                    imageVector = Icons.Rounded.Print,
+                    contentDescription = "Impresora configurada",
+                    tint = MaterialTheme.colorScheme.secondary
+                )
+                Spacer(modifier = Modifier.width(4.dp))
+            }
             IconButton(onClick = { onOptionsClick(billingPoint.billingPoint) }) {
                 Icon(
                     imageVector = Icons.Rounded.MoreHoriz,

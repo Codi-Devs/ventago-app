@@ -4,6 +4,7 @@ import androidx.compose.runtime.Composable
 import androidx.lifecycle.viewModelScope
 import com.teco.ventago.core.BaseViewModel
 import com.teco.ventago.core.PdfSharer
+import com.teco.ventago.core.SnackbarService
 import com.teco.ventago.core.authz.ActionKey
 import com.teco.ventago.core.authz.AuthzEvaluator
 import com.teco.ventago.features.auth.domain.IAuthService
@@ -21,6 +22,7 @@ import com.teco.ventago.features.orders.domain.models.Order
 import com.teco.ventago.features.orders.domain.models.PaymentStatus
 import com.teco.ventago.features.orders.domain.models.ReceivableTermDto
 import com.teco.ventago.features.orders.domain.models.OrderStatus
+import com.teco.ventago.features.printers.domain.PrinterService
 import com.teco.ventago.utils.doubleTryParse
 import com.teco.ventago.utils.toLongCents
 import com.teco.ventago.viewModels
@@ -62,6 +64,8 @@ class OrdersDetailsViewModel(
     private val financialProfileService: FinancialProfileService,
     private val authService: IAuthService,
     private val pdfSharer: PdfSharer,
+    private val printerService: PrinterService,
+    private val snackbarService: SnackbarService,
 ) : BaseViewModel<OrderDetailsState, OrderDetailsUiEvent>(OrderDetailsState()) {
 
     var business: Business? = null
@@ -311,6 +315,157 @@ class OrdersDetailsViewModel(
                         showError()
                     }
                 }
+            }
+        }
+    }
+
+    fun canShowReprintAction(order: Order? = uiState.value.order): Boolean {
+        val safeOrder = order ?: return false
+        val businessId = business?.businessId ?: safeOrder.businessId
+        return !uiState.value.hideReprintTicketAction &&
+            !uiState.value.reprintInFlight &&
+            safeOrder.invoiceStatus == InvoiceStatus.ISSUED.id &&
+            safeOrder.id > 0 &&
+            businessId > 0 &&
+            safeOrder.ticketEnabled == true
+    }
+
+    fun reprintTicket() {
+        if (uiState.value.reprintInFlight) return
+        val order = uiState.value.order ?: return
+        val businessId = business?.businessId ?: order.businessId
+        if (businessId <= 0) return
+
+        showLoading()
+        updateState {
+            copy(
+                reprintInFlight = true,
+                showPrinterSelectionSheet = false,
+                printerSelectionOptions = emptyList(),
+                reprintTicketState = null
+            )
+        }
+
+        viewModelScope.launch {
+            runCatching {
+                val payload = printerService.fetchOrderTicketLayout(
+                    orderId = order.id,
+                    businessId = businessId
+                )
+                val layout = printerService.parseTicketLayout(payload)
+                val reprintState = com.teco.ventago.features.printers.domain.model.ReprintTicketState(
+                    businessId = businessId,
+                    orderId = order.id,
+                    orderNumber = order.internalNumber,
+                    ticketLayout = layout
+                )
+                val printers = printerService.resolveSelectionOptions().ifEmpty {
+                    runCatching {
+                        printerService.refresh(businessId = businessId, force = true)
+                    }
+                    printerService.resolveSelectionOptions()
+                }
+                Triple(reprintState, layout, printers)
+            }.onSuccess { result ->
+                val reprintState = result.first
+                val options = result.third
+                when {
+                    options.isEmpty() -> {
+                        hideLoading()
+                        updateState { copy(reprintInFlight = false) }
+                        snackbarService.show("No hay impresoras activas disponibles para reimprimir este ticket.")
+                    }
+
+                    options.size == 1 -> {
+                        printTicketWithSelection(options.first().printerConfig, reprintState)
+                    }
+
+                    else -> {
+                        hideLoading()
+                        updateState {
+                            copy(
+                                reprintInFlight = false,
+                                showPrinterSelectionSheet = true,
+                                printerSelectionOptions = options,
+                                reprintTicketState = reprintState
+                            )
+                        }
+                    }
+                }
+            }.onFailure { error ->
+                hideLoading()
+                updateState {
+                    copy(
+                        reprintInFlight = false,
+                        hideReprintTicketAction = error is com.teco.ventago.features.printers.domain.model.TicketUnavailableException
+                    )
+                }
+                val message = if (error is com.teco.ventago.features.printers.domain.model.TicketUnavailableException) {
+                    "Este pedido no tiene ticket disponible para reimprimir."
+                } else {
+                    "No se pudo cargar el ticket para reimprimir."
+                }
+                snackbarService.show(message)
+            }
+        }
+    }
+
+    fun dismissPrinterSelectionSheet() {
+        updateState {
+            copy(
+                showPrinterSelectionSheet = false,
+                printerSelectionOptions = emptyList(),
+                reprintTicketState = null,
+                reprintInFlight = false
+            )
+        }
+    }
+
+    fun printSelectedPrinter(optionIndex: Int) {
+        val state = uiState.value
+        val option = state.printerSelectionOptions.getOrNull(optionIndex) ?: return
+        val reprintState = state.reprintTicketState ?: return
+        printTicketWithSelection(option.printerConfig, reprintState)
+    }
+
+    private fun printTicketWithSelection(
+        printerConfig: com.teco.ventago.features.printers.domain.model.PrinterConfig,
+        reprintState: com.teco.ventago.features.printers.domain.model.ReprintTicketState,
+    ) {
+        showLoading()
+        updateState {
+            copy(
+                reprintInFlight = true,
+                showPrinterSelectionSheet = false
+            )
+        }
+        viewModelScope.launch {
+            runCatching {
+                printerService.reprintTicket(
+                    reprintState = reprintState,
+                    printerConfig = printerConfig
+                )
+            }.onSuccess {
+                hideLoading()
+                updateState {
+                    copy(
+                        reprintInFlight = false,
+                        reprintTicketState = null,
+                        printerSelectionOptions = emptyList()
+                    )
+                }
+                snackbarService.show("Ticket reenviado a la impresora correctamente.")
+            }.onFailure { error ->
+                hideLoading()
+                updateState {
+                    copy(
+                        reprintInFlight = false,
+                        reprintTicketState = null,
+                        printerSelectionOptions = emptyList()
+                    )
+                }
+                val detail = error.message?.takeIf { it.isNotBlank() } ?: "Verifica la conexión de la impresora."
+                snackbarService.show("La reimpresión falló. $detail")
             }
         }
     }

@@ -4,6 +4,8 @@ import com.teco.ventago.core.LoadableState
 import com.teco.ventago.design_system.organism.LoadingBottomSheetState
 import com.teco.ventago.features.orders.domain.models.ManualPaymentMethodOption
 import com.teco.ventago.features.orders.domain.models.Order
+import com.teco.ventago.features.printers.domain.model.PrinterSelectionOption
+import com.teco.ventago.features.printers.domain.model.ReprintTicketState
 
 data class OrderDetailsState(
     val order: Order? = null,
@@ -21,6 +23,12 @@ data class OrderDetailsState(
     val loadingPaymentLink: Boolean = false,
     val paymentLink: String? = null,
     val errorLoadingPaymentLink: Boolean = false,
+
+    val hideReprintTicketAction: Boolean = false,
+    val reprintInFlight: Boolean = false,
+    val showPrinterSelectionSheet: Boolean = false,
+    val printerSelectionOptions: List<PrinterSelectionOption> = emptyList(),
+    val reprintTicketState: ReprintTicketState? = null,
 
     val manualPayment: ManualPaymentState = ManualPaymentState(),
     val registerPaymentState: RegisterPaymentState = RegisterPaymentState(),

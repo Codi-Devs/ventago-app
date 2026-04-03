@@ -66,12 +66,15 @@ import com.teco.ventago.core.flags.IFlagsService
 import com.teco.ventago.core.firebase.AnalyticsService
 import com.teco.ventago.design_system.molecules.AppChromeState
 import com.teco.ventago.design_system.molecules.ColoredTopBarHost
+import com.teco.ventago.design_system.molecules.DMAlertDialog
 import com.teco.ventago.design_system.molecules.DMTopAppBar
 import com.teco.ventago.design_system.molecules.flags.MaintenanceModeOverlay
 import com.teco.ventago.design_system.molecules.rememberAppChromeState
 import com.teco.ventago.design_system.theme.DigitalMenuTheme
 import com.teco.ventago.design_system.theme.cardContainerColor
 import com.teco.ventago.features.auth.domain.IAuthService
+import com.teco.ventago.features.printers.domain.PrinterQrEntry
+import com.teco.ventago.features.printers.ui.viewmodel.PrinterEntryContext
 import com.teco.ventago.features.pos.ui.viewmodel.FlowMode
 import com.teco.ventago.features.pos.ui.viewmodel.PosState
 import com.teco.ventago.features.pos.ui.viewmodel.PosViewModel
@@ -79,6 +82,7 @@ import com.teco.ventago.features.payments.ui.yappy.viewmodel.YappyViewModel
 import com.teco.ventago.navigation.BottomNavKey
 import com.teco.ventago.navigation.LocalNavController
 import com.teco.ventago.navigation.Navigation
+import com.teco.ventago.navigation.PrinterOnboardingRoute
 import com.teco.ventago.navigation.PosScreens
 import com.teco.ventago.navigation.fallbackScreenFor
 import com.teco.ventago.navigation.routeKeyForScreen
@@ -144,6 +148,7 @@ fun App(
     var showSummaryHintDot by remember(summaryHintSeenKey) {
         mutableStateOf(localStorage.bool(summaryHintSeenKey) != true)
     }
+    var showPendingPrinterQrDialog by remember { mutableStateOf(false) }
 
 //    LaunchedEffect(mainState.isAuthenticated, mainState.missingBusiness) {
 //        println("newState isAuthenticated: ${mainState.isAuthenticated}")
@@ -216,6 +221,15 @@ fun App(
             localStorage.set(summaryHintSeenKey, true)
             showSummaryHintDot = false
         }
+    }
+
+    LaunchedEffect(graphReady, mainState.isAuthenticated, mainState.business?.businessId) {
+        if (!graphReady || !mainState.isAuthenticated || mainState.business == null) {
+            showPendingPrinterQrDialog = false
+            return@LaunchedEffect
+        }
+        showPendingPrinterQrDialog =
+            localStorage.bool(PrinterQrEntry.KEY_PENDING_ONBOARDING) == true
     }
 
     LaunchedEffect(graphReady, currentRoute, currentRouteKey, currentUser, betaSnapshot, currentBucket) {
@@ -516,6 +530,30 @@ fun App(
                         modifier = Modifier.fillMaxSize()
                     )
                 }
+
+                DMAlertDialog(
+                    title = "Configurar impresora",
+                    message = "Detectamos que escaneaste el QR de una impresora. ¿Deseas configurarla ahora?",
+                    show = showPendingPrinterQrDialog,
+                    confirmText = "Configurar",
+                    dismissText = "Ahora no",
+                    onConfirm = {
+                        localStorage.deleteObject(PrinterQrEntry.KEY_PENDING_ONBOARDING)
+                        showPendingPrinterQrDialog = false
+                        navController.navigate(
+                            PrinterOnboardingRoute(
+                                entryContext = PrinterEntryContext.SETTINGS.name,
+                                fromQr = true
+                            )
+                        ) {
+                            launchSingleTop = true
+                        }
+                    },
+                    onDismiss = {
+                        localStorage.deleteObject(PrinterQrEntry.KEY_PENDING_ONBOARDING)
+                        showPendingPrinterQrDialog = false
+                    }
+                )
             }
         }
 

@@ -59,7 +59,12 @@ data class LoadingBottomSheetState(
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun LoadingBottomSheet(loadingState: MutableState<LoadingBottomSheetState>, sheetState: SheetState, onDismissRequest: () -> Unit = {}) {
+fun LoadingBottomSheet(
+    loadingState: MutableState<LoadingBottomSheetState>,
+    sheetState: SheetState,
+    loadingAnimationFile: String = "files/61209-loading-loop.json",
+    onDismissRequest: () -> Unit = {},
+) {
 
     val state by remember { loadingState }
 
@@ -70,7 +75,10 @@ fun LoadingBottomSheet(loadingState: MutableState<LoadingBottomSheetState>, shee
     ) {
         when(state.state) {
             LoadingState.LOADING -> {
-                LoadingContent(state.title)
+                LoadingContent(
+                    title = state.title,
+                    loadingAnimationFile = loadingAnimationFile
+                )
             }
             LoadingState.ERROR -> {
                 ActionContent(false, state.title, sheetState) {
@@ -91,7 +99,12 @@ fun LoadingBottomSheet(loadingState: MutableState<LoadingBottomSheetState>, shee
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun LoadingSheet(state: LoadingBottomSheetState, sheetState: SheetState, onDismissRequest: () -> Unit = {}) {
+fun LoadingSheet(
+    state: LoadingBottomSheetState,
+    sheetState: SheetState,
+    loadingAnimationFile: String = "files/61209-loading-loop.json",
+    onDismissRequest: () -> Unit = {},
+) {
 
     ModalBottomSheet(
         containerColor = cardContainerColor(),
@@ -100,7 +113,10 @@ fun LoadingSheet(state: LoadingBottomSheetState, sheetState: SheetState, onDismi
     ) {
         when(state.state) {
             LoadingState.LOADING -> {
-                LoadingContent(state.title)
+                LoadingContent(
+                    title = state.title,
+                    loadingAnimationFile = loadingAnimationFile
+                )
             }
             LoadingState.ERROR -> {
                 ActionContent(false, state.title, sheetState) {
@@ -177,10 +193,13 @@ internal fun ActionContent(success: Boolean, title: String, sheetState: SheetSta
 
 @OptIn(ExperimentalResourceApi::class)
 @Composable
-internal fun LoadingContent(title: String) {
+internal fun LoadingContent(
+    title: String,
+    loadingAnimationFile: String = "files/61209-loading-loop.json",
+) {
     val loadingComposition by rememberLottieComposition {
         LottieCompositionSpec.JsonString(
-            Res.readBytes("files/61209-loading-loop.json").decodeToString()
+            Res.readBytes(loadingAnimationFile).decodeToString()
         )
     }
 

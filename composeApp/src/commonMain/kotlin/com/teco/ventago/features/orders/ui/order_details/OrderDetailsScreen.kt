@@ -373,6 +373,7 @@ fun OrderDetailsScreen(
     val canShowCancelButton = order.invoiceStatus != InvoiceStatus.ISSUED.id &&
             viewModel.isOrderCancellable(order.status)
     val canShowDeleteButton = canDeleteOrder(order)
+    val canShowReprintButton = viewModel.canShowReprintAction(order)
 
     Column(
         modifier = Modifier
@@ -423,6 +424,14 @@ fun OrderDetailsScreen(
                         viewModel.getDocumentByCufe()
                     }) {
                         Text("Ver factura PDF")
+                    }
+                    if (canShowReprintButton || uiState.reprintInFlight) {
+                        OutlinedButtonM(
+                            onClick = { viewModel.reprintTicket() },
+                            enabled = !uiState.reprintInFlight
+                        ) {
+                            Text(if (uiState.reprintInFlight) "Reimprimiendo..." else "Reimprimir ticket")
+                        }
                     }
                     if (uiState.canMarkPaid && viewModel.totalOpenReceivableCents(order) > 0L) {
                         OutlinedButtonM(
@@ -593,6 +602,34 @@ fun OrderDetailsScreen(
 
                 }
 
+            }
+        }
+
+        if (uiState.showPrinterSelectionSheet) {
+            ModalBottomSheet(
+                containerColor = MaterialTheme.colorScheme.background,
+                onDismissRequest = { viewModel.dismissPrinterSelectionSheet() },
+                sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+            ) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(start = 16.dp, end = 16.dp, bottom = 16.dp),
+                    verticalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    Text(
+                        text = "Selecciona una impresora",
+                        style = titleMediumBold()
+                    )
+                    uiState.printerSelectionOptions.forEachIndexed { index, option ->
+                        OutlinedButtonM(
+                            onClick = { viewModel.printSelectedPrinter(index) },
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Text(option.displayLabel)
+                        }
+                    }
+                }
             }
         }
 

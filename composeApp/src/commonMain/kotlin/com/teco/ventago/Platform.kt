@@ -60,7 +60,7 @@ object ReleaseConfigs {
     const val serverBasePath: String = "https://business-vg.tecodigi.com/index.php?r="
 
        const val ordersBasePath: String = "http://192.168.0.3:5001"
-    // const val ordersBasePath: String = "https://invoice-vg.tecodigi.com"
+//     const val ordersBasePath: String = "https://invoice-vg.tecodigi.com"
 }
 
 object SandboxConfigs {
@@ -68,6 +68,6 @@ object SandboxConfigs {
     const val serverBasePath: String = "https://business-vg.tecodigi.com/index.php?r="
 
        const val ordersBasePath: String = "http://192.168.0.3:5001"
-    // const val ordersBasePath: String = "https://invoice-vg.tecodigi.com"
+//     const val ordersBasePath: String = "https://invoice-vg.tecodigi.com"
 }
 

@@ -18,17 +18,40 @@ kotlin {
             jvmTarget.set(JvmTarget.JVM_17)
         }
     }
-    
+
+    val epsonIosHeadersDir = project.file("vendor/epson/ios/Headers")
+    val epsonIosArm64Dir = project.file("vendor/epson/ios/libepos2-static.xcframework/ios-arm64")
+    val epsonIosSimulatorDir = project.file("vendor/epson/ios/libepos2-static.xcframework/ios-arm64_x86_64-simulator")
+
     listOf(
         iosArm64(),
         iosSimulatorArm64()
     ).forEach { iosTarget ->
+        iosTarget.compilations.getByName("main").cinterops.create("epos2") {
+            defFile(project.file("src/nativeInterop/cinterop/epos2.def"))
+            packageName("com.teco.ventago.vendor.epson")
+            compilerOpts("-I${epsonIosHeadersDir.absolutePath}")
+        }
+
         iosTarget.binaries.framework {
             baseName = "ComposeApp"
             isStatic = true
+            val epsonSliceDir = when (iosTarget.name) {
+                "iosArm64" -> epsonIosArm64Dir
+                else -> epsonIosSimulatorDir
+            }
+            linkerOpts(
+                epsonSliceDir.resolve("libepos2.a").absolutePath,
+                "-framework", "Foundation",
+                "-framework", "UIKit",
+                "-framework", "CoreGraphics",
+                "-framework", "CoreImage",
+                "-framework", "Security",
+                "-framework", "SystemConfiguration"
+            )
         }
     }
-    
+
     sourceSets {
         androidMain.dependencies {
             implementation(compose.preview)
@@ -54,6 +77,7 @@ kotlin {
             implementation(libs.google.android.places)
             implementation(libs.accompanist.permissions)
             implementation(libs.qr.gen)
+            implementation(files("libs/epson/ePOS2.jar"))
         }
         commonMain.dependencies {
             implementation(compose.runtime)
@@ -114,8 +138,8 @@ android {
         applicationId = "com.teco.ventago"
         minSdk = libs.versions.android.minSdk.get().toInt()
         targetSdk = libs.versions.android.targetSdk.get().toInt()
-        versionCode = 34
-        versionName = "1.4.2"
+        versionCode = 35
+        versionName = "1.4.3"
     }
     packaging {
         resources {
@@ -147,4 +171,3 @@ dependencies {
     add("kspIosSimulatorArm64", libs.androidx.room.compiler)
     add("kspIosArm64", libs.androidx.room.compiler)
 }
-

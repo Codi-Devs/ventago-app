@@ -20,6 +20,7 @@ import com.teco.ventago.features.business.domain.model.BusinessAddress
 import com.teco.ventago.features.customers.domain.CustomerService
 import com.teco.ventago.features.financialProfile.domain.FinancialProfileService
 import com.teco.ventago.features.orders.domain.OrderService
+import com.teco.ventago.features.printers.domain.PrinterService
 import com.teco.ventago.features.payments.ui.home.viewmodel.PaymentMethodItem
 import com.teco.ventago.features.product.domain.ProductService
 import com.teco.ventago.features.quotes.domain.QuotesService
@@ -47,6 +48,7 @@ class SettingsViewModel(
     private val customerService: CustomerService,
     private val branchService: BranchService,
     private val orderService: OrderService,
+    private val printerService: PrinterService,
     private val logger: ILoggerService,
     private val betaService: BetaService,
     private val quotesService: QuotesService,
@@ -218,6 +220,7 @@ class SettingsViewModel(
             customerService.clear()
             branchService.clear()
             orderService.clear()
+            printerService.clear()
 
         }
 //        state.signOut.value = true

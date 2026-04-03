@@ -24,9 +24,11 @@ import androidx.navigation.navDeepLink
 import androidx.navigation.toRoute
 import com.teco.ventago.AppViewModel
 import com.teco.ventago.Greetings
+import com.teco.ventago.core.LocalStorage
 import com.teco.ventago.core.deeplink.ExternalUriHandler
 import com.teco.ventago.core.firebase.AnalyticsService
 import com.teco.ventago.design_system.organism.ItemScreenActions
+import com.teco.ventago.features.auth.domain.IAuthService
 import com.teco.ventago.features.auth.ui.invoice_landing.InvoiceLandingScreen
 import com.teco.ventago.features.auth.ui.login.ForgotPasswordResultScreen
 import com.teco.ventago.features.auth.ui.login.ForgotPasswordScreen
@@ -64,6 +66,10 @@ import com.teco.ventago.features.orders.ui.order_details.viewModel.OrdersDetails
 import com.teco.ventago.features.orders.ui.order_history.viewModel.OrderHistoryViewModel
 import com.teco.ventago.features.orders.ui.order_invoice.viewModel.OrderInvoiceViewModel
 import com.teco.ventago.features.orders.ui.orders.viewmodel.OrdersViewModel
+import com.teco.ventago.features.printers.domain.PrinterQrEntry
+import com.teco.ventago.features.printers.ui.PrinterConfigScreen as PrinterConfigContent
+import com.teco.ventago.features.printers.ui.PrinterOnboardingScreen as PrinterOnboardingContent
+import com.teco.ventago.features.printers.ui.PrintersScreen as PrintersContent
 import com.teco.ventago.features.payments.ui.home.OnboardingPaymentScreen
 import com.teco.ventago.features.payments.ui.home.viewmodel.PaymentMethodsViewModel
 import com.teco.ventago.features.payments.ui.paypal.OnboardingPaypalScreen
@@ -144,6 +150,9 @@ import ventago.composeapp.generated.resources.pos_cart
 import ventago.composeapp.generated.resources.pos_clients
 import ventago.composeapp.generated.resources.pos_invoice
 import ventago.composeapp.generated.resources.pos_payment
+import ventago.composeapp.generated.resources.printer_config
+import ventago.composeapp.generated.resources.printer_onboarding
+import ventago.composeapp.generated.resources.printers
 import ventago.composeapp.generated.resources.quote_details
 import ventago.composeapp.generated.resources.quote_success
 import ventago.composeapp.generated.resources.quote_summary
@@ -300,6 +309,9 @@ enum class PosScreens(
     Settings(Res.string.action_settings), SettingsScreen(Res.string.action_settings), BusinessLogoSettingsScreen(
         Res.string.add_image
     ),
+    PrintersScreen(Res.string.printers),
+    PrinterOnboardingScreen(Res.string.printer_onboarding),
+    PrinterConfigScreen(Res.string.printer_config),
 
     ChangeBusinessNameScreen(
         Res.string.change_business_name
@@ -1094,8 +1106,58 @@ private fun NavGraphBuilder.addSettingsNavigation(
         composable(route = PosScreens.SettingsScreen.name) {
             analyticsService.logScreenView("SettingsScreen")
             SettingsScreen { route ->
-                navController.navigate(route.name)
+                navController.navigateRoute(route)
             }
+        }
+
+        composable(route = PosScreens.PrintersScreen.name) {
+            analyticsService.logScreenView("PrintersScreen")
+            PrintersContent(navigate = { route: Any ->
+                navController.navigateRoute(route)
+            })
+        }
+
+        composable<PrinterOnboardingRoute>(
+            deepLinks = listOf(
+                navDeepLink<PrinterOnboardingRoute>(basePath = "https://tecodigi.com/printer-onboarding"),
+                navDeepLink { uriPattern = "https://tecodigi.com/printer-onboarding?fromQr={fromQr}" }
+            )
+        ) { backStackEntry ->
+            val args = backStackEntry.toRoute<PrinterOnboardingRoute>()
+            val authService: IAuthService = koinInject()
+            val localStorage: LocalStorage = koinInject()
+
+            LaunchedEffect(args.fromQr) {
+                if (args.fromQr && !authService.isAuthenticated()) {
+                    localStorage.set(PrinterQrEntry.KEY_PENDING_ONBOARDING, true)
+                }
+            }
+
+            analyticsService.logScreenView("PrinterOnboardingScreen")
+            PrinterOnboardingContent(
+                entryContext = args.entryContext,
+                branchCode = args.branchCode,
+                billingPointCode = args.billingPointCode,
+                fromQr = args.fromQr,
+                onDismiss = { navController.navigateUp() },
+                onGoToBranches = {
+                    navController.navigate(PosScreens.Branches.name) {
+                        popUpTo(PosScreens.Settings.name) { inclusive = false }
+                        launchSingleTop = true
+                    }
+                }
+            )
+        }
+
+        composable<PrinterConfigRoute> { backStackEntry ->
+            val args = backStackEntry.toRoute<PrinterConfigRoute>()
+            analyticsService.logScreenView("PrinterConfigScreen")
+            PrinterConfigContent(
+                entryContext = args.entryContext,
+                branchCode = args.branchCode,
+                billingPointCode = args.billingPointCode,
+                onDismiss = { navController.navigateUp() },
+            )
         }
 
         composable(route = PosScreens.BusinessLogoSettingsScreen.name) {
@@ -1158,7 +1220,7 @@ private fun NavGraphBuilder.addBranchesNavigation(
             )
 
             BillingPointManageScreen(viewModel) { route: Any ->
-                navController.navigate(route)
+                navController.navigateRoute(route)
             }
         }
 
@@ -1326,6 +1388,13 @@ fun NavController.navigate(route: PosScreens, builder: (NavOptionsBuilder.() -> 
     }
 }
 
+private fun NavHostController.navigateRoute(route: Any) {
+    when (route) {
+        is PosScreens -> navigate(route.name)
+        else -> navigate(route)
+    }
+}
+
 fun PosScreens.withArgs(vararg args: Pair<String, String>): String {
     val base = this.name
     val query = args.joinToString("&") { "${it.first}=${it.second}" }
@@ -1343,6 +1412,8 @@ fun String.toPosScreenOrNull(): PosScreens? {
     if (this.contains("BillingPointManageRoute")) return PosScreens.BillingPointManageScreen
     if (this.contains("AddBillingPointRoute")) return PosScreens.AddBillingPointScreen
     if (this.contains("EditBillingPointRoute")) return PosScreens.EditBillingPointScreen
+    if (this.contains("PrinterOnboardingRoute")) return PosScreens.PrinterOnboardingScreen
+    if (this.contains("PrinterConfigRoute")) return PosScreens.PrinterConfigScreen
     val base = this.substringBefore("?")     // strip query params
         .substringBefore("/{")    // strip path param segments
         .substringBefore("{")     // strip any leftover placeholder
@@ -1420,3 +1491,18 @@ data class AddBillingPointRoute(val branchCode: String)
 
 @Serializable
 data class EditBillingPointRoute(val branchCode: String, val billingCode: String)
+
+@Serializable
+data class PrinterOnboardingRoute(
+    val entryContext: String = "SETTINGS",
+    val branchCode: String? = null,
+    val billingPointCode: String? = null,
+    val fromQr: Boolean = false,
+)
+
+@Serializable
+data class PrinterConfigRoute(
+    val entryContext: String = "SETTINGS",
+    val branchCode: String? = null,
+    val billingPointCode: String? = null,
+)

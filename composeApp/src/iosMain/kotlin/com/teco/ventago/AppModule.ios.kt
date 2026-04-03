@@ -7,6 +7,10 @@ import com.teco.ventago.core.SecureStorage
 import com.teco.ventago.core.cache.getDatabaseBuilder
 import com.teco.ventago.core.cache.room.CacheDatabase
 import com.teco.ventago.core.cache.room.getCacheDatabase
+import com.teco.ventago.features.printers.domain.IosEpsonPrinterDiscoveryEngine
+import com.teco.ventago.features.printers.domain.IosEpsonPrinterEngine
+import com.teco.ventago.features.printers.domain.PrinterDiscoveryEngine
+import com.teco.ventago.features.printers.domain.PrinterEngine
 import dev.gitlive.firebase.auth.FirebaseAuth
 import io.ktor.client.HttpClient
 import io.ktor.client.HttpClientConfig
@@ -38,6 +42,8 @@ actual val platformModule: Module = module {
         CoroutineScope(SupervisorJob() + Dispatchers.Default)
     }
     single<PdfSharer> { IosPdfSharer() }
+    single<PrinterEngine> { IosEpsonPrinterEngine(get()) }
+    single<PrinterDiscoveryEngine> { IosEpsonPrinterDiscoveryEngine() }
 }
 
 fun test() {

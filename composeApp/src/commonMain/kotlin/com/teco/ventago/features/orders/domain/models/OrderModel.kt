@@ -1,8 +1,8 @@
 package com.teco.ventago.features.orders.domain.models
 
 import com.teco.ventago.features.invoicing.domain.models.InvoiceStatus
-import kotlinx.serialization.KSerializer
 import kotlinx.serialization.SerialName
+import kotlinx.serialization.KSerializer
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.descriptors.PrimitiveKind
 import kotlinx.serialization.descriptors.PrimitiveSerialDescriptor
@@ -49,6 +49,7 @@ data class Order(
     @SerialName("receivable_terms") val receivableTerms: List<ReceivableTermDto> = emptyList(),
 
     @SerialName("payment_link") val paymentLink: String? = null,
+    @SerialName("ticket_enabled") val ticketEnabled: Boolean? = null,
 
     val customer: CustomerSnapshot? = null,
 

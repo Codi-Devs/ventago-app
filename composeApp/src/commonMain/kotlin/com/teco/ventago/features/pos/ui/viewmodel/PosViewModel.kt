@@ -4,6 +4,7 @@ import androidx.lifecycle.viewModelScope
 import com.teco.ventago.core.BaseViewModel
 import com.teco.ventago.core.LocalStorage
 import com.teco.ventago.core.PdfSharer
+import com.teco.ventago.core.SnackbarService
 import com.teco.ventago.core.authz.ActionKey
 import com.teco.ventago.core.authz.AuthzEvaluator
 import com.teco.ventago.core.beta.BetaFeature
@@ -50,6 +51,8 @@ import com.teco.ventago.features.orders.domain.models.requests.References
 import com.teco.ventago.features.orders.domain.models.requests.Retentions
 import com.teco.ventago.features.orders.domain.models.requests.ThirdParty
 import com.teco.ventago.features.pos.domain.PosService
+import com.teco.ventago.features.printers.domain.PrinterService
+import com.teco.ventago.features.printers.domain.model.PrintContext
 import com.teco.ventago.features.pos.domain.models.CartLine
 import com.teco.ventago.features.pos.domain.models.Discount
 import com.teco.ventago.features.pos.domain.models.Money
@@ -120,10 +123,13 @@ class PosViewModel(
     private val pdfSharer: PdfSharer,
     private val localStorage: LocalStorage,
     private val betaService: BetaService,
+    private val printerService: PrinterService,
+    private val snackbarService: SnackbarService,
 ) : BaseViewModel<PosState, PosStateUiEvent>(PosState()) {
     private companion object {
         const val DEFAULT_QUOTE_BRANCH_CODE = "0000"
         const val PRODUCT_VIEW_MODE_KEY_PREFIX = "pos.product_view_mode"
+        const val BRANCH_BILLING_POINT_KEY_PREFIX = "pos.last_branch_billing_point"
     }
 
     var business: Business? = null
@@ -132,6 +138,10 @@ class PosViewModel(
     private var order: Order? = null
     private var pendingQuoteBranchCode: String? = null
     private var customerAddressesJob: Job? = null
+    private data class PersistedBranchBillingPoint(
+        val branchCode: String,
+        val billingPoint: String
+    )
 
     private data class PosAuthzState(
         val canCreateInvoice: Boolean,
@@ -189,14 +199,28 @@ class PosViewModel(
                 val pendingIndex = pendingCode?.let { code ->
                     branches.indexOfFirst { it.branchCode == code }
                 } ?: -1
+                val persistedSelection = if (
+                    currentState.flowMode == FlowMode.SALE &&
+                    currentState.branches.isEmpty()
+                ) {
+                    resolvePersistedBranchBillingPointSelection(branches)
+                } else {
+                    null
+                }
                 val resolvedIndex = when {
                     pendingIndex >= 0 -> pendingIndex
+                    persistedSelection != null -> persistedSelection.first
                     currentState.flowMode == FlowMode.QUOTE && currentState.branches.isEmpty() ->
                         if (defaultIndex >= 0) defaultIndex else safeCurrentIndex
                     else -> safeCurrentIndex
                 }
                 val resetBillingPoint = currentState.branches.isEmpty() || resolvedIndex != currentState.selectedBranchIndex
-                updateBranchSelection(resolvedIndex, branches, resetBillingPoint)
+                updateBranchSelection(
+                    index = resolvedIndex,
+                    branches = branches,
+                    resetBillingPoint = resetBillingPoint,
+                    forcedBillingPointIndex = persistedSelection?.second
+                )
                 if (pendingIndex >= 0 || pendingCode != null) {
                     pendingQuoteBranchCode = null
                 }
@@ -224,6 +248,7 @@ class PosViewModel(
                             productViewMode = persistedViewMode
                         )
                     }
+                    applyPersistedBranchBillingPointSelectionIfPossible()
                     fetchCustomerAddresses()
                 }
             }.launchIn(this)
@@ -808,6 +833,12 @@ class PosViewModel(
 
 
     fun resetForNewSale() {
+        val currentState = uiState.value
+        val (nextBranchIndex, nextBillingPointIndex) = resolveSelectionForNewSaleReset(currentState)
+        val nextBillingPoints = currentState.branches
+            .getOrNull(nextBranchIndex)
+            ?.fiscalBillingPoints
+            .orEmpty()
         customerAddressesJob?.cancel()
         updateState {
             copy(
@@ -823,8 +854,9 @@ class PosViewModel(
                 freeTrialAvailable = false,
                 customer = null,
                 customerQuery = "",
-                selectedBranchIndex = 0,
-                selectedBillingPointIndex = 0,
+                selectedBranchIndex = nextBranchIndex,
+                billingPoints = nextBillingPoints,
+                selectedBillingPointIndex = nextBillingPointIndex,
                 selectedDocTypeIndex = 0,
                 selectedDocType = "01",
                 enabledSelectionDocType = true,
@@ -895,6 +927,23 @@ class PosViewModel(
 
                 )
         }
+        persistCurrentBranchBillingPointSelection()
+    }
+
+    private fun resolveSelectionForNewSaleReset(state: PosState): Pair<Int, Int> {
+        val branches = state.branches
+        if (branches.isEmpty()) return 0 to 0
+
+        resolvePersistedBranchBillingPointSelection(branches)?.let { return it }
+
+        val safeBranchIndex = state.selectedBranchIndex.coerceIn(0, branches.lastIndex)
+        val billingPoints = branches[safeBranchIndex].fiscalBillingPoints
+        val safeBillingPointIndex = if (billingPoints.isEmpty()) {
+            0
+        } else {
+            state.selectedBillingPointIndex.coerceIn(0, billingPoints.lastIndex)
+        }
+        return safeBranchIndex to safeBillingPointIndex
     }
 
 
@@ -933,6 +982,37 @@ class PosViewModel(
                           orderNumber = response.orderNumber,
                           orderCreationFailed = !hasValidOrderNumber
                       )
+                  }
+
+                  if (hasValidOrderNumber && !createPaymentLink && !saveAsDraft) {
+                      val printer = printerService.resolveActivePrinter(
+                          branchCode = request.branch.code,
+                          billingPointCode = request.branch.billingPoint
+                      )
+                      if (printer != null) {
+                          val ticketPayload = response.invoiceFiles?.ticket
+                          if (ticketPayload != null) {
+                              runCatching {
+                                  printerService.printTicketPayload(
+                                      printerConfig = printer,
+                                      ticketPayload = ticketPayload,
+                                      context = PrintContext(
+                                          source = "pos_order_create",
+                                          orderId = response.id
+                                      )
+                                  )
+                              }.onFailure {
+                                  loggerPrintFailure(response.orderNumber, it)
+                                  withContext(Dispatchers.Main) {
+                                      snackbarService.show("La venta se guardó, pero la impresión del ticket falló.")
+                                  }
+                              }
+                          } else {
+                              withContext(Dispatchers.Main) {
+                                  snackbarService.show("La venta se guardó, pero el ticket no estuvo disponible para imprimir.")
+                              }
+                          }
+                      }
                   }
                   
                   withContext(Dispatchers.Main) {
@@ -1414,7 +1494,13 @@ class PosViewModel(
 
         val commercialAddenda: CommercialAddenda? = null // TODO add commercial addenda if needed
 
-        val formats = listOf("PDF", "XML")
+        val formats = buildList {
+            add("PDF")
+            add("XML")
+            if (printerService.shouldRequestTicket(branch.code, branch.billingPoint)) {
+                add("TICKET")
+            }
+        }
 
         return CreateOrderRequest(
             invoice = invoice,
@@ -1440,28 +1526,40 @@ class PosViewModel(
         )
     }
 
+    private fun loggerPrintFailure(orderNumber: String, throwable: Throwable) {
+        println("Ticket print failed for order $orderNumber: ${throwable.message}")
+    }
+
     fun onBranchSelected(index: Int) {
         updateBranchSelection(index)
+        persistCurrentBranchBillingPointSelection()
     }
 
     fun onBillingPointSelected(index: Int) {
         updateState { copy(selectedBillingPointIndex = index) }
+        persistCurrentBranchBillingPointSelection()
     }
 
     private fun updateBranchSelection(
         index: Int,
         branches: List<BranchModel> = uiState.value.branches,
-        resetBillingPoint: Boolean = true
+        resetBillingPoint: Boolean = true,
+        forcedBillingPointIndex: Int? = null
     ) {
         if (branches.isEmpty()) return
         val safeIndex = index.coerceIn(0, branches.lastIndex)
         val selectedBranch = branches[safeIndex]
         val billingPoints = selectedBranch.fiscalBillingPoints
         val billingPointIndex = if (resetBillingPoint) {
-            0
+            forcedBillingPointIndex?.coerceIn(0, (billingPoints.lastIndex).coerceAtLeast(0)) ?: 0
         } else {
-            val currentIndex = uiState.value.selectedBillingPointIndex
-            if (billingPoints.isEmpty()) 0 else currentIndex.coerceIn(0, billingPoints.lastIndex)
+            val forced = forcedBillingPointIndex
+            if (forced != null && billingPoints.isNotEmpty()) {
+                forced.coerceIn(0, billingPoints.lastIndex)
+            } else {
+                val currentIndex = uiState.value.selectedBillingPointIndex
+                if (billingPoints.isEmpty()) 0 else currentIndex.coerceIn(0, billingPoints.lastIndex)
+            }
         }
         updateState {
             copy(
@@ -1471,6 +1569,61 @@ class PosViewModel(
                 selectedBillingPointIndex = billingPointIndex
             )
         }
+    }
+
+    private fun resolvePersistedBranchBillingPointSelection(
+        branches: List<BranchModel>
+    ): Pair<Int, Int>? {
+        val businessId = business?.businessId ?: return null
+        val persisted = readPersistedBranchBillingPointSelection(businessId) ?: return null
+        val branchIndex = branches.indexOfFirst { it.branchCode == persisted.branchCode }
+        if (branchIndex < 0) return null
+        val billingPoints = branches[branchIndex].fiscalBillingPoints
+        val billingPointIndex = billingPoints.indexOfFirst { it.billingPoint == persisted.billingPoint }
+        if (billingPointIndex < 0) return null
+        return branchIndex to billingPointIndex
+    }
+
+    private fun applyPersistedBranchBillingPointSelectionIfPossible() {
+        val state = uiState.value
+        if (state.flowMode != FlowMode.SALE) return
+        if (state.branches.isEmpty()) return
+        val (branchIndex, billingPointIndex) = resolvePersistedBranchBillingPointSelection(state.branches) ?: return
+        updateBranchSelection(
+            index = branchIndex,
+            branches = state.branches,
+            resetBillingPoint = true,
+            forcedBillingPointIndex = billingPointIndex
+        )
+    }
+
+    private fun readPersistedBranchBillingPointSelection(businessId: Int): PersistedBranchBillingPoint? {
+        val saved = localStorage.string(branchBillingPointKey(businessId)).orEmpty()
+        if (saved.isBlank()) return null
+        val parts = saved.split("|", limit = 2)
+        if (parts.size != 2) return null
+        val branchCode = parts[0].trim()
+        val billingPoint = parts[1].trim()
+        if (branchCode.isBlank() || billingPoint.isBlank()) return null
+        return PersistedBranchBillingPoint(branchCode, billingPoint)
+    }
+
+    private fun persistCurrentBranchBillingPointSelection() {
+        val state = uiState.value
+        if (state.flowMode != FlowMode.SALE) return
+        if (state.branches.isEmpty() || state.selectedBranchIndex !in state.branches.indices) return
+        if (state.billingPoints.isEmpty() || state.selectedBillingPointIndex !in state.billingPoints.indices) return
+        val businessId = business?.businessId ?: return
+        val selectedBranchCode = state.branches[state.selectedBranchIndex].branchCode
+        val selectedBillingPoint = state.billingPoints[state.selectedBillingPointIndex].billingPoint
+        localStorage.set(
+            branchBillingPointKey(businessId),
+            "$selectedBranchCode|$selectedBillingPoint"
+        )
+    }
+
+    private fun branchBillingPointKey(businessId: Int): String {
+        return "$BRANCH_BILLING_POINT_KEY_PREFIX.$businessId"
     }
 
     private fun applyQuoteDefaultBranch() {

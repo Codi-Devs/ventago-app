@@ -93,6 +93,8 @@ import com.teco.ventago.navigation.PosScreens
 import com.teco.ventago.rememberPlatformState
 import com.teco.ventago.utils.launchAutocompleteWidget
 import com.teco.ventago.features.quotes.ui.settings.QuoteSettingsSection
+import com.teco.ventago.features.printers.domain.PrinterService
+import com.teco.ventago.features.printers.ui.viewmodel.PrinterEntryContext
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -100,6 +102,7 @@ import org.jetbrains.compose.resources.painterResource
 import org.jetbrains.compose.resources.stringResource
 import org.koin.compose.koinInject
 import org.koin.compose.viewmodel.koinViewModel
+import com.teco.ventago.navigation.PrinterOnboardingRoute
 import ventago.composeapp.generated.resources.Res
 import ventago.composeapp.generated.resources.action_settings
 import ventago.composeapp.generated.resources.bank_transfer
@@ -136,13 +139,15 @@ import kotlin.text.get
 @Composable
 fun SettingsScreen(
     viewModel: SettingsViewModel = koinViewModel<SettingsViewModel>(),
-    navigate: (PosScreens) -> Unit) {
+    navigate: (Any) -> Unit) {
     val snackbarService: SnackbarService = koinInject()
+    val printerService: PrinterService = koinInject()
     val uriHandler = LocalUriHandler.current
     val platformState = rememberPlatformState()
     val scope = rememberCoroutineScope()
 
     val uiState by viewModel.uiState.collectAsState()
+    val printers by printerService.observe().collectAsState()
     val loadingSheetState = rememberModalBottomSheetState(confirmValueChange = { false })
     val noAddressSelectedString = stringResource(Res.string.no_address_selected)
 
@@ -426,6 +431,23 @@ fun SettingsScreen(
                     )
                 }
 
+
+                if (uiState.canModifySettings) {
+                    SettingsTextButton(
+                        label = "Impresoras térmicas",
+                        onClick = {
+                            if (printers.isEmpty()) {
+                                navigate(
+                                    PrinterOnboardingRoute(
+                                        entryContext = PrinterEntryContext.SETTINGS.name
+                                    )
+                                )
+                            } else {
+                                navigate(PosScreens.PrintersScreen)
+                            }
+                        }
+                    )
+                }
 
                 if (uiState.canModifySettings) {
                     SettingsTextButton(

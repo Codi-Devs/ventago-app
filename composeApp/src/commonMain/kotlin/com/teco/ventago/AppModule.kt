@@ -57,6 +57,17 @@ import com.teco.ventago.features.orders.ui.order_details.viewModel.OrdersDetails
 import com.teco.ventago.features.orders.ui.order_history.viewModel.OrderHistoryViewModel
 import com.teco.ventago.features.orders.ui.order_invoice.viewModel.OrderInvoiceViewModel
 import com.teco.ventago.features.orders.ui.orders.viewmodel.OrdersViewModel
+import com.teco.ventago.features.printers.data.provider.IPrinterProvider
+import com.teco.ventago.features.printers.data.provider.PrinterProvider
+import com.teco.ventago.features.printers.data.repository.IPrinterRepository
+import com.teco.ventago.features.printers.data.repository.PrinterRepository
+import com.teco.ventago.features.printers.domain.PrinterCacheSyncService
+import com.teco.ventago.features.printers.domain.PrinterDiscoveryEngine
+import com.teco.ventago.features.printers.domain.PrinterDiscoveryService
+import com.teco.ventago.features.printers.domain.PrinterEngine
+import com.teco.ventago.features.printers.domain.PrinterService
+import com.teco.ventago.features.printers.ui.viewmodel.PrinterOnboardingViewModel
+import com.teco.ventago.features.printers.ui.viewmodel.PrintersViewModel
 import com.teco.ventago.features.payments.data.provider.PaymentsProvider
 import com.teco.ventago.features.payments.data.provider.PaypalProvider
 import com.teco.ventago.features.payments.data.provider.YappyProvider
@@ -218,6 +229,7 @@ internal val viewModels = module {
     viewModelOf(::OrderInvoiceViewModel)
     viewModelOf(::OrderHistoryViewModel)
     viewModelOf(::BranchesManageViewModel)
+    viewModelOf(::PrintersViewModel)
     viewModelOf(::AddCustomerViewModel)
     viewModelOf(::ClientListViewModel)
     viewModelOf(::SearchCustomerViewModel)
@@ -247,6 +259,18 @@ internal val viewModels = module {
             loggerService = get(),
             branchCode = branchCode,
             billingPoint = billingPoint
+        )
+    }
+    viewModel { (entryContext: String, branchCode: String?, billingPointCode: String?, startAtConfig: Boolean) ->
+        PrinterOnboardingViewModel(
+            printerService = get(),
+            discoveryService = get(),
+            branchService = get(),
+            logger = get(),
+            entryContext = entryContext,
+            preselectedBranchCode = branchCode,
+            preselectedBillingPointCode = billingPointCode,
+            startAtConfig = startAtConfig
         )
     }
 
@@ -525,6 +549,48 @@ internal fun appModule() = module {
                 ),
                 logger = get()
             )
+        )
+    }
+
+    single<IPrinterProvider> {
+        PrinterProvider(
+            client = get(),
+            authService = get()
+        )
+    }
+
+    single<IPrinterRepository> {
+        PrinterRepository(
+            provider = get(),
+            logger = get()
+        )
+    }
+
+    single {
+        PrinterCacheSyncService(
+            storage = get(),
+            logger = get(),
+            appScope = get(named("AppScope"))
+        )
+    }
+
+    single {
+        PrinterService(
+            repository = get(),
+            engine = get<PrinterEngine>(),
+            businessService = get(),
+            storage = get(),
+            logger = get(),
+            cacheSyncService = get(),
+            json = json,
+            appScope = get(named("AppScope"))
+        )
+    }
+
+    single {
+        PrinterDiscoveryService(
+            engine = get<PrinterDiscoveryEngine>(),
+            logger = get(),
         )
     }
 

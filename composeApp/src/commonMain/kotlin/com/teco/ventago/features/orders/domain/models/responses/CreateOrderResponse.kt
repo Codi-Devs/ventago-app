@@ -1,5 +1,6 @@
 package com.teco.ventago.features.orders.domain.models.responses
 
+import com.teco.ventago.features.printers.domain.model.TicketDocumentPayload
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 
@@ -49,5 +50,8 @@ data class InvoiceFilesDto(
     val pdf: String? = null,
 
     @SerialName("XML")
-    val xml: String? = null
+    val xml: String? = null,
+
+    @SerialName("TICKET")
+    val ticket: TicketDocumentPayload? = null
 )

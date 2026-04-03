@@ -364,6 +364,9 @@
 
 <!--    Settings Strings -->
     <string name="action_settings">Settings</string>
+    <string name="printers">Thermal printers</string>
+    <string name="printer_onboarding">Thermal printer</string>
+    <string name="printer_config">Printer configuration</string>
     <string name="change_business_name">Change business name</string>
     <string name="change_business_logo">Change business logo</string>
     <string name="business_address">Business Address:</string>

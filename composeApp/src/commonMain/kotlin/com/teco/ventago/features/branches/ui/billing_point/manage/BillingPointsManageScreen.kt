@@ -1,6 +1,7 @@
 package com.teco.ventago.features.branches.ui.billing_point.manage
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
@@ -9,6 +10,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Add
@@ -34,6 +36,7 @@ import androidx.compose.ui.unit.dp
 import androidx.navigation.NavBackStackEntry
 import androidx.navigation.toRoute
 import com.teco.ventago.design_system.buttons.ButtonM
+import com.teco.ventago.design_system.buttons.OutlinedButtonM
 import com.teco.ventago.design_system.buttons.TextButtonS
 import com.teco.ventago.design_system.molecules.FiscalBillingPointItem
 import com.teco.ventago.design_system.organism.LoadingSheet
@@ -42,13 +45,18 @@ import com.teco.ventago.design_system.theme.cardContainerColor
 import com.teco.ventago.design_system.theme.headlineSmall
 import com.teco.ventago.design_system.theme.labelLarge
 import com.teco.ventago.design_system.theme.vanishedBackgroundColor
+import com.teco.ventago.features.printers.domain.PrinterService
+import com.teco.ventago.features.printers.ui.viewmodel.PrinterEntryContext
 import com.teco.ventago.features.branches.ui.billing_point.manage.viewmodel.BillingPointsManageViewModel
 import com.teco.ventago.features.branches.domain.model.FiscalBillingPoint
 import com.teco.ventago.navigation.AddBillingPointRoute
 import com.teco.ventago.navigation.BillingPointManageRoute
 import com.teco.ventago.navigation.EditBillingPointRoute
+import com.teco.ventago.navigation.PrinterConfigRoute
+import com.teco.ventago.navigation.PrinterOnboardingRoute
 import kotlinx.coroutines.launch
 import org.jetbrains.compose.resources.stringResource
+import org.koin.compose.koinInject
 import org.koin.compose.viewmodel.koinViewModel
 import org.koin.core.parameter.parametersOf
 import ventago.composeapp.generated.resources.Res
@@ -85,10 +93,11 @@ fun BillingPointManageActions(backStackEntry: NavBackStackEntry?,
 @Composable
 fun BillingPointManageScreen(
     viewModel: BillingPointsManageViewModel,
-    onNavigate: (EditBillingPointRoute) -> Unit,
+    onNavigate: (Any) -> Unit,
 ) {
 
     val uiState by viewModel.uiState.collectAsState()
+    val printerService: PrinterService = koinInject()
     val loadingSheetState = rememberModalBottomSheetState(confirmValueChange = { false })
     val lazyListState = rememberLazyListState()
 
@@ -113,12 +122,28 @@ fun BillingPointManageScreen(
             state = lazyListState,
         ) {
             items(uiState.billingPoints, key = { it.billingPoint }) { billingPoints ->
-                FiscalBillingPointItem(modifier = Modifier.padding(
-                    start = 16.dp, end = 16.dp, top = 8.dp, bottom = 8.dp
-                ), billingPoint = billingPoints, onClick = {}, onOptionsClick = {
-                    selectedBillingPoint = billingPoints
-                    showBillingPointEdit = true
-                })
+                val hasConfiguredPrinter = uiState.selectedBranchCode?.let { selectedBranchCode ->
+                    printerService.getCachedPrinters().any { printer ->
+                        printer.branchCode == selectedBranchCode &&
+                            printer.billingPointCode == billingPoints.billingPoint
+                    }
+                } ?: false
+
+                FiscalBillingPointItem(
+                    modifier = Modifier.padding(
+                        start = 16.dp,
+                        end = 16.dp,
+                        top = 8.dp,
+                        bottom = 8.dp
+                    ),
+                    billingPoint = billingPoints,
+                    hasConfiguredPrinter = hasConfiguredPrinter,
+                    onClick = {},
+                    onOptionsClick = {
+                        selectedBillingPoint = billingPoints
+                        showBillingPointEdit = true
+                    }
+                )
             }
 
         }
@@ -183,13 +208,12 @@ fun BillingPointManageScreen(
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .padding(bottom = 16.dp),
+                            .padding(bottom = 12.dp),
                         verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
                     ) {
                         ButtonM(
-                            modifier = Modifier
-                                .weight(1f, fill = true)
-                                .padding(start = 8.dp),
+                            modifier = Modifier.weight(1f, fill = true),
                             onClick = {
                                 onNavigate(EditBillingPointRoute(uiState.selectedBranchCode ?: "", selectedBillingPoint?.billingPoint ?: ""))
 //                                navigateRoute(PosScreens.EditBillingPointScreen.editBillingPointRoute(uiState.selectedBranchCode ?: "", selectedBillingPoint?.billingPoint ?: ""))
@@ -207,9 +231,7 @@ fun BillingPointManageScreen(
 
                         if (selectedBillingPoint?.billingPoint != "001") {
                             ButtonM(
-                                modifier = Modifier
-                                    .weight(1f, fill = true)
-                                    .padding(start = 8.dp),
+                                modifier = Modifier.weight(1f, fill = true),
                                 onClick = {
                                     showDeleteDialog = true
                                 },
@@ -218,6 +240,45 @@ fun BillingPointManageScreen(
                                 Text(text = stringResource(Res.string.delete), style = labelLarge().copy(color = MaterialTheme.colorScheme.onPrimary))
                             }
                         }
+                    }
+
+                    OutlinedButtonM(
+                        modifier = Modifier.fillMaxWidth(),
+                        onClick = {
+                            val branchCode = uiState.selectedBranchCode ?: ""
+                            val billingPointCode = selectedBillingPoint?.billingPoint ?: ""
+                            val existingPrinter = printerService.getCachedPrinters().firstOrNull {
+                                it.branchCode == branchCode && it.billingPointCode == billingPointCode
+                            }
+                            onNavigate(
+                                if (existingPrinter != null) {
+                                    PrinterConfigRoute(
+                                        entryContext = PrinterEntryContext.BRANCH.name,
+                                        branchCode = branchCode,
+                                        billingPointCode = billingPointCode
+                                    )
+                                } else {
+                                    PrinterOnboardingRoute(
+                                        entryContext = PrinterEntryContext.BRANCH.name,
+                                        branchCode = branchCode,
+                                        billingPointCode = billingPointCode
+                                    )
+                                }
+                            )
+                            scope.launch { billingPointEditSheetState.hide() }.invokeOnCompletion {
+                                if (!billingPointEditSheetState.isVisible) {
+                                    showBillingPointEdit = false
+                                    selectedBillingPoint = null
+                                }
+                            }
+                        },
+                        contentColor = MaterialTheme.colorScheme.secondary,
+                        border = BorderStroke(1.dp, MaterialTheme.colorScheme.secondary),
+                    ) {
+                        Text(
+                            text = "Configurar impresora",
+                            style = labelLarge().copy(color = MaterialTheme.colorScheme.secondary)
+                        )
                     }
                 }
             }

@@ -362,6 +362,9 @@
 
 <!--    Settings Strings -->
     <string name="action_settings">Configuración</string>
+    <string name="printers">Impresoras térmicas</string>
+    <string name="printer_onboarding">Impresora térmica</string>
+    <string name="printer_config">Configurar impresora</string>
     <string name="change_business_name">Cambiar nombre del negocio</string>
     <string name="change_business_logo">Cambiar logo del negocio</string>
     <string name="business_address">Dirección del negocio:</string>
