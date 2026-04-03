@@ -4,8 +4,12 @@
 <dict>
 	<key>CADisableMinimumFrameDurationOnPhone</key>
 	<true/>
+	<key>NSCameraUsageDescription</key>
+	<string>VentaGo necesita acceso a la cámara para escanear códigos QR/barcode y tomar fotos de productos y gastos.</string>
 	<key>NSLocalNetworkUsageDescription</key>
 	<string>VentaGo necesita acceso a tu red local para imprimir tickets directamente en tu impresora térmica Epson.</string>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>VentaGo necesita acceso a tu galería para seleccionar imágenes de productos y comprobantes.</string>
 	<key>NSAppTransportSecurity</key>
 	<dict/>
 </dict>

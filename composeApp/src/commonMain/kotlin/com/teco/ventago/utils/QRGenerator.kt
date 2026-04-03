@@ -15,13 +15,10 @@ import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.RoundRect
 import androidx.compose.ui.geometry.Size
-import androidx.compose.ui.graphics.ClipOp
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ImageBitmap
-import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
-import androidx.compose.ui.graphics.drawscope.clipPath
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.teco.ventago.core.camera.SharedImage
@@ -137,16 +134,36 @@ fun ScannerScrimWithCutout(
         val ch = cw / cutoutAspectRatio
         val left = (size.width - cw) / 2f
         val top  = (size.height - ch) / 2f
+        val right = left + cw
+        val bottom = top + ch
 
         val rr = RoundRect(
-            left = left, top = top, right = left + cw, bottom = top + ch,
+            left = left, top = top, right = right, bottom = bottom,
             cornerRadius = CornerRadius(r, r)
         )
-        val path = Path().apply { addRoundRect(rr) }
 
-        clipPath(path, clipOp = ClipOp.Difference) {
-            drawRect(color = scrimColor)
-        }
+        // Draw 4 surrounding rectangles instead of clipPath(Difference) to avoid
+        // iOS Skia/Metal crashes when opening scanner overlays.
+        drawRect(
+            color = scrimColor,
+            topLeft = Offset.Zero,
+            size = Size(size.width, top.coerceAtLeast(0f))
+        )
+        drawRect(
+            color = scrimColor,
+            topLeft = Offset(0f, top),
+            size = Size(left.coerceAtLeast(0f), ch.coerceAtLeast(0f))
+        )
+        drawRect(
+            color = scrimColor,
+            topLeft = Offset(right, top),
+            size = Size((size.width - right).coerceAtLeast(0f), ch.coerceAtLeast(0f))
+        )
+        drawRect(
+            color = scrimColor,
+            topLeft = Offset(0f, bottom),
+            size = Size(size.width, (size.height - bottom).coerceAtLeast(0f))
+        )
 
         drawRoundRect(
             color = Color.White.copy(alpha = 0.85f),

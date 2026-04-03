@@ -1,5 +1,8 @@
 # Lessons Learned
 
+- En Compose Multiplatform iOS, evita `clipPath(..., ClipOp.Difference)` en overlays fullscreen de cámara/scanner: puede disparar crashes nativos de Skia/Metal (`SkPictureRecorder::finishRecordingAsPicture`). Prefiere dibujar scrim con rectángulos alrededor del cutout.
+- En iOS KMP, para push no basta con `UNUserNotificationCenter.requestAuthorization`; hay que disparar también registro APNs (`registerForRemoteNotifications`). Si el binding directo falla en Kotlin/Native, usar selector ObjC (`performSelector`) con `@OptIn(ExperimentalForeignApi::class)`.
+- En iOS KMP, no presentes `UIImagePickerController` desde `UIApplication.keyWindow` directamente; usa un resolvedor de `topViewController` (window/scene-aware) y maneja cancelación + keys opcionales (`EditedImage`/`OriginalImage`) para evitar pickers que no abren o crashes por `getValue`.
 - En paridad de impresión web/mobile, no enviar logos con su resolución original al SDK nativo: renderiza una "canvas width" por ancho de papel y aplica `image.width_hint` para escalar/centrar igual que web.
 - Para paridad web/mobile en tickets Epson, no delegar centrado al SDK en papel angosto: aplicar alineación por software (pad por ancho de línea y enviar `ALIGN_LEFT`) evita recortes en 57mm.
 - En layouts de factura, `key_value` no siempre debe imprimirse en dos columnas; alinear con web: inline `Label: Value` por defecto y split solo en secciones tipo `totals`.
@@ -55,3 +58,4 @@
 - En flujos de edición donde el backend recrea hijos (ej. `items`) durante `update`, nunca encadenar mutaciones usando IDs del estado previo: primero refrescar el recurso (`getExpense`) y construir payloads siguientes con los IDs nuevos del backend.
 - En flujos con prefill persistido (ej. sucursal/punto de facturación en POS), no basta con restaurar en carga inicial de catálogos; también hay que re-aplicar la selección en `resetForNewSale()`/retorno desde Success para evitar que un reset local vuelva el índice a `0`.
 - Si el cache de selección depende de contexto (ej. `businessId`), no asumir orden de carga entre flujos observables: reintenta aplicar el prefill cuando ese contexto llegue (ej. en observer de negocio) para cubrir entradas frescas desde Home.
+- En KMP + Coil con `coil-network-ktor2`, no declarar `ktor-client-cio` en `commonMain`: en iOS puede activar un path TLS no soportado (`TLS sessions are not supported on Native platform`). Mantén `CIO` en `androidMain` y `Darwin` en `appleMain`.

@@ -57,6 +57,9 @@ import androidx.navigation.NavGraph.Companion.findStartDestination
 import androidx.navigation.NavHostController
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
+import coil3.ImageLoader
+import coil3.compose.setSingletonImageLoaderFactory
+import coil3.network.ktor2.KtorNetworkFetcherFactory
 import com.teco.ventago.core.SnackbarService
 import com.teco.ventago.core.LocalStorage
 import com.teco.ventago.core.authz.AuthzEvaluator
@@ -113,6 +116,13 @@ fun App(
     appViewModel: AppViewModel = koinViewModel<AppViewModel>(),
     navController: NavHostController = rememberNavController()
 ) {
+    setSingletonImageLoaderFactory { context ->
+        ImageLoader.Builder(context)
+            .components {
+                add(KtorNetworkFetcherFactory())
+            }
+            .build()
+    }
 
     val mainState by appViewModel.mainState.collectAsState()
     val snackbarHostState = remember { SnackbarHostState() }

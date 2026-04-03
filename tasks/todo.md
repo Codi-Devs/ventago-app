@@ -1,3 +1,106 @@
+# iOS Network Images Not Loading TODO
+
+## Plan
+- [x] Validate current Coil/iOS network image wiring and identify root-cause candidate.
+- [x] Apply minimal-impact fix for iOS network image loading and add runtime error visibility for failed requests.
+- [x] Run verification gates (shared + iOS compile).
+
+## Verification Gates
+- [x] `./gradlew :composeApp:compileKotlinIosSimulatorArm64`
+- [x] `./gradlew :composeApp:compileKotlinMetadata`
+- [x] `./gradlew :composeApp:compileDebugKotlinAndroid`
+
+## Review Notes
+- The target CDN URL responds correctly (`HTTP 200`, `image/jpeg`) and serves a valid TLS chain; this suggests an app-side iOS image pipeline issue rather than a broken asset URL.
+- Root-cause candidate: implicit/default image loader setup on iOS was not explicit, and failures were silent in UI because `AsyncImage` in `HomeLogo` had no error callback.
+- Root-cause confirmed by runtime log: `TLS sessions are not supported on Native platform.` The iOS classpath was receiving `ktor-client-cio` from `commonMain`, which can force Coil/Ktor image requests into a Native-incompatible TLS path.
+- Applied a minimal-impact hardening:
+- Added a singleton Coil `ImageLoader` factory in `App.kt` with explicit `KtorNetworkFetcherFactory()` registration.
+- Updated `HomeLogo` (`Cards.kt`) to use `getImageRequest(LocalPlatformContext.current, url.trim())` and added `onError` logging so iOS failures are observable.
+- Moved `ktor-client-cio` dependency from `commonMain` to `androidMain` in `composeApp/build.gradle.kts` so iOS resolves only Darwin engine (`ktor-client-darwin`) for Ktor/Coil networking.
+- Confirmed iOS dependency graph no longer includes `ktor-client-cio` in `iosSimulatorArm64CompileKlibraries`.
+- Verification passed on April 3, 2026:
+- `./gradlew :composeApp:compileKotlinMetadata`
+- `./gradlew :composeApp:compileKotlinIosSimulatorArm64`
+- `./gradlew :composeApp:compileDebugKotlinAndroid`
+
+# iOS QR Scanner Crash (Skia/Metal) TODO
+
+## Plan
+- [x] Inspect iOS scanner stack trace and identify shared UI path used by all scanner entry points.
+- [x] Apply minimal-impact fix in scanner overlay rendering to avoid iOS Skia crash path.
+- [x] Run iOS verification gates (KMP compile + iOS app build + simulator launch).
+
+## Verification Gates
+- [x] `./gradlew :composeApp:compileKotlinIosSimulatorArm64`
+- [x] `xcodebuild -project iosApp/iosApp.xcodeproj -scheme iosApp -configuration Debug -destination 'id=640A022E-3291-4ABD-9F49-442B6FFDB32F' build`
+- [x] `xcrun simctl launch booted com.teco.ventago.VentaGo`
+
+## Review Notes
+- Crash reported at scanner open: `EXC_BAD_ACCESS` in `SkPictureRecorder::finishRecordingAsPicture` (`MetalRedrawer` draw path).
+- Root-cause candidate was scanner scrim rendering in `QRGenerator.kt` using `clipPath(..., ClipOp.Difference)` over full-screen canvas, which is unstable on Compose iOS/Skia in some runtime/device combinations.
+- Fix: replaced clip-path difference approach with a deterministic 4-rect scrim draw around the cutout (no clip operations), preserving scanner visual behavior while avoiding the Skia crash path.
+- File updated: `composeApp/src/commonMain/kotlin/com/teco/ventago/utils/QRGenerator.kt`.
+- Verification passed on April 3, 2026:
+- `./gradlew :composeApp:compileKotlinIosSimulatorArm64`
+- `xcodebuild -project iosApp/iosApp.xcodeproj -scheme iosApp -configuration Debug -destination 'id=640A022E-3291-4ABD-9F49-442B6FFDB32F' build`
+- `xcrun simctl launch booted com.teco.ventago.VentaGo` (pid `30327`)
+
+# iOS Camera/Permissions/Firebase Integration TODO
+
+## Plan
+- [x] Fix iOS gallery picker and camera capture launch flow (presenter lookup + safe picker callbacks + unavailable source handling).
+- [x] Correct iOS camera/gallery permission handling for all relevant iOS authorization statuses.
+- [x] Add missing iOS privacy usage descriptions required for camera/photo access and scanner flows.
+- [x] Implement iOS notification/token wiring (permission request + APNs/FCM token bridge) and remove empty iOS `getToken()` behavior.
+- [x] Run iOS verification gates (KMP compile + iOS app build + simulator launch).
+
+## Verification Gates
+- [x] `./gradlew :composeApp:compileKotlinIosSimulatorArm64`
+- [x] `xcodebuild -project iosApp/iosApp.xcodeproj -scheme iosApp -configuration Debug -destination 'id=640A022E-3291-4ABD-9F49-442B6FFDB32F' build`
+- [x] `xcrun simctl launch booted com.teco.ventago.VentaGo`
+
+## Review Notes
+- Fixed iOS image picker presentation in `CameraManager.ios.kt` and `GalleryManager.ios.kt` by replacing direct `keyWindow` usage with shared `getRootViewController()` resolution and by handling picker cancel paths safely.
+- Prevented picker runtime issues by replacing unsafe `Map.getValue(...)` extraction with nullable lookups and by returning `null` when source types are unavailable (e.g., camera in simulator).
+- Updated `PermissionsManager.ios.kt` to handle all relevant statuses without crashes:
+- Camera: `Authorized` -> granted, `NotDetermined` -> request, `Denied/Restricted` -> denied.
+- Gallery: `Authorized/Limited` -> granted, `NotDetermined` -> request, `Denied/Restricted` -> denied.
+- Added missing privacy keys in iOS app plist:
+- `NSCameraUsageDescription`
+- `NSPhotoLibraryUsageDescription`
+- Implemented iOS notification/token integration:
+- `Platform.ios.kt` now requests notification authorization.
+- `core/firebase/FirebaseMessaging.kt` iOS actual now requests notification authorization (no longer empty) and triggers APNs registration after grant.
+- `iosApp/iOSApp.swift` now wires `UNUserNotificationCenterDelegate` + `MessagingDelegate`, maps APNs token to Firebase Messaging, and persists FCM tokens into Firestore `device_tokens/{uid}` (arrayUnion), mirroring Android behavior.
+- APNs registration from Kotlin is executed via Objective-C selector (`registerForRemoteNotifications`) with `@OptIn(ExperimentalForeignApi::class)` to keep Kotlin/Native compatibility.
+- Scanner crash root cause (`TCC Code 0` missing usage description) is addressed by the new camera usage plist key.
+- Verification passed on April 3, 2026:
+- `./gradlew :composeApp:compileKotlinIosSimulatorArm64`
+- `xcodebuild -project iosApp/iosApp.xcodeproj -scheme iosApp -configuration Debug -destination 'id=640A022E-3291-4ABD-9F49-442B6FFDB32F' build`
+- `xcrun simctl launch booted com.teco.ventago.VentaGo` (pid `26714`)
+
+# iOS Simulator Build Enablement TODO
+
+## Plan
+- [x] Reproduce iOS simulator compile failures on current branch.
+- [x] Fix Kotlin Multiplatform iOS compile errors with minimal-impact changes.
+- [x] Verify iOS simulator target compiles successfully.
+
+## Verification Gates
+- [x] `./gradlew :composeApp:compileKotlinIosSimulatorArm64`
+- [x] `xcodebuild -project iosApp/iosApp.xcodeproj -scheme iosApp -configuration Debug -destination 'id=640A022E-3291-4ABD-9F49-442B6FFDB32F' build`
+
+## Review Notes
+- Fixed iOS compile blockers in `LoginViewModel` and `CufeImportViewModel` by importing `kotlinx.coroutines.IO` so `Dispatchers.IO` resolves to the public multiplatform extension on Native.
+- Fixed `PdfPreview.ios.kt` by using `androidx.compose.ui.viewinterop.UIKitInteropProperties`, adding `kotlinx.cinterop.readValue` + `ExperimentalForeignApi` opt-in, and using Foundation wildcard imports for NSURL percent-encoding APIs.
+- Initial `xcodebuild` failed at link stage due missing Epson symbols (`Epos2Printer`, `Epos2Discovery`, `Epos2FilterOption`) from `ComposeApp.framework`.
+- Added simulator/device-specific Epson static library linkage in `iosApp.xcodeproj` via `OTHER_LDFLAGS[sdk=iphonesimulator*]` and `OTHER_LDFLAGS[sdk=iphoneos*]`.
+- Verification passed on April 3, 2026:
+- `./gradlew :composeApp:compileKotlinIosSimulatorArm64`
+- `xcodebuild -project iosApp/iosApp.xcodeproj -scheme iosApp -configuration Debug -destination 'id=640A022E-3291-4ABD-9F49-442B6FFDB32F' build`
+- Installed and launched on booted simulator successfully: `xcrun simctl launch booted com.teco.ventago.VentaGo` (pid `2458`).
+
 # Printer QR Onboarding Entry TODO
 
 ## Plan

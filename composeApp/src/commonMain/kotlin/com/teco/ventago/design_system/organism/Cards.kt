@@ -27,9 +27,11 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil3.compose.AsyncImage
+import coil3.compose.LocalPlatformContext
 import com.teco.ventago.design_system.buttons.DottedButton
 import com.teco.ventago.design_system.theme.cardContainerColor
 import com.teco.ventago.design_system.theme.latoFontFamily
+import com.teco.ventago.utils.getImageRequest
 
 @Composable
 fun HomeTopCard(
@@ -95,11 +97,14 @@ fun HomeLogo(url: String) {
         contentAlignment = Alignment.Center
     ) {
         AsyncImage(
-            model = url,
+            model = getImageRequest(LocalPlatformContext.current, url.trim()),
             contentDescription = "Image Styles preview",
             placeholder = ColorPainter(Color.LightGray),
             contentScale = ContentScale.FillWidth,
             error = ColorPainter(Color.LightGray),
+            onError = { state ->
+                println("HomeLogo AsyncImage error for url=$url : ${state.result.throwable.message}")
+            },
             modifier = Modifier
                 .height(height)
                 .width(width)

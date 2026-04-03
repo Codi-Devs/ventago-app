@@ -6,6 +6,7 @@ import platform.AVFoundation.AVAuthorizationStatus
 import platform.AVFoundation.AVAuthorizationStatusAuthorized
 import platform.AVFoundation.AVAuthorizationStatusDenied
 import platform.AVFoundation.AVAuthorizationStatusNotDetermined
+import platform.AVFoundation.AVAuthorizationStatusRestricted
 import platform.AVFoundation.AVCaptureDevice
 import platform.AVFoundation.AVMediaTypeVideo
 import platform.AVFoundation.authorizationStatusForMediaType
@@ -14,14 +15,16 @@ import platform.Foundation.NSURL
 import platform.Photos.PHAuthorizationStatus
 import platform.Photos.PHAuthorizationStatusAuthorized
 import platform.Photos.PHAuthorizationStatusDenied
+import platform.Photos.PHAuthorizationStatusLimited
 import platform.Photos.PHAuthorizationStatusNotDetermined
+import platform.Photos.PHAuthorizationStatusRestricted
 import platform.Photos.PHPhotoLibrary
 import platform.UIKit.UIApplication
 import platform.UIKit.UIApplicationOpenSettingsURLString
 
 @Composable
 actual fun createPermissionsManager(callback: PermissionCallback): PermissionsManager {
-    return PermissionsManager(callback)
+    return remember(callback) { PermissionsManager(callback) }
 }
 
 actual class PermissionsManager actual constructor(private val callback: PermissionCallback) :
@@ -30,14 +33,12 @@ actual class PermissionsManager actual constructor(private val callback: Permiss
     actual override fun askPermission(permission: PermissionType) {
         when (permission) {
             PermissionType.CAMERA -> {
-                val status: AVAuthorizationStatus =
-                    remember { AVCaptureDevice.authorizationStatusForMediaType(AVMediaTypeVideo) }
+                val status: AVAuthorizationStatus = AVCaptureDevice.authorizationStatusForMediaType(AVMediaTypeVideo)
                 askCameraPermission(status, permission, callback)
             }
 
             PermissionType.GALLERY -> {
-                val status: PHAuthorizationStatus =
-                    remember { PHPhotoLibrary.authorizationStatus() }
+                val status: PHAuthorizationStatus = PHPhotoLibrary.authorizationStatus()
                 askGalleryPermission(status, permission, callback)
             }
 
@@ -66,7 +67,11 @@ actual class PermissionsManager actual constructor(private val callback: Permiss
                 callback.onPermissionStatus(permission, PermissionStatus.DENIED)
             }
 
-            else -> error("unknown camera status $status")
+            AVAuthorizationStatusRestricted -> {
+                callback.onPermissionStatus(permission, PermissionStatus.DENIED)
+            }
+
+            else -> callback.onPermissionStatus(permission, PermissionStatus.DENIED)
         }
     }
 
@@ -75,6 +80,10 @@ actual class PermissionsManager actual constructor(private val callback: Permiss
     ) {
         when (status) {
             PHAuthorizationStatusAuthorized -> {
+                callback.onPermissionStatus(permission, PermissionStatus.GRANTED)
+            }
+
+            PHAuthorizationStatusLimited -> {
                 callback.onPermissionStatus(permission, PermissionStatus.GRANTED)
             }
 
@@ -90,7 +99,11 @@ actual class PermissionsManager actual constructor(private val callback: Permiss
                 )
             }
 
-            else -> error("unknown gallery status $status")
+            PHAuthorizationStatusRestricted -> {
+                callback.onPermissionStatus(permission, PermissionStatus.DENIED)
+            }
+
+            else -> callback.onPermissionStatus(permission, PermissionStatus.DENIED)
         }
     }
 
@@ -98,15 +111,13 @@ actual class PermissionsManager actual constructor(private val callback: Permiss
     actual override fun isPermissionGranted(permission: PermissionType): Boolean {
         return when (permission) {
             PermissionType.CAMERA -> {
-                val status: AVAuthorizationStatus =
-                    remember { AVCaptureDevice.authorizationStatusForMediaType(AVMediaTypeVideo) }
+                val status: AVAuthorizationStatus = AVCaptureDevice.authorizationStatusForMediaType(AVMediaTypeVideo)
                 status == AVAuthorizationStatusAuthorized
             }
 
             PermissionType.GALLERY -> {
-                val status: PHAuthorizationStatus =
-                    remember { PHPhotoLibrary.authorizationStatus() }
-                status == PHAuthorizationStatusAuthorized
+                val status: PHAuthorizationStatus = PHPhotoLibrary.authorizationStatus()
+                status == PHAuthorizationStatusAuthorized || status == PHAuthorizationStatusLimited
             }
         }
     }

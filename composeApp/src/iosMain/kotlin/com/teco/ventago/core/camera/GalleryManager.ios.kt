@@ -2,7 +2,7 @@ package com.teco.ventago.core.camera
 
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
-import platform.UIKit.UIApplication
+import com.teco.ventago.utils.getRootViewController
 import platform.UIKit.UIImage
 import platform.UIKit.UIImagePickerController
 import platform.UIKit.UIImagePickerControllerDelegateProtocol
@@ -21,12 +21,14 @@ actual fun rememberGalleryManager(onResult: (SharedImage?) -> Unit): GalleryMana
             override fun imagePickerController(
                 picker: UIImagePickerController, didFinishPickingMediaWithInfo: Map<Any?, *>
             ) {
-                val image = didFinishPickingMediaWithInfo.getValue(
-                    UIImagePickerControllerEditedImage
-                ) as? UIImage ?: didFinishPickingMediaWithInfo.getValue(
-                    UIImagePickerControllerOriginalImage
-                ) as? UIImage
-                onResult.invoke(SharedImage(image))
+                val image = (didFinishPickingMediaWithInfo[UIImagePickerControllerEditedImage] as? UIImage)
+                    ?: (didFinishPickingMediaWithInfo[UIImagePickerControllerOriginalImage] as? UIImage)
+                onResult.invoke(image?.let { SharedImage(it) })
+                picker.dismissViewControllerAnimated(true, null)
+            }
+
+            override fun imagePickerControllerDidCancel(picker: UIImagePickerController) {
+                onResult.invoke(null)
                 picker.dismissViewControllerAnimated(true, null)
             }
         }
@@ -34,12 +36,15 @@ actual fun rememberGalleryManager(onResult: (SharedImage?) -> Unit): GalleryMana
 
     return remember {
         GalleryManager {
+            if (!UIImagePickerController.isSourceTypeAvailable(UIImagePickerControllerSourceType.UIImagePickerControllerSourceTypePhotoLibrary)) {
+                onResult.invoke(null)
+                return@GalleryManager
+            }
             imagePicker.setSourceType(UIImagePickerControllerSourceType.UIImagePickerControllerSourceTypePhotoLibrary)
             imagePicker.setAllowsEditing(true)
             imagePicker.setDelegate(galleryDelegate)
-            UIApplication.sharedApplication.keyWindow?.rootViewController?.presentViewController(
-                imagePicker, true, null
-            )
+            getRootViewController()?.presentViewController(imagePicker, true, null)
+                ?: onResult.invoke(null)
         }
     }
 }

@@ -2,15 +2,15 @@ package com.teco.ventago.features.quotes.ui.preview
 
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.viewinterop.UIKitInteropProperties
 import androidx.compose.ui.viewinterop.UIKitView
-import androidx.compose.ui.interop.UIKitInteropProperties
+import kotlinx.cinterop.ExperimentalForeignApi
+import kotlinx.cinterop.readValue
 import platform.CoreGraphics.CGRectZero
-import platform.Foundation.NSCharacterSet
-import platform.Foundation.NSURL
-import platform.Foundation.NSURLRequest
-import platform.Foundation.NSString
+import platform.Foundation.*
 import platform.WebKit.WKWebView
 
+@OptIn(ExperimentalForeignApi::class)
 @Composable
 actual fun PdfPreview(url: String, modifier: Modifier) {
     UIKitView(

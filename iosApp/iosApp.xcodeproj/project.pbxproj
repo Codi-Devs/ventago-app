@@ -216,6 +216,14 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
+				"OTHER_LDFLAGS[sdk=iphoneos*]" = (
+					"$(inherited)",
+					"\"$(SRCROOT)/../composeApp/vendor/epson/ios/libepos2-static.xcframework/ios-arm64/libepos2.a\"",
+				);
+				"OTHER_LDFLAGS[sdk=iphonesimulator*]" = (
+					"$(inherited)",
+					"\"$(SRCROOT)/../composeApp/vendor/epson/ios/libepos2-static.xcframework/ios-arm64_x86_64-simulator/libepos2.a\"",
+				);
 				PROVISIONING_PROFILE_SPECIFIER = "";
 				SWIFT_EMIT_LOC_STRINGS = YES;
 				SWIFT_VERSION = 5.0;
@@ -247,6 +255,14 @@
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",
+				);
+				"OTHER_LDFLAGS[sdk=iphoneos*]" = (
+					"$(inherited)",
+					"\"$(SRCROOT)/../composeApp/vendor/epson/ios/libepos2-static.xcframework/ios-arm64/libepos2.a\"",
+				);
+				"OTHER_LDFLAGS[sdk=iphonesimulator*]" = (
+					"$(inherited)",
+					"\"$(SRCROOT)/../composeApp/vendor/epson/ios/libepos2-static.xcframework/ios-arm64_x86_64-simulator/libepos2.a\"",
 				);
 				PROVISIONING_PROFILE_SPECIFIER = "";
 				SWIFT_EMIT_LOC_STRINGS = YES;

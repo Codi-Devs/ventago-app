@@ -5,6 +5,14 @@ import androidx.compose.runtime.remember
 import kotlinx.cinterop.ExperimentalForeignApi
 import kotlinx.cinterop.useContents
 import platform.UIKit.UIScreen
+import platform.UserNotifications.UNAuthorizationOptionAlert
+import platform.UserNotifications.UNAuthorizationOptionBadge
+import platform.UserNotifications.UNAuthorizationOptionSound
+import platform.UserNotifications.UNUserNotificationCenter
+import platform.UIKit.UIApplication
+import platform.Foundation.NSSelectorFromString
+import platform.darwin.dispatch_async
+import platform.darwin.dispatch_get_main_queue
 
 class IOSPlatform: Platform {
     override val name: String = "IOS"
@@ -45,9 +53,19 @@ internal class IOSPlatformState() : PlatformState {
         com.teco.ventago.utils.openEmailIntent(email)
     }
 
+    @OptIn(ExperimentalForeignApi::class)
     override fun requestNotificationPermission() {
-        // iOS notification permissions are typically requested through native code
-        // This is a no-op for now, can be implemented if needed
+        val options = UNAuthorizationOptionAlert or UNAuthorizationOptionBadge or UNAuthorizationOptionSound
+        UNUserNotificationCenter.currentNotificationCenter().requestAuthorizationWithOptions(options) { granted, _ ->
+            if (!granted) return@requestAuthorizationWithOptions
+            dispatch_async(dispatch_get_main_queue()) {
+                val app = UIApplication.sharedApplication
+                val selector = NSSelectorFromString("registerForRemoteNotifications")
+                if (app.respondsToSelector(selector)) {
+                    app.performSelector(selector)
+                }
+            }
+        }
     }
 
 }

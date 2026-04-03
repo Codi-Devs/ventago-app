@@ -2,7 +2,7 @@ package com.teco.ventago.core.camera
 
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
-import platform.UIKit.UIApplication
+import com.teco.ventago.utils.getRootViewController
 import platform.UIKit.UIImage
 import platform.UIKit.UIImagePickerController
 import platform.UIKit.UIImagePickerControllerCameraCaptureMode
@@ -22,25 +22,30 @@ actual fun rememberCameraManager(onResult: (SharedImage?) -> Unit): CameraManage
             override fun imagePickerController(
                 picker: UIImagePickerController, didFinishPickingMediaWithInfo: Map<Any?, *>
             ) {
-                val image =
-                    didFinishPickingMediaWithInfo.getValue(UIImagePickerControllerEditedImage) as? UIImage
-                        ?: didFinishPickingMediaWithInfo.getValue(
-                            UIImagePickerControllerOriginalImage
-                        ) as? UIImage
-                onResult.invoke(SharedImage(image))
+                val image = (didFinishPickingMediaWithInfo[UIImagePickerControllerEditedImage] as? UIImage)
+                    ?: (didFinishPickingMediaWithInfo[UIImagePickerControllerOriginalImage] as? UIImage)
+                onResult.invoke(image?.let { SharedImage(it) })
+                picker.dismissViewControllerAnimated(true, null)
+            }
+
+            override fun imagePickerControllerDidCancel(picker: UIImagePickerController) {
+                onResult.invoke(null)
                 picker.dismissViewControllerAnimated(true, null)
             }
         }
     }
     return remember {
         CameraManager {
+            if (!UIImagePickerController.isSourceTypeAvailable(UIImagePickerControllerSourceType.UIImagePickerControllerSourceTypeCamera)) {
+                onResult.invoke(null)
+                return@CameraManager
+            }
             imagePicker.setSourceType(UIImagePickerControllerSourceType.UIImagePickerControllerSourceTypeCamera)
             imagePicker.setAllowsEditing(true)
             imagePicker.setCameraCaptureMode(UIImagePickerControllerCameraCaptureMode.UIImagePickerControllerCameraCaptureModePhoto)
             imagePicker.setDelegate(cameraDelegate)
-            UIApplication.sharedApplication.keyWindow?.rootViewController?.presentViewController(
-                imagePicker, true, null
-            )
+            getRootViewController()?.presentViewController(imagePicker, true, null)
+                ?: onResult.invoke(null)
         }
     }
 }

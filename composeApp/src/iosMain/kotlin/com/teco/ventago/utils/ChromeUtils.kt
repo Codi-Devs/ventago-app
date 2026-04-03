@@ -5,6 +5,7 @@ import platform.SafariServices.SFSafariViewController
 import platform.UIKit.UIActivityViewController
 import platform.UIKit.UIApplication
 import platform.UIKit.UIViewController
+import platform.UIKit.UIWindow
 import platform.UIKit.popoverPresentationController
 
 actual fun openCustomTab(url: String){
@@ -31,6 +32,16 @@ actual fun shareLink(url: String) {
 }
 
 fun getRootViewController(): UIViewController? {
-    return UIApplication.sharedApplication.keyWindow?.rootViewController
-        ?: UIApplication.sharedApplication.delegate?.window?.rootViewController
+    val application = UIApplication.sharedApplication
+    val firstWindowRoot = (application.windows.firstOrNull() as? UIWindow)?.rootViewController
+    val root = application.keyWindow?.rootViewController
+        ?: firstWindowRoot
+        ?: application.delegate?.window?.rootViewController
+
+    var top = root
+    while (top?.presentedViewController != null) {
+        top = top.presentedViewController
+    }
+
+    return top
 }
