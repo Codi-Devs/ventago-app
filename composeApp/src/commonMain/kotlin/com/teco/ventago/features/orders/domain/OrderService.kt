@@ -4,14 +4,18 @@ import com.teco.ventago.core.Paged
 import com.teco.ventago.features.business.domain.model.Business
 import com.teco.ventago.features.customers.domain.models.CustomerListItem
 import com.teco.ventago.features.orders.data.repository.IOrdersRepository
+import com.teco.ventago.features.orders.domain.models.AchPaymentDetail
+import com.teco.ventago.features.orders.domain.models.AchProofFileDownload
 import com.teco.ventago.features.orders.domain.models.ManualPaymentMethodOption
 
 import com.teco.ventago.features.orders.domain.models.Order
 import com.teco.ventago.features.orders.domain.models.OrderStatus
 import com.teco.ventago.features.orders.domain.models.requests.CancelOrderRequest
+import com.teco.ventago.features.orders.domain.models.requests.CreatePaymentLinkRequest
 import com.teco.ventago.features.orders.domain.models.requests.DeleteOrderRequest
 import com.teco.ventago.features.orders.domain.models.requests.ManualPaymentItemRequest
 import com.teco.ventago.features.orders.domain.models.requests.PaymentApplicationRequest
+import com.teco.ventago.features.orders.domain.models.requests.RejectAchPaymentRequest
 import com.teco.ventago.features.orders.domain.models.requests.RescheduleReceivableTermRequest
 import com.teco.ventago.features.orders.domain.models.requests.RescheduleReceivablesRequest
 import com.teco.ventago.features.orders.domain.models.requests.RescheduleReceivablesResponse
@@ -378,6 +382,67 @@ class OrderService(private val repository: IOrdersRepository) {
         return repository.getOrderPaymentLink(orderID)
     }
 
+    suspend fun createPaymentLink(
+        businessId: Int,
+        orderId: Int,
+        amount: String?,
+        expireInMinutes: Int
+    ): String? {
+        return repository.createPaymentLink(
+            businessId = businessId,
+            request = CreatePaymentLinkRequest(
+                orderId = orderId,
+                amount = amount?.takeIf { it.isNotBlank() },
+                expireInMinutes = expireInMinutes
+            )
+        )
+    }
+
+    suspend fun getAchPaymentByIntent(
+        businessId: Int,
+        paymentIntentId: String
+    ): AchPaymentDetail {
+        return repository.getAchPaymentByIntent(
+            businessId = businessId,
+            paymentIntentId = paymentIntentId
+        )
+    }
+
+    suspend fun approveAchPayment(
+        businessId: Int,
+        paymentIntentId: String
+    ): String {
+        return repository.approveAchPayment(
+            businessId = businessId,
+            paymentIntentId = paymentIntentId
+        )
+    }
+
+    suspend fun rejectAchPayment(
+        businessId: Int,
+        paymentIntentId: String,
+        reasonCode: String,
+        reasonText: String
+    ): String {
+        return repository.rejectAchPayment(
+            businessId = businessId,
+            paymentIntentId = paymentIntentId,
+            request = RejectAchPaymentRequest(reasonCode = reasonCode, reasonText = reasonText)
+        )
+    }
+
+    suspend fun downloadAchProofFile(
+        businessId: Int,
+        paymentId: String,
+        proofId: String
+    ): AchProofFileDownload {
+        return repository.downloadAchProofFile(
+            businessId = businessId,
+            paymentId = paymentId,
+            proofId = proofId
+        )
+    }
+
     suspend fun findOrderByOrderNumber(businessId: Int, orderNumber: String): Order {
         val order = orders.find { it.internalNumber == orderNumber }
         if (order != null) {
@@ -424,7 +489,7 @@ class OrderService(private val repository: IOrdersRepository) {
         }
         sb.appendLine("Total: ${currency}${order.totalAmount}")
 
-        order.paymentLink?.takeIf { it.isNotBlank() }?.let {
+        PaymentLinkResolver.resolveCurrent(order)?.url?.takeIf { it.isNotBlank() }?.let {
             sb.appendLine()
             sb.appendLine("Enlace de pago: $it")
         }

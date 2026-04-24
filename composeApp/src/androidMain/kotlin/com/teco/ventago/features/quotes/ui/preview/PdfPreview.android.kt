@@ -30,14 +30,28 @@ actual fun PdfPreview(url: String, modifier: Modifier) {
             }
         },
         update = { webView ->
-            val encoded = try {
-                URLEncoder.encode(url, "UTF-8")
-            } catch (_: Exception) {
-                url
-            }
-            val viewerUrl = "https://docs.google.com/gview?embedded=true&url=$encoded"
-            if (webView.url != viewerUrl) {
-                webView.loadUrl(viewerUrl)
+            if (url.startsWith("data:application/pdf", ignoreCase = true)) {
+                val escapedDataUri = url
+                    .replace("&", "&amp;")
+                    .replace("\"", "&quot;")
+                val html = """
+                    <html>
+                    <body style="margin:0;padding:0;">
+                        <iframe src="$escapedDataUri" style="width:100%;height:100%;border:none;"></iframe>
+                    </body>
+                    </html>
+                """.trimIndent()
+                webView.loadDataWithBaseURL(null, html, "text/html", "utf-8", null)
+            } else {
+                val encoded = try {
+                    URLEncoder.encode(url, "UTF-8")
+                } catch (_: Exception) {
+                    url
+                }
+                val viewerUrl = "https://docs.google.com/gview?embedded=true&url=$encoded"
+                if (webView.url != viewerUrl) {
+                    webView.loadUrl(viewerUrl)
+                }
             }
         }
     )

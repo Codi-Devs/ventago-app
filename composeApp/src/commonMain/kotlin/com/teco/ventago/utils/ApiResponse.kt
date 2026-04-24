@@ -80,7 +80,15 @@ enum class ApiError(val error: String?){
     F_AUTH_005("F_AUTH_005"), // TOO_MANY_ATTEMPTS_TRY_LATER
     F_AUTH_006("F_AUTH_006"), // UNDEFINED
     F_AUTH_007("F_AUTH_007"), // Firebase auth expection
+    O_RP_001("O_RP_001"),
     O_RP_002("O_RP_002"),
+    O_RP_004("O_RP_004"),
+    O_RP_005("O_RP_005"),
+    PAY_001("PAY_001"),
+    PAY_002("PAY_002"),
+    PAY_PP_001("PAY_PP_001"),
+    INV_001("INV_001"),
+    INV_002("INV_002"),
     UNDEFINED("U_001"),
     INVALID_RUC("CU_001"),
     RUC_NOT_FOUND("CU_002"),
@@ -105,7 +113,15 @@ enum class ApiError(val error: String?){
                 "F_AUTH_005" -> F_AUTH_005   // TOO_MANY_ATTEMPTS_TRY_LATER
                 "F_AUTH_006" -> F_AUTH_006   // UNDEFINED
                 "F_AUTH_007" -> F_AUTH_007  // Firebase auth expection
+                "O_RP_001" -> O_RP_001
                 "O_RP_002" -> O_RP_002
+                "O_RP_004" -> O_RP_004
+                "O_RP_005" -> O_RP_005
+                "PAY_001" -> PAY_001
+                "PAY_002" -> PAY_002
+                "PAY_PP_001" -> PAY_PP_001
+                "INV_001" -> INV_001
+                "INV_002" -> INV_002
                 "CU_004" -> CUSTOMER_ALREADY_EXISTS
                 else -> NO_ERROR
             }

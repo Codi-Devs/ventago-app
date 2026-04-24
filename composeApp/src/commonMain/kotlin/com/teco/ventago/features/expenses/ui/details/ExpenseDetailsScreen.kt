@@ -75,6 +75,7 @@ import com.teco.ventago.core.camera.PermissionType
 import com.teco.ventago.core.camera.createPermissionsManager
 import com.teco.ventago.core.camera.rememberCameraManager
 import com.teco.ventago.core.camera.rememberGalleryManager
+import com.teco.ventago.core.firebase.AnalyticsService
 import com.teco.ventago.core.file.rememberDocumentPickerManager
 import com.teco.ventago.design_system.buttons.ButtonM
 import com.teco.ventago.design_system.buttons.OutlinedButtonM
@@ -113,6 +114,7 @@ import kotlinx.datetime.plus
 import kotlinx.datetime.toLocalDateTime
 import kotlin.math.roundToLong
 import org.jetbrains.compose.resources.stringResource
+import org.koin.compose.koinInject
 import ventago.composeapp.generated.resources.Res
 import ventago.composeapp.generated.resources.expense_details
 
@@ -126,6 +128,7 @@ fun ExpenseDetailsScreen(
     onDuplicate: () -> Unit = {}
 ) {
     val uiState by viewModel.uiState.collectAsState()
+    val analyticsService: AnalyticsService = koinInject()
     val loadingSheetState = rememberModalBottomSheetState(confirmValueChange = { false })
     val conceptSheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     val snackbarHostState = remember { SnackbarHostState() }
@@ -205,12 +208,14 @@ fun ExpenseDetailsScreen(
                 hasCreditLock = creditLockPayment != null,
                 canManagePayments = uiState.canUpdateExpenseAction,
                 onRegisterPayment = {
+                    analyticsService.logExpensePaymentActionOpened(mode = "register")
                     paymentSheetMode = PaymentSheetMode.REGISTER
                     viewModel.setEditingPayment(null)
                     showPaymentSheet = true
                 },
                 onMarkCreditAsPaid = {
                     if (creditLockPayment != null) {
+                        analyticsService.logExpensePaymentActionOpened(mode = "mark_paid")
                         paymentSheetMode = PaymentSheetMode.MARK_AS_PAID
                         viewModel.setEditingPayment(creditLockPayment)
                         showPaymentSheet = true
@@ -225,6 +230,7 @@ fun ExpenseDetailsScreen(
                     canUpdatePayments = uiState.canUpdateExpenseAction,
                     canDeletePayments = uiState.canDeleteExpenseAction,
                     onMarkPaid = { payment ->
+                        analyticsService.logExpensePaymentActionOpened(mode = "mark_paid")
                         if (payment.paymentMethod == PaymentMethod.CREDIT.value && payment.paymentStatus != "paid") {
                             paymentSheetMode = PaymentSheetMode.MARK_AS_PAID
                             viewModel.setEditingPayment(payment)
@@ -234,11 +240,15 @@ fun ExpenseDetailsScreen(
                         }
                     },
                     onEdit = { p ->
+                        analyticsService.logExpensePaymentActionOpened(mode = "edit")
                         paymentSheetMode = PaymentSheetMode.EDIT
                         viewModel.setEditingPayment(p)
                         showPaymentSheet = true
                     },
-                    onDelete = { viewModel.deletePayment(it.id ?: return@PaymentsListCard) },
+                    onDelete = {
+                        analyticsService.logExpensePaymentActionOpened(mode = "confirm_delete")
+                        viewModel.deletePayment(it.id ?: return@PaymentsListCard)
+                    },
                     onDownloadProof = { url -> uriHandler.openUri(url) }
                 )
             }

@@ -7,6 +7,10 @@ import com.teco.ventago.core.PdfSharer
 import com.teco.ventago.core.SnackbarService
 import com.teco.ventago.core.authz.ActionKey
 import com.teco.ventago.core.authz.AuthzEvaluator
+import com.teco.ventago.core.authz.RouteKey
+import com.teco.ventago.core.beta.BetaFeature
+import com.teco.ventago.core.beta.BetaService
+import com.teco.ventago.core.firebase.AnalyticsService
 import com.teco.ventago.features.auth.domain.IAuthService
 import com.teco.ventago.features.business.domain.BusinessService
 import com.teco.ventago.features.business.domain.model.Business
@@ -14,11 +18,15 @@ import com.teco.ventago.features.financialProfile.domain.FinancialProfileService
 import com.teco.ventago.features.invoicing.domain.models.InvoiceStatus
 import com.teco.ventago.features.orders.domain.OrderService
 import com.teco.ventago.features.orders.domain.OrderPaymentSubmission
+import com.teco.ventago.features.orders.domain.OrderReceivableResolver
+import com.teco.ventago.features.orders.domain.PaymentLinkResolver
 import com.teco.ventago.features.orders.domain.PaymentAllocation
 import com.teco.ventago.features.orders.domain.ReceivableApplicationAllocation
 import com.teco.ventago.features.orders.domain.ReceivableRescheduleTerm
+import com.teco.ventago.features.orders.domain.models.AchPaymentDetail
 import com.teco.ventago.features.orders.domain.models.ManualPaymentMethodOption
 import com.teco.ventago.features.orders.domain.models.Order
+import com.teco.ventago.features.orders.domain.models.OrderPaymentDto
 import com.teco.ventago.features.orders.domain.models.PaymentStatus
 import com.teco.ventago.features.orders.domain.models.ReceivableTermDto
 import com.teco.ventago.features.orders.domain.models.OrderStatus
@@ -63,23 +71,60 @@ class OrdersDetailsViewModel(
     private val businessService: BusinessService,
     private val financialProfileService: FinancialProfileService,
     private val authService: IAuthService,
+    private val betaService: BetaService,
     private val pdfSharer: PdfSharer,
     private val printerService: PrinterService,
     private val snackbarService: SnackbarService,
+    private val analyticsService: AnalyticsService,
 ) : BaseViewModel<OrderDetailsState, OrderDetailsUiEvent>(OrderDetailsState()) {
 
     var business: Business? = null
+    private val achDetailsInFlight = mutableSetOf<String>()
+    private val achProofBinaryCache = mutableMapOf<String, AchProofBinary>()
+
+    private data class AchProofBinary(
+        val bytes: ByteArray,
+        val contentType: String?,
+        val fileName: String?
+    )
+
+    private fun betaSnapshot(): Set<BetaFeature> {
+        return betaService.features().value?.features.orEmpty()
+            .mapNotNull(BetaFeature::fromKey)
+            .toSet()
+    }
 
     init {
         viewModelScope.launch {
             authService.getUser().collect { user ->
+                val beta = betaSnapshot()
                 updateState {
                     copy(
                         canMarkPaid = AuthzEvaluator.canAction(
                             ActionKey.ORDERS_MARK_PAID,
                             user,
-                            emptySet()
-                        )
+                            beta
+                        ),
+                        canCreatePaymentLink = AuthzEvaluator.canAction(
+                            ActionKey.ORDERS_PAYMENT_LINK,
+                            user,
+                            beta
+                        ),
+                        canViewAchPayment = AuthzEvaluator.canRoute(
+                            RouteKey.ACH_PAYMENT_DETAILS,
+                            user,
+                            beta
+                        ),
+                        canApproveAchPayment = AuthzEvaluator.canAction(
+                            ActionKey.ACH_PAYMENT_APPROVE,
+                            user,
+                            beta
+                        ),
+                        canRejectAchPayment = AuthzEvaluator.canAction(
+                            ActionKey.ACH_PAYMENT_REJECT,
+                            user,
+                            beta
+                        ),
                     )
                 }
             }
@@ -164,14 +209,178 @@ class OrdersDetailsViewModel(
     }
 
     fun getOrderPaymentLink() {
-        if (!uiState.value.canMarkPaid) return
         val order = uiState.value.order ?: return
-        order.paymentLink?.let { link ->
+        val resolved = PaymentLinkResolver.resolveCurrent(order) ?: return
+        if (resolved.isTerminal) return
+        analyticsService.logOrderPaymentLinkAction(actionValue = "open_modal")
+        updateState {
+            copy(
+                paymentLink = resolved.url,
+                showPaymentLinkSheet = true
+            )
+        }
+    }
+
+    fun openGeneratePaymentLinkSheet() {
+        if (!uiState.value.canCreatePaymentLink) return
+        val order = uiState.value.order ?: return
+        val canGenerate = canGeneratePaymentLink(order)
+        if (!canGenerate) return
+        val pendingAmountInput = centsToAmountInput(totalOpenReceivableCents(order))
+        analyticsService.logOrderPaymentLinkAction(actionValue = "open_modal")
+        updateState {
+            copy(
+                generatePaymentLinkState = generatePaymentLinkState.copy(
+                    showSheet = true,
+                    amountInput = pendingAmountInput,
+                    errorMessage = null
+                )
+            )
+        }
+    }
+
+    fun closeGeneratePaymentLinkSheet() {
+        updateState {
+            copy(
+                generatePaymentLinkState = generatePaymentLinkState.copy(
+                    showSheet = false,
+                    errorMessage = null
+                )
+            )
+        }
+    }
+
+    fun updateGeneratePaymentAmountInput(value: String) {
+        updateState {
+            copy(
+                generatePaymentLinkState = generatePaymentLinkState.copy(
+                    amountInput = value,
+                    errorMessage = null
+                )
+            )
+        }
+    }
+
+    fun selectGenerateExpiryPreset(minutes: Int) {
+        updateState {
+            copy(
+                generatePaymentLinkState = generatePaymentLinkState.copy(
+                    selectedExpiryPresetMinutes = minutes,
+                    useCustomExpiry = false,
+                    customExpiryMinutesInput = "",
+                    errorMessage = null
+                )
+            )
+        }
+    }
+
+    fun setGenerateCustomExpiryEnabled(enabled: Boolean) {
+        updateState {
+            copy(
+                generatePaymentLinkState = generatePaymentLinkState.copy(
+                    useCustomExpiry = enabled,
+                    errorMessage = null
+                )
+            )
+        }
+    }
+
+    fun updateGenerateCustomExpiryInput(value: String) {
+        updateState {
+            copy(
+                generatePaymentLinkState = generatePaymentLinkState.copy(
+                    customExpiryMinutesInput = value.filter(Char::isDigit),
+                    errorMessage = null
+                )
+            )
+        }
+    }
+
+    fun generatePaymentLink() {
+        if (!uiState.value.canCreatePaymentLink) return
+        val order = uiState.value.order ?: return
+        val businessId = business?.businessId ?: return
+        val remainingCents = totalOpenReceivableCents(order)
+        val state = uiState.value.generatePaymentLinkState
+        val expireInMinutes = if (state.useCustomExpiry) {
+            state.customExpiryMinutesInput.toIntOrNull() ?: 0
+        } else {
+            state.selectedExpiryPresetMinutes
+        }
+        if (expireInMinutes <= 0) {
             updateState {
                 copy(
-                    paymentLink = link,
-                    showPaymentLinkSheet = true
+                    generatePaymentLinkState = generatePaymentLinkState.copy(
+                        errorMessage = "La expiración debe ser mayor a 0 minutos."
+                    )
                 )
+            }
+            return
+        }
+
+        val amountInput = state.amountInput.trim().replace(",", ".")
+        val amountNumber = amountInput.toDoubleOrNull()
+        if (amountInput.isNotBlank() && (amountNumber == null || amountNumber <= 0.0)) {
+            updateState {
+                copy(
+                    generatePaymentLinkState = generatePaymentLinkState.copy(
+                        errorMessage = "El monto debe ser mayor a 0."
+                    )
+                )
+            }
+            return
+        }
+        val maxAmount = remainingCents / 100.0
+        if (amountNumber != null && amountNumber > maxAmount) {
+            updateState {
+                copy(
+                    generatePaymentLinkState = generatePaymentLinkState.copy(
+                        errorMessage = "El monto no puede exceder el saldo pendiente."
+                    )
+                )
+            }
+            return
+        }
+
+        showLoading()
+        viewModelScope.launch {
+            runCatching {
+                withContext(Dispatchers.IO) {
+                    orderService.createPaymentLink(
+                        businessId = businessId,
+                        orderId = order.id,
+                        amount = amountInput.ifBlank { null },
+                        expireInMinutes = expireInMinutes
+                    )
+                }
+            }.onSuccess { generated ->
+                runCatching {
+                    orderService.refreshOrder(businessId = businessId, orderId = order.id)
+                }.onSuccess { fresh ->
+                    updateState {
+                        copy(
+                            order = fresh,
+                            paymentLink = generated ?: PaymentLinkResolver.resolveCurrent(fresh)?.url,
+                            showPaymentLinkSheet = true,
+                            generatePaymentLinkState = generatePaymentLinkState.copy(
+                                showSheet = false,
+                                errorMessage = null
+                            )
+                        )
+                    }
+                    showSuccess()
+                }.onFailure {
+                    showError()
+                }
+            }.onFailure { error ->
+                updateState {
+                    copy(
+                        generatePaymentLinkState = generatePaymentLinkState.copy(
+                            errorMessage = mapOrderMutationError(error, "No se pudo generar el link de pago.")
+                        )
+                    )
+                }
+                showError()
             }
         }
     }
@@ -187,7 +396,7 @@ class OrdersDetailsViewModel(
 
     fun resetPaymentLink() {
         updateState {
-            copy(paymentLink = null, errorLoadingPaymentLink = false)
+            copy(paymentLink = null, showPaymentLinkSheet = false, errorLoadingPaymentLink = false)
         }
     }
 
@@ -252,26 +461,107 @@ class OrdersDetailsViewModel(
         val businessId = business?.businessId ?: return
         showLoading()
         viewModelScope.launch {
-            withContext(Dispatchers.IO) {
-                try {
-                    val response = orderService.retryElectronicInvoice(
-                        businessId,
-                        order.id
-                    )
-                    withContext(Dispatchers.Main) {
-                        if (response.invoiceStatus == InvoiceStatus.ISSUED.id) {
-                            refreshOrder(order.id)
-                        } else {
-                            showError()
-                        }
-                    }
-                } catch (e: Exception) {
-                    withContext(Dispatchers.Main) {
-                        showError()
-                    }
+            runCatching {
+                withContext(Dispatchers.IO) {
+                    val response = orderService.retryElectronicInvoice(businessId, order.id)
+                    val freshOrder = runCatching {
+                        orderService.refreshOrder(businessId = businessId, orderId = order.id)
+                    }.getOrNull()
+                    response to freshOrder
                 }
+            }.onSuccess { result ->
+                val retryResponse = result.first
+                val freshOrder = result.second ?: uiState.value.order
+                val issued = freshOrder?.invoiceStatus == InvoiceStatus.ISSUED.id &&
+                    !freshOrder.externalInvoiceNumber.isNullOrBlank()
+                if (issued) {
+                    updateState {
+                        copy(
+                            order = freshOrder,
+                            invoiceRetryState = invoiceRetryState.copy(
+                                showSuccessDialog = true,
+                                showWarningDialog = false,
+                                warningMessage = null
+                            )
+                        )
+                    }
+                    showSuccess()
+                } else {
+                    val warningMessage = retryResponse.invoiceWarningMessage
+                        ?.takeIf { it.isNotBlank() }
+                        ?: "La factura aún está en verificación. Intenta nuevamente en unos minutos."
+                    updateState {
+                        copy(
+                            order = freshOrder,
+                            invoiceRetryState = invoiceRetryState.copy(
+                                showSuccessDialog = false,
+                                showWarningDialog = true,
+                                warningMessage = warningMessage
+                            )
+                        )
+                    }
+                    hideLoading()
+                }
+            }.onFailure { error ->
+                snackbarService.show(mapOrderMutationError(error, "No se pudo reintentar la facturación."))
+                showError()
             }
         }
+    }
+
+    fun dismissRetryInvoiceDialogs() {
+        updateState {
+            copy(
+                invoiceRetryState = invoiceRetryState.copy(
+                    showSuccessDialog = false,
+                    showWarningDialog = false,
+                    warningMessage = null
+                )
+            )
+        }
+    }
+
+    fun buildInvoiceShareMessage(): String {
+        val order = uiState.value.order ?: return ""
+        val cufe = order.externalInvoiceNumber.orEmpty()
+        val total = order.totalAmount
+        return buildString {
+            append("Factura del pedido #")
+            append(order.internalNumber)
+            if (total.isNotBlank()) {
+                append("\nTotal: ")
+                append(total)
+            }
+            if (cufe.isNotBlank()) {
+                append("\nCUFE: ")
+                append(cufe)
+            }
+        }
+    }
+
+    fun canShowRetryInvoiceButton(order: Order? = uiState.value.order): Boolean {
+        val safeOrder = order ?: return false
+        if (safeOrder.status == OrderStatus.CANCELLED) return false
+        val isPaid = safeOrder.paymentStatus == PaymentStatus.PAID.id
+        val invoiceStatus = safeOrder.invoiceStatus ?: InvoiceStatus.NONE.id
+        return isPaid && invoiceStatus != InvoiceStatus.ISSUED.id && invoiceStatus != InvoiceStatus.CANCELLED.id
+    }
+
+    fun canGeneratePaymentLink(order: Order? = uiState.value.order): Boolean {
+        if (!uiState.value.canCreatePaymentLink) return false
+        if (!uiState.value.havePaymentsConfigured) return false
+        val safeOrder = order ?: return false
+        if (safeOrder.status == OrderStatus.CANCELLED) return false
+        if (safeOrder.paymentStatus == PaymentStatus.PAID.id) return false
+        if (totalOpenReceivableCents(safeOrder) <= 0L) return false
+        if (PaymentLinkResolver.hasOpenLink(safeOrder)) return false
+        return true
+    }
+
+    fun canCopyOrSharePaymentLink(order: Order? = uiState.value.order): Boolean {
+        val safeOrder = order ?: return false
+        if (safeOrder.paymentStatus == PaymentStatus.PAID.id) return false
+        return PaymentLinkResolver.hasOpenLink(safeOrder)
     }
 
     fun canInvoiceDraftOrder(order: Order? = uiState.value.order): Boolean {
@@ -284,6 +574,470 @@ class OrdersDetailsViewModel(
                 isDraftNotInvoiced &&
                 hasOutstandingPayment &&
                 safeOrder.totalAmount.toLongCents() > 0L
+    }
+
+    fun achRejectReasonOptions(): List<Pair<String, String>> = listOf(
+        "fraud" to "Fraude",
+        "invalid_proof" to "Comprobante inválido",
+        "amount_mismatch" to "Monto no coincide",
+        "reference_mismatch" to "Referencia no coincide",
+        "other" to "Otro"
+    )
+
+    fun isAutomaticAchPayment(payment: OrderPaymentDto): Boolean {
+        if (!payment.isAutomatic) return false
+        val methodName = payment.paymentMethod.name.lowercase()
+        val methodDescription = payment.paymentMethod.description.lowercase()
+        val methodId = payment.paymentMethod.id
+        return methodName.contains("ach") ||
+            methodDescription.contains("ach") ||
+            methodId == 3
+    }
+
+    fun achStatusLabel(rawStatus: String?): String {
+        return when (normalizeAchStatus(rawStatus)) {
+            "pending_review" -> "Pendiente revisión"
+            "requires_action" -> "Requiere acción"
+            "pending", "processing", "created" -> "Pendiente"
+            "approved", "paid", "succeeded", "completed" -> "Pagado"
+            "rejected", "declined", "cancelled" -> "Rechazado"
+            else -> rawStatus?.replace('_', ' ')?.replaceFirstChar { it.uppercase() } ?: "Pendiente"
+        }
+    }
+
+    fun canShowAchApproveAction(rawStatus: String?): Boolean {
+        if (!uiState.value.canApproveAchPayment) return false
+        return when (normalizeAchStatus(rawStatus)) {
+            "pending_review", "requires_action", "pending", "processing", "created" -> true
+            else -> false
+        }
+    }
+
+    fun canShowAchRejectAction(rawStatus: String?): Boolean {
+        if (!uiState.value.canRejectAchPayment) return false
+        return when (normalizeAchStatus(rawStatus)) {
+            "pending_review", "requires_action", "pending", "processing", "created" -> true
+            else -> false
+        }
+    }
+
+    fun canShowAchProofAction(detail: AchPaymentDetail?): Boolean {
+        if (!uiState.value.canViewAchPayment) return false
+        val safeDetail = detail ?: return false
+        if (normalizeAchStatus(safeDetail.paymentStatus) == "rejected") return false
+        return safeDetail.proofId != null || !safeDetail.proofFileUrl.isNullOrBlank()
+    }
+
+    fun canDownloadAchProof(detail: AchPaymentDetail?): Boolean {
+        val safeDetail = detail ?: return false
+        return normalizeAchStatus(safeDetail.paymentStatus) in setOf("approved", "paid", "succeeded", "completed")
+    }
+
+    fun achDetailState(paymentIntentId: String): AchIntentDetailState {
+        return uiState.value.achIntentStates[paymentIntentId] ?: AchIntentDetailState()
+    }
+
+    fun loadAchDetailIfNeeded(paymentIntentId: String, force: Boolean = false) {
+        if (paymentIntentId.isBlank()) return
+        viewModelScope.launch {
+            fetchAndCacheAchDetail(paymentIntentId, force = force)
+        }
+    }
+
+    fun openAchApproveDialog(paymentIntentId: String) {
+        if (!uiState.value.canApproveAchPayment || paymentIntentId.isBlank()) return
+        val detail = achDetailState(paymentIntentId).detail
+        val highRisk = isHighRisk(detail)
+        updateState {
+            copy(
+                achApproveDialog = AchApproveDialogState(
+                    show = true,
+                    paymentIntentId = paymentIntentId,
+                    highRisk = highRisk
+                )
+            )
+        }
+    }
+
+    fun dismissAchApproveDialog() {
+        updateState { copy(achApproveDialog = AchApproveDialogState()) }
+    }
+
+    fun confirmApproveAchPayment() {
+        if (!uiState.value.canApproveAchPayment) return
+        val paymentIntentId = uiState.value.achApproveDialog.paymentIntentId ?: return
+        val order = uiState.value.order
+        val businessId = business?.businessId ?: order?.businessId
+        if (businessId == null || businessId <= 0) {
+            viewModelScope.launch {
+                snackbarService.show("No se pudo determinar el negocio para aprobar el pago ACH.")
+            }
+            return
+        }
+
+        showLoading()
+        viewModelScope.launch {
+            runCatching {
+                withContext(Dispatchers.IO) {
+                    orderService.approveAchPayment(businessId, paymentIntentId)
+                    runCatching { financialProfileService.refresh(businessId) }
+                    val freshOrder = order?.let {
+                        runCatching { orderService.refreshOrder(businessId, it.id) }.getOrNull()
+                    }
+                    val freshAchDetail = runCatching {
+                        orderService.getAchPaymentByIntent(businessId, paymentIntentId)
+                    }.getOrNull()
+                    freshOrder to freshAchDetail
+                }
+            }.onSuccess { result ->
+                val freshOrder = result.first
+                val freshAchDetail = result.second
+                updateState {
+                    val updatedMap = if (freshAchDetail != null) {
+                        achIntentStates + (paymentIntentId to AchIntentDetailState(detail = freshAchDetail))
+                    } else {
+                        achIntentStates
+                    }
+                    copy(
+                        order = freshOrder ?: order,
+                        achIntentStates = updatedMap,
+                        achApproveDialog = AchApproveDialogState(),
+                        achRejectDialog = AchRejectDialogState()
+                    )
+                }
+                showSuccess()
+            }.onFailure { error ->
+                snackbarService.show(mapOrderMutationError(error, "No se pudo aprobar el pago ACH."))
+                showError()
+            }
+        }
+    }
+
+    fun openAchRejectDialog(paymentIntentId: String) {
+        if (!uiState.value.canRejectAchPayment || paymentIntentId.isBlank()) return
+        updateState {
+            copy(
+                achRejectDialog = AchRejectDialogState(
+                    show = true,
+                    paymentIntentId = paymentIntentId,
+                    reasonCode = "fraud",
+                    customReasonText = "",
+                    errorMessage = null
+                )
+            )
+        }
+    }
+
+    fun dismissAchRejectDialog() {
+        updateState { copy(achRejectDialog = AchRejectDialogState()) }
+    }
+
+    fun updateAchRejectReasonCode(reasonCode: String) {
+        updateState {
+            copy(
+                achRejectDialog = achRejectDialog.copy(
+                    reasonCode = reasonCode,
+                    errorMessage = null
+                )
+            )
+        }
+    }
+
+    fun updateAchRejectCustomReasonText(value: String) {
+        updateState {
+            copy(
+                achRejectDialog = achRejectDialog.copy(
+                    customReasonText = value,
+                    errorMessage = null
+                )
+            )
+        }
+    }
+
+    fun confirmRejectAchPayment() {
+        if (!uiState.value.canRejectAchPayment) return
+        val dialog = uiState.value.achRejectDialog
+        val paymentIntentId = dialog.paymentIntentId ?: return
+        val order = uiState.value.order
+        val businessId = business?.businessId ?: order?.businessId
+        if (businessId == null || businessId <= 0) {
+            viewModelScope.launch {
+                snackbarService.show("No se pudo determinar el negocio para rechazar el pago ACH.")
+            }
+            return
+        }
+        val reasonText = if (dialog.reasonCode == "other") {
+            dialog.customReasonText.trim()
+        } else {
+            defaultAchRejectReasonText(dialog.reasonCode)
+        }
+
+        if (reasonText.isBlank()) {
+            updateState {
+                copy(
+                    achRejectDialog = achRejectDialog.copy(
+                        errorMessage = "Debes especificar una razón para rechazar."
+                    )
+                )
+            }
+            return
+        }
+
+        showLoading()
+        viewModelScope.launch {
+            runCatching {
+                withContext(Dispatchers.IO) {
+                    orderService.rejectAchPayment(
+                        businessId = businessId,
+                        paymentIntentId = paymentIntentId,
+                        reasonCode = dialog.reasonCode,
+                        reasonText = reasonText
+                    )
+                    runCatching { financialProfileService.refresh(businessId) }
+                    val freshOrder = order?.let {
+                        runCatching { orderService.refreshOrder(businessId, it.id) }.getOrNull()
+                    }
+                    val freshAchDetail = runCatching {
+                        orderService.getAchPaymentByIntent(businessId, paymentIntentId)
+                    }.getOrNull()
+                    freshOrder to freshAchDetail
+                }
+            }.onSuccess { result ->
+                val freshOrder = result.first
+                val freshAchDetail = result.second
+                updateState {
+                    val updatedMap = if (freshAchDetail != null) {
+                        achIntentStates + (paymentIntentId to AchIntentDetailState(detail = freshAchDetail))
+                    } else {
+                        achIntentStates
+                    }
+                    copy(
+                        order = freshOrder ?: order,
+                        achIntentStates = updatedMap,
+                        achRejectDialog = AchRejectDialogState(),
+                        achApproveDialog = AchApproveDialogState()
+                    )
+                }
+                showSuccess()
+            }.onFailure { error ->
+                snackbarService.show(mapOrderMutationError(error, "No se pudo rechazar el pago ACH."))
+                showError()
+            }
+        }
+    }
+
+    fun openAchProofPreview(paymentIntentId: String) {
+        if (paymentIntentId.isBlank()) return
+        updateState {
+            copy(
+                achProofPreviewState = AchProofPreviewState(
+                    show = true,
+                    paymentIntentId = paymentIntentId,
+                    isLoading = true
+                )
+            )
+        }
+        viewModelScope.launch {
+            prepareAchProofPreview(paymentIntentId = paymentIntentId, openSheet = true)
+        }
+    }
+
+    fun closeAchProofPreview() {
+        updateState {
+            copy(
+                achProofPreviewState = achProofPreviewState.copy(show = false)
+            )
+        }
+    }
+
+    fun loadAchReview(paymentIntentId: String) {
+        if (paymentIntentId.isBlank()) return
+        updateState {
+            copy(
+                achReviewState = AchReviewState(
+                    paymentIntentId = paymentIntentId,
+                    isLoading = true,
+                    errorMessage = null
+                ),
+                achProofPreviewState = achProofPreviewState.copy(
+                    show = false,
+                    paymentIntentId = paymentIntentId,
+                    isLoading = true,
+                    imageDataUri = null,
+                    previewUrl = null,
+                    contentType = null,
+                    fileName = null,
+                    errorMessage = null
+                )
+            )
+        }
+        viewModelScope.launch {
+            val detail = fetchAndCacheAchDetail(paymentIntentId, force = false)
+            if (detail == null) {
+                updateState {
+                    copy(
+                        achReviewState = achReviewState.copy(
+                            isLoading = false,
+                            errorMessage = achDetailState(paymentIntentId).errorMessage
+                                ?: "No se pudo cargar el detalle ACH."
+                        ),
+                        achProofPreviewState = achProofPreviewState.copy(
+                            paymentIntentId = paymentIntentId,
+                            isLoading = false,
+                            imageDataUri = null,
+                            previewUrl = null,
+                            contentType = null,
+                            fileName = null,
+                            errorMessage = "No se pudo cargar el comprobante ACH."
+                        )
+                    )
+                }
+                return@launch
+            }
+
+            updateState {
+                copy(
+                    achReviewState = achReviewState.copy(
+                        paymentIntentId = paymentIntentId,
+                        isLoading = false,
+                        errorMessage = null
+                    )
+                )
+            }
+            prepareAchProofPreview(paymentIntentId = paymentIntentId, openSheet = false)
+        }
+    }
+
+    fun retryAchReview() {
+        val paymentIntentId = uiState.value.achReviewState.paymentIntentId ?: return
+        loadAchReview(paymentIntentId)
+    }
+
+    fun setAchScoreInfoDialog(show: Boolean) {
+        updateState { copy(showAchScoreInfoDialog = show) }
+    }
+
+    fun openAchProofDocumentForDownload(paymentIntentId: String) {
+        if (paymentIntentId.isBlank()) return
+        val order = uiState.value.order
+        val businessId = business?.businessId ?: order?.businessId ?: return
+        val detail = resolveAchDetailForIntent(paymentIntentId)
+        if (detail == null) {
+            viewModelScope.launch {
+                snackbarService.show("No hay detalle ACH disponible para descargar el comprobante.")
+            }
+            return
+        }
+        if (!canDownloadAchProof(detail)) {
+            viewModelScope.launch {
+                snackbarService.show("El comprobante solo se puede descargar cuando el pago ACH está aprobado.")
+            }
+            return
+        }
+
+        val cacheKeys = achProofCacheKeys(paymentIntentId, detail)
+        val cachedBinary = cacheKeys.asSequence()
+            .mapNotNull { key -> achProofBinaryCache[key] }
+            .firstOrNull()
+        if (cachedBinary != null) {
+            cacheKeys.forEach { key -> achProofBinaryCache[key] = cachedBinary }
+            viewModelScope.launch {
+                handleAchProofDownloadSuccess(
+                    detail = detail,
+                    binary = cachedBinary,
+                    withLoadingFeedback = false
+                )
+            }
+            return
+        }
+
+        showLoading()
+        viewModelScope.launch {
+            runCatching {
+                val paymentId = detail.paymentId ?: error("No se encontró el identificador del pago.")
+                val proofId = detail.proofId ?: error("No se encontró el identificador del comprobante.")
+                val downloaded = orderService.downloadAchProofFile(
+                    businessId = businessId,
+                    paymentId = paymentId,
+                    proofId = proofId
+                )
+                AchProofBinary(
+                    bytes = downloaded.bytes,
+                    contentType = downloaded.contentType ?: detail.proofContentType,
+                    fileName = downloaded.fileName ?: detail.proofFileName
+                )
+            }.onSuccess { binary ->
+                cacheKeys.forEach { key -> achProofBinaryCache[key] = binary }
+                handleAchProofDownloadSuccess(
+                    detail = detail,
+                    binary = binary,
+                    withLoadingFeedback = true
+                )
+            }.onFailure { error ->
+                val fallbackUrl = detail.proofFileUrl
+                if (!fallbackUrl.isNullOrBlank()) {
+                    emitEvent(OrderDetailsUiEvent.OpenExternalUrl(fallbackUrl))
+                    showSuccess()
+                } else {
+                    snackbarService.show(mapOrderMutationError(error, "No se pudo descargar el comprobante ACH."))
+                    showError()
+                }
+            }
+        }
+    }
+
+    private fun resolveAchDetailForIntent(paymentIntentId: String): AchPaymentDetail? {
+        val direct = achDetailState(paymentIntentId).detail
+        if (direct != null) return direct
+        return uiState.value.achIntentStates.values
+            .asSequence()
+            .mapNotNull { state -> state.detail }
+            .firstOrNull { detail -> detail.paymentUid == paymentIntentId }
+    }
+
+    private fun achProofCacheKeys(
+        paymentIntentId: String,
+        detail: AchPaymentDetail
+    ): List<String> {
+        val stateKeys = uiState.value.achIntentStates
+            .asSequence()
+            .filter { (_, state) -> state.detail?.paymentUid == detail.paymentUid }
+            .map { (key, _) -> key }
+            .toList()
+        val previewKey = uiState.value.achProofPreviewState.paymentIntentId
+
+        return buildList {
+            add(paymentIntentId)
+            if (detail.paymentUid.isNotBlank()) add(detail.paymentUid)
+            if (!previewKey.isNullOrBlank()) add(previewKey)
+            addAll(stateKeys)
+        }.distinct()
+    }
+
+    private suspend fun handleAchProofDownloadSuccess(
+        detail: AchPaymentDetail,
+        binary: AchProofBinary,
+        withLoadingFeedback: Boolean
+    ) {
+        val contentType = binary.contentType.orEmpty().lowercase()
+        if (contentType.contains("pdf")) {
+            pdfSharer.openPdf(
+                filename = binary.fileName ?: "comprobante_ach.pdf",
+                bytes = binary.bytes
+            )
+            if (withLoadingFeedback) showSuccess()
+            return
+        }
+
+        val fallbackUrl = detail.proofFileUrl
+        if (!fallbackUrl.isNullOrBlank()) {
+            emitEvent(OrderDetailsUiEvent.OpenExternalUrl(fallbackUrl))
+            if (withLoadingFeedback) showSuccess()
+            return
+        }
+
+        snackbarService.show("No hay un visor disponible para este tipo de comprobante.")
+        if (withLoadingFeedback) showError()
     }
 
     fun getDocumentByCufe() {
@@ -490,7 +1244,15 @@ class OrdersDetailsViewModel(
     }
 
     fun totalOpenReceivableCents(order: Order? = uiState.value.order): Long {
-        return nonCancelledReceivableTerms(order).sumOf { it.openAmount.toLongCents() }
+        val safeOrder = order ?: return 0L
+        return OrderReceivableResolver.totalOpenCents(safeOrder)
+    }
+
+    private fun centsToAmountInput(amountCents: Long): String {
+        val safeCents = amountCents.coerceAtLeast(0L)
+        val units = safeCents / 100L
+        val decimals = (safeCents % 100L).toString().padStart(2, '0')
+        return "$units.$decimals"
     }
 
     fun totalOverdueReceivableCents(order: Order? = uiState.value.order): Long {
@@ -506,6 +1268,7 @@ class OrdersDetailsViewModel(
         if (order.status == OrderStatus.CANCELLED || order.invoiceStatus != InvoiceStatus.ISSUED.id) return
         if (totalOpenReceivableCents(order) <= 0L) return
 
+        analyticsService.logOrderPaymentActionOpened(mode = "mark_paid_full")
         val today = todayPanamaIso()
         updateState {
             copy(
@@ -529,6 +1292,12 @@ class OrdersDetailsViewModel(
 
     fun setRegisterPaymentMode(mode: RegisterPaymentMode) {
         val current = uiState.value.registerPaymentState
+        analyticsService.logOrderPaymentActionOpened(
+            mode = when (mode) {
+                RegisterPaymentMode.AUTOMATIC -> "mark_paid_full"
+                RegisterPaymentMode.MANUAL -> "mark_paid_installments"
+            }
+        )
         updateState {
             copy(
                 registerPaymentState = current.copy(
@@ -736,6 +1505,11 @@ class OrdersDetailsViewModel(
             return
         }
 
+        val submitMode = when (registerState.mode) {
+            RegisterPaymentMode.AUTOMATIC -> "mark_paid_full"
+            RegisterPaymentMode.MANUAL -> "mark_paid_installments"
+        }
+        analyticsService.logOrderPaymentSubmitAttempted(mode = submitMode)
         showLoading()
         viewModelScope.launch {
             val businessId = business?.businessId ?: return@launch
@@ -765,9 +1539,14 @@ class OrdersDetailsViewModel(
                     payments = payments
                 )
             }.onSuccess {
+                analyticsService.logOrderPaymentSubmitSucceeded(mode = submitMode)
                 refreshOrder(order.id)
                 updateState { copy(registerPaymentState = registerPaymentState.copy(showSheet = false, errorMessage = null)) }
             }.onFailure { e ->
+                analyticsService.logOrderPaymentSubmitFailed(
+                    mode = submitMode,
+                    errorCode = analyticsService.extractErrorCode(e)
+                )
                 updateState {
                     copy(
                         registerPaymentState = registerPaymentState.copy(
@@ -783,6 +1562,7 @@ class OrdersDetailsViewModel(
     fun openRescheduleSheet() {
         val order = uiState.value.order ?: return
         if (totalOpenReceivableCents(order) <= 0L) return
+        analyticsService.logOrderPaymentActionOpened(mode = "reschedule")
         updateState {
             copy(
                 rescheduleState = RescheduleState(
@@ -881,6 +1661,7 @@ class OrdersDetailsViewModel(
         val rescheduleState = state.rescheduleState
         val businessId = business?.businessId ?: return
 
+        analyticsService.logOrderPaymentSubmitAttempted(mode = "reschedule")
         showLoading()
         viewModelScope.launch {
             val sourceIds = openReceivableTerms(order).map { it.id }
@@ -899,6 +1680,7 @@ class OrdersDetailsViewModel(
                     newTerms = terms
                 )
             }.onSuccess {
+                analyticsService.logOrderPaymentSubmitSucceeded(mode = "reschedule")
                 refreshOrder(order.id)
                 updateState {
                     copy(
@@ -910,6 +1692,10 @@ class OrdersDetailsViewModel(
                     )
                 }
             }.onFailure { e ->
+                analyticsService.logOrderPaymentSubmitFailed(
+                    mode = "reschedule",
+                    errorCode = analyticsService.extractErrorCode(e)
+                )
                 updateState {
                     copy(
                         rescheduleState = this.rescheduleState.copy(
@@ -924,6 +1710,7 @@ class OrdersDetailsViewModel(
     }
 
     fun openVoidPaymentSheet(paymentId: Long) {
+        analyticsService.logOrderPaymentActionOpened(mode = "void")
         updateState {
             copy(
                 voidPaymentState = VoidPaymentState(
@@ -957,6 +1744,7 @@ class OrdersDetailsViewModel(
         }
 
         val businessId = business?.businessId ?: return
+        analyticsService.logOrderPaymentSubmitAttempted(mode = "void")
         showLoading()
         viewModelScope.launch {
             runCatching {
@@ -966,9 +1754,14 @@ class OrdersDetailsViewModel(
                     reason = reason
                 )
             }.onSuccess {
+                analyticsService.logOrderPaymentSubmitSucceeded(mode = "void")
                 refreshOrder(order.id)
                 updateState { copy(voidPaymentState = voidPaymentState.copy(showSheet = false, errorMessage = null)) }
             }.onFailure { e ->
+                analyticsService.logOrderPaymentSubmitFailed(
+                    mode = "void",
+                    errorCode = analyticsService.extractErrorCode(e)
+                )
                 updateState {
                     copy(
                         voidPaymentState = voidPaymentState.copy(
@@ -978,6 +1771,250 @@ class OrdersDetailsViewModel(
                 }
                 showError()
             }
+        }
+    }
+
+    private fun normalizeAchStatus(rawStatus: String?): String {
+        return rawStatus.orEmpty()
+            .trim()
+            .lowercase()
+            .replace('-', '_')
+            .replace(' ', '_')
+    }
+
+    private fun defaultAchRejectReasonText(reasonCode: String): String {
+        return when (reasonCode) {
+            "fraud" -> "Comprobante de pago fraudulento"
+            "invalid_proof" -> "Comprobante de pago inválido"
+            "amount_mismatch" -> "Monto del comprobante no coincide con la orden"
+            "reference_mismatch" -> "Referencia del comprobante no coincide con la orden"
+            "other" -> ""
+            else -> reasonCode
+        }
+    }
+
+    private fun isHighRisk(detail: AchPaymentDetail?): Boolean {
+        val safeDetail = detail ?: return false
+        val riskLevel = safeDetail.riskLevel.orEmpty().trim().lowercase()
+        val riskScore = safeDetail.riskScore ?: 0
+        return riskLevel == "high" || riskScore >= 70
+    }
+
+    private suspend fun fetchAndCacheAchDetail(
+        paymentIntentId: String,
+        force: Boolean
+    ): AchPaymentDetail? {
+        val existing = achDetailState(paymentIntentId)
+        if (!force && existing.detail != null) return existing.detail
+        if (achDetailsInFlight.contains(paymentIntentId)) {
+            return waitForAchDetailInFlight(paymentIntentId) ?: achDetailState(paymentIntentId).detail
+        }
+
+        achDetailsInFlight.add(paymentIntentId)
+        updateState {
+            copy(
+                achIntentStates = achIntentStates + (
+                    paymentIntentId to achDetailState(paymentIntentId).copy(
+                        isLoading = true,
+                        errorMessage = null
+                    )
+                )
+            )
+        }
+
+        val businessId = business?.businessId ?: uiState.value.order?.businessId ?: -1
+        if (businessId <= 0) {
+            achDetailsInFlight.remove(paymentIntentId)
+            updateState {
+                copy(
+                    achIntentStates = achIntentStates + (
+                        paymentIntentId to achDetailState(paymentIntentId).copy(
+                            isLoading = false,
+                            errorMessage = "No se encontró el negocio activo para cargar el pago ACH."
+                        )
+                    )
+                )
+            }
+            return null
+        }
+
+        return runCatching {
+            withContext(Dispatchers.IO) {
+                orderService.getAchPaymentByIntent(
+                    businessId = businessId,
+                    paymentIntentId = paymentIntentId
+                )
+            }
+        }.onSuccess { detail ->
+            updateState {
+                copy(
+                    achIntentStates = achIntentStates + (
+                        paymentIntentId to AchIntentDetailState(
+                            detail = detail,
+                            isLoading = false,
+                            errorMessage = null
+                        )
+                    )
+                )
+            }
+        }.onFailure { error ->
+            val message = mapOrderMutationError(error, "No se pudo cargar el detalle ACH.")
+            updateState {
+                copy(
+                    achIntentStates = achIntentStates + (
+                        paymentIntentId to achDetailState(paymentIntentId).copy(
+                            isLoading = false,
+                            errorMessage = message
+                        )
+                    )
+                )
+            }
+        }.getOrNull().also {
+            achDetailsInFlight.remove(paymentIntentId)
+        }
+    }
+
+    private suspend fun waitForAchDetailInFlight(paymentIntentId: String): AchPaymentDetail? {
+        repeat(40) {
+            val current = achDetailState(paymentIntentId).detail
+            if (current != null) return current
+            if (!achDetailsInFlight.contains(paymentIntentId)) {
+                return achDetailState(paymentIntentId).detail
+            }
+            delay(50)
+        }
+        return achDetailState(paymentIntentId).detail
+    }
+
+    private suspend fun prepareAchProofPreview(
+        paymentIntentId: String,
+        openSheet: Boolean
+    ) {
+        val detail = fetchAndCacheAchDetail(paymentIntentId, force = false)
+            ?: achDetailState(paymentIntentId).detail
+        if (detail == null) {
+            updateState {
+                copy(
+                    achProofPreviewState = achProofPreviewState.copy(
+                        show = if (openSheet) true else achProofPreviewState.show,
+                        paymentIntentId = paymentIntentId,
+                        isLoading = false,
+                        errorMessage = "No se pudo cargar el comprobante ACH."
+                    )
+                )
+            }
+            return
+        }
+
+        if (normalizeAchStatus(detail.paymentStatus) == "rejected") {
+            updateState {
+                copy(
+                    achProofPreviewState = achProofPreviewState.copy(
+                        show = if (openSheet) true else achProofPreviewState.show,
+                        paymentIntentId = paymentIntentId,
+                        isLoading = false,
+                        imageDataUri = null,
+                        previewUrl = null,
+                        contentType = null,
+                        fileName = null,
+                        errorMessage = "El comprobante no está disponible para pagos rechazados."
+                    )
+                )
+            }
+            return
+        }
+
+        val fallbackUrl = detail.proofFileUrl?.takeIf { it.isNotBlank() }
+        val businessId = business?.businessId ?: uiState.value.order?.businessId ?: -1
+
+        if (detail.paymentId == null || detail.proofId == null || businessId <= 0) {
+            updateState {
+                copy(
+                    achProofPreviewState = achProofPreviewState.copy(
+                        show = if (openSheet) true else achProofPreviewState.show,
+                        paymentIntentId = paymentIntentId,
+                        isLoading = false,
+                        imageDataUri = null,
+                        previewUrl = fallbackUrl,
+                        contentType = detail.proofContentType,
+                        fileName = detail.proofFileName,
+                        errorMessage = if (fallbackUrl == null) "No hay comprobante disponible." else null
+                    )
+                )
+            }
+            return
+        }
+
+        val cachedBinary = achProofBinaryCache[paymentIntentId]
+        val binary = if (cachedBinary != null) {
+            cachedBinary
+        } else {
+            runCatching {
+                withContext(Dispatchers.IO) {
+                    val downloaded = orderService.downloadAchProofFile(
+                        businessId = businessId,
+                        paymentId = detail.paymentId,
+                        proofId = detail.proofId
+                    )
+                    AchProofBinary(
+                        bytes = downloaded.bytes,
+                        contentType = downloaded.contentType ?: detail.proofContentType,
+                        fileName = downloaded.fileName ?: detail.proofFileName
+                    )
+                }
+            }.getOrNull()?.also { achProofBinaryCache[paymentIntentId] = it }
+        }
+
+        if (binary == null) {
+            updateState {
+                copy(
+                    achProofPreviewState = achProofPreviewState.copy(
+                        show = if (openSheet) true else achProofPreviewState.show,
+                        paymentIntentId = paymentIntentId,
+                        isLoading = false,
+                        imageDataUri = null,
+                        previewUrl = fallbackUrl,
+                        contentType = detail.proofContentType,
+                        fileName = detail.proofFileName,
+                        errorMessage = if (fallbackUrl == null) "No se pudo obtener el comprobante ACH." else null
+                    )
+                )
+            }
+            return
+        }
+
+        val contentType = binary.contentType ?: detail.proofContentType
+        val normalizedContentType = contentType.orEmpty().lowercase()
+        val imageDataUri = if (normalizedContentType.startsWith("image/")) {
+            @OptIn(ExperimentalEncodingApi::class)
+            "data:${contentType ?: "image/jpeg"};base64,${Base64.encode(binary.bytes)}"
+        } else {
+            null
+        }
+        val pdfDataUri = if (normalizedContentType.contains("pdf")) {
+            @OptIn(ExperimentalEncodingApi::class)
+            "data:application/pdf;base64,${Base64.encode(binary.bytes)}"
+        } else {
+            null
+        }
+
+        updateState {
+            copy(
+                achProofPreviewState = achProofPreviewState.copy(
+                    show = if (openSheet) true else achProofPreviewState.show,
+                    paymentIntentId = paymentIntentId,
+                    isLoading = false,
+                    imageDataUri = imageDataUri,
+                    previewUrl = when {
+                        imageDataUri != null -> null
+                        pdfDataUri != null -> pdfDataUri
+                        else -> fallbackUrl
+                    },
+                    contentType = contentType,
+                    fileName = binary.fileName ?: detail.proofFileName,
+                    errorMessage = null
+                )
+            )
         }
     }
 
@@ -1005,15 +2042,20 @@ class OrdersDetailsViewModel(
 
     private fun mapOrderMutationError(error: Throwable, fallback: String): String {
         val raw = error.message.orEmpty()
-        if (raw.contains("O_RP_002")) {
-            return "La suma de los nuevos vencimientos debe coincidir exactamente con el saldo abierto total."
-        }
         val errorCode = Regex("\"error\":\"([^\"]+)\"").find(raw)?.groupValues?.getOrNull(1)
             ?: Regex("\"errorCode\":\"([^\"]+)\"").find(raw)?.groupValues?.getOrNull(1)
-        return if (!errorCode.isNullOrBlank() && errorCode != "null") {
-            "$fallback Código: $errorCode"
-        } else {
-            fallback
+        return when (errorCode) {
+            "O_RP_001" -> "No tienes permisos para realizar esta accion."
+            "O_RP_002" -> "La suma de los nuevos vencimientos debe coincidir exactamente con el saldo abierto total."
+            "O_RP_004" -> "No se encontro la orden o pago solicitado."
+            "O_RP_005" -> "No se puede completar la accion por el estado actual del recurso."
+            "PAY_001" -> "No fue posible procesar la operacion de pago."
+            "PAY_002" -> "No hay metodos de pago configurados para continuar."
+            "PAY_PP_001" -> "No fue posible completar la operacion con PayPal."
+            "INV_001" -> "No fue posible emitir la factura en este momento."
+            "INV_002" -> "La factura no esta disponible para esta operacion."
+            null, "", "null" -> fallback
+            else -> "$fallback Código: $errorCode"
         }
     }
 
@@ -1021,6 +2063,9 @@ class OrdersDetailsViewModel(
     /// Payment methods sheet handling
     fun showManualPaymentSheet(show: Boolean) {
         if (show && !uiState.value.canMarkPaid) return
+        if (show) {
+            analyticsService.logOrderPaymentActionOpened(mode = "operational")
+        }
         val order = uiState.value.order
         val orderTotalCents = order?.let { safeOrder ->
             totalOpenReceivableCents(safeOrder).takeIf { it > 0L } ?: safeOrder.totalAmount.toLongCents()
@@ -1107,6 +2152,7 @@ class OrdersDetailsViewModel(
             return
         }
 
+        analyticsService.logOrderPaymentSubmitAttempted(mode = "operational")
         updateState {
             copy(
                 manualPayment = mp.copy(
@@ -1139,12 +2185,21 @@ class OrdersDetailsViewModel(
             }
 
             result.onSuccess {
+                analyticsService.logOrderPaymentSubmitSucceeded(mode = "operational")
                 // Refresh order details if needed
                 refreshOrder(order.id)
             }.onFailure { e ->
+                analyticsService.logOrderPaymentSubmitFailed(
+                    mode = "operational",
+                    errorCode = analyticsService.extractErrorCode(e)
+                )
                 showError()
             }
         }
+    }
+
+    fun trackOrderPaymentLinkAction(action: String) {
+        analyticsService.logOrderPaymentLinkAction(actionValue = action)
     }
 
     fun refreshOrder(orderId: Int) {

@@ -1,3 +1,578 @@
+# Payments + Settings + Notifications Replication TODO
+
+## Iteration 6 Order Details Generate Link Sheet UX (Current)
+
+## Plan
+- [x] Prefill `Monto a cobrar` with current pending balance when opening generate-link sheet.
+- [x] Update generate action button to secondary color in sheet.
+- [x] Verify compile gate for KMP/Android.
+
+## Verification Gates
+- [x] `./gradlew --no-build-cache --no-configuration-cache :composeApp:compileKotlinMetadata :composeApp:compileDebugKotlinAndroid`
+
+## Review Notes
+- `openGeneratePaymentLinkSheet()` ahora prellena `amountInput` con saldo pendiente (`totalOpenReceivableCents`) formateado como decimal de 2 dígitos.
+- En el modal, el botón `Generar` usa `MaterialTheme.colorScheme.secondary` + `onSecondary` para alinearse al guideline visual.
+
+## Iteration 6 Order 3796 Generate Link Eligibility (Current)
+
+## Plan
+- [x] Reproduce and isolate why `canGeneratePaymentLink` blocks draft order `3796` while web allows generation.
+- [x] Fix open-balance computation for orders without `receivable_terms` using `total_amount - net_paid` fallback.
+- [x] Add focused unit tests for fallback scenarios (no terms, partial payments, voided payments).
+- [x] Verify with focused tests + compile gate.
+
+## Verification Gates
+- [x] `./gradlew --no-build-cache --no-configuration-cache :composeApp:testDebugUnitTest --tests '*OrderReceivableResolverTest*'`
+- [x] `./gradlew --no-build-cache --no-configuration-cache :composeApp:compileKotlinMetadata :composeApp:compileDebugKotlinAndroid`
+
+## Review Notes
+- Root cause confirmado: `totalOpenReceivableCents(...)` solo sumaba `receivable_terms.open_amount`; cuando el backend no envía `receivable_terms` (caso orden `3796`), el saldo quedaba en `0` y ocultaba `Generar Link de Pago`.
+- Se agregó `OrderReceivableResolver.totalOpenCents(...)` con fallback cuando no hay `receivable_terms`: `max(total_amount - pagos_netos_no_anulados, 0)`.
+- `OrdersDetailsViewModel.totalOpenReceivableCents(...)` ahora delega en el resolver, por lo que el botón vuelve a mostrarse para órdenes abiertas sin términos CxC.
+- Se añadieron tests para fallback sin términos, parcial, ignorar pagos anulados y prioridad de términos cuando existen.
+
+## Iteration 6 Order Details Copy Link on `requires_action` (Current)
+
+## Plan
+- [x] Reproduce/validate why `Copiar Link de Pago` is hidden for order `3797` with `payment_links.status=requires_action`.
+- [x] Fix `OrderDetails` visibility rule so copy/share uses open-link semantics (non-terminal) instead of only active-link.
+- [x] Add regression coverage for `requires_action` link classification (`open=true`, `active=false`).
+- [x] Verify with focused tests + compile gate.
+
+## Verification Gates
+- [x] `./gradlew --no-build-cache --no-configuration-cache :composeApp:testDebugUnitTest --tests '*PaymentLinkResolverTest*'`
+- [x] `./gradlew --no-build-cache --no-configuration-cache :composeApp:compileKotlinMetadata :composeApp:compileDebugKotlinAndroid`
+
+## Review Notes
+- Root cause confirmado: `canCopyOrSharePaymentLink()` estaba atado a `hasActiveLink`, por lo que links en estado `requires_action` no habilitaban `Copiar Link de Pago` aunque fueran enlaces abiertos válidos.
+- Fix aplicado en ViewModel: `canCopyOrSharePaymentLink()` ahora usa `PaymentLinkResolver.hasOpenLink(...)` (manteniendo la exclusión para órdenes pagadas).
+- Se agregó test de regresión (`treatsRequiresActionAsOpenButNotActive`) para blindar clasificación de estado `requires_action` y evitar regresiones de visibilidad.
+
+## Iteration 6 Order Details Copy Payment Link Visibility (Current)
+
+## Plan
+- [x] Fix payment-link resolver to choose the right link candidate (status/source priority + most recent timestamp per source).
+- [x] Ensure `hasActiveLink/hasOpenLink` evaluate across all available sources (`payment_links`, `payment_link`, `links`) instead of a single resolved item.
+- [x] Add focused unit tests for mixed-status/mixed-source payment-link payloads.
+- [x] Verify with focused tests + compile gate.
+
+## Verification Gates
+- [x] `./gradlew --no-build-cache --no-configuration-cache :composeApp:testDebugUnitTest --tests '*PaymentLinkResolverTest*'`
+- [x] `./gradlew --no-build-cache --no-configuration-cache :composeApp:compileKotlinMetadata :composeApp:compileDebugKotlinAndroid`
+
+## Review Notes
+- `PaymentLinkResolver.resolveCurrent(...)` dejó de depender del primer elemento de lista: ahora prioriza link activo por fuente y escoge el más reciente por `created_at` en `payment_links`/`links`.
+- `hasPendingLink/hasActiveLink/hasOpenLink` ahora evalúan sobre todas las fuentes, evitando falsos negativos cuando el primer candidate es terminal.
+- Se añadieron tests para:
+- selección del link más reciente en `payment_links`,
+- detección de link abierto/activo en `links` aunque `payment_links` traiga terminal.
+
+## Iteration 6 Payment Link Config Check UX (Current)
+
+## Plan
+- [x] Remove blocking `config-summary` refresh on every click of `Crear enlace de pago` tab and `Generar enlace` button.
+- [x] Keep validation cache-first using loaded `FinancialProfileService` state to avoid interrupting UI.
+- [x] Move config refresh to background with throttle so freshness is preserved without click-latency.
+- [x] Verify compile gate for Android/KMP.
+
+## Verification Gates
+- [x] `./gradlew --no-build-cache --no-configuration-cache :composeApp:compileKotlinMetadata :composeApp:compileDebugKotlinAndroid`
+
+## Review Notes
+- `PosViewModel.checkPaymentMethodsConfigured(...)` now resolves `paymentsConfigured` immediately from in-memory state (`FinancialProfileService` loaded state / local UI fallback) and returns without waiting network.
+- Added background sync `refreshPaymentConfigInBackground(...)` with in-flight guard + 60s throttle to avoid repeated `GET /api/v1/business/config-summary` hits.
+- `onPaymentScreenVisible()` now opportunistically triggers this background sync, so data freshness is recovered outside direct user click paths and not from tab/button clicks.
+- Added `FinancialProfileService.hasLoadedProfile()` for explicit cache-readiness checks.
+
+## Iteration 3 ACH Proof Download Cache-First (Current)
+
+## Plan
+- [x] Remove LoadingSheet when ACH proof binary is already cached from preview.
+- [x] Make ACH proof download resolve detail/cache by canonical `payment_intent_id` aliases to avoid unnecessary re-download failures.
+- [x] Keep current behavior for network fallback (loader + feedback) only when binary is not cached.
+- [x] Verify compile gate for Android/KMP.
+
+## Verification Gates
+- [x] `./gradlew --no-build-cache --no-configuration-cache :composeApp:compileKotlinMetadata :composeApp:compileDebugKotlinAndroid`
+
+## Review Notes
+- `openAchProofDocumentForDownload` ahora es cache-first: si el binario del comprobante ya existe, abre/descarga directo sin `showLoading()` ni `LoadingSheet`.
+- Se agregó resolución robusta de detalle ACH y llaves de caché por alias (`paymentIntentId` solicitado, `detail.paymentUid`, llave activa de preview y llaves del mapa de estados), evitando re-download innecesario cuando cambia el origen de navegación (órdenes/notificaciones).
+- El fallback de red se mantiene para casos sin caché: ahí sí se conserva `showLoading()` + `showSuccess()/showError()` según resultado.
+
+## Iteration 3 ACH Approve/Reject Action Fix (Current)
+
+## Plan
+- [x] Fix ACH approve/reject action handlers in ViewModel to avoid silent no-op when no selected order is present.
+- [x] Align reject payload `reason_text` defaults with descriptive backend-friendly text.
+- [x] Keep post-action refresh behavior: always refresh ACH detail; refresh order only when order context exists.
+- [x] Verify compile gate for Android/KMP.
+
+## Verification Gates
+- [x] `./gradlew --no-build-cache --no-configuration-cache :composeApp:compileKotlinMetadata :composeApp:compileDebugKotlinAndroid`
+
+## Review Notes
+- Root cause: `confirmApproveAchPayment()` y `confirmRejectAchPayment()` retornaban temprano con `uiState.order == null`, generando no-op silencioso en vista de detalle ACH fuera de contexto de orden.
+- Fix aplicado: ambas acciones ahora resuelven `businessId` con fallback `business?.businessId ?: order?.businessId`, muestran `snackbar` si no hay negocio válido y no dependen de que exista orden seleccionada.
+- Post-action refresh: detalle ACH se refresca siempre; refresh de orden solo se ejecuta cuando existe contexto de orden.
+- Payload reject: `reason_text` ahora usa texto descriptivo por `reason_code` (`fraud`, `invalid_proof`, `amount_mismatch`, `reference_mismatch`), manteniendo `customReasonText` para `other`.
+- Follow-up notificaciones: en `AchPaymentReviewScreen` approve/reject/preview ahora usan el `payment_intent_id` canónico (`detail.paymentUid`) en vez del `paymentUid` de ruta; además `NotificationActionResolver` acepta `payment_intent_id`, `payment_id` e `id` como fallback.
+
+## Iteration 3 ACH Review UI Visual Refresh (Current)
+
+## Plan
+- [x] Redesign ACH review visual language (hero, cards, chips, spacing, hierarchy) to match provided mobile references while preserving behavior.
+- [x] Refactor commercial summary and expected-vs-detected presentation for clearer, app-style cards and parity labels.
+- [x] Polish findings, proof, and timeline sections with stronger visual grouping and readability on mobile.
+- [x] Verify compile gate for Android/KMP after UI changes.
+
+## Verification Gates
+- [x] `./gradlew --no-build-cache --no-configuration-cache :composeApp:compileKotlinMetadata :composeApp:compileDebugKotlinAndroid`
+
+## Review Notes
+- Se aplicó refresh visual de la pantalla ACH con dirección UI más cercana a los mocks: hero más jerárquico con badges (`estado`, `riesgo`, `score`), bloques con radios suaves y espaciado consistente.
+- `Resumen comercial` pasó a formato de tarjetas compactas en grid de 2 columnas con iconografía por campo para lectura rápida.
+- `Esperado vs Detectado` se transformó en filas comparativas tipo card con etiqueta de estado (`Coincide`/`No coincide`) para resaltar discrepancias.
+- `Hallazgos` se reorganizó en buckets verticales (riesgo sube/baja) para mejor legibilidad en mobile.
+- `Comprobante` ahora usa panel enmarcado con acciones y nota contextual más clara cuando preview/download no aplica.
+- `Timeline del pago` adoptó trazo vertical con puntos de estado y eventos en tarjetas secundarias.
+
+## Iteration 3 ACH Review Loader + Web Labels Follow-up (Current)
+
+## Plan
+- [x] Fix ACH proof preview infinite skeleton state by handling in-flight detail fetches and clearing loading state on early error exits.
+- [x] Align ACH review labels/texts with web copy for sections and fields (hero/commercial summary/comparison/findings/proof/timeline).
+- [x] Improve timeline event labeling/messages to web-equivalent wording (`Checkout ACH creado`, `Comprobante subido`, `OCR procesado`, etc.).
+- [x] Verify compile gate for Android/KMP and focused ACH normalizer tests.
+
+## Verification Gates
+- [x] `./gradlew --no-build-cache --no-configuration-cache :composeApp:compileKotlinMetadata :composeApp:compileDebugKotlinAndroid`
+- [x] `./gradlew --no-build-cache --no-configuration-cache :composeApp:testDebugUnitTest --tests '*AchPaymentNormalizerTest*'`
+
+## Review Notes
+- Se corrigió el loop de shimmer infinito en revisión ACH: cuando el detalle estaba en `in-flight`, ahora se espera el resultado (`waitForAchDetailInFlight`) y en salidas tempranas se limpia `achProofPreviewState.isLoading=false`.
+- En `loadAchReview`, si falla la carga de detalle/comprobante, el estado del preview ya no queda colgado en loading.
+- Se alineó copy de la pantalla ACH con web:
+- `Control antifraude`, `Sugerencia`, `Correo`, `Pedido`, `Banco Destino`, `Fecha de pago`, `Hallazgos y sugerencia de decisión`, `Timeline del pago`, `Descargar comprobante`.
+- `Esperado vs Detectado` ahora incluye `Cuenta destino`, `Banco` y `Fecha` además de monto/referencia.
+- Timeline ACH desde eventos backend quedó con labels/mensajes de paridad web (`Checkout ACH creado`, `Comprobante subido`, `OCR procesado`, etc.) y chips de estado (`Checkout Created`, `En revisión`, `Aprobado`).
+
+## Iteration 3 ACH Details Nested Payload + UUID Proof (Current)
+
+## Plan
+- [x] Adapt ACH detail normalization to current nested API response (`payment/account/proofs/events/latest_*`) with backward-compatible aliases.
+- [x] Support UUID string IDs for ACH `paymentId` and `proofId` across model/service/repository/provider so proof download endpoint works.
+- [x] Render proof preview correctly for image and PDF when proof is available only through authenticated binary endpoint.
+- [x] Update/expand ACH normalizer tests with nested payload coverage.
+- [x] Verify compile + focused tests.
+
+## Verification Gates
+- [x] `./gradlew --no-build-cache --no-configuration-cache :composeApp:compileKotlinMetadata :composeApp:compileDebugKotlinAndroid`
+- [x] `./gradlew --no-build-cache --no-configuration-cache :composeApp:testDebugUnitTest --tests '*AchPaymentNormalizerTest*'`
+
+## Review Notes
+- `AchPaymentNormalizer` ahora soporta contrato anidado del backend ACH (`payment`, `account`, `proofs[]`, `events`, `latest_fraud`, `latest_ocr`) y conserva compatibilidad con aliases legacy.
+- IDs ACH de pago/comprobante se migraron a `String` (UUID-safe) en modelo, servicio, repositorio y provider para construir correctamente `/payments/{paymentId}/proofs/{proofId}/file`.
+- Vista previa de comprobante ahora soporta PDF binario autenticado: el ViewModel genera `data:application/pdf;base64,...` y `PdfPreview` (Android/iOS) renderiza también data URIs además de enlaces remotos.
+- Se reforzó la UI de revisión ACH para leer `latest_fraud.features`/`rules`/`explanations`, y se evita mostrar `Abrir enlace` cuando la fuente es data URI.
+- Cobertura de tests ampliada en `AchPaymentNormalizerTest` con caso real de payload anidado + UUID + proof PDF.
+
+## Iteration 6 Notifications Cache Merge + Pull Refresh Flicker (Current)
+
+## Plan
+- [x] Preserve loaded notifications in memory/cache during pull refresh and merge first-page server payload by `id` instead of replacing.
+- [x] Keep cache de-duplicated on both restore and refresh merges to prevent duplicate rows after repeated reloads.
+- [x] Prevent empty-state flicker while pull-to-refresh is active by gating empty rendering with `!isRefreshing`.
+- [x] Verify compile + notification tests.
+
+## Verification Gates
+- [x] `./gradlew --no-build-cache --no-configuration-cache :composeApp:compileKotlinMetadata :composeApp:compileDebugKotlinAndroid`
+- [x] `./gradlew --no-build-cache --no-configuration-cache :composeApp:testDebugUnitTest --tests '*Notification*'`
+
+## Review Notes
+- `NotificationsService.refresh()` now merges `offset=0` refresh payload into existing loaded items when cache/list already exists, preserving immediate UI while pushing new notifications.
+- Merge path uses de-duplication by notification `id` and stable descending sort, applied for both live refresh and cached restore.
+- `NotificationsScreen` empty state now waits for refresh completion (`!isRefreshing`) so pull reload never flashes an empty list between frames.
+
+## Iteration 4 Payments Authz Scopes for SubUsers (Current)
+
+## Plan
+- [x] Add payments route authz policy gated by `invoice:create_payment_link`, `ach_payment:view`, `ach_payment:approve`, `ach_payment:reject` (+ payments beta).
+- [x] Map payments screens to the new route key so global authz redirection applies to all payments routes.
+- [x] Gate `Pagos y cobros` settings entry visibility with the same authz policy for authenticated sub-users.
+- [x] Verify compile and authz unit tests.
+
+## Verification Gates
+- [x] `./gradlew --no-build-cache --no-configuration-cache :composeApp:compileKotlinMetadata :composeApp:compileDebugKotlinAndroid :composeApp:testDebugUnitTest --tests '*AuthzEvaluatorTest*'`
+
+## Review Notes
+- Se agregó `RouteKey.PAYMENTS_PAGE` con policy de acceso por cualquiera de los scopes: `invoice:create_payment_link`, `ach_payment:view`, `ach_payment:approve`, `ach_payment:reject`, además de beta `PAYMENTS`.
+- Se mapearon todas las pantallas de pagos (`Payments`, `PaymentsHomeScreen`, `PaymentsYappyScreen`, `PaymentsTransferenceScreen`, `PaymentsPaypalScreen`, `PaymentsPaypalOnboardingScreen`) al nuevo `RouteKey.PAYMENTS_PAGE` para que aplique redirección authz global.
+- El botón `Pagos y cobros` en Settings ahora se muestra solo cuando `uiState.hasPaymentsAccess` es `true` (incluye bypass de owner y validación real para subusuarios).
+- Se añadieron pruebas en `AuthzEvaluatorTest` para `RouteKey.PAYMENTS_PAGE` con y sin scopes/beta.
+
+## Iteration 6 Notifications Screen Visual Parity (Current)
+
+## Plan
+- [x] Rediseñar `NotificationsScreen` para paridad visual con mock (header, tabs, CTA y cards) manteniendo componentes del design system.
+- [x] Agregar filtro local por pestañas (`Todas`, `No leídas`, `Importantes`, `Transacciones`) y agrupar lista por día (`Hoy`, `Ayer`, fecha).
+- [x] Mantener acciones funcionales existentes (`tap`, `dismiss`, `dismiss all`, `load more`) y agregar `Marcar todas como leídas` para items cargados.
+- [x] Ajustar strings ES/EN para nuevos textos de UI.
+- [x] Ejecutar gates de compilación y pruebas de notificaciones.
+
+## Verification Gates
+- [x] `./gradlew --no-build-cache --no-configuration-cache :composeApp:compileKotlinMetadata :composeApp:compileDebugKotlinAndroid`
+- [x] `./gradlew --no-build-cache --no-configuration-cache :composeApp:testDebugUnitTest --tests '*Notification*'`
+
+## Review Notes
+- `NotificationsScreen` se rediseñó con layout cercano al mock: chips superiores con conteos, CTA `Marcar todas como leídas`, secciones por día (`Hoy`, `Ayer`, fecha), tarjetas de notificación con ícono por tipo, punto de no leído en color secundario y banner informativo final.
+- Se añadió filtrado local por pestañas (`Todas`, `No leídas`, `Importantes`, `Transacciones`) sin cambiar contrato API ni paginación existente.
+- Se mantuvieron acciones previas (`tap`, `dismiss`, `dismiss all`, `load more`) y se agregó acción masiva `markAllLoadedAsRead()` en `NotificationsViewModel` usando actualización optimista + sync de `unread_count`.
+- Se añadieron nuevos textos i18n ES/EN para filtros, secciones, CTA y banner.
+- Se agregó ícono de ajustes en el app bar de `PosScreens.NotificationsScreen` para alinear cabecera con referencia visual.
+- Se añadió cobertura unitaria para `markAllLoadedAsRead()` en `NotificationsViewModelTest`.
+- Follow-up de paleta: tabs, íconos de acento y botones de notificaciones migrados de `primary` a `secondary`.
+- Gates en verde (warnings existentes de KSP/KMP sin bloquear).
+
+## Iteration 6 Analytics Events Payments Core + Notifications (Current)
+
+## Plan
+- [x] Extender `AnalyticsService` con helpers tipados para todos los eventos nuevos y utilidades de parámetros compartidos.
+- [x] Instrumentar eventos de Payments Core en métodos de pago (settings/onboarding/config), printer onboarding/config, gastos y órdenes.
+- [x] Instrumentar `order_creation_payment_option_selected` en creación de orden (MANUAL|LINK|DRAFT).
+- [x] Instrumentar eventos de Notifications (`received/opened/read/archived`) con `business_id`, `user_id`, `user_email`, `notification_id`, `notification_type`.
+- [x] Ajustar DI/tests impactados y verificar compilación + pruebas de notificaciones.
+
+## Verification Gates
+- [x] `./gradlew --no-build-cache --no-configuration-cache :composeApp:compileKotlinMetadata :composeApp:compileDebugKotlinAndroid`
+- [x] `./gradlew --no-build-cache --no-configuration-cache :composeApp:testDebugUnitTest --tests '*Notification*'`
+
+## Review Notes
+- `AnalyticsService` ahora expone helpers tipados para todos los eventos de este alcance (Payments Core + Printer + Expense/Order payments + Notifications), con base params (`surface`, `flow`, `action`) y sanitización de `error_code`.
+- Se instrumentó Payments Settings/Onboarding (viewed/started/blocked/completed/failed/skipped) y configuración de métodos (`payment_method_config_attempted/succeeded/failed`) en acciones Yappy/ACH/PayPal.
+- Se instrumentó printer onboarding/config (`opened`, `step_viewed`, `dismissed`, `completed`, `action_clicked`, `config_attempted/succeeded/failed`) en pantalla y ViewModel.
+- Se instrumentó gastos y órdenes para acciones y submits de pago (`opened`, `submit_attempted/succeeded/failed`, `delete_succeeded/failed`, `link_action`) y selección de opción de pago en creación de orden (`MANUAL|LINK|DRAFT`).
+- Notifications ahora registran `notification_received/opened/read/archived` con `business_id`, `user_id`, `user_email`, `notification_id`, `notification_type` desde el servicio de dominio.
+- Se ajustó DI para nuevas dependencias (`AnalyticsService` y `IAuthService`) y se actualizaron tests de notifications para el contrato nuevo.
+- Gates ejecutados y en verde (warnings preexistentes de KSP/Kotlin sin bloqueo).
+
+## Iteration 5 In-App Notifications MVP (Current)
+
+## Plan
+- [x] Extend notifications domain model with optional `priority` and `status`, plus derived state helpers for unread/read/dismissed/removed.
+- [x] Implement notifications list ViewModel + screen with first load, pagination (`loadMore`), dismiss one, dismiss all loaded, unread dot, status/priority chips, and shimmer first-load.
+- [x] Resolve notification actions by URL contract (ACH in-app route, unknown absolute external, unknown relative unsupported message).
+- [x] Integrate Home header bell with unread badge cap (`99+`) and navigation to notifications screen.
+- [x] Add route wiring (`PosScreens.NotificationsScreen`) and authz mapping for the new screen.
+- [x] Add notification-focused unit tests for action resolver, model/badge mapping, and ViewModel workflows.
+- [x] Fix test determinism by injecting `ioDispatcher` into `NotificationsViewModel` and using test dispatcher in unit tests.
+- [x] Add missing Spanish resource strings for notifications and align fallback kind icon to bell.
+
+## Verification Gates
+- [x] `./gradlew --no-build-cache --no-configuration-cache :composeApp:compileKotlinMetadata :composeApp:compileDebugKotlinAndroid`
+- [x] `./gradlew --no-build-cache --no-configuration-cache :composeApp:testDebugUnitTest --tests '*Notification*'`
+
+## Review Notes
+- Home top card now supports an optional trailing action and renders a notifications bell with red unread badge (`1..99`, `99+`, hidden at `0`).
+- Notifications screen supports list visibility filtering (`!dismissed && !removed`), item dismiss, dismiss-all-loaded, load-more pagination, and unread secondary dot.
+- Notification kind-to-icon mapping includes the requested registered kinds and now uses bell icon fallback.
+- Row tap marks unread notifications seen optimistically in UI and sends background `markSeen`; dismiss actions use `LoadingSheet` success/error feedback.
+- Notification action resolver behavior matches the locked assumptions for in-app, external, and unsupported relative URLs.
+- Notification unit tests now pass after dispatcher injection refactor in ViewModel.
+
+## Follow-up Fixes (Apr 22, 2026)
+- [x] Update Home bell icon to outlined visual style and move badge closer to icon.
+- [x] Enforce Home top-card layout as `[logo][business name][spacer][bell]` with bell pinned at top-right.
+- [x] Fix crash when opening notifications by changing Koin registration for `NotificationsViewModel` from `viewModelOf(::NotificationsViewModel)` to explicit factory with only `notificationsService`.
+- [x] Increase bell icon size and vertically align bell container with business name row.
+
+### Verification Gates
+- [x] `./gradlew --no-build-cache --no-configuration-cache :composeApp:compileKotlinMetadata :composeApp:compileDebugKotlinAndroid`
+- [x] `./gradlew --no-build-cache --no-configuration-cache :composeApp:testDebugUnitTest --tests '*Notification*'`
+
+## Iteration 4 PayPal Onboarding 4-Step Parity (Current)
+
+## Plan
+- [x] Replace generic PayPal onboarding with dedicated 4-step flow (Cómo funciona, Requisitos, Costos, Configuración).
+- [x] Implement PayPal onboarding step content/UI parity including hero image, bullets, alert, and status rows with icons.
+- [x] Keep step-4 actions wired to existing endpoints (`connect` and `billing agreement`) and open returned URLs in browser.
+- [x] Transition onboarding to success screen once both PayPal statuses are complete.
+- [x] Verify compile gate for Android/KMP after PayPal onboarding changes.
+
+## Verification Gates
+- [x] `./gradlew --no-build-cache --no-configuration-cache :composeApp:compileKotlinMetadata :composeApp:compileDebugKotlinAndroid`
+
+## Review Notes
+- PayPal onboarding now follows dedicated 4-step wizard (info, requisitos, costos, configuración) with its own stepper and footer actions.
+- Step 4 renders connection status for `Cuenta PayPal conectada` and `Autorización de cobro` with icon + status pill, plus CTA buttons that open connect and billing-agreement URLs.
+- Finalization validates fresh profile state and advances to success screen only when both PayPal states are complete.
+- Compile gate passed successfully (warnings only).
+
+## Iteration 4 Commissions Tabs Secondary Color (Current)
+
+## Plan
+- [x] Update `Transacciones` / `Ciclos de cobro` tab selector styling to secondary color palette.
+- [x] Verify compile gate for Android/KMP after style change.
+
+## Verification Gates
+- [x] `./gradlew --no-build-cache --no-configuration-cache :composeApp:compileKotlinMetadata :composeApp:compileDebugKotlinAndroid`
+
+## Review Notes
+- Tabs now use `secondary` styling: selected pill background + onSecondary label, unselected label in secondary.
+- Compile gate passed successfully (warnings only).
+
+## Iteration 4 Duplicate Content Titles Cleanup (Current)
+
+## Plan
+- [x] Remove in-content duplicate title `Métodos de pago` from payments home content section.
+- [x] Remove in-content duplicate method titles (`Yappy`, `ACH con comprobante`, `PayPal`) from method detail content.
+- [x] Verify compile gate for Android/KMP after UI cleanup.
+
+## Verification Gates
+- [x] `./gradlew --no-build-cache --no-configuration-cache :composeApp:compileKotlinMetadata :composeApp:compileDebugKotlinAndroid`
+
+## Review Notes
+- Removed duplicated content titles so app bar remains the single source of page naming in payments home and method detail routes.
+- Compile gate passed successfully (warnings only).
+
+## Iteration 4 ACH Persistence Bug Fix (Current)
+
+## Plan
+- [x] Corregir persistencia de estado configurado ACH al volver desde Home cuando `config-summary` no envía `enabled`.
+- [x] Forzar refresh de `GET /api/v1/payments/ach/status` cuando se confirme acceso de pagos para evitar race de bootstrap.
+- [x] Verificar compilación KMP/Android.
+
+## Verification Gates
+- [x] `./gradlew --no-build-cache --no-configuration-cache :composeApp:compileKotlinMetadata :composeApp:compileDebugKotlinAndroid`
+
+## Review Notes
+- `AchMethod.enabled` ahora asume `true` por defecto cuando backend omite el campo en `config-summary`, evitando falso negativo de método no configurado.
+- Se añadió refresh explícito de status ACH en `observeBetaAccess()` para garantizar estado consistente al reingresar a la pantalla.
+
+## Iteration 4 ACH Configured Parity Fixes (Current)
+
+## Plan
+- [x] En ACH configurado ocultar código de banco y usar selección por banco (nombre) con code+name interno.
+- [x] Mapear tipo de cuenta con labels `Ahorros`/`Corriente` y códigos `savings`/`checking`.
+- [x] Mostrar número de cuenta enmascarado desde estado ACH y exigir reingreso para actualizar.
+- [x] Quitar input de instrucciones en ACH configurado.
+- [x] Estilar botón `Desactivar ACH` con color de warning/error.
+- [x] Permitir actualización de configuración ACH vía `PUT /api/v1/payments/ach/account`.
+- [x] Verificar compilación KMP/Android.
+
+## Verification Gates
+- [x] `./gradlew --no-build-cache --no-configuration-cache :composeApp:compileKotlinMetadata :composeApp:compileDebugKotlinAndroid`
+
+## Review Notes
+- El detalle configurado de ACH ahora muestra el banco por nombre (sin exponer `bank_code`) y el número enmascarado.
+- Para actualizar ACH, el usuario debe ingresar nuevamente el número de cuenta; el formulario no reutiliza el valor enmascarado.
+- El refresco de estado ACH sigue usando `GET /api/v1/payments/ach/status` como fuente de estado en pantalla.
+
+## Iteration 4 General Switch Color (Current)
+
+## Plan
+- [x] Cambiar el color del switch de configuración general a `secondary`.
+- [x] Verificar compilación Android.
+
+## Verification Gates
+- [x] `./gradlew --no-build-cache --no-configuration-cache :composeApp:compileDebugKotlinAndroid`
+
+## Review Notes
+- El switch de `Emitir factura automáticamente...` ahora usa `MaterialTheme.colorScheme.secondary` en thumb y track.
+
+## Iteration 4 Fee Badge Mapping Fix (Current)
+
+## Plan
+- [x] Ajustar comisiones mostradas por método configurado según regla de negocio.
+- [x] Verificar compilación Android.
+
+## Verification Gates
+- [x] `./gradlew --no-build-cache --no-configuration-cache :composeApp:compileDebugKotlinAndroid`
+
+## Review Notes
+- Fee badges actualizados:
+- Yappy `1%`
+- ACH `$0.27`
+- PayPal `1%`
+
+## Iteration 4 Header Cleanup (Current)
+
+## Plan
+- [x] Remover botón `Atrás` del header de detalle de método en Payments onboarding/config.
+- [x] Limpiar import no usado asociado al ícono de back.
+- [x] Verificar compilación Android.
+
+## Verification Gates
+- [x] `./gradlew --no-build-cache --no-configuration-cache :composeApp:compileDebugKotlinAndroid`
+
+## Review Notes
+- El header de detalle de método queda solo con título centrado, sin acción de retroceso en esquina izquierda.
+
+## Iteration 4 ACH Bank Catalog Parity (Current)
+
+## Plan
+- [x] Reemplazar lista corta de bancos ACH por catálogo completo (código+nombre) provisto para dropdown de onboarding ACH.
+- [x] Mantener mapeo de selección para guardar `bankCode` y `bankName` en `achForm`.
+- [x] Verificar compilación KMP/Android.
+
+## Verification Gates
+- [x] `./gradlew --no-build-cache --no-configuration-cache :composeApp:compileKotlinMetadata :composeApp:compileDebugKotlinAndroid`
+
+## Review Notes
+- El selector ACH ahora usa el catálogo completo alineado al enum/opciones web, incluyendo nombres oficiales de bancos.
+
+## Iteration 4 ACH Onboarding Carousel (Current)
+
+## Plan
+- [x] Implement ACH onboarding as a guided 3-step flow aligned with Yappy onboarding pattern.
+- [x] Add Step 1 with promo image and Spanish "Cómo funciona" copy.
+- [x] Add Step 2 "Costos y cobros" content with bullet structure.
+- [x] Add Step 3 ACH configuration form with bank dropdown, account type dropdown, account number and account name fields.
+- [x] Add ACH onboarding footer with step-aware CTA labels (`Continuar` / `Guardar configuración ACH`).
+- [x] Apply secondary color styling to ACH onboarding action buttons.
+- [x] Verify compile gates.
+
+## Verification Gates
+- [x] `./gradlew --no-build-cache --no-configuration-cache :composeApp:compileKotlinMetadata :composeApp:compileDebugKotlinAndroid`
+
+## Review Notes
+- ACH onboarding now follows dedicated method flow with stepper parity and method-specific footer actions.
+- Step 3 saves ACH config through existing typed request flow and transitions to success state in onboarding mode.
+
+## Iteration 4 Yappy Onboarding Visual Polish (Current)
+
+## Plan
+- [x] Set payments screen background to `MaterialTheme.colorScheme.background`.
+- [x] Center Yappy title horizontally in method onboarding header.
+- [x] Add `Guías útiles` title and style guide links with secondary color in requirements step.
+- [x] Apply bold emphasis to requested fee/cost tokens in Yappy costs copy.
+- [x] Add eye icon to tutorial text button in Yappy config step.
+- [x] Verify compile gates.
+
+## Verification Gates
+- [x] `./gradlew --no-build-cache --no-configuration-cache :composeApp:compileKotlinMetadata :composeApp:compileDebugKotlinAndroid`
+
+## Review Notes
+- Yappy onboarding copy/styles now match requested final polish details.
+- Header keeps a centered title while preserving back action at the left side.
+
+## Iteration 4 Yappy Onboarding Carousel (Current)
+
+## Plan
+- [x] Convert Yappy onboarding into 4 guided steps with explicit stepper progression.
+- [x] Implement Step 1 product info with remote promo image and Spanish copy parity.
+- [x] Implement Step 2 requirements with bullet list + external PDF guides.
+- [x] Implement Step 3 fees/costs explanation with bullet list and compatibility alert.
+- [x] Implement Step 4 configuration form + tutorial link + `Conectar Yappy` action.
+- [x] Update Yappy success behavior to show success state and auto-return to payment methods.
+- [x] Verify compile gates after ViewModel + Compose updates.
+
+## Verification Gates
+- [x] `./gradlew --no-build-cache --no-configuration-cache :composeApp:compileKotlinMetadata :composeApp:compileDebugKotlinAndroid`
+
+## Review Notes
+- Yappy now uses a dedicated onboarding path with stepper `1..4`; ACH/PayPal onboarding flow remains unchanged.
+- Step content matches requested web parity structure and keeps all copy in Spanish.
+- External links open through the existing payment UI event pipeline (`OpenExternalUrl`) to preserve platform behavior.
+- On successful Yappy connection, screen enters success state and returns automatically to the methods list.
+
+## Iteration 4 Payments Web Parity Polish (Current)
+
+## Plan
+- [x] Align settings entry with web parity by adding `Nuevo` badge in `Pagos y cobros`.
+- [x] Align payment channels UX so full row tap opens method detail (not only chevron tap).
+- [x] Align PayPal onboarding step-2 behavior to show warning toast on continue attempt when not configured.
+- [x] Keep compile verification green after UI/design-system changes.
+
+## Verification Gates
+- [x] `./gradlew --no-build-cache --no-configuration-cache :composeApp:compileKotlinMetadata :composeApp:compileDebugKotlinAndroid`
+
+## Review Notes
+- Added `badgeText` support to `SettingsTextButton` and applied `Nuevo` badge for `Pagos y cobros` entry in Settings.
+- Updated channels list interaction in payments home so each visible method row is fully tappable and opens method detail.
+- Updated onboarding footer behavior for PayPal step 2: primary action remains tappable and delegates validation to ViewModel, which now surfaces the expected warning when PayPal is not fully configured.
+- Compile gates passed on April 17, 2026.
+
+## Settings Payment Entry Visibility Fix TODO
+
+## Plan
+- [x] Identify why payment methods option is not visible in Settings screen.
+- [x] Restore settings entry and route wiring to payments flow.
+- [x] Verify Android compile.
+
+## Verification Gates
+- [x] `./gradlew --no-build-cache --no-configuration-cache :composeApp:compileDebugKotlinAndroid`
+
+## Review Notes
+- Root cause: payment-methods entry was fully disabled in `SettingsScreen` behind a temporary "HIDDEN" block.
+- Fix: restored "Pagos y cobros" directly in the Settings action list (`SettingsTextButton`) and wired CTA to `PosScreens.Payments`.
+- Result: all users with Settings access now see and can open payment methods configuration from Settings.
+
+## Plan
+- [x] Create and persist multi-iteration implementation plan artifact.
+- [x] Iteration 1 foundation: authz + contracts + providers/repositories/services + model extensions + error mappings.
+- [x] Iteration 2 orders creation/detail payment-link + retry invoice UX.
+- [x] Iteration 3 ACH review (inline + dedicated screen).
+- [ ] Iteration 4 settings/payments redesign + ACH + fees.
+- [ ] Iteration 5 in-app notifications module + topbar dropdown UX.
+- [ ] Iteration 6 analytics parity + hardening + localization sweep.
+
+## Iteration 3 Checklist
+- [x] Add ACH inline section in order detail payment rows with lazy detail load, cache and in-flight de-dup.
+- [x] Add ACH approve/reject actions from order detail with permission gates and success refresh.
+- [x] Add order detail proof preview modal/action for ACH payments.
+- [x] Add dedicated ACH review route + screen (loading/error/content states).
+- [x] Add dedicated ACH review reject modal and score-help modal.
+- [x] Add proof panel behavior in review screen (blob-first attempt, URL fallback, download policy).
+- [x] Verify compile/tests and document outcome in `tasks/lessons.md`.
+
+## Verification Gates
+- [x] `./gradlew :composeApp:compileKotlinMetadata`
+- [x] `./gradlew :composeApp:compileDebugKotlinAndroid`
+- [x] `./gradlew :composeApp:testDebugUnitTest --tests '*PaymentLinkResolverTest*' --tests '*AchPaymentNormalizerTest*' --tests '*AuthzEvaluatorTest*'`
+- [x] `./gradlew --no-build-cache --no-configuration-cache :composeApp:compileKotlinMetadata :composeApp:compileDebugKotlinAndroid :composeApp:testDebugUnitTest --tests '*PaymentLinkResolverTest*' --tests '*AchPaymentNormalizerTest*' --tests '*AuthzEvaluatorTest*'`
+
+## Review Notes
+- Iteration 0 artifacts created:
+- `tasks/payments-settings-notifications-kmp-replication-plan.md`
+- tracking section in `tasks/todo.md`.
+- Iteration 1 completed with foundation scope:
+- authz + beta additions for payment links and ACH actions/routes.
+- `Order` model extensions for payment links array/fallback aliases and ACH-automatic flag.
+- financial profile/payment summary contract extensions (ACH, fee billing, auto-invoice).
+- orders provider/repository/service additions for create payment link, ACH detail/approve/reject, proof download.
+- payments provider/repository/service additions for auto-invoice, ACH status/account/config/disable, fee summary/transactions/batches.
+- new in-app notifications module (provider/repository/service + cache scaffolding) wired in DI.
+- new shared normalizers/utilities:
+- `PaymentLinkResolver`
+- `AchPaymentNormalizer`
+- extended API error code mapping for `O_RP_001/002/004/005`, `PAY_001`, `PAY_002`, `PAY_PP_001`, `INV_001`, `INV_002`.
+- tests added and passing:
+- `PaymentLinkResolverTest`
+- `AchPaymentNormalizerTest`
+- `AuthzEvaluatorTest` (new payment/ACH gate coverage).
+- Iteration 2 completed:
+- POS payment-link preflight now forces `FinancialProfileService.refresh(...)` before enabling link flow or showing settings redirect dialog.
+- POS link-tab selection marks `Nuevo` as seen and stores a full payment-step checkpoint snapshot before redirecting to payment settings.
+- Order detail now resolves link source via `PaymentLinkResolver` and applies action matrix:
+- `Generar Link de Pago` when eligible (authz + configured methods + unpaid + pending balance + no open link).
+- `Copiar Link de Pago` and `Compartir Link de Pago` when an active link exists.
+- New generate-link modal in order detail with optional amount, expiry presets (`1h`, `12h`, `24h`, `3 días`) and custom minutes validation.
+- Order detail now renders shimmer skeleton on first-load, including payment-link/action surfaces while detail data is null.
+- Retry invoice flow now shows:
+- success dialog (`Descargar factura`, `Compartir factura`) when invoice gets issued,
+- warning dialog with backend message fallback when still pending verification.
+- Invoice success dialog now includes structured visual parity details for `Total facturado` and `CUFE`, and share payload includes those fields.
+- Iteration 3 completed:
+- Order detail now renders ACH automatic-payment inline metadata/actions with lazy detail fetch, in-memory cache and in-flight request dedupe.
+- ACH approve/reject actions are enabled from order detail and dedicated ACH review, gated by authz and state, with post-action order/detail refresh.
+- Added dedicated ACH review route/screen with loading/error/content states plus sections for hero, commercial summary, `Esperado vs Detectado`, hallazgos split, proof panel and timeline.
+- Added ACH modals in dedicated review context: reject with reason-code/custom text and score explanation.
+- Proof handling now enforces policy parity: blob-first preview/download, URL fallback, no preview for rejected payments, and download button only for approved statuses.
+- Verification passed on April 17, 2026:
+- `./gradlew --no-build-cache --no-configuration-cache :composeApp:compileKotlinMetadata :composeApp:compileDebugKotlinAndroid :composeApp:testDebugUnitTest --tests '*AchPaymentNormalizerTest*' --tests '*AuthzEvaluatorTest*'`
+
 # iOS Network Images Not Loading TODO
 
 ## Plan
@@ -1621,3 +2196,92 @@
 - Verification passed on April 3, 2026: `./gradlew :composeApp:compileDebugKotlinAndroid`.
 - Follow-up fix (April 3, 2026): `resetForNewSale()` no longer forces billing point index `0`; it now resolves cached branch/billing-point (or a safe current fallback) and reapplies it so the next invoice keeps the last used selection.
 - Follow-up fix #2 (April 3, 2026): when entering POS from Home, business context could become available after branch list hydration; now `PosViewModel` reapplies persisted branch/billing-point once business is loaded, so prefill works even on fresh Home -> POS entry.
+
+# Payments Navigation Split (Titles + Back Stack) TODO
+
+## Plan
+- [x] Separar navegación de pagos en rutas dedicadas: métodos, Yappy, ACH con comprobante y PayPal.
+- [x] Hacer que el título del app bar sea por ruta (`Métodos de pago`, `Yappy`, `ACH con comprobante`, `PayPal`).
+- [x] Ajustar `OnboardingPaymentScreen` para modo home vs modo detalle por método sin mezclar vistas en una sola ruta.
+- [x] Corregir back behavior: desde detalle de método regresar a lista de métodos (no salir a Settings).
+- [x] Ejecutar gate de compilación Android/KMP.
+
+## Verification Gates
+- [x] `./gradlew --no-build-cache --no-configuration-cache :composeApp:compileKotlinMetadata :composeApp:compileDebugKotlinAndroid`
+
+## Review Notes
+- Se añadió `Res.string.ach_with_proof` para título de la ruta ACH.
+- `PaymentsHomeScreen` ahora usa `Res.string.payment_methods` para título de página principal de métodos.
+- `addPaymentsNavigation(...)` ahora reutiliza `PaymentMethodsViewModel` en las rutas de método y usa `OnboardingPaymentScreen` en modo detalle por método.
+- Se removió la lógica legacy del app bar que inyectaba `YappyViewModel` para interceptar back; el back vuelve al comportamiento de `navigateUp()`, y el manejo de flujo se hace por rutas.
+
+## Follow-up Bugfix (method click showed shimmer in home)
+- [x] Al abrir método desde `ConfiguredList`, inicializar estado de método (`viewModel.onOpenMethod(method)`) antes de navegar para evitar estado intermedio inválido.
+- [x] Al salir de rutas de método (botón interno o back top bar), restaurar estado home con `onEnterHomeRoute()` antes de `navigateUp()`.
+- [x] Eliminar fallback de shimmer en home para `MethodDetail*` y mostrar lista configurada como fallback seguro.
+- [x] Re-ejecutar gate de compilación.
+
+### Verification Gate
+- [x] `./gradlew --no-build-cache --no-configuration-cache :composeApp:compileKotlinMetadata :composeApp:compileDebugKotlinAndroid`
+
+## Crash Fix (Yappy onboarding "Atrás")
+- [x] Reemplazar `getBackStackEntry(PosScreens.Payments.name)` por owner seguro en rutas de pagos.
+- [x] Usar `rememberSafeGraphOwner(...)` con fallback al `backStackEntry` actual para evitar crash cuando el grafo `Payments` ya fue removido del back stack durante transición.
+- [x] Verificar compilación Android.
+- [x] Corregir doble navegación al salir de onboarding de método (evitar pop extra a Settings al tocar "Atrás").
+
+### Verification Gate
+- [x] `./gradlew --no-build-cache --no-configuration-cache :composeApp:compileDebugKotlinAndroid`
+
+# Notifications Pagination Follow-up TODO
+
+## Plan
+- [x] Cambiar batch de notificaciones a `10` para carga inicial y `load more`.
+- [x] Hacer top-up automático en primera carga cuando el primer payload deja `<= 1` notificación visible.
+- [x] Cubrir el caso con test unitario del `NotificationsViewModel`.
+
+## Verification Gates
+- [x] `./gradlew --no-build-cache --no-configuration-cache :composeApp:testDebugUnitTest --tests '*Notification*'`
+
+## Review Notes
+- El `NotificationsViewModel` ahora usa `DEFAULT_PAGE_SIZE = 10`.
+- En `refreshFirstPage`, si la primera página deja muy pocos ítems visibles por filtros (`dismissed/removed`), solicita páginas adicionales (offset incremental) hasta completar visibilidad razonable o agotar `total`.
+
+# Notifications UI Interaction Follow-up TODO
+
+## Plan
+- [x] Reemplazar CTA de descarte (`X`) por gesto swipe en cada notificación.
+- [x] Remover acción de engranaje del app bar en `NotificationsScreen`.
+- [x] Mostrar solo hora dentro de cada card (la fecha ya vive en los headers de sección).
+- [x] Ejecutar verificación de compilación + tests de notificaciones.
+- [x] Endurecer swipe para requerir gesto casi completo antes de descartar (evitar falsos positivos durante scroll).
+
+## Verification Gates
+- [x] `./gradlew --no-build-cache --no-configuration-cache :composeApp:compileDebugKotlinAndroid`
+- [x] `./gradlew --no-build-cache --no-configuration-cache :composeApp:testDebugUnitTest --tests '*Notification*'`
+
+## Review Notes
+- Swipe habilitado `EndToStart` con fondo de acción de borrado en color `secondary`; el ícono de cierre inline fue eliminado.
+- `PosScreens.NotificationsScreen` quedó sin acciones de top bar (sin engranaje).
+- El timestamp en card se normalizó a formato de hora `HH:mm`.
+- Ajuste de compatibilidad Material3: el estado visual de swipe usa `targetValue == SwipeToDismissBoxValue.EndToStart` para esta versión de Compose.
+- Se configuró `positionalThreshold` al `95%` del ancho (`FULL_SWIPE_DISMISS_THRESHOLD_FRACTION = 0.95f`) para exigir full swipe práctico antes de disparar `dismiss`.
+
+# Notifications UI Tweaks Follow-up TODO
+
+## Plan
+- [x] Cambiar `Load more` de botón primario a `TextButtonS` con color `secondary`.
+- [x] Remover tarjeta informativa "Tus notificaciones se actualizan en tiempo real".
+- [x] Agregar pull-to-refresh sobre la lista para recargar notificaciones.
+- [x] Exponer estado `isRefreshing` y acción `refreshNotifications()` en ViewModel/State.
+- [x] Ejecutar compilación Android y tests de notificaciones.
+
+## Verification Gates
+- [x] `./gradlew --no-build-cache --no-configuration-cache :composeApp:compileDebugKotlinAndroid`
+- [x] `./gradlew --no-build-cache --no-configuration-cache :composeApp:testDebugUnitTest --tests '*Notification*'`
+
+## Review Notes
+- `NotificationsContent` ahora usa `TextButtonS` para `notifications_load_more` con `MaterialTheme.colorScheme.secondary`.
+- Se eliminó `NotificationsInfoCard` y sus strings asociadas del flujo de render.
+- Se añadió `rememberPullRefreshState` + `PullRefreshIndicator` y `Modifier.pullRefresh(...)` siguiendo patrón de listas existentes (Orders/Expenses/Quotes).
+- Se añadió `isRefreshing` en `NotificationsState` y `refreshNotifications()` en `NotificationsViewModel` para recarga manual por swipe.

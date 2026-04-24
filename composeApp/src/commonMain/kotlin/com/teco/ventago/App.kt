@@ -78,10 +78,10 @@ import com.teco.ventago.design_system.theme.cardContainerColor
 import com.teco.ventago.features.auth.domain.IAuthService
 import com.teco.ventago.features.printers.domain.PrinterQrEntry
 import com.teco.ventago.features.printers.ui.viewmodel.PrinterEntryContext
+import com.teco.ventago.features.payments.ui.home.viewmodel.PaymentMethodsViewModel
 import com.teco.ventago.features.pos.ui.viewmodel.FlowMode
 import com.teco.ventago.features.pos.ui.viewmodel.PosState
 import com.teco.ventago.features.pos.ui.viewmodel.PosViewModel
-import com.teco.ventago.features.payments.ui.yappy.viewmodel.YappyViewModel
 import com.teco.ventago.navigation.BottomNavKey
 import com.teco.ventago.navigation.LocalNavController
 import com.teco.ventago.navigation.Navigation
@@ -348,44 +348,29 @@ fun App(
 
                         )
                     } else {
-                        // Get Yappy ViewModel state for top app bar back button interception
+                        val isPaymentMethodScreen = currentScreen == PosScreens.PaymentsYappyScreen ||
+                            currentScreen == PosScreens.PaymentsTransferenceScreen ||
+                            currentScreen == PosScreens.PaymentsPaypalScreen ||
+                            currentScreen == PosScreens.PaymentsPaypalOnboardingScreen
                         val paymentsBackStackEntry = remember(currentScreen) {
-                            if (currentScreen == PosScreens.PaymentsYappyScreen) {
-                                runCatching {
-                                    navController.getBackStackEntry(PosScreens.Payments.name)
-                                }.getOrNull()
+                            if (isPaymentMethodScreen) {
+                                runCatching { navController.getBackStackEntry(PosScreens.Payments.name) }.getOrNull()
                             } else {
                                 null
                             }
                         }
-                        
-                        val yappyViewModel = if (paymentsBackStackEntry != null) {
-                            koinViewModel<YappyViewModel>(viewModelStoreOwner = paymentsBackStackEntry)
-                        } else {
-                            null
+                        val paymentMethodsViewModel = paymentsBackStackEntry?.let {
+                            koinViewModel<PaymentMethodsViewModel>(viewModelStoreOwner = it)
                         }
-                        
-                        val yappyUiState by yappyViewModel?.uiState?.collectAsState() 
-                            ?: remember { mutableStateOf(com.teco.ventago.features.payments.ui.yappy.viewmodel.YappyUiState()) }
-                        
-                        val yappyHelpNeeded = if (currentScreen == PosScreens.PaymentsYappyScreen && yappyViewModel != null) {
-                            !yappyUiState.linkedYappyAccount && !yappyViewModel.canConfigureYappy()
-                        } else {
-                            false
-                        }
-                        
                         DMTopAppBar(
                             title = appBarTitle,
                             showBackButton = currentScreen.showAppBar && currentScreen.showBackButton &&navController.previousBackStackEntry != null,
                             navigateBack = {
                                 if (navController.previousBackStackEntry != null) {
-                                    // Special handling for YappyScreen - show help modal if not configured
-                                    if (yappyHelpNeeded) {
-                                        // Store flag to show help sheet in YappyScreen
-                                        backStackEntry?.savedStateHandle?.set("show_yappy_help", true)
-                                    } else {
-                                        navController.navigateUp()
+                                    if (isPaymentMethodScreen) {
+                                        paymentMethodsViewModel?.onEnterHomeRoute()
                                     }
+                                    navController.navigateUp()
                                 }
                             },
                             actions = {

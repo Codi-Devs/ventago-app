@@ -121,6 +121,7 @@ kotlin {
         }
         commonTest.dependencies {
             implementation(libs.kotlin.test)
+            implementation("org.jetbrains.kotlinx:kotlinx-coroutines-test:1.10.1")
         }
 
         appleMain.dependencies {
@@ -138,8 +139,8 @@ android {
         applicationId = "com.teco.ventago"
         minSdk = libs.versions.android.minSdk.get().toInt()
         targetSdk = libs.versions.android.targetSdk.get().toInt()
-        versionCode = 35
-        versionName = "1.4.3"
+        versionCode = 36
+        versionName = "1.4.4"
     }
     packaging {
         resources {

@@ -2,6 +2,7 @@ package com.teco.ventago.features.printers.ui.viewmodel
 
 import androidx.lifecycle.viewModelScope
 import com.teco.ventago.core.BaseViewModel
+import com.teco.ventago.core.firebase.AnalyticsService
 import com.teco.ventago.core.logger.ILoggerService
 import com.teco.ventago.core.logger.Log
 import com.teco.ventago.core.logger.LogLevel
@@ -28,6 +29,7 @@ class PrinterOnboardingViewModel(
     private val discoveryService: PrinterDiscoveryService,
     private val branchService: BranchService,
     private val logger: ILoggerService,
+    private val analyticsService: AnalyticsService,
     entryContext: String = PrinterEntryContext.SETTINGS.name,
     private val preselectedBranchCode: String? = null,
     private val preselectedBillingPointCode: String? = null,
@@ -310,6 +312,11 @@ class PrinterOnboardingViewModel(
 
     fun testPrint() {
         val draft = buildDraftPrinterConfig()?.copy(supportsCutter = true) ?: return
+        analyticsService.logPrinterConfigAttempted(
+            source = analyticsSource(),
+            step = analyticsStep(),
+            mode = "test"
+        )
         updateState {
             copy(
                 loadingBottomSheet = LoadingBottomSheetState(
@@ -323,6 +330,11 @@ class PrinterOnboardingViewModel(
             runCatching {
                 printerService.testPrint(draft)
             }.onSuccess {
+                analyticsService.logPrinterConfigSucceeded(
+                    source = analyticsSource(),
+                    step = analyticsStep(),
+                    mode = "test"
+                )
                 lastSuccessfulTestFingerprint = fingerprint(draft)
                 updateState {
                     copy(
@@ -335,6 +347,12 @@ class PrinterOnboardingViewModel(
                     )
                 }
             }.onFailure { throwable ->
+                analyticsService.logPrinterConfigFailed(
+                    source = analyticsSource(),
+                    step = analyticsStep(),
+                    mode = "test",
+                    errorCode = analyticsService.extractErrorCode(throwable)
+                )
                 logger.sendLog(
                     Log(
                         LogLevel.ERROR,
@@ -367,6 +385,11 @@ class PrinterOnboardingViewModel(
             return
         }
 
+        analyticsService.logPrinterConfigAttempted(
+            source = analyticsSource(),
+            step = analyticsStep(),
+            mode = "save"
+        )
         updateState {
             copy(
                 loadingBottomSheet = LoadingBottomSheetState(
@@ -419,6 +442,11 @@ class PrinterOnboardingViewModel(
                     )
                 }
             }.onSuccess { savedPrinter ->
+                analyticsService.logPrinterConfigSucceeded(
+                    source = analyticsSource(),
+                    step = analyticsStep(),
+                    mode = "save"
+                )
                 stopAutoDiscovery(markCompleted = false)
                 lastSuccessfulTestFingerprint = fingerprint(savedPrinter)
                 updateState {
@@ -450,6 +478,12 @@ class PrinterOnboardingViewModel(
                     emitSavedAndClose()
                 }
             }.onFailure { throwable ->
+                analyticsService.logPrinterConfigFailed(
+                    source = analyticsSource(),
+                    step = analyticsStep(),
+                    mode = "save",
+                    errorCode = analyticsService.extractErrorCode(throwable)
+                )
                 logger.sendLog(
                     Log(
                         LogLevel.ERROR,
@@ -667,6 +701,16 @@ class PrinterOnboardingViewModel(
         viewModelScope.launch {
             emitEvent(PrinterOnboardingUiEvent.SavedAndClose)
         }
+    }
+
+    private fun analyticsSource(): String = uiState.value.entryContext.name.lowercase()
+
+    private fun analyticsStep(): String = when (uiState.value.step) {
+        PrinterOnboardingStep.LANDING -> "landing"
+        PrinterOnboardingStep.SETUP -> "setup"
+        PrinterOnboardingStep.NETWORK -> "network"
+        PrinterOnboardingStep.CONFIG -> "config"
+        PrinterOnboardingStep.SUCCESS -> "success"
     }
 
     companion object {

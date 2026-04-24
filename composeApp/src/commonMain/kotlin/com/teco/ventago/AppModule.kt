@@ -57,6 +57,13 @@ import com.teco.ventago.features.orders.ui.order_details.viewModel.OrdersDetails
 import com.teco.ventago.features.orders.ui.order_history.viewModel.OrderHistoryViewModel
 import com.teco.ventago.features.orders.ui.order_invoice.viewModel.OrderInvoiceViewModel
 import com.teco.ventago.features.orders.ui.orders.viewmodel.OrdersViewModel
+import com.teco.ventago.features.notifications.data.provider.INotificationsProvider
+import com.teco.ventago.features.notifications.data.provider.NotificationsProvider
+import com.teco.ventago.features.notifications.data.repository.INotificationsRepository
+import com.teco.ventago.features.notifications.data.repository.NotificationsRepository
+import com.teco.ventago.features.notifications.domain.INotificationsService
+import com.teco.ventago.features.notifications.domain.NotificationsService
+import com.teco.ventago.features.notifications.ui.viewmodel.NotificationsViewModel
 import com.teco.ventago.features.printers.data.provider.IPrinterProvider
 import com.teco.ventago.features.printers.data.provider.PrinterProvider
 import com.teco.ventago.features.printers.data.repository.IPrinterRepository
@@ -233,6 +240,11 @@ internal val viewModels = module {
     viewModelOf(::AddCustomerViewModel)
     viewModelOf(::ClientListViewModel)
     viewModelOf(::SearchCustomerViewModel)
+    viewModel {
+        NotificationsViewModel(
+            notificationsService = get()
+        )
+    }
     viewModelOf(::CustomersListViewModel)
     viewModelOf(::CustomerDetailsViewModel)
     viewModelOf(::CustomerFormViewModel)
@@ -267,6 +279,7 @@ internal val viewModels = module {
             discoveryService = get(),
             branchService = get(),
             logger = get(),
+            analyticsService = get(),
             entryContext = entryContext,
             preselectedBranchCode = branchCode,
             preselectedBillingPointCode = billingPointCode,
@@ -618,6 +631,32 @@ internal fun appModule() = module {
                 logger = get()
             ),
             financialProfileService = get()
+        )
+    }
+
+    single<INotificationsProvider> {
+        NotificationsProvider(
+            client = get(),
+            authService = get()
+        )
+    }
+
+    single<INotificationsRepository> {
+        NotificationsRepository(
+            provider = get(),
+            logger = get()
+        )
+    }
+
+    single<INotificationsService> {
+        NotificationsService(
+            repository = get(),
+            businessService = get(),
+            localStorage = get(),
+            appScope = get(named("AppScope")),
+            json = json,
+            authService = get(),
+            analyticsService = get()
         )
     }
 }

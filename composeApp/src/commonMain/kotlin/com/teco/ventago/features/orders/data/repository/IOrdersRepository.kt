@@ -1,11 +1,15 @@
 package com.teco.ventago.features.orders.data.repository
 
 import com.teco.ventago.features.orders.domain.models.ChangeOrderStatusResponse
+import com.teco.ventago.features.orders.domain.models.AchPaymentDetail
+import com.teco.ventago.features.orders.domain.models.AchProofFileDownload
 import com.teco.ventago.features.orders.domain.models.IsBusinessRegisteredResponse
 import com.teco.ventago.features.orders.domain.models.Order
 import com.teco.ventago.features.orders.domain.models.requests.CancelOrderRequest
+import com.teco.ventago.features.orders.domain.models.requests.CreatePaymentLinkRequest
 import com.teco.ventago.features.orders.domain.models.requests.CreateOrderRequest
 import com.teco.ventago.features.orders.domain.models.requests.DeleteOrderRequest
+import com.teco.ventago.features.orders.domain.models.requests.RejectAchPaymentRequest
 import com.teco.ventago.features.orders.domain.models.requests.RescheduleReceivablesRequest
 import com.teco.ventago.features.orders.domain.models.requests.RescheduleReceivablesResponse
 import com.teco.ventago.features.orders.domain.models.requests.RegisterManualPaymentsDataResponse
@@ -82,6 +86,19 @@ interface IOrdersRepository {
     ): RetryInvoiceResponse
 
     suspend fun getInvoiceDocsRaw(businessId: Int, cufe: String): InvoiceDocsDto
+    suspend fun createPaymentLink(businessId: Int, request: CreatePaymentLinkRequest): String?
+    suspend fun getAchPaymentByIntent(businessId: Int, paymentIntentId: String): AchPaymentDetail
+    suspend fun approveAchPayment(businessId: Int, paymentIntentId: String): String
+    suspend fun rejectAchPayment(
+        businessId: Int,
+        paymentIntentId: String,
+        request: RejectAchPaymentRequest
+    ): String
+    suspend fun downloadAchProofFile(
+        businessId: Int,
+        paymentId: String,
+        proofId: String
+    ): AchProofFileDownload
 
     suspend fun removeCustomer(businessId: Int, customerId: Int): Boolean
 

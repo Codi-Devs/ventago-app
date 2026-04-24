@@ -49,6 +49,10 @@ data class Order(
     @SerialName("receivable_terms") val receivableTerms: List<ReceivableTermDto> = emptyList(),
 
     @SerialName("payment_link") val paymentLink: String? = null,
+    @SerialName("payment_links") val paymentLinks: List<OrderPaymentLinkDto> = emptyList(),
+    @SerialName("links") val links: List<OrderPaymentLinkDto> = emptyList(),
+    @SerialName("external_uuid") val externalUuid: String? = null,
+    @SerialName("payment_flow_type") val paymentFlowType: String? = null,
     @SerialName("ticket_enabled") val ticketEnabled: Boolean? = null,
 
     val customer: CustomerSnapshot? = null,
@@ -101,6 +105,14 @@ data class OrderHistoryDto(
 )
 
 @Serializable
+data class OrderPaymentLinkDto(
+    @SerialName("link") val link: String? = null,
+    @SerialName("url") val url: String? = null,
+    val status: String? = null,
+    @SerialName("created_at") val createdAt: String? = null,
+)
+
+@Serializable
 data class OrderPaymentDto(
     val id: Long? = null,
     @SerialName("payment_intent_id") val paymentIntentId: String = "",
@@ -115,7 +127,8 @@ data class OrderPaymentDto(
     @SerialName("void_reason") val voidReason: String? = null,
     @SerialName("total_amount") val totalAmount: String = "0.00",
     val charged: String = "0.00",
-    val refunded: String = "0.00"
+    val refunded: String = "0.00",
+    @SerialName("is_automatic") val isAutomatic: Boolean = false,
 )
 
 @Serializable

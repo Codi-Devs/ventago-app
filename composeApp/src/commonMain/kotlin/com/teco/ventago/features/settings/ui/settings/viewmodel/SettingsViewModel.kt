@@ -53,6 +53,13 @@ class SettingsViewModel(
     private val betaService: BetaService,
     private val quotesService: QuotesService,
 ) : BaseViewModel<SettingsState, SettingsStateUiEvent>(SettingsState()) {
+    private data class SettingsAuthzSnapshot(
+        val hasQuotesAccess: Boolean,
+        val hasPaymentsAccess: Boolean,
+        val canModifySettings: Boolean,
+        val canModifyQuoteSettings: Boolean,
+    )
+
     private fun normalizeHtmlForComparison(value: String): String {
         val trimmed = value.trim()
         if (trimmed.isBlank()) return ""
@@ -88,21 +95,23 @@ class SettingsViewModel(
                     val betaSnapshot = betaResponse?.features.orEmpty()
                         .mapNotNull(BetaFeature::fromKey)
                         .toSet()
-                    Triple(
-                        AuthzEvaluator.canRoute(RouteKey.QUOTES_LIST, user, betaSnapshot),
-                        AuthzEvaluator.canAction(ActionKey.SETTINGS_MODIFY, user, betaSnapshot),
-                        AuthzEvaluator.canAction(ActionKey.QUOTES_UPDATE, user, betaSnapshot)
+                    SettingsAuthzSnapshot(
+                        hasQuotesAccess = AuthzEvaluator.canRoute(RouteKey.QUOTES_LIST, user, betaSnapshot),
+                        hasPaymentsAccess = AuthzEvaluator.canRoute(RouteKey.PAYMENTS_PAGE, user, betaSnapshot),
+                        canModifySettings = AuthzEvaluator.canAction(ActionKey.SETTINGS_MODIFY, user, betaSnapshot),
+                        canModifyQuoteSettings = AuthzEvaluator.canAction(ActionKey.QUOTES_UPDATE, user, betaSnapshot)
                     )
                 }
-                .collect { (hasQuotesAccess, canModifySettings, canModifyQuoteSettings) ->
+                .collect { authz ->
                     updateState {
                         copy(
-                            hasQuotesAccess = hasQuotesAccess,
-                            canModifySettings = canModifySettings,
-                            canModifyQuoteSettings = canModifyQuoteSettings
+                            hasQuotesAccess = authz.hasQuotesAccess,
+                            hasPaymentsAccess = authz.hasPaymentsAccess,
+                            canModifySettings = authz.canModifySettings,
+                            canModifyQuoteSettings = authz.canModifyQuoteSettings
                         )
                     }
-                    if (hasQuotesAccess) {
+                    if (authz.hasQuotesAccess) {
                         refreshQuoteSettingsInBackground()
                     }
             }

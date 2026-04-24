@@ -7,6 +7,7 @@ Apply `$disciplined-execution` on every task by default.
 - Use verification gates before marking work complete.
 - Keep task tracking in `tasks/todo.md` and corrections in `tasks/lessons.md`.
 - Apply simplicity, root-cause, and minimal-impact principles from the skill.
+- Load `[$frontend-design](/Users/oscar/.agents/skills/frontend-design/SKILL.md)` every time you modify any UI-related file.
 
 ## Reference Documentation
 

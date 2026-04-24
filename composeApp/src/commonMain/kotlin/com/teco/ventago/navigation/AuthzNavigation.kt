@@ -30,9 +30,11 @@ fun visibleBottomNavKeys(user: User?, betaSnapshot: Set<BetaFeature>): List<Bott
 fun routeKeyForScreen(screen: PosScreens): RouteKey? {
     return when (screen) {
         PosScreens.HomeScreen -> RouteKey.HOME
+        PosScreens.NotificationsScreen -> RouteKey.HOME
         PosScreens.SummaryScreen -> RouteKey.HOME_SUMMARY
         PosScreens.OrdersScreen -> RouteKey.ORDERS_LIST
         PosScreens.OrderDetailsScreen -> RouteKey.ORDER_DETAILS
+        PosScreens.AchPaymentDetailsScreen -> RouteKey.ACH_PAYMENT_DETAILS
         PosScreens.OrderInvoiceScreen -> RouteKey.INVOICE_PREVIEW
         PosScreens.CustomersListScreen -> RouteKey.CUSTOMERS_LIST
         PosScreens.CustomerDetailsScreen -> RouteKey.CUSTOMER_DETAILS
@@ -53,6 +55,12 @@ fun routeKeyForScreen(screen: PosScreens): RouteKey? {
         PosScreens.DuplicateExpenseScreen,
         PosScreens.CufeImportScreen -> RouteKey.EXPENSE_NEW
         PosScreens.SettingsScreen -> RouteKey.SETTINGS_PAGE
+        PosScreens.Payments,
+        PosScreens.PaymentsHomeScreen,
+        PosScreens.PaymentsTransferenceScreen,
+        PosScreens.PaymentsPaypalScreen,
+        PosScreens.PaymentsPaypalOnboardingScreen,
+        PosScreens.PaymentsYappyScreen -> RouteKey.PAYMENTS_PAGE
         PosScreens.BranchesManageScreen,
         PosScreens.BillingPointManageScreen,
         PosScreens.AddBillingPointScreen,

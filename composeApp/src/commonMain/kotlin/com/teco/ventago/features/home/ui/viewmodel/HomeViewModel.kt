@@ -13,12 +13,15 @@ import com.teco.ventago.features.financialProfile.domain.FinancialProfileService
 import com.teco.ventago.features.home.domain.HomeSummaryService
 import com.teco.ventago.features.home.domain.model.HomeSalesChartMapper
 import com.teco.ventago.features.home.domain.model.HomeSalesRange
+import com.teco.ventago.features.notifications.domain.INotificationsService
 import com.teco.ventago.features.product.domain.ProductService
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.launchIn
 import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import kotlinx.datetime.Clock
 import kotlinx.datetime.TimeZone
 import kotlinx.datetime.toLocalDateTime
@@ -30,6 +33,7 @@ class HomeViewModel(
     private val financialProfileService: FinancialProfileService,
     private val homeSummaryService: HomeSummaryService,
     private val betaService: BetaService,
+    private val notificationsService: INotificationsService,
 ) : BaseViewModel<HomeState, HomeStateUiEvent>(HomeState()) {
 
     private var summaryBusinessId: Int? = null
@@ -138,6 +142,10 @@ class HomeViewModel(
                     )
                 }
             }.launchIn(this)
+
+            notificationsService.observeUnreadCount().onEach { unread ->
+                updateState { copy(unreadCount = unread) }
+            }.launchIn(this)
         }
     }
 
@@ -188,6 +196,14 @@ class HomeViewModel(
             }
 
             else -> chart.lastIndex
+        }
+    }
+
+    fun onHomeVisible() {
+        viewModelScope.launch {
+            withContext(Dispatchers.IO) {
+                runCatching { notificationsService.refreshUnreadCount() }
+            }
         }
     }
 }

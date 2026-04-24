@@ -8,7 +8,9 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.material3.Text
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -38,7 +40,8 @@ fun HomeTopCard(
     modifier : Modifier = Modifier,
     title: String,
     image: String? = null,
-    onAddImageClick: () -> Unit
+    onAddImageClick: () -> Unit,
+    trailingAction: @Composable (() -> Unit)? = null,
 ) {
 
     Card (
@@ -52,32 +55,48 @@ fun HomeTopCard(
             containerColor = cardContainerColor())
     ) {
 
-        Row(
-            modifier = Modifier.padding(16.dp, 16.dp, 16.dp, 16.dp),
-            verticalAlignment = Alignment.CenterVertically
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(16.dp, 16.dp, 16.dp, 16.dp)
         ) {
-            if (image.isNullOrBlank()) {
-                DottedButton(
-                    modifier = Modifier.size(70.dp, 70.dp),
-                    onClick = onAddImageClick
+            Row(
+                modifier = Modifier
+                    .align(Alignment.CenterStart)
+                    .padding(end = if (trailingAction != null) 48.dp else 0.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                if (image.isNullOrBlank()) {
+                    DottedButton(
+                        modifier = Modifier.size(70.dp, 70.dp),
+                        onClick = onAddImageClick
+                    )
+                } else {
+                    HomeLogo(url = image)
+                }
+
+                Spacer(modifier = Modifier.width(12.dp))
+
+                Text(
+                    modifier = Modifier.widthIn(max = 220.dp),
+                    text = title,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    style = TextStyle(
+                        fontSize = 24.sp,
+                        lineHeight = 32.sp,
+                        fontFamily = latoFontFamily(),
+                        fontWeight = FontWeight.W400,
+                        textAlign = TextAlign.Start,
+                    )
                 )
-            } else {
-                HomeLogo(url = image)
             }
 
-            Text(
-                modifier = Modifier.padding(16.dp, 8.dp, 8.dp, 8.dp),
-                text = title,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-                style = TextStyle(
-                    fontSize = 24.sp,
-                    lineHeight = 32.sp,
-                    fontFamily = latoFontFamily(),
-                    fontWeight = FontWeight.W400,
-                    textAlign = TextAlign.Start,
-                )
-            )
+            trailingAction?.let { action ->
+                Box(modifier = Modifier.align(Alignment.CenterEnd)) {
+                    action()
+                }
+            }
         }
     }
 }

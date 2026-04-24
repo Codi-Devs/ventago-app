@@ -31,6 +31,8 @@ import androidx.compose.material.icons.rounded.CalendarMonth
 import androidx.compose.material.icons.rounded.Delete
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.Badge
+import androidx.compose.material3.BadgedBox
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.DatePicker
 import androidx.compose.material3.DatePickerDialog
@@ -204,6 +206,9 @@ fun PaymentScreenContent(
 //    onConfirmPaymentLink: () -> Unit           // create payment link; invoice on backend after paid
 ) {
     val ui by viewModel.uiState.collectAsState()
+    LaunchedEffect(ui.paymentsConfigured, ui.canCreatePaymentLink, ui.cart.size) {
+        viewModel.onPaymentScreenVisible()
+    }
 
     // Amounts
     val legal = remember(ui) { viewModel.legalInvoiceTotal() }
@@ -217,6 +222,7 @@ fun PaymentScreenContent(
     var showGovernmentWarning by remember { mutableStateOf(false) }
     var governmentInvalidProducts by remember { mutableStateOf<List<String>>(emptyList()) }
     var pendingGovernmentAction by remember { mutableStateOf<(() -> Unit)?>(null) }
+    var showPaymentMethodsConfigDialog by remember { mutableStateOf(false) }
 
     fun requestGovernmentWarningOrProceed(action: () -> Unit) {
         val invalidProducts = viewModel.governmentWarningInvalidProducts()
@@ -274,83 +280,106 @@ fun PaymentScreenContent(
         // Credit notes (04) and debit notes (05) cannot use payment links or be saved as drafts
         val isCreditOrDebitNote = ui.selectedDocType == "04" || ui.selectedDocType == "05"
 
-        // HIDDEN: Payment Link tab temporarily disabled (backend bug)
-        // To restore: uncomment the TabRow block below and the PaymentLinkSection else branch
-        // See tasks/restore-payment-links.md for full instructions
-//        if (!isCreditOrDebitNote) {
-//            val modes = listOf(PaymentFlowMode.MANUAL_OR_INSTALLMENTS, PaymentFlowMode.PAYMENT_LINK)
-//            val labels = listOf("Manual/Cuotas", "Enlace de Pago")
-//            TabRow(
-//                selectedTabIndex = modes.indexOf(ui.paymentFlowMode),
-//                modifier = Modifier,
-//                indicator = { tabPositions ->
-//                    TabRowDefaults.SecondaryIndicator(
-//                        Modifier.tabIndicatorOffset(tabPositions[modes.indexOf(ui.paymentFlowMode)]),
-//                        color = MaterialTheme.colorScheme.secondary
-//                    )
-//                },
-//                containerColor = MaterialTheme.colorScheme.background) {
-//                modes.forEachIndexed { i, m ->
-//                    Tab(
-//                        selected = (m == ui.paymentFlowMode),
-//                        onClick = {
-//                            viewModel.setPaymentFlow(m)
-//                        },
-//                        text = { Text(labels[i]) }
-//                    )
-//                }
-//            }
-//        }
+        if (!isCreditOrDebitNote && ui.canCreatePaymentLink) {
+            val modes = listOf(PaymentFlowMode.MANUAL_OR_INSTALLMENTS, PaymentFlowMode.PAYMENT_LINK)
+            TabRow(
+                selectedTabIndex = modes.indexOf(ui.paymentFlowMode),
+                modifier = Modifier,
+                indicator = { tabPositions ->
+                    TabRowDefaults.SecondaryIndicator(
+                        Modifier.tabIndicatorOffset(tabPositions[modes.indexOf(ui.paymentFlowMode)]),
+                        color = MaterialTheme.colorScheme.secondary
+                    )
+                },
+                containerColor = MaterialTheme.colorScheme.background
+            ) {
+                modes.forEachIndexed { i, mode ->
+                    Tab(
+                        selected = (mode == ui.paymentFlowMode),
+                        onClick = {
+                            if (mode == PaymentFlowMode.PAYMENT_LINK) {
+                                viewModel.markPaymentLinkBadgeSeen()
+                                viewModel.checkPaymentMethodsConfigured { configured ->
+                                    if (!configured) {
+                                        showPaymentMethodsConfigDialog = true
+                                    } else {
+                                        viewModel.setPaymentFlow(mode)
+                                    }
+                                }
+                            } else {
+                                viewModel.setPaymentFlow(mode)
+                            }
+                        },
+                        text = {
+                            if (mode == PaymentFlowMode.PAYMENT_LINK) {
+                                BadgedBox(
+                                    badge = {
+                                        if (ui.showPaymentLinkNewBadge) {
+                                            Badge { Text("Nuevo") }
+                                        }
+                                    }
+                                ) {
+                                    Text("Crear enlace de pago")
+                                }
+                            } else {
+                                Text("Manual/Cuotas")
+                            }
+                        }
+                    )
+                }
+            }
+        }
 
         Spacer(Modifier.height(12.dp))
 
-        // Always show manual payment while payment links are disabled
-        ManualAndInstallmentsSection(
-            viewModel = viewModel,
-            legal = legal,
-            tips = tips,
-            totalToCharge = totalToCharge,
-            remaining = remaining,
-            onToggleMethod = viewModel::toggleManualMethod,
-            onAmountChange = viewModel::setManualAmount,
-            onOtherDesc = viewModel::setOtherDescription,
-            onAddInstallment = viewModel::addInstallment,
-            onRemoveInstallment = viewModel::removeInstallment,
-            onInstallmentAmount = viewModel::setInstallmentAmount,
-            onInstallmentDate = viewModel::setInstallmentDueDate,
-            methodOptions = viewModel.manualMethodOptions(),
-            selectedDocType = ui.selectedDocType,
-            onConfirm = {
-                requestGovernmentWarningOrProceed {
-                    viewModel.createOrder(createPaymentLink = false, saveAsDraft = false)
+        if (ui.paymentFlowMode == PaymentFlowMode.MANUAL_OR_INSTALLMENTS || isCreditOrDebitNote) {
+            ManualAndInstallmentsSection(
+                viewModel = viewModel,
+                legal = legal,
+                tips = tips,
+                totalToCharge = totalToCharge,
+                remaining = remaining,
+                onToggleMethod = viewModel::toggleManualMethod,
+                onAmountChange = viewModel::setManualAmount,
+                onOtherDesc = viewModel::setOtherDescription,
+                onAddInstallment = viewModel::addInstallment,
+                onRemoveInstallment = viewModel::removeInstallment,
+                onInstallmentAmount = viewModel::setInstallmentAmount,
+                onInstallmentDate = viewModel::setInstallmentDueDate,
+                methodOptions = viewModel.manualMethodOptions(),
+                selectedDocType = ui.selectedDocType,
+                onConfirm = {
+                    requestGovernmentWarningOrProceed {
+                        viewModel.createOrder(createPaymentLink = false, saveAsDraft = false)
+                    }
+                },
+                onSaveDraft = {
+                    requestGovernmentWarningOrProceed {
+                        viewModel.createOrder(createPaymentLink = false, saveAsDraft = true)
+                    }
+                },
+                // Disable save draft for credit/debit notes
+                saveDraftEnabled = hasPositiveAmount && !isCreditOrDebitNote,
+                canCreateInvoice = ui.canCreateInvoice,
+                canCreateDraft = ui.canCreateDraft,
+            )
+        } else {
+            PaymentLinkSection(
+                totalToCharge = totalToCharge,
+                enabled = hasPositiveAmount && ui.canCreateInvoice,
+                onConfirm = {
+                    requestGovernmentWarningOrProceed {
+                        viewModel.checkPaymentMethodsConfigured { configured ->
+                            if (!configured) {
+                                showPaymentMethodsConfigDialog = true
+                            } else {
+                                viewModel.createOrder(createPaymentLink = true, saveAsDraft = false)
+                            }
+                        }
+                    }
                 }
-            },
-            onSaveDraft = {
-                requestGovernmentWarningOrProceed {
-                    viewModel.createOrder(createPaymentLink = false, saveAsDraft = true)
-                }
-            },
-            // Disable save draft for credit/debit notes
-            saveDraftEnabled = hasPositiveAmount && !isCreditOrDebitNote,
-            canCreateInvoice = ui.canCreateInvoice,
-            canCreateDraft = ui.canCreateDraft,
-        )
-        // HIDDEN: PaymentLinkSection temporarily disabled (backend bug)
-//        } else {
-//            PaymentLinkSection(
-//                totalToCharge = totalToCharge,
-//                enabled = hasPositiveAmount,
-//                onConfirm = {
-//                    requestGovernmentWarningOrProceed {
-//                        if (!ui.paymentsConfigured) {
-//                            navigate(PosScreens.Payments, null)
-//                        } else {
-//                            viewModel.createOrder(createPaymentLink = true, saveAsDraft = false)
-//                        }
-//                    }
-//                }
-//            )
-//        }
+            )
+        }
     }
 
     if (ui.loadingBottomSheet.isLoading()) {
@@ -395,6 +424,22 @@ fun PaymentScreenContent(
             },
             confirmText = "Continuar",
             dismissText = "Volver"
+        )
+    }
+
+    if (showPaymentMethodsConfigDialog) {
+        DMAlertDialog(
+            title = "Configura tus métodos de pago",
+            message = "Para crear enlaces de pago primero debes configurar al menos un método de cobro.",
+            show = showPaymentMethodsConfigDialog,
+            confirmText = "Configurar",
+            dismissText = "Más tarde",
+            onDismiss = { showPaymentMethodsConfigDialog = false },
+            onConfirm = {
+                showPaymentMethodsConfigDialog = false
+                viewModel.savePaymentLinkCheckpointForResume()
+                navigate(PosScreens.Payments, null)
+            }
         )
     }
 
@@ -663,8 +708,7 @@ private fun PaymentLinkSection(
             Text("Cobro con enlace", style = MaterialTheme.typography.titleMedium)
             Spacer(Modifier.height(8.dp))
             Text(
-                "Se generará un link por el monto total (incluye propina si la agregaste). " +
-                        "La factura se emite cuando el pago se complete."
+                "Se generará un enlace para compartir con tu cliente y facilitar el pago."
             )
             Spacer(Modifier.height(12.dp))
             ButtonM(

@@ -2,6 +2,7 @@ package com.teco.ventago.features.orders.ui.order_details.viewModel
 
 import com.teco.ventago.core.LoadableState
 import com.teco.ventago.design_system.organism.LoadingBottomSheetState
+import com.teco.ventago.features.orders.domain.models.AchPaymentDetail
 import com.teco.ventago.features.orders.domain.models.ManualPaymentMethodOption
 import com.teco.ventago.features.orders.domain.models.Order
 import com.teco.ventago.features.printers.domain.model.PrinterSelectionOption
@@ -20,9 +21,21 @@ data class OrderDetailsState(
     val havePaymentsConfigured: Boolean = false,
     val invoicingEnabled: Boolean = false,
     val canMarkPaid: Boolean = false,
+    val canCreatePaymentLink: Boolean = false,
+    val canViewAchPayment: Boolean = false,
+    val canApproveAchPayment: Boolean = false,
+    val canRejectAchPayment: Boolean = false,
     val loadingPaymentLink: Boolean = false,
     val paymentLink: String? = null,
     val errorLoadingPaymentLink: Boolean = false,
+    val generatePaymentLinkState: GeneratePaymentLinkState = GeneratePaymentLinkState(),
+    val invoiceRetryState: InvoiceRetryState = InvoiceRetryState(),
+    val achIntentStates: Map<String, AchIntentDetailState> = emptyMap(),
+    val achApproveDialog: AchApproveDialogState = AchApproveDialogState(),
+    val achRejectDialog: AchRejectDialogState = AchRejectDialogState(),
+    val achProofPreviewState: AchProofPreviewState = AchProofPreviewState(),
+    val achReviewState: AchReviewState = AchReviewState(),
+    val showAchScoreInfoDialog: Boolean = false,
 
     val hideReprintTicketAction: Boolean = false,
     val reprintInFlight: Boolean = false,
@@ -44,6 +57,7 @@ data class OrderDetailsState(
 
 sealed class OrderDetailsUiEvent {
     data class ShowPaymentLinkSheet(val url: String) : OrderDetailsUiEvent()
+    data class OpenExternalUrl(val url: String) : OrderDetailsUiEvent()
     data object OrderDeleted : OrderDetailsUiEvent()
 }
 
@@ -206,3 +220,55 @@ data class ManualPaymentState(
     val isConfirmEnabled: Boolean
         get() = allocated >= totalToChargeCents && (!requiresOtherDesc || otherPaymentDescription.isNotBlank())
 }
+
+data class GeneratePaymentLinkState(
+    val showSheet: Boolean = false,
+    val amountInput: String = "",
+    val selectedExpiryPresetMinutes: Int = 1440,
+    val useCustomExpiry: Boolean = false,
+    val customExpiryMinutesInput: String = "",
+    val errorMessage: String? = null
+)
+
+data class InvoiceRetryState(
+    val showSuccessDialog: Boolean = false,
+    val showWarningDialog: Boolean = false,
+    val warningMessage: String? = null
+)
+
+data class AchIntentDetailState(
+    val detail: AchPaymentDetail? = null,
+    val isLoading: Boolean = false,
+    val errorMessage: String? = null,
+)
+
+data class AchApproveDialogState(
+    val show: Boolean = false,
+    val paymentIntentId: String? = null,
+    val highRisk: Boolean = false,
+)
+
+data class AchRejectDialogState(
+    val show: Boolean = false,
+    val paymentIntentId: String? = null,
+    val reasonCode: String = "fraud",
+    val customReasonText: String = "",
+    val errorMessage: String? = null,
+)
+
+data class AchProofPreviewState(
+    val show: Boolean = false,
+    val paymentIntentId: String? = null,
+    val isLoading: Boolean = false,
+    val imageDataUri: String? = null,
+    val previewUrl: String? = null,
+    val contentType: String? = null,
+    val fileName: String? = null,
+    val errorMessage: String? = null,
+)
+
+data class AchReviewState(
+    val paymentIntentId: String? = null,
+    val isLoading: Boolean = false,
+    val errorMessage: String? = null,
+)

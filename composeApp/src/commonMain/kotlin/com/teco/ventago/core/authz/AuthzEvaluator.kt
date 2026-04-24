@@ -101,9 +101,22 @@ object AuthzEvaluator {
         ),
         RouteKey.EXPENSE_NEW to AuthzPolicy(requiredAny = setOf(ScopeKey.EXPENSES_CREATE)),
         RouteKey.SETTINGS_PAGE to AuthzPolicy(allowAll = true),
+        RouteKey.PAYMENTS_PAGE to AuthzPolicy(
+            requiredAny = setOf(
+                ScopeKey.INVOICE_CREATE_PAYMENT_LINK,
+                ScopeKey.ACH_PAYMENT_VIEW,
+                ScopeKey.ACH_PAYMENT_APPROVE,
+                ScopeKey.ACH_PAYMENT_REJECT
+            ),
+            betaFeature = BetaFeature.PAYMENTS
+        ),
         RouteKey.SETTINGS_BRANCHES_OWNER to AuthzPolicy(ownerOnly = true),
         RouteKey.SETTINGS_EXPENSE_ACCOUNTS_OWNER to AuthzPolicy(ownerOnly = true),
         RouteKey.SETTINGS_SUB_USERS to AuthzPolicy(ownerOnly = true, betaFeature = BetaFeature.MULTI_USERS),
+        RouteKey.ACH_PAYMENT_DETAILS to AuthzPolicy(
+            requiredAny = setOf(ScopeKey.ACH_PAYMENT_VIEW),
+            betaFeature = BetaFeature.PAYMENTS
+        ),
         RouteKey.RECURRING_LIST to AuthzPolicy(
             requiredAny = setOf(ScopeKey.RECURRING_VIEW),
             betaFeature = BetaFeature.RECURRING_INVOICING
@@ -126,11 +139,23 @@ object AuthzEvaluator {
         ),
         ActionKey.ORDERS_CREATE to AuthzPolicy(requiredAny = setOf(ScopeKey.INVOICE_CREATE)),
         ActionKey.ORDERS_CREATE_DRAFT to AuthzPolicy(requiredAny = setOf(ScopeKey.INVOICE_CREATE_DRAFT)),
+        ActionKey.ORDERS_PAYMENT_LINK to AuthzPolicy(
+            requiredAny = setOf(ScopeKey.INVOICE_CREATE_PAYMENT_LINK),
+            betaFeature = BetaFeature.PAYMENTS
+        ),
         ActionKey.ORDERS_MARK_PAID to AuthzPolicy(requiredAny = setOf(ScopeKey.INVOICE_CREATE)),
         ActionKey.ORDERS_CANCEL to AuthzPolicy(requiredAny = setOf(ScopeKey.INVOICE_CANCEL)),
         ActionKey.ORDERS_CREDIT_NOTE to AuthzPolicy(requiredAny = setOf(ScopeKey.INVOICE_CREDIT_NOTES)),
         ActionKey.ORDERS_CUSTOM_PRODUCT to AuthzPolicy(requiredAny = setOf(ScopeKey.INVOICE_CUSTOM_PRODUCT)),
         ActionKey.ORDERS_EDIT_PRODUCT to AuthzPolicy(requiredAny = setOf(ScopeKey.INVOICE_EDIT_PRODUCT)),
+        ActionKey.ACH_PAYMENT_APPROVE to AuthzPolicy(
+            requiredAny = setOf(ScopeKey.ACH_PAYMENT_APPROVE),
+            betaFeature = BetaFeature.PAYMENTS
+        ),
+        ActionKey.ACH_PAYMENT_REJECT to AuthzPolicy(
+            requiredAny = setOf(ScopeKey.ACH_PAYMENT_REJECT),
+            betaFeature = BetaFeature.PAYMENTS
+        ),
         ActionKey.CUSTOMERS_CREATE to AuthzPolicy(requiredAny = setOf(ScopeKey.CUSTOMER_CREATE)),
         ActionKey.CUSTOMERS_UPDATE to AuthzPolicy(requiredAny = setOf(ScopeKey.CUSTOMER_CREATE)),
         ActionKey.CUSTOMERS_DELETE to AuthzPolicy(requiredAny = setOf(ScopeKey.CUSTOMER_DELETE)),

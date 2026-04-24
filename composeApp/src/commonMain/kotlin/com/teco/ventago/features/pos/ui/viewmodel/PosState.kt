@@ -55,6 +55,7 @@ data class PosState(
     val invoicingEnabled: Boolean = false,
     val canCreateInvoice: Boolean = false,
     val canCreateDraft: Boolean = false,
+    val canCreatePaymentLink: Boolean = false,
     val canCreateQuote: Boolean = false,
     val canUpdateQuote: Boolean = false,
     val canUseCustomProduct: Boolean = false,
@@ -152,6 +153,7 @@ data class PosState(
 
     // === Payments view ===
     val paymentFlowMode: PaymentFlowMode = PaymentFlowMode.MANUAL_OR_INSTALLMENTS,
+    val showPaymentLinkNewBadge: Boolean = false,
     val otherPaymentDescription: String = "",
     val wantPaymentLink: Boolean = false,
     val installments: List<InstallmentUI> = emptyList(),

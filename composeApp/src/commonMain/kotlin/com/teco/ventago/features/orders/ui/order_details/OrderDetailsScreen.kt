@@ -39,13 +39,17 @@ import androidx.compose.material.icons.rounded.Business
 import androidx.compose.material.icons.rounded.Cancel
 import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material.icons.rounded.ContentCopy
+import androidx.compose.material.icons.rounded.Download
+import androidx.compose.material.icons.rounded.ErrorOutline
 import androidx.compose.material.icons.rounded.HelpOutline
 import androidx.compose.material.icons.rounded.Inventory2
 import androidx.compose.material.icons.rounded.MoreVert
+import androidx.compose.material.icons.rounded.OpenInNew
 import androidx.compose.material.icons.rounded.Payment
 import androidx.compose.material.icons.rounded.Receipt
 import androidx.compose.material.icons.rounded.Search
 import androidx.compose.material.icons.rounded.Share
+import androidx.compose.material.icons.rounded.Visibility
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -78,6 +82,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.painter.BitmapPainter
 import androidx.compose.ui.graphics.vector.rememberVectorPainter
@@ -92,11 +97,13 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.navigation.NavBackStackEntry
 import androidx.navigation.NavOptionsBuilder
+import coil3.compose.AsyncImage
 import com.teco.ventago.design_system.buttons.ButtonM
 import com.teco.ventago.design_system.buttons.OutlinedButtonM
 import com.teco.ventago.design_system.buttons.TextButtonM
 import com.teco.ventago.design_system.buttons.TextButtonS
 import com.teco.ventago.design_system.molecules.orders.OrderStatusChip
+import com.teco.ventago.design_system.loaders.shimmerBrush
 import com.teco.ventago.design_system.molecules.InstallmentDueDateFieldKmp
 import com.teco.ventago.design_system.organism.LoadingSheet
 import com.teco.ventago.design_system.textfields.DMMoneyOutlinedTextField
@@ -121,6 +128,7 @@ import com.teco.ventago.design_system.theme.titleLarge
 import com.teco.ventago.design_system.theme.titleMediumBold
 import com.teco.ventago.features.invoicing.domain.models.FEDocumentType
 import com.teco.ventago.features.invoicing.domain.models.InvoiceStatus
+import com.teco.ventago.features.orders.domain.PaymentLinkResolver
 import com.teco.ventago.features.orders.domain.models.ManualPaymentMethodOption
 import com.teco.ventago.features.orders.domain.models.Order
 import com.teco.ventago.features.orders.domain.models.OrderStatus
@@ -134,6 +142,8 @@ import com.teco.ventago.features.orders.ui.order_details.viewModel.RegisterPayme
 import com.teco.ventago.features.orders.ui.order_details.viewModel.RegisterPaymentState
 import com.teco.ventago.features.orders.ui.order_details.viewModel.RescheduleState
 import com.teco.ventago.features.orders.ui.order_details.viewModel.VoidPaymentState
+import com.teco.ventago.features.quotes.ui.preview.PdfPreview
+import com.teco.ventago.navigation.AchPaymentDetailsRoute
 import com.teco.ventago.navigation.PosNoteRoute
 import com.teco.ventago.navigation.PosScreens
 import com.teco.ventago.utils.DateFormat
@@ -320,7 +330,7 @@ fun OrderDetailsActions(backStackEntry: NavBackStackEntry?,  navigateAny: (Any) 
 @Composable
 fun OrderDetailsScreen(
     viewModel: OrdersDetailsViewModel,
-    navigate: (PosScreens, (NavOptionsBuilder.() -> Unit)?) -> Unit
+    navigate: (Any, (NavOptionsBuilder.() -> Unit)?) -> Unit
 ) {
 
     var showCancelDialog by remember { mutableStateOf(false) }
@@ -345,6 +355,9 @@ fun OrderDetailsScreen(
                         launchSingleTop = true
                     }
                 }
+                is OrderDetailsUiEvent.OpenExternalUrl -> {
+                    openCustomTab(event.url)
+                }
 
                 else -> Unit
             }
@@ -359,6 +372,7 @@ fun OrderDetailsScreen(
     }
 
     val order = uiState.order ?: run {
+        OrderDetailsLoadingSkeleton()
         if (uiState.loadingBottomSheet.isLoading()) {
             LoadingSheet(
                 state = uiState.loadingBottomSheet,
@@ -374,6 +388,10 @@ fun OrderDetailsScreen(
             viewModel.isOrderCancellable(order.status)
     val canShowDeleteButton = canDeleteOrder(order)
     val canShowReprintButton = viewModel.canShowReprintAction(order)
+    val pendingCents = viewModel.totalOpenReceivableCents(order)
+    val resolvedPaymentLink = PaymentLinkResolver.resolveCurrent(order)
+    val canGeneratePaymentLink = viewModel.canGeneratePaymentLink(order)
+    val canCopyOrSharePaymentLink = viewModel.canCopyOrSharePaymentLink(order)
 
     Column(
         modifier = Modifier
@@ -392,14 +410,18 @@ fun OrderDetailsScreen(
         if (order.status != OrderStatus.CANCELLED) {
             OrderReceivablesCard(
                 order = order,
-                pendingCents = viewModel.totalOpenReceivableCents(order),
+                pendingCents = pendingCents,
                 overdueCents = viewModel.totalOverdueReceivableCents(order),
                 terms = viewModel.nonCancelledReceivableTerms(order),
                 onReschedule = { viewModel.openRescheduleSheet() }
             )
             RegisteredPaymentsCard(
                 order = order,
-                onVoidPayment = { paymentId -> viewModel.openVoidPaymentSheet(paymentId) }
+                viewModel = viewModel,
+                onVoidPayment = { paymentId -> viewModel.openVoidPaymentSheet(paymentId) },
+                onNavigateAchReview = { paymentIntentId ->
+                    navigate(AchPaymentDetailsRoute(paymentUid = paymentIntentId), null)
+                }
             )
         }
 
@@ -457,37 +479,6 @@ fun OrderDetailsScreen(
                         ) {
                             Text("Facturar")
                         }
-                    } else if (order.paymentStatus == PaymentStatus.PAID.id &&
-                        order.invoiceStatus == InvoiceStatus.PENDING.id
-                    ) {
-                        ButtonM(onClick = { viewModel.retryElectronicInvoice() }) {
-                            Text("Generar factura electrónica")
-                        }
-                    } else {
-                        if (!order.paymentLink.isNullOrBlank() && uiState.canMarkPaid) {
-                            if (uiState.loadingPaymentLink) {
-                                Box(
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .padding(vertical = 8.dp),
-                                    contentAlignment = Alignment.Center
-                                ) {
-                                    CircularProgressIndicator(
-                                        modifier = Modifier.size(24.dp),
-                                        strokeWidth = 2.dp
-                                    )
-                                }
-                            } else if (order.paymentStatus != PaymentStatus.PAID.id
-                                && uiState.havePaymentsConfigured
-                            ) {
-                                TextButtonS(
-                                    modifier = Modifier.fillMaxWidth(),
-                                    label = stringResource(Res.string.payment_link)
-                                ) {
-                                    viewModel.getOrderPaymentLink()
-                                }
-                            }
-                        }
                     }
 
                     if (canShowCancelButton) {
@@ -501,6 +492,46 @@ fun OrderDetailsScreen(
 
                 InvoiceStatus.CANCELLED.id -> {
                     // Intentionally no actions
+                }
+            }
+
+            if (viewModel.canShowRetryInvoiceButton(order)) {
+                ButtonM(onClick = { viewModel.retryElectronicInvoice() }) {
+                    Text("Reintentar facturación")
+                }
+            }
+
+            if (uiState.canCreatePaymentLink) {
+                if (canGeneratePaymentLink) {
+                    OutlinedButtonM(
+                        onClick = { viewModel.openGeneratePaymentLinkSheet() },
+                        contentColor = MaterialTheme.colorScheme.secondary,
+                        border = BorderStroke(1.dp, MaterialTheme.colorScheme.secondary)
+                    ) {
+                        Text("Generar Link de Pago")
+                    }
+                }
+                if (canCopyOrSharePaymentLink) {
+                    val linkUrl = resolvedPaymentLink?.url.orEmpty()
+                    OutlinedButtonM(
+                        onClick = {
+                            if (linkUrl.isNotBlank()) {
+                                viewModel.trackOrderPaymentLinkAction("copy")
+                                copyToClipboard("Link de pago", linkUrl)
+                            }
+                        }
+                    ) {
+                        Text("Copiar Link de Pago")
+                    }
+                    TextButtonS(
+                        modifier = Modifier.fillMaxWidth(),
+                        label = stringResource(Res.string.share_payment_link)
+                    ) {
+                        if (linkUrl.isNotBlank()) {
+                            viewModel.trackOrderPaymentLinkAction("share")
+                            shareLink(linkUrl)
+                        }
+                    }
                 }
             }
 
@@ -564,6 +595,367 @@ fun OrderDetailsScreen(
                     }
                 }
             }
+        }
+
+        if (uiState.generatePaymentLinkState.showSheet) {
+            val generationState = uiState.generatePaymentLinkState
+            val expiryPresets = listOf(
+                60 to "1 hora",
+                720 to "12 horas",
+                1440 to "24 horas",
+                4320 to "3 días",
+            )
+            ModalBottomSheet(
+                containerColor = MaterialTheme.colorScheme.background,
+                onDismissRequest = { viewModel.closeGeneratePaymentLinkSheet() },
+                sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+            ) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(16.dp)
+                        .navigationBarsPadding()
+                        .imePadding(),
+                    verticalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    Text("Generar Link de Pago", style = titleMediumBold())
+                    Text(
+                        "Saldo pendiente por cobrar: ${formatDollarFromCents(pendingCents)}",
+                        style = bodyMediumBold()
+                    )
+
+                    DMOutlinedTextField(
+                        text = generationState.amountInput,
+                        label = "Monto a cobrar (opcional)",
+                        onChange = { viewModel.updateGeneratePaymentAmountInput(it) },
+                        modifier = Modifier.fillMaxWidth(),
+                        keyboardType = KeyboardType.Decimal
+                    )
+
+                    Text("Expiración del link", style = bodyMediumBold())
+                    FlowRow(
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        expiryPresets.forEach { (minutes, label) ->
+                            FilterChip(
+                                selected = !generationState.useCustomExpiry && generationState.selectedExpiryPresetMinutes == minutes,
+                                onClick = { viewModel.selectGenerateExpiryPreset(minutes) },
+                                label = { Text(label) }
+                            )
+                        }
+                        FilterChip(
+                            selected = generationState.useCustomExpiry,
+                            onClick = { viewModel.setGenerateCustomExpiryEnabled(true) },
+                            label = { Text("Personalizado") }
+                        )
+                    }
+
+                    if (generationState.useCustomExpiry) {
+                        DMOutlinedTextField(
+                            text = generationState.customExpiryMinutesInput,
+                            label = "Minutos personalizados",
+                            onChange = { viewModel.updateGenerateCustomExpiryInput(it) },
+                            modifier = Modifier.fillMaxWidth(),
+                            keyboardType = KeyboardType.Number
+                        )
+                    }
+
+                    generationState.errorMessage?.let {
+                        Text(it, color = MaterialTheme.colorScheme.error, style = bodySmall())
+                    }
+
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        OutlinedButtonM(
+                            modifier = Modifier.weight(1f),
+                            onClick = { viewModel.closeGeneratePaymentLinkSheet() }
+                        ) {
+                            Text("Cancelar")
+                        }
+                        ButtonM(
+                            modifier = Modifier.weight(1f),
+                            containerColor = MaterialTheme.colorScheme.secondary,
+                            contentColor = MaterialTheme.colorScheme.onSecondary,
+                            onClick = { viewModel.generatePaymentLink() }
+                        ) {
+                            Text("Generar")
+                        }
+                    }
+                }
+            }
+        }
+
+        if (uiState.invoiceRetryState.showSuccessDialog) {
+            val invoiceOrder = uiState.order
+            val invoiceTotal = invoiceOrder?.totalAmount?.let { formatNumberToMoney(it) }.orEmpty()
+            val invoiceCufe = invoiceOrder?.externalInvoiceNumber.orEmpty()
+            AlertDialog(
+                onDismissRequest = { viewModel.dismissRetryInvoiceDialogs() },
+                title = { Text("Factura emitida") },
+                text = {
+                    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Icon(
+                                imageVector = Icons.Rounded.Receipt,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.primary
+                            )
+                            Spacer(Modifier.width(8.dp))
+                            Text("La facturación del pedido fue completada exitosamente.")
+                        }
+                        if (invoiceOrder != null) {
+                            Divider()
+                            if (invoiceTotal.isNotBlank()) {
+                                InfoRow("Total facturado", invoiceTotal)
+                            }
+                            InfoRow(
+                                "CUFE",
+                                value = invoiceCufe.ifBlank { "No disponible" },
+                                maxLines = 2
+                            )
+                        }
+                    }
+                },
+                confirmButton = {
+                    ButtonM(onClick = {
+                        viewModel.dismissRetryInvoiceDialogs()
+                        viewModel.getDocumentByCufe()
+                    }) {
+                        Text("Descargar factura")
+                    }
+                },
+                dismissButton = {
+                    TextButton(onClick = {
+                        val shareMessage = viewModel.buildInvoiceShareMessage().ifBlank {
+                            "Factura emitida para el pedido #${invoiceOrder?.internalNumber.orEmpty()}"
+                        }
+                        if (shareMessage.isNotBlank()) {
+                            shareLink(shareMessage)
+                        }
+                        viewModel.dismissRetryInvoiceDialogs()
+                    }) {
+                        Text("Compartir factura")
+                    }
+                }
+            )
+        }
+
+        if (uiState.invoiceRetryState.showWarningDialog) {
+            AlertDialog(
+                onDismissRequest = { viewModel.dismissRetryInvoiceDialogs() },
+                title = { Text("Facturación en proceso") },
+                text = {
+                    Text(uiState.invoiceRetryState.warningMessage.orEmpty())
+                },
+                confirmButton = {
+                    ButtonM(onClick = { viewModel.dismissRetryInvoiceDialogs() }) {
+                        Text("Entendido")
+                    }
+                }
+            )
+        }
+
+        if (uiState.achApproveDialog.show) {
+            AlertDialog(
+                onDismissRequest = { viewModel.dismissAchApproveDialog() },
+                title = { Text("Aprobar pago ACH") },
+                text = {
+                    Text(
+                        if (uiState.achApproveDialog.highRisk) {
+                            "Este pago ACH tiene indicadores de riesgo alto. ¿Deseas aprobarlo de todas formas?"
+                        } else {
+                            "¿Confirmas que deseas aprobar este pago ACH?"
+                        }
+                    )
+                },
+                confirmButton = {
+                    ButtonM(onClick = { viewModel.confirmApproveAchPayment() }) {
+                        Text("Aprobar")
+                    }
+                },
+                dismissButton = {
+                    TextButton(onClick = { viewModel.dismissAchApproveDialog() }) {
+                        Text("Cancelar")
+                    }
+                }
+            )
+        }
+
+        if (uiState.achRejectDialog.show) {
+            val rejectDialog = uiState.achRejectDialog
+            val reasonOptions = remember { viewModel.achRejectReasonOptions() }
+            AlertDialog(
+                onDismissRequest = { viewModel.dismissAchRejectDialog() },
+                title = { Text("Rechazar pago ACH") },
+                text = {
+                    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                        Text("Selecciona la razón del rechazo:")
+                        FlowRow(
+                            horizontalArrangement = Arrangement.spacedBy(6.dp),
+                            verticalArrangement = Arrangement.spacedBy(6.dp)
+                        ) {
+                            reasonOptions.forEach { (code, label) ->
+                                FilterChip(
+                                    selected = rejectDialog.reasonCode == code,
+                                    onClick = { viewModel.updateAchRejectReasonCode(code) },
+                                    label = { Text(label) }
+                                )
+                            }
+                        }
+                        if (rejectDialog.reasonCode == "other") {
+                            OutlinedTextField(
+                                value = rejectDialog.customReasonText,
+                                onValueChange = { viewModel.updateAchRejectCustomReasonText(it) },
+                                label = { Text("Motivo personalizado") },
+                                modifier = Modifier.fillMaxWidth(),
+                                minLines = 3
+                            )
+                        }
+                        rejectDialog.errorMessage?.let {
+                            Text(
+                                text = it,
+                                style = bodySmall(),
+                                color = MaterialTheme.colorScheme.error
+                            )
+                        }
+                    }
+                },
+                confirmButton = {
+                    ButtonM(onClick = { viewModel.confirmRejectAchPayment() }) {
+                        Text("Rechazar")
+                    }
+                },
+                dismissButton = {
+                    TextButton(onClick = { viewModel.dismissAchRejectDialog() }) {
+                        Text("Cancelar")
+                    }
+                }
+            )
+        }
+
+        if (uiState.achProofPreviewState.show) {
+            val preview = uiState.achProofPreviewState
+            val previewDetail = preview.paymentIntentId?.let { viewModel.achDetailState(it).detail }
+            val canDownloadProof = viewModel.canDownloadAchProof(previewDetail)
+            val proofSheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+            ModalBottomSheet(
+                containerColor = MaterialTheme.colorScheme.background,
+                onDismissRequest = { viewModel.closeAchProofPreview() },
+                sheetState = proofSheetState
+            ) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(16.dp)
+                        .navigationBarsPadding(),
+                    verticalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    Text("Comprobante ACH", style = titleMediumBold())
+
+                    when {
+                        preview.isLoading -> {
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .height(340.dp)
+                                    .clip(RoundedCornerShape(12.dp))
+                                    .background(shimmerBrush())
+                            )
+                        }
+                        !preview.imageDataUri.isNullOrBlank() -> {
+                            AsyncImage(
+                                model = preview.imageDataUri,
+                                contentDescription = "Comprobante ACH",
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .heightIn(min = 220.dp, max = 460.dp)
+                                    .clip(RoundedCornerShape(12.dp))
+                            )
+                        }
+                        !preview.previewUrl.isNullOrBlank() &&
+                            (preview.contentType.orEmpty().contains("pdf", ignoreCase = true) ||
+                                preview.previewUrl.endsWith(".pdf", ignoreCase = true)) -> {
+                            PdfPreview(
+                                url = preview.previewUrl,
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .height(420.dp)
+                                    .clip(RoundedCornerShape(12.dp))
+                            )
+                        }
+                        !preview.previewUrl.isNullOrBlank() -> {
+                            AsyncImage(
+                                model = preview.previewUrl,
+                                contentDescription = "Comprobante ACH",
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .heightIn(min = 220.dp, max = 460.dp)
+                                    .clip(RoundedCornerShape(12.dp))
+                            )
+                        }
+                        else -> {
+                            Text(
+                                text = preview.errorMessage ?: "No hay vista previa disponible para este comprobante.",
+                                style = bodySmall(),
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                    }
+
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        if (!preview.previewUrl.isNullOrBlank() &&
+                            preview.previewUrl.startsWith("http", ignoreCase = true)
+                        ) {
+                            OutlinedButtonM(
+                                modifier = Modifier.weight(1f),
+                                onClick = { openCustomTab(preview.previewUrl) }
+                            ) {
+                                Text("Abrir enlace")
+                            }
+                        }
+                        if (canDownloadProof) {
+                            preview.paymentIntentId?.let { paymentIntentId ->
+                                ButtonM(
+                                    modifier = Modifier.weight(1f),
+                                    onClick = { viewModel.openAchProofDocumentForDownload(paymentIntentId) }
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Rounded.Download,
+                                        contentDescription = null,
+                                        modifier = Modifier.size(16.dp)
+                                    )
+                                    Spacer(Modifier.width(6.dp))
+                                    Text("Descargar")
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        if (uiState.showAchScoreInfoDialog) {
+            AlertDialog(
+                onDismissRequest = { viewModel.setAchScoreInfoDialog(false) },
+                title = { Text("¿Qué significa el score ACH?") },
+                text = {
+                    Text(
+                        "El score ACH combina señales del comprobante, el banco y los datos detectados para sugerir una revisión. " +
+                            "Un score más alto implica más riesgo potencial y requiere una validación más estricta."
+                    )
+                },
+                confirmButton = {
+                    TextButton(onClick = { viewModel.setAchScoreInfoDialog(false) }) {
+                        Text("Entendido")
+                    }
+                }
+            )
         }
 
         if (uiState.showShareSheet) {
@@ -815,6 +1207,37 @@ fun OrderDetailsScreen(
 }
 
 @Composable
+private fun OrderDetailsLoadingSkeleton() {
+    val brush = shimmerBrush()
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .verticalScroll(rememberScrollState())
+            .padding(16.dp),
+        verticalArrangement = Arrangement.spacedBy(16.dp)
+    ) {
+        repeat(4) { index ->
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(if (index == 0) 210.dp else 140.dp)
+                    .clip(RoundedCornerShape(12.dp))
+                    .background(brush)
+            )
+        }
+        repeat(3) {
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(48.dp)
+                    .clip(RoundedCornerShape(10.dp))
+                    .background(brush)
+            )
+        }
+    }
+}
+
+@Composable
 private fun OrderHeaderCard(order: Order, viewModel: OrdersDetailsViewModel) {
     Card(
         modifier = Modifier.fillMaxWidth(),
@@ -1055,9 +1478,11 @@ private fun TermTableRow(term: ReceivableTermDto) {
 @Composable
 private fun RegisteredPaymentsCard(
     order: Order,
+    viewModel: OrdersDetailsViewModel,
+    onNavigateAchReview: (String) -> Unit,
     onVoidPayment: (Long) -> Unit
 ) {
-    if (order.orderPayments.size < 2) return
+    if (order.orderPayments.isEmpty()) return
 
     Card(
         modifier = Modifier.fillMaxWidth(),
@@ -1080,9 +1505,37 @@ private fun RegisteredPaymentsCard(
             order.orderPayments.forEachIndexed { index, payment ->
                 val paymentDate = formatRfc3339DateOnly(payment.paymentDate)
                 val isVoided = !payment.voidedAt.isNullOrBlank()
-                val badgeLabel = if (isVoided) "Anulado" else "Aplicado"
-                val badgeBg = if (isVoided) Color(0xFFFFEBEE) else Color(0xFFE8F5E9)
-                val badgeFg = if (isVoided) Color(0xFFD32F2F) else Color(0xFF2E7D32)
+                val isAchAutomatic = viewModel.isAutomaticAchPayment(payment) && payment.paymentIntentId.isNotBlank()
+                val achIntentId = payment.paymentIntentId
+                val achState = if (isAchAutomatic) viewModel.achDetailState(achIntentId) else null
+                val achDetail = achState?.detail
+                val achStatusRaw = achDetail?.paymentStatus ?: payment.paymentStatusStr
+                val achStatus = viewModel.achStatusLabel(achStatusRaw)
+                val canApproveAch = isAchAutomatic && !isVoided && viewModel.canShowAchApproveAction(achStatusRaw)
+                val canRejectAch = isAchAutomatic && !isVoided && viewModel.canShowAchRejectAction(achStatusRaw)
+                val canOpenProof = isAchAutomatic && !isVoided && viewModel.canShowAchProofAction(achDetail)
+
+                val badgeLabel = when {
+                    isVoided -> "Anulado"
+                    isAchAutomatic -> achStatus
+                    else -> "Aplicado"
+                }
+                val statusColorPair = when {
+                    isVoided -> Pair(Color(0xFFFFEBEE), Color(0xFFD32F2F))
+                    normalizeStatusToken(achStatusRaw) in setOf("approved", "paid", "succeeded", "completed") ->
+                        Pair(Color(0xFFE8F5E9), Color(0xFF2E7D32))
+                    normalizeStatusToken(achStatusRaw) in setOf("rejected", "declined", "cancelled") ->
+                        Pair(Color(0xFFFFEBEE), Color(0xFFD32F2F))
+                    else -> Pair(Color(0xFFFFF8E1), Color(0xFFF57F17))
+                }
+                val badgeBg = statusColorPair.first
+                val badgeFg = statusColorPair.second
+
+                if (isAchAutomatic) {
+                    LaunchedEffect(achIntentId) {
+                        viewModel.loadAchDetailIfNeeded(achIntentId)
+                    }
+                }
 
                 Column {
                     Row(
@@ -1108,6 +1561,103 @@ private fun RegisteredPaymentsCard(
                         text = paymentDate,
                         style = labelSmall(color = MaterialTheme.colorScheme.onSurfaceVariant)
                     )
+                    if (isAchAutomatic) {
+                        Spacer(modifier = Modifier.height(4.dp))
+                        if (achState?.isLoading == true && achDetail == null) {
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .height(42.dp)
+                                    .clip(RoundedCornerShape(8.dp))
+                                    .background(shimmerBrush())
+                            )
+                        } else if (!achState?.errorMessage.isNullOrBlank()) {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(6.dp)
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Rounded.ErrorOutline,
+                                    contentDescription = null,
+                                    tint = MaterialTheme.colorScheme.error,
+                                    modifier = Modifier.size(14.dp)
+                                )
+                                Text(
+                                    text = achState?.errorMessage.orEmpty(),
+                                    style = labelSmall(color = MaterialTheme.colorScheme.error)
+                                )
+                            }
+                        } else {
+                            achDetail?.let { detail ->
+                                if (detail.bankName.isNotBlank()) {
+                                    Text(
+                                        text = "Banco: ${detail.bankName}",
+                                        style = labelSmall(color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                    )
+                                }
+                                if (detail.destinationAccount.isNotBlank()) {
+                                    Text(
+                                        text = "Cuenta destino: ${detail.destinationAccount}",
+                                        style = labelSmall(color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                    )
+                                }
+                                if (detail.reference.isNotBlank()) {
+                                    Text(
+                                        text = "Referencia: ${detail.reference}",
+                                        style = labelSmall(color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                    )
+                                }
+                            }
+                        }
+
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(6.dp)
+                        ) {
+                            TextButtonS(
+                                label = "Ver detalles",
+                                color = MaterialTheme.colorScheme.primary,
+                                prefixIcon = rememberVectorPainter(Icons.Rounded.OpenInNew)
+                            ) {
+                                onNavigateAchReview(achIntentId)
+                            }
+                            if (canOpenProof) {
+                                TextButtonS(
+                                    label = "Ver comprobante",
+                                    color = MaterialTheme.colorScheme.secondary,
+                                    prefixIcon = rememberVectorPainter(Icons.Rounded.Visibility)
+                                ) {
+                                    viewModel.openAchProofPreview(achIntentId)
+                                }
+                            }
+                        }
+
+                        if (canApproveAch || canRejectAch) {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.spacedBy(6.dp)
+                            ) {
+                                if (canApproveAch) {
+                                    OutlinedButtonM(
+                                        modifier = Modifier.weight(1f),
+                                        onClick = { viewModel.openAchApproveDialog(achIntentId) }
+                                    ) {
+                                        Text("Aprobar")
+                                    }
+                                }
+                                if (canRejectAch) {
+                                    OutlinedButtonM(
+                                        modifier = Modifier.weight(1f),
+                                        onClick = { viewModel.openAchRejectDialog(achIntentId) },
+                                        contentColor = MaterialTheme.colorScheme.error,
+                                        border = BorderStroke(1.dp, MaterialTheme.colorScheme.error)
+                                    ) {
+                                        Text("Rechazar")
+                                    }
+                                }
+                            }
+                        }
+                    }
                     if (!isVoided && payment.id != null && order.invoiceStatus == InvoiceStatus.ISSUED.id) {
                         TextButtonS(
                             label = "Anular pago",
@@ -1123,6 +1673,14 @@ private fun RegisteredPaymentsCard(
             }
         }
     }
+}
+
+private fun normalizeStatusToken(raw: String?): String {
+    return raw.orEmpty()
+        .trim()
+        .lowercase()
+        .replace('-', '_')
+        .replace(' ', '_')
 }
 
 @Composable

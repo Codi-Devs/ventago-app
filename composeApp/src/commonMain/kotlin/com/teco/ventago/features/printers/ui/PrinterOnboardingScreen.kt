@@ -62,6 +62,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import coil3.compose.AsyncImage
 import com.teco.ventago.core.SnackbarService
+import com.teco.ventago.core.firebase.AnalyticsService
 import com.teco.ventago.design_system.buttons.ButtonM
 import com.teco.ventago.design_system.buttons.OutlinedButtonM
 import com.teco.ventago.design_system.buttons.TextButtonS
@@ -81,6 +82,7 @@ import com.teco.ventago.design_system.theme.vanishedBackgroundColor
 import com.teco.ventago.features.printers.domain.model.PrinterDiscoveryStatus
 import com.teco.ventago.features.printers.ui.viewmodel.PrinterBranchOption
 import com.teco.ventago.features.printers.ui.viewmodel.PrinterConfigMode
+import com.teco.ventago.features.printers.ui.viewmodel.PrinterEntryContext
 import com.teco.ventago.features.printers.ui.viewmodel.PrinterOnboardingState
 import com.teco.ventago.features.printers.ui.viewmodel.PrinterOnboardingStep
 import com.teco.ventago.features.printers.ui.viewmodel.PrinterOnboardingUiEvent
@@ -147,11 +149,20 @@ private fun PrinterFlowContent(
     onSaveAndClose: () -> Unit,
 ) {
     val snackbarService: SnackbarService = koinInject()
+    val analyticsService: AnalyticsService = koinInject()
     val uiState by viewModel.uiState.collectAsState()
     val loadingSheetState = rememberModalBottomSheetState(confirmValueChange = { false })
     val coroutineScope = rememberCoroutineScope()
+    var completedEventSent by rememberSaveable { mutableStateOf(false) }
+    val analyticsSource = remember(uiState.entryContext, fromQr) {
+        printerAnalyticsSource(uiState.entryContext, fromQr)
+    }
 
     LaunchedEffect(Unit) {
+        analyticsService.logPrinterOnboardingOpened(
+            source = analyticsSource,
+            step = printerAnalyticsStep(uiState.step)
+        )
         viewModel.events.collect { event ->
             when (event) {
                 is PrinterOnboardingUiEvent.Message -> snackbarService.show(event.text)
@@ -160,17 +171,47 @@ private fun PrinterFlowContent(
         }
     }
 
+    LaunchedEffect(uiState.step) {
+        val step = printerAnalyticsStep(uiState.step)
+        analyticsService.logPrinterOnboardingStepViewed(
+            source = analyticsSource,
+            step = step
+        )
+        if (uiState.step == PrinterOnboardingStep.SUCCESS && !completedEventSent) {
+            completedEventSent = true
+            analyticsService.logPrinterOnboardingCompleted(source = analyticsSource)
+        }
+    }
+
     when (uiState.step) {
         PrinterOnboardingStep.LANDING -> PrinterLandingStep(
             fromQr = fromQr,
             onBuyPrinter = {
+                analyticsService.logPrinterOnboardingActionClicked(
+                    source = analyticsSource,
+                    step = "landing",
+                    actionValue = "buy"
+                )
                 openWhatsappMessage(
                     "50763879477",
                     "Hola, quiero adquirir una impresora térmica para usarla con VentaGo."
                 )
             },
-            onHasPrinter = viewModel::startSetupFlow,
-            onDismiss = onDismiss,
+            onHasPrinter = {
+                analyticsService.logPrinterOnboardingActionClicked(
+                    source = analyticsSource,
+                    step = "landing",
+                    actionValue = "configure"
+                )
+                viewModel.startSetupFlow()
+            },
+            onDismiss = {
+                analyticsService.logPrinterOnboardingDismissed(
+                    source = analyticsSource,
+                    step = "landing"
+                )
+                onDismiss()
+            },
         )
 
         PrinterOnboardingStep.SETUP -> PrinterSetupStep(
@@ -190,6 +231,10 @@ private fun PrinterFlowContent(
                 if (uiState.showSuccessOnSave) {
                     viewModel.goBackFromConfig()
                 } else {
+                    analyticsService.logPrinterOnboardingDismissed(
+                        source = analyticsSource,
+                        step = "config"
+                    )
                     onDismiss()
                 }
             },
@@ -214,7 +259,14 @@ private fun PrinterFlowContent(
 
         PrinterOnboardingStep.SUCCESS -> PrinterSuccessStep(
             onGoToBranches = onGoToBranches,
-            onConfigureAnother = viewModel::configureAnotherPrinter,
+            onConfigureAnother = {
+                analyticsService.logPrinterOnboardingActionClicked(
+                    source = analyticsSource,
+                    step = "success",
+                    actionValue = "configure_another"
+                )
+                viewModel.configureAnotherPrinter()
+            },
         )
     }
 
@@ -226,6 +278,20 @@ private fun PrinterFlowContent(
         ) {
             viewModel.hideLoading()
         }
+    }
+}
+
+private fun printerAnalyticsSource(entryContext: PrinterEntryContext, fromQr: Boolean): String {
+    return if (fromQr) "qr" else entryContext.name.lowercase()
+}
+
+private fun printerAnalyticsStep(step: PrinterOnboardingStep): String {
+    return when (step) {
+        PrinterOnboardingStep.LANDING -> "landing"
+        PrinterOnboardingStep.SETUP -> "setup"
+        PrinterOnboardingStep.NETWORK -> "network"
+        PrinterOnboardingStep.CONFIG -> "config"
+        PrinterOnboardingStep.SUCCESS -> "success"
     }
 }
 

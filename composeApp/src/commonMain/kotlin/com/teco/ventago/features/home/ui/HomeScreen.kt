@@ -10,6 +10,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -27,6 +28,7 @@ import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.Chat
+import androidx.compose.material.icons.outlined.NotificationsNone
 import androidx.compose.material.icons.rounded.AddShoppingCart
 import androidx.compose.material.icons.rounded.Redeem
 import androidx.compose.material.icons.rounded.Description
@@ -37,6 +39,7 @@ import androidx.compose.material.icons.rounded.Person
 import androidx.compose.material.icons.rounded.ReceiptLong
 import androidx.compose.material.icons.rounded.TrendingDown
 import androidx.compose.material.icons.rounded.TrendingUp
+import androidx.compose.material3.Badge
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
@@ -44,6 +47,7 @@ import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Divider
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
@@ -86,6 +90,7 @@ import com.teco.ventago.design_system.theme.latoFontFamily
 import com.teco.ventago.design_system.theme.titleMediumBold
 import com.teco.ventago.design_system.theme.vanishedBackgroundColor
 import com.teco.ventago.core.flags.IFlagsService
+import com.teco.ventago.features.notifications.domain.formatUnreadBadge
 import com.teco.ventago.features.home.ui.viewmodel.HomeViewModel
 import com.teco.ventago.features.home.domain.model.HomeSalesRange
 import com.teco.ventago.features.home.domain.model.HomeSummary
@@ -164,6 +169,7 @@ fun HomeScreen(
     // Request notification permission when user successfully logs in and lands on home screen
     LaunchedEffect(Unit) {
         platformState.requestNotificationPermission()
+        viewModel.onHomeVisible()
     }
 
     if (uiState.isLoadingData) {
@@ -186,6 +192,12 @@ fun HomeScreen(
             onAddImageClick = {
                 navigate(PosScreens.BusinessLogoSettingsScreen)
             },
+            trailingAction = {
+                NotificationBell(
+                    unreadCount = uiState.unreadCount,
+                    onClick = { navigate(PosScreens.NotificationsScreen) }
+                )
+            }
         )
 
         if (flagsState.dgiDown) {
@@ -633,6 +645,38 @@ fun HomeScreen(
                     Text(stringResource(Res.string.action_continue), style = bodyMediumBold(color = MaterialTheme.colorScheme.onSecondary))
                 }
                 Spacer(Modifier.height(12.dp))
+            }
+        }
+    }
+}
+
+@Composable
+private fun NotificationBell(
+    unreadCount: Int,
+    onClick: () -> Unit,
+) {
+    val badgeValue = formatUnreadBadge(unreadCount)
+    Box {
+        IconButton(onClick = onClick) {
+            Icon(
+                imageVector = Icons.Outlined.NotificationsNone,
+                contentDescription = "Notifications",
+                tint = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.size(28.dp)
+            )
+        }
+        if (badgeValue != null) {
+            Badge(
+                modifier = Modifier
+                    .align(Alignment.TopEnd)
+                    .offset(x = (-2).dp, y = 2.dp),
+                containerColor = Color(0xFFD32F2F),
+                contentColor = Color.White
+            ) {
+                Text(
+                    text = badgeValue,
+                    style = labelSmall(color = Color.White)
+                )
             }
         }
     }

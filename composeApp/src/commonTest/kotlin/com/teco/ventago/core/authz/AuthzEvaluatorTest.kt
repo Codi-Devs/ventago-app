@@ -74,4 +74,38 @@ class AuthzEvaluatorTest {
     fun settingsRouteIsAvailableWithoutSettingsScope() {
         assertTrue(AuthzEvaluator.canRoute(RouteKey.SETTINGS_PAGE, subUser(), emptySet()))
     }
+
+    @Test
+    fun paymentLinkAndAchPoliciesRequirePaymentsBetaAndScopes() {
+        val scopedUser = subUser(
+            setOf(
+                ScopeKey.INVOICE_CREATE_PAYMENT_LINK,
+                ScopeKey.ACH_PAYMENT_VIEW,
+                ScopeKey.ACH_PAYMENT_APPROVE,
+                ScopeKey.ACH_PAYMENT_REJECT
+            )
+        )
+
+        assertFalse(AuthzEvaluator.canAction(ActionKey.ORDERS_PAYMENT_LINK, scopedUser, emptySet()))
+        assertFalse(AuthzEvaluator.canRoute(RouteKey.ACH_PAYMENT_DETAILS, scopedUser, emptySet()))
+        assertFalse(AuthzEvaluator.canRoute(RouteKey.PAYMENTS_PAGE, scopedUser, emptySet()))
+
+        val beta = setOf(BetaFeature.PAYMENTS)
+        assertTrue(AuthzEvaluator.canAction(ActionKey.ORDERS_PAYMENT_LINK, scopedUser, beta))
+        assertTrue(AuthzEvaluator.canAction(ActionKey.ACH_PAYMENT_APPROVE, scopedUser, beta))
+        assertTrue(AuthzEvaluator.canAction(ActionKey.ACH_PAYMENT_REJECT, scopedUser, beta))
+        assertTrue(AuthzEvaluator.canRoute(RouteKey.ACH_PAYMENT_DETAILS, scopedUser, beta))
+        assertTrue(AuthzEvaluator.canRoute(RouteKey.PAYMENTS_PAGE, scopedUser, beta))
+    }
+
+    @Test
+    fun paymentsRouteDeniesSubUserWithoutScopesEvenIfPaymentsBetaEnabled() {
+        assertFalse(
+            AuthzEvaluator.canRoute(
+                RouteKey.PAYMENTS_PAGE,
+                subUser(),
+                setOf(BetaFeature.PAYMENTS)
+            )
+        )
+    }
 }

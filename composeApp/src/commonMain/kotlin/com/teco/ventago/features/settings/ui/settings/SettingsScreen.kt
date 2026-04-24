@@ -71,7 +71,6 @@ import com.teco.ventago.design_system.buttons.SettingsTextButton
 import com.teco.ventago.design_system.buttons.TextButtonS
 import com.teco.ventago.design_system.loaders.shimmerBrush
 import com.teco.ventago.design_system.molecules.DMAlertDialog
-import com.teco.ventago.design_system.molecules.payments.PaymentItem
 import com.teco.ventago.design_system.organism.BusinessImage
 import com.teco.ventago.design_system.organism.LoadingSheet
 import com.teco.ventago.design_system.organism.SaveChangesBar
@@ -105,7 +104,6 @@ import org.koin.compose.viewmodel.koinViewModel
 import com.teco.ventago.navigation.PrinterOnboardingRoute
 import ventago.composeapp.generated.resources.Res
 import ventago.composeapp.generated.resources.action_settings
-import ventago.composeapp.generated.resources.bank_transfer
 import ventago.composeapp.generated.resources.business_address
 import ventago.composeapp.generated.resources.business_address_notdot
 import ventago.composeapp.generated.resources.business_info
@@ -119,8 +117,6 @@ import ventago.composeapp.generated.resources.ic_bank
 import ventago.composeapp.generated.resources.name
 import ventago.composeapp.generated.resources.no_address_selected
 import ventago.composeapp.generated.resources.order_see_on_map
-import ventago.composeapp.generated.resources.payment_methods
-import ventago.composeapp.generated.resources.paypal
 import ventago.composeapp.generated.resources.phone
 import ventago.composeapp.generated.resources.privacy_policy
 import ventago.composeapp.generated.resources.request_camera_permission
@@ -128,10 +124,8 @@ import ventago.composeapp.generated.resources.save
 import ventago.composeapp.generated.resources.select_photo_from_camera
 import ventago.composeapp.generated.resources.select_photo_from_gallery
 import ventago.composeapp.generated.resources.set_address
-import ventago.composeapp.generated.resources.settings_configure_payment
 import ventago.composeapp.generated.resources.sign_out
 import ventago.composeapp.generated.resources.terms_and_conditions
-import ventago.composeapp.generated.resources.yappy_logo
 import kotlin.compareTo
 import kotlin.text.get
 
@@ -399,9 +393,6 @@ fun SettingsScreen(
                 }
             }
 
-            // HIDDEN: Payments Card temporarily disabled (backend bug)
-            // See tasks/restore-payment-links.md for full restore instructions
-
             if (uiState.hasQuotesAccess) {
                 QuoteSettingsSection(
                     additionalInfo = uiState.defaultQuoteAdditionalInfo,
@@ -422,6 +413,16 @@ fun SettingsScreen(
                 shape = RoundedCornerShape(10.dp),
                 onClick = {})
             {
+                if (uiState.hasPaymentsAccess) {
+                    SettingsTextButton(
+                        label = "Pagos y cobros",
+                        badgeText = "Nuevo",
+                        onClick = {
+                            navigate(PosScreens.Payments)
+                        }
+                    )
+                }
+
                 if (uiState.invoicingEnabled && uiState.canModifySettings) {
                     SettingsTextButton(
                         label = "Sucursales",

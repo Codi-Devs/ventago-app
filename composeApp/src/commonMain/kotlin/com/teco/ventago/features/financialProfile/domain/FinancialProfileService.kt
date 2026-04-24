@@ -37,6 +37,8 @@ class FinancialProfileService(
 
     fun observe(): StateFlow<BusinessFinancialProfile?> = state.asStateFlow()
 
+    fun hasLoadedProfile(): Boolean = state.value != null
+
     fun init() {
         appScope.launch(Dispatchers.IO) {
             // 1) try cache fast-path
@@ -90,6 +92,7 @@ class FinancialProfileService(
         val summary = state.value
         return summary?.let {
             it.paymentSummary.onboardingCompleted && (it.paymentSummary.paymentMethods.paypal.linkedAccount || it.paymentSummary.paymentMethods.yappy.linkedAccount
+                    || (it.paymentSummary.paymentMethods.ach.configured && it.paymentSummary.paymentMethods.ach.enabled)
                     || it.paymentSummary.paymentMethods.manualTransference.enabled)
         } ?: false
     }

@@ -216,6 +216,7 @@
     <string name="paypal_commissions">Note: Our platform charges a 2% fee for payments made through PayPal. This fee is independent and additional to PayPal’s own transaction fees, which are managed directly by PayPal.</string>
     <string name="check_paypal_commissions">Check PayPal fees</string>
     <string name="bank_transfer">Bank Transfer</string>
+    <string name="ach_with_proof">ACH with proof</string>
     <string name="suspension_warning">Non-payment of charges may result in suspension of your account.</string>
     <string name="get_paid_easily">Get Paid Easily with Digital Payment Links</string>
     <string name="accept_online_payments">Start accepting secure online payments from your clients with just a few taps.</string>
@@ -357,6 +358,23 @@
     <string name="home_summary_no_top_clients">No recurring clients yet</string>
     <string name="home_summary_orders_word">orders</string>
     <string name="home_summary_records_word">records</string>
+    <string name="notifications">Notifications</string>
+    <string name="notifications_empty">No notifications available</string>
+    <string name="notifications_load_more">Load more</string>
+    <string name="notifications_dismiss_all">Dismiss all</string>
+    <string name="notifications_dismiss">Dismiss notification</string>
+    <string name="notifications_action_unavailable">This action is not available in the app yet.</string>
+    <string name="notifications_filter_all">All</string>
+    <string name="notifications_filter_unread">Unread</string>
+    <string name="notifications_filter_important">Important</string>
+    <string name="notifications_filter_transactions">Transactions</string>
+    <string name="notifications_filter_empty">There are no notifications in this category.</string>
+    <string name="notifications_mark_all_read">Mark all as read</string>
+    <string name="notifications_section_today">Today</string>
+    <string name="notifications_section_yesterday">Yesterday</string>
+    <string name="notifications_section_undated">Undated</string>
+    <string name="notifications_info_title">Your notifications update in real time</string>
+    <string name="notifications_info_subtitle">Track payment and ACH proof status updates from here.</string>
 
 <!--    Invoicing Strings -->
     <string name="invoicing">Invoicing</string>

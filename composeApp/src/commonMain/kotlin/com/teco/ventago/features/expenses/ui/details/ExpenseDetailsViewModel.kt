@@ -7,6 +7,7 @@ import com.teco.ventago.core.authz.ActionKey
 import com.teco.ventago.core.authz.AuthzEvaluator
 import com.teco.ventago.core.beta.BetaFeature
 import com.teco.ventago.core.beta.BetaService
+import com.teco.ventago.core.firebase.AnalyticsService
 import com.teco.ventago.design_system.organism.LoadingState
 import com.teco.ventago.design_system.organism.LoadingBottomSheetState
 import com.teco.ventago.features.auth.domain.IAuthService
@@ -39,6 +40,7 @@ class ExpenseDetailsViewModel(
     private val pdfSharer: PdfSharer,
     private val betaService: BetaService,
     private val authService: IAuthService,
+    private val analyticsService: AnalyticsService,
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(ExpenseDetailsState())
@@ -143,13 +145,19 @@ class ExpenseDetailsViewModel(
                     return@launch
                 }
                 showLoading("Registrando pago...")
+                analyticsService.logExpensePaymentSubmitAttempted(mode = "create")
                 val createdPayment = withContext(Dispatchers.IO) {
                     expensesService.createPayment(expenseId, requestResult.request, proofFile)
                 }
                 applyCreatedPaymentLocally(createdPayment)
+                analyticsService.logExpensePaymentSubmitSucceeded(mode = "create")
                 showSuccess("Pago registrado correctamente")
                 _uiState.value = _uiState.value.copy(isSubmittingPayment = false, paymentSuccess = true)
             } catch (e: Exception) {
+                analyticsService.logExpensePaymentSubmitFailed(
+                    mode = "create",
+                    errorCode = analyticsService.extractErrorCode(e)
+                )
                 showError("No se pudo registrar el pago")
                 _uiState.value = _uiState.value.copy(isSubmittingPayment = false, paymentError = e.message)
             }
@@ -166,8 +174,12 @@ class ExpenseDetailsViewModel(
                     expensesService.deletePayment(expenseId, paymentId)
                 }
                 applyDeletedPaymentLocally(paymentId)
+                analyticsService.logExpensePaymentDeleteSucceeded()
                 showSuccess("Pago eliminado correctamente")
             } catch (e: Exception) {
+                analyticsService.logExpensePaymentDeleteFailed(
+                    errorCode = analyticsService.extractErrorCode(e)
+                )
                 showError("No se pudo eliminar el pago")
                 _uiState.value = _uiState.value.copy(error = e.message)
             }
@@ -186,6 +198,7 @@ class ExpenseDetailsViewModel(
                     amountPaid = payment.amountPaid ?: 0.0
                 )
                 showLoading("Actualizando pago...")
+                analyticsService.logExpensePaymentSubmitAttempted(mode = "mark_paid")
                 val updatedPayment = withContext(Dispatchers.IO) {
                     expensesService.updatePayment(expenseId, paymentId, request)
                 }
@@ -196,8 +209,13 @@ class ExpenseDetailsViewModel(
                     fallback = payment
                 )
                 applyUpsertedPaymentLocally(optimisticPayment)
+                analyticsService.logExpensePaymentSubmitSucceeded(mode = "mark_paid")
                 showSuccess("Pago actualizado correctamente")
             } catch (e: Exception) {
+                analyticsService.logExpensePaymentSubmitFailed(
+                    mode = "mark_paid",
+                    errorCode = analyticsService.extractErrorCode(e)
+                )
                 showError("No se pudo actualizar el pago")
                 _uiState.value = _uiState.value.copy(error = e.message)
             }
@@ -244,6 +262,8 @@ class ExpenseDetailsViewModel(
                     return@launch
                 }
                 showLoading("Actualizando pago...")
+                val mode = if (paymentStatus == "paid") "mark_paid" else "update"
+                analyticsService.logExpensePaymentSubmitAttempted(mode = mode)
                 val updatedPayment = withContext(Dispatchers.IO) {
                     expensesService.updatePayment(expenseId, paymentId, requestResult.request, proofFile)
                 }
@@ -256,6 +276,7 @@ class ExpenseDetailsViewModel(
                     fallback = fallback
                 )
                 applyUpsertedPaymentLocally(optimisticPayment)
+                analyticsService.logExpensePaymentSubmitSucceeded(mode = mode)
                 showSuccess("Pago actualizado correctamente")
                 _uiState.value = _uiState.value.copy(
                     isSubmittingPayment = false,
@@ -263,6 +284,10 @@ class ExpenseDetailsViewModel(
                     editingPayment = null
                 )
             } catch (e: Exception) {
+                analyticsService.logExpensePaymentSubmitFailed(
+                    mode = if (paymentStatus == "paid") "mark_paid" else "update",
+                    errorCode = analyticsService.extractErrorCode(e)
+                )
                 showError("No se pudo actualizar el pago")
                 _uiState.value = _uiState.value.copy(isSubmittingPayment = false, paymentError = e.message)
             }

@@ -38,10 +38,19 @@ data class CreateOrderResponse(
 @Serializable
 data class CreateOrderLinkDto(
     @SerialName("url")
-    val url: String,
+    val url: String = "",
 
     @SerialName("action")
-    val action: String
+    val action: String = "",
+
+    @SerialName("status")
+    val status: String? = null,
+
+    @SerialName("link")
+    val link: String? = null,
+
+    @SerialName("created_at")
+    val createdAt: String? = null,
 )
 
 @Serializable

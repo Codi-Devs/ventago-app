@@ -2,8 +2,10 @@ package com.teco.ventago.features.orders.data.provider
 
 import com.teco.ventago.features.orders.domain.models.Order
 import com.teco.ventago.features.orders.domain.models.requests.CancelOrderRequest
+import com.teco.ventago.features.orders.domain.models.requests.CreatePaymentLinkRequest
 import com.teco.ventago.features.orders.domain.models.requests.CreateOrderRequest
 import com.teco.ventago.features.orders.domain.models.requests.DeleteOrderRequest
+import com.teco.ventago.features.orders.domain.models.requests.RejectAchPaymentRequest
 import com.teco.ventago.features.orders.domain.models.requests.RescheduleReceivablesRequest
 import com.teco.ventago.features.orders.domain.models.requests.RegisterManualPaymentsRequest
 import com.teco.ventago.features.orders.domain.models.requests.VoidOrderPaymentRequest
@@ -31,6 +33,19 @@ interface IOrdersProvider {
         orderId: Int,
     ): ApiResponse
     suspend fun getInvoiceDocsRaw(businessId: Int, cufe: String): ApiResponse
+    suspend fun createPaymentLink(businessId: Int, request: CreatePaymentLinkRequest): ApiResponse
+    suspend fun getAchPaymentByIntent(businessId: Int, paymentIntentId: String): ApiResponse
+    suspend fun approveAchPayment(businessId: Int, paymentIntentId: String): ApiResponse
+    suspend fun rejectAchPayment(
+        businessId: Int,
+        paymentIntentId: String,
+        request: RejectAchPaymentRequest
+    ): ApiResponse
+    suspend fun downloadAchProofFile(
+        businessId: Int,
+        paymentId: String,
+        proofId: String
+    ): BinaryPayload
 
     // OLD METHODS> CHECK IF NEEDED LATER
 

@@ -4,9 +4,11 @@ import com.teco.ventago.Configs
 import com.teco.ventago.features.auth.domain.IAuthService
 import com.teco.ventago.features.orders.domain.models.Order
 import com.teco.ventago.features.orders.domain.models.requests.CancelOrderRequest
+import com.teco.ventago.features.orders.domain.models.requests.CreatePaymentLinkRequest
 import com.teco.ventago.features.orders.domain.models.requests.CreateOrderRequest
 import com.teco.ventago.features.orders.domain.models.requests.DeleteOrderRequest
 import com.teco.ventago.features.orders.domain.models.requests.FindOrderByIdRequest
+import com.teco.ventago.features.orders.domain.models.requests.RejectAchPaymentRequest
 import com.teco.ventago.features.orders.domain.models.requests.RescheduleReceivablesRequest
 import com.teco.ventago.features.orders.domain.models.requests.RegisterManualPaymentsRequest
 import com.teco.ventago.features.orders.domain.models.requests.VoidOrderPaymentRequest
@@ -26,6 +28,7 @@ import io.ktor.http.contentType
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.buildJsonObject
 
 class OrdersProvider(private val client: HttpClient, private val authService: IAuthService) : IOrdersProvider {
     val json = Json {
@@ -249,6 +252,143 @@ class OrdersProvider(private val client: HttpClient, private val authService: IA
             }
         }
         return response
+    }
+
+    override suspend fun createPaymentLink(businessId: Int, request: CreatePaymentLinkRequest): ApiResponse {
+        val res = client.post(Configs.ordersBasePath + "/api/v1/payments/links") {
+            headers {
+                append(HttpHeaders.Accept, "*/*")
+                append(HttpHeaders.Authorization, "Bearer ${authService.getJwtToken()}")
+                append(HttpHeaders.ContentType, "application/json")
+                append("X-Business-ID", "$businessId")
+            }
+            contentType(ContentType.Application.Json)
+            setBody(json.encodeToString(CreatePaymentLinkRequest.serializer(), request))
+        }
+
+        val body = res.body<JsonObject>()
+        val response = ApiResponse.fromJson(body)
+        if (response.error == ApiError.AUTH_001) {
+            return try {
+                authService.refreshToken(client)
+                createPaymentLink(businessId, request)
+            } catch (e: Exception) {
+                response
+            }
+        }
+        return response
+    }
+
+    override suspend fun getAchPaymentByIntent(businessId: Int, paymentIntentId: String): ApiResponse {
+        val res = client.get(Configs.ordersBasePath + "/api/v1/payments/ach/payments/$paymentIntentId") {
+            headers {
+                append(HttpHeaders.Accept, "*/*")
+                append(HttpHeaders.Authorization, "Bearer ${authService.getJwtToken()}")
+                append(HttpHeaders.ContentType, "application/json")
+                append("X-Business-ID", "$businessId")
+            }
+            contentType(ContentType.Application.Json)
+        }
+
+        val body = res.body<JsonObject>()
+        val response = ApiResponse.fromJson(body)
+        if (response.error == ApiError.AUTH_001) {
+            return try {
+                authService.refreshToken(client)
+                getAchPaymentByIntent(businessId, paymentIntentId)
+            } catch (e: Exception) {
+                response
+            }
+        }
+        return response
+    }
+
+    override suspend fun approveAchPayment(businessId: Int, paymentIntentId: String): ApiResponse {
+        val res = client.post(Configs.ordersBasePath + "/api/v1/payments/ach/payments/$paymentIntentId/approve") {
+            headers {
+                append(HttpHeaders.Accept, "*/*")
+                append(HttpHeaders.Authorization, "Bearer ${authService.getJwtToken()}")
+                append(HttpHeaders.ContentType, "application/json")
+                append("X-Business-ID", "$businessId")
+            }
+            contentType(ContentType.Application.Json)
+            setBody(buildJsonObject { })
+        }
+
+        val body = res.body<JsonObject>()
+        val response = ApiResponse.fromJson(body)
+        if (response.error == ApiError.AUTH_001) {
+            return try {
+                authService.refreshToken(client)
+                approveAchPayment(businessId, paymentIntentId)
+            } catch (e: Exception) {
+                response
+            }
+        }
+        return response
+    }
+
+    override suspend fun rejectAchPayment(
+        businessId: Int,
+        paymentIntentId: String,
+        request: RejectAchPaymentRequest
+    ): ApiResponse {
+        val res = client.post(Configs.ordersBasePath + "/api/v1/payments/ach/payments/$paymentIntentId/reject") {
+            headers {
+                append(HttpHeaders.Accept, "*/*")
+                append(HttpHeaders.Authorization, "Bearer ${authService.getJwtToken()}")
+                append(HttpHeaders.ContentType, "application/json")
+                append("X-Business-ID", "$businessId")
+            }
+            contentType(ContentType.Application.Json)
+            setBody(json.encodeToString(RejectAchPaymentRequest.serializer(), request))
+        }
+
+        val body = res.body<JsonObject>()
+        val response = ApiResponse.fromJson(body)
+        if (response.error == ApiError.AUTH_001) {
+            return try {
+                authService.refreshToken(client)
+                rejectAchPayment(businessId, paymentIntentId, request)
+            } catch (e: Exception) {
+                response
+            }
+        }
+        return response
+    }
+
+    override suspend fun downloadAchProofFile(
+        businessId: Int,
+        paymentId: String,
+        proofId: String
+    ): BinaryPayload {
+        val res = client.get(
+            Configs.ordersBasePath + "/api/v1/payments/ach/payments/$paymentId/proofs/$proofId/file"
+        ) {
+            headers {
+                append(HttpHeaders.Accept, "*/*")
+                append(HttpHeaders.Authorization, "Bearer ${authService.getJwtToken()}")
+                append("X-Business-ID", "$businessId")
+            }
+        }
+
+        if (res.status == HttpStatusCode.Unauthorized) {
+            authService.refreshToken(client)
+            return downloadAchProofFile(businessId, paymentId, proofId)
+        }
+
+        val contentDisposition = res.headers[HttpHeaders.ContentDisposition]
+        val fileName = contentDisposition
+            ?.substringAfter("filename=", "")
+            ?.trim()
+            ?.trim('"')
+            ?.ifBlank { null }
+
+        return BinaryPayload(
+            bytes = res.body(),
+            contentType = res.headers[HttpHeaders.ContentType],
+            fileName = fileName
+        )
     }
 
 

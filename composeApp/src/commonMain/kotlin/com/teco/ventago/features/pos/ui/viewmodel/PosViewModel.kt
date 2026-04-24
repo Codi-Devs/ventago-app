@@ -5,6 +5,7 @@ import com.teco.ventago.core.BaseViewModel
 import com.teco.ventago.core.LocalStorage
 import com.teco.ventago.core.PdfSharer
 import com.teco.ventago.core.SnackbarService
+import com.teco.ventago.core.firebase.AnalyticsService
 import com.teco.ventago.core.authz.ActionKey
 import com.teco.ventago.core.authz.AuthzEvaluator
 import com.teco.ventago.core.beta.BetaFeature
@@ -98,9 +99,11 @@ import kotlinx.datetime.TimeZone
 import kotlinx.datetime.plus
 import kotlinx.datetime.toInstant
 import kotlinx.datetime.toLocalDateTime
+import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.jsonPrimitive
+import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.encodeToString
 import kotlin.String
 import kotlin.io.encoding.Base64
@@ -125,11 +128,44 @@ class PosViewModel(
     private val betaService: BetaService,
     private val printerService: PrinterService,
     private val snackbarService: SnackbarService,
+    private val analyticsService: AnalyticsService,
 ) : BaseViewModel<PosState, PosStateUiEvent>(PosState()) {
     private companion object {
         const val DEFAULT_QUOTE_BRANCH_CODE = "0000"
         const val PRODUCT_VIEW_MODE_KEY_PREFIX = "pos.product_view_mode"
         const val BRANCH_BILLING_POINT_KEY_PREFIX = "pos.last_branch_billing_point"
+        const val PAYMENT_LINK_BADGE_SEEN_KEY_PREFIX = "pos.payment_link_tab_seen"
+        const val PAYMENT_LINK_CHECKPOINT_KEY_PREFIX = "pos.payment_link_checkpoint"
+        const val PAYMENT_LINK_CHECKPOINT_MAX_AGE_SECONDS = 60L * 60L * 12L
+        const val PAYMENT_CONFIG_REFRESH_THROTTLE_SECONDS = 60L
+    }
+
+    @Serializable
+    private data class PaymentStepCheckpoint(
+        val paymentFlowMode: String = PaymentFlowMode.MANUAL_OR_INSTALLMENTS.name,
+        val tipAmount: Long = 0L,
+        val tipIsPercentage: Boolean = true,
+        val charged: Map<Int, Long> = emptyMap(),
+        val installments: List<InstallmentCheckpoint> = emptyList(),
+        val otherPaymentDescription: String = "",
+        val selectedDocTypeIndex: Int = 0,
+        val selectedDocType: String = "01",
+        val selectedOperationNatureIndex: Int = 0,
+        val selectedOperationNature: String = "01",
+        val savedAtEpochSeconds: Long = 0L
+    )
+
+    @Serializable
+    private data class InstallmentCheckpoint(
+        val amountCents: Long,
+        val dueDateIso: String
+    )
+
+    private enum class RestoreCheckpointResult {
+        RESTORED_AND_CLEARED,
+        KEEP_FOR_LATER,
+        CLEAR_INVALID_OR_STALE,
+        NONE
     }
 
     var business: Business? = null
@@ -138,6 +174,8 @@ class PosViewModel(
     private var order: Order? = null
     private var pendingQuoteBranchCode: String? = null
     private var customerAddressesJob: Job? = null
+    private var paymentConfigRefreshJob: Job? = null
+    private var lastPaymentConfigRefreshAtEpochSeconds: Long = 0L
     private data class PersistedBranchBillingPoint(
         val branchCode: String,
         val billingPoint: String
@@ -146,6 +184,7 @@ class PosViewModel(
     private data class PosAuthzState(
         val canCreateInvoice: Boolean,
         val canCreateDraft: Boolean,
+        val canCreatePaymentLink: Boolean,
         val canCreateQuote: Boolean,
         val canUpdateQuote: Boolean,
         val canUseCustomProduct: Boolean,
@@ -162,6 +201,7 @@ class PosViewModel(
                     PosAuthzState(
                         canCreateInvoice = AuthzEvaluator.canAction(ActionKey.ORDERS_CREATE, user, betaSnapshot),
                         canCreateDraft = AuthzEvaluator.canAction(ActionKey.ORDERS_CREATE_DRAFT, user, betaSnapshot),
+                        canCreatePaymentLink = AuthzEvaluator.canAction(ActionKey.ORDERS_PAYMENT_LINK, user, betaSnapshot),
                         canCreateQuote = AuthzEvaluator.canAction(ActionKey.QUOTES_CREATE, user, betaSnapshot),
                         canUpdateQuote = AuthzEvaluator.canAction(ActionKey.QUOTES_UPDATE, user, betaSnapshot),
                         canUseCustomProduct = AuthzEvaluator.canAction(ActionKey.ORDERS_CUSTOM_PRODUCT, user, betaSnapshot),
@@ -173,6 +213,7 @@ class PosViewModel(
                         copy(
                             canCreateInvoice = authz.canCreateInvoice,
                             canCreateDraft = authz.canCreateDraft,
+                            canCreatePaymentLink = authz.canCreatePaymentLink,
                             canCreateQuote = authz.canCreateQuote,
                             canUpdateQuote = authz.canUpdateQuote,
                             canUseCustomProduct = authz.canUseCustomProduct,
@@ -248,6 +289,7 @@ class PosViewModel(
                             productViewMode = persistedViewMode
                         )
                     }
+                    refreshPaymentLinkBadge(it.businessId)
                     applyPersistedBranchBillingPointSelectionIfPossible()
                     fetchCustomerAddresses()
                 }
@@ -948,6 +990,17 @@ class PosViewModel(
 
 
     fun createOrder(createPaymentLink: Boolean = false, saveAsDraft: Boolean) {
+        if (saveAsDraft) {
+            analyticsService.logOrderCreationPaymentOptionSelected(mode = "DRAFT")
+        }
+        val hasPaymentLinkAccess = canAction(ActionKey.ORDERS_PAYMENT_LINK)
+        val effectiveCreatePaymentLink = createPaymentLink && hasPaymentLinkAccess
+        if (createPaymentLink && !hasPaymentLinkAccess) {
+            updateState { copy(paymentFlowMode = PaymentFlowMode.MANUAL_OR_INSTALLMENTS) }
+            viewModelScope.launch {
+                snackbarService.show("No tienes permisos para crear enlaces de pago. Se aplicará cobro manual.")
+            }
+        }
         val allowed = if (saveAsDraft) {
             canAction(ActionKey.ORDERS_CREATE_DRAFT)
         } else {
@@ -961,7 +1014,7 @@ class PosViewModel(
         viewModelScope.launch {
             withContext(Dispatchers.IO) {
                 try {
-                    val request = createOrderRequest(createPaymentLink, saveAsDraft)
+                    val request = createOrderRequest(effectiveCreatePaymentLink, saveAsDraft)
                     println("ASDASD: ${json.encodeToString(request)}")
                   val response = posService.createOrder(business!!.businessId, request)
                   val hasValidOrderNumber = response.orderNumber.isNotBlank()
@@ -969,7 +1022,7 @@ class PosViewModel(
                   
                   // If creating a confirmed order (not draft, not payment link) and invoice status is NONE,
                   // treat it as invoice generation failure
-                  if (!createPaymentLink && !saveAsDraft && invoiceStatusFromResponse == InvoiceStatus.NONE) {
+                  if (!effectiveCreatePaymentLink && !saveAsDraft && invoiceStatusFromResponse == InvoiceStatus.NONE) {
                       invoiceStatusFromResponse = InvoiceStatus.FAILED
                   }
                   
@@ -984,7 +1037,7 @@ class PosViewModel(
                       )
                   }
 
-                  if (hasValidOrderNumber && !createPaymentLink && !saveAsDraft) {
+                  if (hasValidOrderNumber && !effectiveCreatePaymentLink && !saveAsDraft) {
                       val printer = printerService.resolveActivePrinter(
                           branchCode = request.branch.code,
                           billingPointCode = request.branch.billingPoint
@@ -1019,6 +1072,7 @@ class PosViewModel(
                       if (!hasValidOrderNumber) {
                           showError()
                       } else {
+                        clearPaymentLinkCheckpoint()
                         showSuccess()
                       }
                   }
@@ -2421,16 +2475,110 @@ class PosViewModel(
     fun amountToCharge(): Long = (legalInvoiceTotal() + tipsTotal()).coerceAtLeast(0L)
 
     // ---------- Payment flow ----------
-    fun setPaymentFlow(mode: PaymentFlowMode) = updateState {
-        // If switching to PAYMENT_LINK, clear installments and manual charged amounts
-        if (mode == PaymentFlowMode.PAYMENT_LINK) {
-            copy(
-                paymentFlowMode = mode,
-                charged = emptyMap(),
-                installments = emptyList()
-            )
+    fun setPaymentFlow(mode: PaymentFlowMode) {
+        val currentMode = uiState.value.paymentFlowMode
+        if (mode == currentMode) return
+        if (mode == PaymentFlowMode.PAYMENT_LINK && !uiState.value.canCreatePaymentLink) return
+
+        analyticsService.logOrderCreationPaymentOptionSelected(
+            mode = when (mode) {
+                PaymentFlowMode.MANUAL_OR_INSTALLMENTS -> "MANUAL"
+                PaymentFlowMode.PAYMENT_LINK -> "LINK"
+            }
+        )
+
+        updateState {
+            if (mode == PaymentFlowMode.PAYMENT_LINK) {
+                business?.businessId?.let { businessId ->
+                    localStorage.set(paymentLinkBadgeSeenKey(businessId), true)
+                }
+                copy(
+                    paymentFlowMode = mode,
+                    showPaymentLinkNewBadge = false,
+                    charged = emptyMap(),
+                    installments = emptyList()
+                )
+            } else {
+                copy(paymentFlowMode = mode)
+            }
+        }
+    }
+
+    fun markPaymentLinkBadgeSeen() {
+        val businessId = business?.businessId ?: return
+        localStorage.set(paymentLinkBadgeSeenKey(businessId), true)
+        updateState { copy(showPaymentLinkNewBadge = false) }
+    }
+
+    fun checkPaymentMethodsConfigured(onResult: (Boolean) -> Unit) {
+        val configured = if (financialProfileService.hasLoadedProfile()) {
+            financialProfileService.paymentsConfigured()
         } else {
-            copy(paymentFlowMode = mode)
+            uiState.value.paymentsConfigured
+        }
+        updateState { copy(paymentsConfigured = configured) }
+        onResult(configured)
+    }
+
+    fun savePaymentLinkCheckpointForResume() {
+        val businessId = business?.businessId ?: return
+        val state = uiState.value
+        val checkpoint = PaymentStepCheckpoint(
+            paymentFlowMode = state.paymentFlowMode.name,
+            tipAmount = state.tipAmount,
+            tipIsPercentage = state.tipIsPercentage,
+            charged = state.charged,
+            installments = state.installments.map {
+                InstallmentCheckpoint(
+                    amountCents = it.amountCents,
+                    dueDateIso = it.dueDateIso
+                )
+            },
+            otherPaymentDescription = state.otherPaymentDescription,
+            selectedDocTypeIndex = state.selectedDocTypeIndex,
+            selectedDocType = state.selectedDocType,
+            selectedOperationNatureIndex = state.selectedOperationNatureIndex,
+            selectedOperationNature = state.selectedOperationNature,
+            savedAtEpochSeconds = Clock.System.now().epochSeconds
+        )
+        localStorage.set(paymentLinkCheckpointKey(businessId), json.encodeToString(checkpoint))
+    }
+
+    fun onPaymentScreenVisible() {
+        business?.businessId?.let { businessId ->
+            refreshPaymentConfigInBackground(
+                businessId = businessId,
+                force = !financialProfileService.hasLoadedProfile()
+            )
+        }
+        when (restorePaymentLinkCheckpointSnapshot()) {
+            RestoreCheckpointResult.RESTORED_AND_CLEARED -> {
+                // restored and cleared
+            }
+            RestoreCheckpointResult.CLEAR_INVALID_OR_STALE -> {
+                clearPaymentLinkCheckpoint()
+            }
+            RestoreCheckpointResult.KEEP_FOR_LATER,
+            RestoreCheckpointResult.NONE -> Unit
+        }
+    }
+
+    private fun refreshPaymentConfigInBackground(
+        businessId: Int,
+        force: Boolean = false
+    ) {
+        val nowEpochSeconds = Clock.System.now().epochSeconds
+        val isThrottled = !force &&
+            (nowEpochSeconds - lastPaymentConfigRefreshAtEpochSeconds) < PAYMENT_CONFIG_REFRESH_THROTTLE_SECONDS
+        if (isThrottled || paymentConfigRefreshJob?.isActive == true) return
+
+        paymentConfigRefreshJob = viewModelScope.launch {
+            lastPaymentConfigRefreshAtEpochSeconds = Clock.System.now().epochSeconds
+            withContext(Dispatchers.IO) {
+                financialProfileService.refresh(businessId)
+            }
+            val configured = financialProfileService.paymentsConfigured()
+            updateState { copy(paymentsConfigured = configured) }
         }
     }
 
@@ -2569,6 +2717,89 @@ class PosViewModel(
 
     fun manualOrInstallmentsEnabled(): Boolean =
         uiState.value.paymentFlowMode == PaymentFlowMode.MANUAL_OR_INSTALLMENTS
+
+    private fun refreshPaymentLinkBadge(businessId: Int) {
+        val seen = localStorage.bool(paymentLinkBadgeSeenKey(businessId)) == true
+        updateState { copy(showPaymentLinkNewBadge = !seen) }
+    }
+
+    private fun paymentLinkBadgeSeenKey(businessId: Int): String {
+        return "$PAYMENT_LINK_BADGE_SEEN_KEY_PREFIX:$businessId"
+    }
+
+    private fun paymentLinkCheckpointKey(businessId: Int): String {
+        return "$PAYMENT_LINK_CHECKPOINT_KEY_PREFIX:$businessId"
+    }
+
+    private fun restorePaymentLinkCheckpointSnapshot(): RestoreCheckpointResult {
+        val businessId = business?.businessId ?: return RestoreCheckpointResult.NONE
+        val key = paymentLinkCheckpointKey(businessId)
+        val state = uiState.value
+
+        val rawCheckpoint = localStorage.string(key)
+        if (rawCheckpoint.isNullOrBlank()) {
+            val legacyRestore = localStorage.bool(key) == true
+            if (!legacyRestore) return RestoreCheckpointResult.NONE
+            return if (state.canCreatePaymentLink && state.paymentsConfigured) {
+                updateState { copy(paymentFlowMode = PaymentFlowMode.PAYMENT_LINK) }
+                clearPaymentLinkCheckpoint()
+                RestoreCheckpointResult.RESTORED_AND_CLEARED
+            } else {
+                RestoreCheckpointResult.KEEP_FOR_LATER
+            }
+        }
+
+        val checkpoint = runCatching {
+            json.decodeFromString<PaymentStepCheckpoint>(rawCheckpoint)
+        }.getOrNull() ?: return RestoreCheckpointResult.CLEAR_INVALID_OR_STALE
+
+        val nowEpochSeconds = Clock.System.now().epochSeconds
+        if (nowEpochSeconds - checkpoint.savedAtEpochSeconds > PAYMENT_LINK_CHECKPOINT_MAX_AGE_SECONDS) {
+            return RestoreCheckpointResult.CLEAR_INVALID_OR_STALE
+        }
+
+        if (state.flowMode != FlowMode.SALE || state.cart.isEmpty()) {
+            return RestoreCheckpointResult.KEEP_FOR_LATER
+        }
+
+        val restoredMode = runCatching {
+            PaymentFlowMode.valueOf(checkpoint.paymentFlowMode)
+        }.getOrDefault(PaymentFlowMode.MANUAL_OR_INSTALLMENTS)
+
+        val canRestorePaymentLinkMode = restoredMode != PaymentFlowMode.PAYMENT_LINK ||
+            (state.canCreatePaymentLink && state.paymentsConfigured)
+        if (!canRestorePaymentLinkMode) {
+            return RestoreCheckpointResult.KEEP_FOR_LATER
+        }
+
+        updateState {
+            copy(
+                paymentFlowMode = restoredMode,
+                tipAmount = checkpoint.tipAmount,
+                tipIsPercentage = checkpoint.tipIsPercentage,
+                charged = checkpoint.charged,
+                installments = checkpoint.installments.map {
+                    InstallmentUI(
+                        amountCents = it.amountCents,
+                        dueDateIso = it.dueDateIso
+                    )
+                },
+                otherPaymentDescription = checkpoint.otherPaymentDescription,
+                selectedDocTypeIndex = checkpoint.selectedDocTypeIndex,
+                selectedDocType = checkpoint.selectedDocType,
+                selectedOperationNatureIndex = checkpoint.selectedOperationNatureIndex,
+                selectedOperationNature = checkpoint.selectedOperationNature,
+                showPaymentLinkNewBadge = false
+            )
+        }
+        clearPaymentLinkCheckpoint()
+        return RestoreCheckpointResult.RESTORED_AND_CLEARED
+    }
+
+    private fun clearPaymentLinkCheckpoint() {
+        val businessId = business?.businessId ?: return
+        localStorage.deleteObject(paymentLinkCheckpointKey(businessId))
+    }
 
     /** Remaining (legal+tips) minus manual-minus-installments. */
     fun remainingToAllocate(): Long {

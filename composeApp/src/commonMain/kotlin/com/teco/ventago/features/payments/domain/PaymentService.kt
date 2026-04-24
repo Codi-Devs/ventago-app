@@ -4,6 +4,12 @@ import com.teco.ventago.features.financialProfile.domain.FinancialProfileService
 import com.teco.ventago.features.payments.data.repository.IPaymentsRepository
 import com.teco.ventago.features.payments.data.repository.IPaypalRepository
 import com.teco.ventago.features.payments.data.repository.IYappyRepository
+import com.teco.ventago.features.payments.domain.models.AchAccount
+import com.teco.ventago.features.payments.domain.models.AchAccountConfigRequest
+import com.teco.ventago.features.payments.domain.models.AchStatus
+import com.teco.ventago.features.payments.domain.models.FeeBatchItem
+import com.teco.ventago.features.payments.domain.models.FeeSummary
+import com.teco.ventago.features.payments.domain.models.FeeTransactionItem
 
 
 class PaymentService(
@@ -119,6 +125,84 @@ class PaymentService(
             }
         }
         return success
+    }
+
+    suspend fun setAutoInvoiceOnPaymentSuccess(businessId: Int, enabled: Boolean): Boolean {
+        val success = paymentsRepository.setAutoInvoice(businessId, enabled)
+        if (success) {
+            val profile = financialProfileService.observe().value
+            profile?.let {
+                val newProfile = profile.copy(
+                    paymentSummary = profile.paymentSummary.copy(
+                        autoInvoiceOnPaymentSuccess = enabled
+                    )
+                )
+                financialProfileService.updateProfile(newProfile, ignoreChange = true)
+            }
+        }
+        return success
+    }
+
+    suspend fun getAchStatus(businessId: Int): AchStatus {
+        return paymentsRepository.getAchStatus(businessId)
+    }
+
+    suspend fun getAchAccount(businessId: Int): AchAccount {
+        return paymentsRepository.getAchAccount(businessId)
+    }
+
+    suspend fun configureAchAccount(businessId: Int, request: AchAccountConfigRequest): Boolean {
+        val success = paymentsRepository.configureAchAccount(businessId, request)
+        if (success) {
+            financialProfileService.refresh()
+        }
+        return success
+    }
+
+    suspend fun disableAch(businessId: Int): Boolean {
+        val success = paymentsRepository.disableAch(businessId)
+        if (success) {
+            financialProfileService.refresh()
+        }
+        return success
+    }
+
+    suspend fun getFeesSummary(businessId: Int, currencyCode: String): FeeSummary {
+        return paymentsRepository.getFeesSummary(businessId, currencyCode)
+    }
+
+    suspend fun getFeeTransactions(
+        businessId: Int,
+        page: Int,
+        size: Int,
+        status: String?,
+        paymentMethod: String?,
+        currencyCode: String
+    ): Pair<List<FeeTransactionItem>, Int> {
+        return paymentsRepository.getFeeTransactions(
+            businessId = businessId,
+            page = page,
+            size = size,
+            status = status,
+            paymentMethod = paymentMethod,
+            currencyCode = currencyCode
+        )
+    }
+
+    suspend fun getFeeBatches(
+        businessId: Int,
+        page: Int,
+        size: Int,
+        status: String?,
+        currencyCode: String
+    ): Pair<List<FeeBatchItem>, Int> {
+        return paymentsRepository.getFeeBatches(
+            businessId = businessId,
+            page = page,
+            size = size,
+            status = status,
+            currencyCode = currencyCode
+        )
     }
 
 }

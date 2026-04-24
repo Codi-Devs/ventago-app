@@ -8,6 +8,11 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.staticCompositionLocalOf
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.Settings
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.ui.Modifier
 import androidx.navigation.NavBackStackEntry
 import androidx.navigation.NavController
@@ -51,9 +56,11 @@ import com.teco.ventago.features.customers.ui.list.CustomersListScreen
 import com.teco.ventago.features.home.ui.HomeSummaryScreen
 import com.teco.ventago.features.home.ui.HomeScreen
 import com.teco.ventago.features.invoicing.ui.InvoicingLandingScreen
+import com.teco.ventago.features.notifications.ui.NotificationsScreen
 import com.teco.ventago.features.orders.domain.OrderService
 import com.teco.ventago.features.orders.domain.models.CustomerSnapshot
 import com.teco.ventago.features.orders.domain.models.Order
+import com.teco.ventago.features.orders.ui.ach_review.AchPaymentReviewScreen
 import com.teco.ventago.features.orders.ui.order_invoice.OrderInvoiceActions
 import com.teco.ventago.features.orders.ui.order_details.OrderDetailsScreen
 import com.teco.ventago.features.orders.ui.order_history.OrderHistoryScreen
@@ -71,13 +78,8 @@ import com.teco.ventago.features.printers.ui.PrinterConfigScreen as PrinterConfi
 import com.teco.ventago.features.printers.ui.PrinterOnboardingScreen as PrinterOnboardingContent
 import com.teco.ventago.features.printers.ui.PrintersScreen as PrintersContent
 import com.teco.ventago.features.payments.ui.home.OnboardingPaymentScreen
+import com.teco.ventago.features.payments.ui.home.viewmodel.PaymentMethodType
 import com.teco.ventago.features.payments.ui.home.viewmodel.PaymentMethodsViewModel
-import com.teco.ventago.features.payments.ui.paypal.OnboardingPaypalScreen
-import com.teco.ventago.features.payments.ui.paypal.PaypalScreenContent
-import com.teco.ventago.features.payments.ui.paypal.viewmodel.PaypalViewModel
-import com.teco.ventago.features.payments.ui.transference.TransferenceScreenView
-import com.teco.ventago.features.payments.ui.yappy.YappyScreenView
-import com.teco.ventago.features.payments.ui.yappy.viewmodel.YappyViewModel
 import com.teco.ventago.features.pos.ui.CartScreen
 import com.teco.ventago.features.pos.ui.CartScreenBottomBar
 import com.teco.ventago.features.pos.ui.PaymentScreen
@@ -123,6 +125,7 @@ import ventago.composeapp.generated.resources.action_settings
 import ventago.composeapp.generated.resources.add_address
 import ventago.composeapp.generated.resources.add_image
 import ventago.composeapp.generated.resources.add_new_category
+import ventago.composeapp.generated.resources.ach_with_proof
 import ventago.composeapp.generated.resources.authz_access_denied_title
 import ventago.composeapp.generated.resources.bank_transfer
 import ventago.composeapp.generated.resources.billing_points
@@ -143,6 +146,7 @@ import ventago.composeapp.generated.resources.order_details
 import ventago.composeapp.generated.resources.order_status_history
 import ventago.composeapp.generated.resources.orders
 import ventago.composeapp.generated.resources.payments
+import ventago.composeapp.generated.resources.payment_methods
 import ventago.composeapp.generated.resources.paypal
 import ventago.composeapp.generated.resources.pos
 import ventago.composeapp.generated.resources.pos_add_client
@@ -161,6 +165,7 @@ import ventago.composeapp.generated.resources.expenses
 import ventago.composeapp.generated.resources.expense_details
 import ventago.composeapp.generated.resources.expense_accounts_settings
 import ventago.composeapp.generated.resources.new_expense
+import ventago.composeapp.generated.resources.notifications
 import ventago.composeapp.generated.resources.cufe_import
 import ventago.composeapp.generated.resources.register
 import ventago.composeapp.generated.resources.register_business
@@ -201,6 +206,7 @@ enum class PosScreens(
     Greetings(Res.string.pos),
     UnauthorizedScreen(Res.string.authz_access_denied_title, showBackButton = false),
     HomeScreen(Res.string.home, false, showBackButton = false),
+    NotificationsScreen(Res.string.notifications),
     SummaryScreen(Res.string.home_summary_tab, true, showBackButton = false),
 
     //    Products Screens
@@ -269,11 +275,11 @@ enum class PosScreens(
 
     // Payments Screens
     Payments(Res.string.payments), PaymentsHomeScreen(
-        Res.string.payments,
+        Res.string.payment_methods,
         true
     ),
     PaymentsTransferenceScreen(
-        Res.string.bank_transfer,
+        Res.string.ach_with_proof,
         true
     ),
     PaymentsPaypalOnboardingScreen(Res.string.paypal, true), PaymentsPaypalScreen(
@@ -295,6 +301,7 @@ enum class PosScreens(
         Res.string.order_details, true,
         actions = { backStackEntry, _, navigateAny -> OrderDetailsActions(backStackEntry, navigateAny) },
     ),
+    AchPaymentDetailsScreen(Res.string.details, true),
     OrderHistoryScreen(Res.string.order_status_history, true), OrderInvoiceScreen(
         Res.string.pos_invoice, true,
         actions = { backStackEntry, navigate, _ -> OrderInvoiceActions(backStackEntry) },
@@ -377,6 +384,17 @@ fun Navigation(
                 appViewModel = appViewModel
             ) {
                 navController.navigate(it.name)
+            }
+        }
+
+        composable(route = PosScreens.NotificationsScreen.name) {
+            analyticsService.logScreenView("NotificationsScreen")
+            NotificationsScreen { route ->
+                when (route) {
+                    is PosScreens -> navController.navigate(route.name)
+                    is AchPaymentDetailsRoute -> navController.navigate(route)
+                    else -> Unit
+                }
             }
         }
 
@@ -816,72 +834,158 @@ private fun NavGraphBuilder.addPOSNavigation(
 private fun NavGraphBuilder.addPaymentsNavigation(
     navController: NavHostController, appViewModel: AppViewModel, analyticsService: AnalyticsService
 ) {
+    fun PaymentMethodType.toScreen(): PosScreens {
+        return when (this) {
+            PaymentMethodType.Yappy -> PosScreens.PaymentsYappyScreen
+            PaymentMethodType.Ach -> PosScreens.PaymentsTransferenceScreen
+            PaymentMethodType.Paypal -> PosScreens.PaymentsPaypalScreen
+        }
+    }
+
     navigation(
         route = PosScreens.Payments.name, startDestination = PosScreens.PaymentsHomeScreen.name
     ) {
 
-        composable(route = PosScreens.PaymentsHomeScreen.name) {
-            val backStackEntry =
-                remember { navController.getBackStackEntry(PosScreens.Payments.name) }
+        composable(route = PosScreens.PaymentsHomeScreen.name) { backStackEntry ->
+            val owner = rememberSafeGraphOwner(
+                navController = navController,
+                graphRoute = PosScreens.Payments.name,
+                fallback = backStackEntry
+            )
             val viewModel: PaymentMethodsViewModel =
-                koinViewModel(viewModelStoreOwner = backStackEntry)
+                koinViewModel(viewModelStoreOwner = owner)
             analyticsService.logScreenView("PaymentsHomeScreen")
-            OnboardingPaymentScreen(viewModel) { route ->
-                navController.navigate(route.name)
-            }
-        }
-
-        composable(route = PosScreens.PaymentsTransferenceScreen.name) {
-            val backStackEntry =
-                remember { navController.getBackStackEntry(PosScreens.Payments.name) }
-            val viewModel: PaymentMethodsViewModel =
-                koinViewModel(viewModelStoreOwner = backStackEntry)
-            analyticsService.logScreenView("PaymentsTransferenceScreen")
-            TransferenceScreenView(viewModel)
-        }
-
-        composable(route = PosScreens.PaymentsPaypalOnboardingScreen.name) {
-            val backStackEntry =
-                remember { navController.getBackStackEntry(PosScreens.Payments.name) }
-            val viewModel: PaypalViewModel = koinViewModel(viewModelStoreOwner = backStackEntry)
-            analyticsService.logScreenView("PaymentsPaypalOnboardingScreen")
-            OnboardingPaypalScreen(viewModel)
-        }
-
-        composable(route = PosScreens.PaymentsPaypalScreen.name) {
-            val backStackEntry =
-                remember { navController.getBackStackEntry(PosScreens.Payments.name) }
-            val viewModel: PaypalViewModel = koinViewModel(viewModelStoreOwner = backStackEntry)
-            analyticsService.logScreenView("PaymentsPaypalScreen")
-            PaypalScreenContent(viewModel)
-        }
-
-        composable(route = PosScreens.PaymentsYappyScreen.name) { yappyBackStackEntry ->
-            val backStackEntry =
-                remember { navController.getBackStackEntry(PosScreens.Payments.name) }
-            val viewModel: YappyViewModel = koinViewModel(viewModelStoreOwner = backStackEntry)
-            analyticsService.logScreenView("PaymentsYappyScreen")
-            
-            // Watch for flag from top app bar back button
-            val showYappyHelpFlag by yappyBackStackEntry
-                .savedStateHandle
-                .getStateFlow<Boolean?>("show_yappy_help", null)
-                .collectAsState()
-            
-            LaunchedEffect(showYappyHelpFlag) {
-                if (showYappyHelpFlag == true) {
-                    // The flag will be handled by YappyScreenView
-                    // We'll pass it as a parameter or use a callback
-                    yappyBackStackEntry.savedStateHandle["show_yappy_help"] = null
-                }
-            }
-            
-            YappyScreenView(
+            OnboardingPaymentScreen(
                 viewModel = viewModel,
-                showHelpFromTopBar = showYappyHelpFlag == true,
-                navigateBack = {
+                onNavigateMethod = { method ->
+                    viewModel.onOpenMethod(method)
+                    navController.navigate(method.toScreen().name)
+                },
+                onNavigateSettingsRoot = {
+                    navController.navigate(PosScreens.SettingsScreen.name) {
+                        popUpTo(PosScreens.Payments.name) { inclusive = true }
+                        launchSingleTop = true
+                    }
+                },
+                onNavigateBusinessAddress = {
+                    navController.navigate(PosScreens.BusinessAddressSettingsScreen.name)
+                },
+            )
+        }
+
+        composable(route = PosScreens.PaymentsYappyScreen.name) { backStackEntry ->
+            val owner = rememberSafeGraphOwner(
+                navController = navController,
+                graphRoute = PosScreens.Payments.name,
+                fallback = backStackEntry
+            )
+            val viewModel: PaymentMethodsViewModel = koinViewModel(viewModelStoreOwner = owner)
+            analyticsService.logScreenView("PaymentsYappyScreen")
+            OnboardingPaymentScreen(
+                viewModel = viewModel,
+                isMethodRoute = true,
+                methodRoute = PaymentMethodType.Yappy,
+                onNavigateMethod = {},
+                onNavigateSettingsRoot = {
+                    navController.navigate(PosScreens.SettingsScreen.name) {
+                        popUpTo(PosScreens.Payments.name) { inclusive = true }
+                        launchSingleTop = true
+                    }
+                },
+                onNavigateBusinessAddress = {
+                    navController.navigate(PosScreens.BusinessAddressSettingsScreen.name)
+                },
+                onExitMethodRoute = {
+                    viewModel.onEnterHomeRoute()
                     navController.navigateUp()
-                }
+                },
+            )
+        }
+
+        composable(route = PosScreens.PaymentsTransferenceScreen.name) { backStackEntry ->
+            val owner = rememberSafeGraphOwner(
+                navController = navController,
+                graphRoute = PosScreens.Payments.name,
+                fallback = backStackEntry
+            )
+            val viewModel: PaymentMethodsViewModel = koinViewModel(viewModelStoreOwner = owner)
+            analyticsService.logScreenView("PaymentsAchScreen")
+            OnboardingPaymentScreen(
+                viewModel = viewModel,
+                isMethodRoute = true,
+                methodRoute = PaymentMethodType.Ach,
+                onNavigateMethod = {},
+                onNavigateSettingsRoot = {
+                    navController.navigate(PosScreens.SettingsScreen.name) {
+                        popUpTo(PosScreens.Payments.name) { inclusive = true }
+                        launchSingleTop = true
+                    }
+                },
+                onNavigateBusinessAddress = {
+                    navController.navigate(PosScreens.BusinessAddressSettingsScreen.name)
+                },
+                onExitMethodRoute = {
+                    viewModel.onEnterHomeRoute()
+                    navController.navigateUp()
+                },
+            )
+        }
+
+        composable(route = PosScreens.PaymentsPaypalScreen.name) { backStackEntry ->
+            val owner = rememberSafeGraphOwner(
+                navController = navController,
+                graphRoute = PosScreens.Payments.name,
+                fallback = backStackEntry
+            )
+            val viewModel: PaymentMethodsViewModel = koinViewModel(viewModelStoreOwner = owner)
+            analyticsService.logScreenView("PaymentsPaypalScreen")
+            OnboardingPaymentScreen(
+                viewModel = viewModel,
+                isMethodRoute = true,
+                methodRoute = PaymentMethodType.Paypal,
+                onNavigateMethod = {},
+                onNavigateSettingsRoot = {
+                    navController.navigate(PosScreens.SettingsScreen.name) {
+                        popUpTo(PosScreens.Payments.name) { inclusive = true }
+                        launchSingleTop = true
+                    }
+                },
+                onNavigateBusinessAddress = {
+                    navController.navigate(PosScreens.BusinessAddressSettingsScreen.name)
+                },
+                onExitMethodRoute = {
+                    viewModel.onEnterHomeRoute()
+                    navController.navigateUp()
+                },
+            )
+        }
+
+        composable(route = PosScreens.PaymentsPaypalOnboardingScreen.name) { backStackEntry ->
+            val owner = rememberSafeGraphOwner(
+                navController = navController,
+                graphRoute = PosScreens.Payments.name,
+                fallback = backStackEntry
+            )
+            val viewModel: PaymentMethodsViewModel = koinViewModel(viewModelStoreOwner = owner)
+            analyticsService.logScreenView("PaymentsPaypalOnboardingScreen")
+            OnboardingPaymentScreen(
+                viewModel = viewModel,
+                isMethodRoute = true,
+                methodRoute = PaymentMethodType.Paypal,
+                onNavigateMethod = {},
+                onNavigateSettingsRoot = {
+                    navController.navigate(PosScreens.SettingsScreen.name) {
+                        popUpTo(PosScreens.Payments.name) { inclusive = true }
+                        launchSingleTop = true
+                    }
+                },
+                onNavigateBusinessAddress = {
+                    navController.navigate(PosScreens.BusinessAddressSettingsScreen.name)
+                },
+                onExitMethodRoute = {
+                    viewModel.onEnterHomeRoute()
+                    navController.navigateUp()
+                },
             )
         }
     }
@@ -1019,8 +1123,23 @@ private fun NavGraphBuilder.addOrdersNavigation(
             val viewModel: OrdersDetailsViewModel = koinViewModel(viewModelStoreOwner = ordersOwner)
             analyticsService.logScreenView("OrderDetailsScreen")
             OrderDetailsScreen(viewModel) { route, builder ->
-                navController.navigate(route, builder)
+                when (route) {
+                    is PosScreens -> navController.navigate(route, builder)
+                    is AchPaymentDetailsRoute -> navController.navigate(route)
+                    else -> Unit
+                }
             }
+        }
+
+        composable<AchPaymentDetailsRoute> { backStackEntry ->
+            val args = backStackEntry.toRoute<AchPaymentDetailsRoute>()
+            val ordersOwner = rememberGraphOwner(navController, PosScreens.Orders.name)
+            val viewModel: OrdersDetailsViewModel = koinViewModel(viewModelStoreOwner = ordersOwner)
+            analyticsService.logScreenView("AchPaymentDetailsScreen")
+            AchPaymentReviewScreen(
+                viewModel = viewModel,
+                paymentUid = args.paymentUid
+            )
         }
 
         composable(route = PosScreens.OrderInvoiceScreen.name) {
@@ -1409,6 +1528,7 @@ fun String.toPosScreenOrNull(): PosScreens? {
     if (this.contains("PosNoteRoute")) return PosScreens.POSScreen
     if (this.contains("pos_note")) return PosScreens.POSScreen
     if (this.contains("OrderDetailsRoute")) return PosScreens.OrderDetailsScreen
+    if (this.contains("AchPaymentDetailsRoute")) return PosScreens.AchPaymentDetailsScreen
     if (this.contains("BillingPointManageRoute")) return PosScreens.BillingPointManageScreen
     if (this.contains("AddBillingPointRoute")) return PosScreens.AddBillingPointScreen
     if (this.contains("EditBillingPointRoute")) return PosScreens.EditBillingPointScreen
@@ -1482,6 +1602,9 @@ data class PosNoteRoute(
 
 @Serializable
 data class OrderDetailsRoute(val orderJson: String? = null)
+
+@Serializable
+data class AchPaymentDetailsRoute(val paymentUid: String)
 
 @Serializable
 data class BillingPointManageRoute(val branchCode: String)
