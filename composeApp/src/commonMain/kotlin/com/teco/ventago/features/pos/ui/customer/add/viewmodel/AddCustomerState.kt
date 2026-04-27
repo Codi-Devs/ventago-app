@@ -34,6 +34,11 @@ data class AddCustomerState(
     val rucCheckDigit: String? = null,
     val legalName: String? = null,
     val addressLine: String? = null,
+    val nameError: String? = null,
+    val addressLineError: String? = null,
+    val provinceError: String? = null,
+    val districtError: String? = null,
+    val corregimientoError: String? = null,
 
     val selectedProvince: String? = null,
     val selectedDistrict: String? = null,
@@ -72,4 +77,5 @@ data class AddCustomerState(
 sealed class AddCustomerStateUiEvent {
     data object InvalidRucNumber : AddCustomerStateUiEvent()
     data object CustomerCreated : AddCustomerStateUiEvent()
+    data class ValidationError(val message: String) : AddCustomerStateUiEvent()
 }

@@ -1,4 +1,162 @@
+# Payment Methods Channels Responsive Layout TODO
+
+## Plan
+- [x] Inspect the current channels row and relevant project UI conventions.
+- [x] Redesign available channel rows so title text, status, fee, and chevron cannot overlap on narrow screens.
+- [x] Keep the change scoped to `PaymentMethodsScreen.kt` and preserve existing navigation/configuration behavior.
+- [x] Run the KMP/Android compile verification gate.
+
+## Verification Gates
+- [x] `./gradlew --no-build-cache --no-configuration-cache :composeApp:compileKotlinMetadata :composeApp:compileDebugKotlinAndroid`
+
+## Review Notes
+- `ChannelRow` now separates channel identity from metadata: logo/name/subtitle stay in the primary content column, while configured/commission pills render in a wrapping `FlowRow` below the title.
+- The chevron has a fixed tap/visual slot, so it no longer competes with the badges for horizontal space.
+- Visible rows are filtered before rendering so dividers only appear between rendered channels.
+- Compile gate passed with existing project warnings only.
+
+# POS Payment Link Badge TODO
+
+## Plan
+- [x] Move the `Nuevo` badge out of the Material `BadgedBox` overlay so it cannot cover the payment-link tab text.
+- [x] Keep the badge visible only for `showPaymentLinkNewBadge`.
+- [x] Verify the POS UI compile gate.
+
+## Verification Gates
+- [x] `./gradlew --no-build-cache --no-configuration-cache :composeApp:compileKotlinMetadata :composeApp:compileDebugKotlinAndroid`
+
+## Review Notes
+- POS payment-link tab now renders `Nuevo` inline after the label with spacing instead of using `BadgedBox`, preventing overlay on the tab text.
+- Compile gate passed with existing project warnings only.
+
+# Settings Quotes Collapse TODO
+
+## Plan
+- [x] Make the Quotes settings card collapsible and default it collapsed.
+- [x] Use the existing iOS disclosure arrow to indicate collapsed/expanded state.
+- [x] Change only the `Pagos y cobros` new badge to use secondary color.
+- [x] Verify the Compose/KMP compile gate.
+
+## Verification Gates
+- [x] `./gradlew --no-build-cache --no-configuration-cache :composeApp:compileKotlinMetadata :composeApp:compileDebugKotlinAndroid`
+
+## Review Notes
+- `QuoteSettingsSection` now renders the quote settings card collapsed by default with an iOS disclosure arrow that rotates when expanded.
+- `SettingsTextButton` accepts an optional `badgeColor`; `Pagos y cobros` passes `MaterialTheme.colorScheme.secondary` for the `Nuevo` badge.
+- Compile gate passed with existing project warnings only.
+
 # Payments + Settings + Notifications Replication TODO
+
+## Iteration 6 Payment Link Confirmed Order Facturar Visibility (Current)
+
+## Plan
+- [x] Confirm why order `3835` does not show `Facturar` in Order Details.
+- [x] Extend the existing invoice action eligibility only for unpaid, not-invoiced confirmed `payment_link` orders.
+- [x] Preserve existing permission, invoice-status, payment-status, and positive-total guards.
+- [x] Verify compile gate for KMP/Android.
+
+## Verification Gates
+- [x] `./gradlew --no-build-cache --no-configuration-cache :composeApp:compileKotlinMetadata :composeApp:compileDebugKotlinAndroid`
+
+## Review Notes
+- Root cause: `OrdersDetailsViewModel.canInvoiceDraftOrder(...)` only allowed `OrderStatus.DRAFT`; order `3835` is `OrderStatus.CONFIRMED` with `payment_flow_type = payment_link`, no invoice status, unpaid, and positive total.
+- Eligibility now also allows confirmed `payment_link` orders when they are not invoiced (`NONE`/`PENDING`), unpaid, have positive total, and the user still has `canMarkPaid`.
+- The button rendering in `OrderDetailsScreen` remains unchanged; only the ViewModel eligibility rule was broadened.
+
+## Iteration 6 Order Cancel Bottom Sheet (Current)
+
+## Plan
+- [x] Replace the cancel order AlertDialog with a ModalBottomSheet.
+- [x] Preserve the existing cancel reason state and `viewModel.cancelOrder(...)` callback.
+- [x] Use existing design-system fields/buttons and contextual destructive styling.
+- [x] Verify compile gate for KMP/Android.
+
+## Verification Gates
+- [x] `./gradlew --no-build-cache --no-configuration-cache :composeApp:compileKotlinMetadata :composeApp:compileDebugKotlinAndroid`
+
+## Review Notes
+- `OrderDetailsScreen` now opens cancellation as a bottom sheet using the existing `showCancelDialog` state.
+- `CancelOrderBottomSheet` keeps the same reason input and confirms through `viewModel.cancelOrder(cancelReason.trim())`.
+- The sheet uses destructive styling, a warning panel, and existing `DMOutlinedTextField`, `OutlinedButtonM`, and `ButtonM` components.
+
+## Iteration 6 Order Details Visual Refresh (Current)
+
+## Plan
+- [x] Apply secondary-tinted circular icon treatment to Order Details cards.
+- [x] Highlight the header total row with a soft secondary container and secondary amount text.
+- [x] Make the items card collapsible, default expanded, with arrow status icon.
+- [x] Separate primary invoicing actions from secondary/destructive actions with an action divider.
+- [x] Convert lower actions to outlined buttons with contextual colors and icons while preserving existing visibility logic.
+- [x] Verify compile gate for KMP/Android.
+
+## Verification Gates
+- [x] `./gradlew --no-build-cache --no-configuration-cache :composeApp:compileKotlinMetadata :composeApp:compileDebugKotlinAndroid`
+
+## Review Notes
+- `OrderDetailsScreen` now uses a shared `CardSectionIcon` treatment: secondary icon inside a circular `vanishedBackgroundColor()` container for detail cards.
+- The header total row now renders as a soft secondary-tinted pill with the amount in secondary color.
+- The items card is collapsible and defaults expanded, with up/down arrow state feedback.
+- Order actions are visually split: primary invoicing actions remain above `Acciones del pedido`, while additional actions render as outlined contextual buttons with icons.
+- Existing conditions and callbacks for rendering/action behavior were preserved.
+
+## Iteration 6 ACH Proof Download Save-to-Device (Current)
+
+## Plan
+- [x] Replace ACH proof download behavior that relies on external viewers with native save-to-device behavior.
+- [x] Add platform-specific persistence path: image proofs to gallery/photos and PDF/files to documents/downloads.
+- [x] Route ACH proof download success handler by MIME type and show explicit save-result feedback.
+- [x] Verify compile gate for KMP/Android.
+
+## Verification Gates
+- [x] `./gradlew --no-build-cache --no-configuration-cache :composeApp:compileKotlinMetadata :composeApp:compileDebugKotlinAndroid`
+
+## Review Notes
+- `PdfSharer` now exposes explicit save APIs (`saveImageToGallery`, `saveFileToDocuments`) so ACH proof download does not depend on installed viewer apps.
+- Android implementation writes bytes directly into `MediaStore` (`Pictures/VentaGo` for images, `Downloads/VentaGo` for documents).
+- iOS implementation saves images to Photos and files to app Documents, avoiding viewer-based fallback for ACH proof downloads.
+- `OrdersDetailsViewModel.handleAchProofDownloadSuccess(...)` now always persists locally by MIME type and shows success/error snackbar accordingly.
+
+## Iteration 6 Void Action Hidden for Automatic Payments (Current)
+
+## Plan
+- [x] Hide `Anular pago` action for payments with `is_automatic = true`.
+- [x] Add defensive ViewModel guard to block void sheet opening for automatic payments.
+- [x] Verify compile gate for KMP/Android.
+
+## Verification Gates
+- [x] `./gradlew --no-build-cache --no-configuration-cache :composeApp:compileKotlinMetadata :composeApp:compileDebugKotlinAndroid`
+
+## Review Notes
+- En `RegisteredPaymentsCard`, la acción `Anular pago` ahora requiere explícitamente `!payment.isAutomatic`.
+- En `OrdersDetailsViewModel.openVoidPaymentSheet`, se agregó guardia para retornar sin abrir sheet cuando el `paymentId` corresponde a un pago automático.
+
+## Iteration 6 Cancelled Order Payments Visibility (Current)
+
+## Plan
+- [x] Ensure `Pagos registrados` card is rendered even when order status is `CANCELLED`.
+- [x] Keep existing action guards unchanged for cancelled orders.
+- [x] Verify compile gate for KMP/Android.
+
+## Verification Gates
+- [x] `./gradlew --no-build-cache --no-configuration-cache :composeApp:compileKotlinMetadata :composeApp:compileDebugKotlinAndroid`
+
+## Review Notes
+- Se movió el render de `RegisteredPaymentsCard` fuera del bloque `order.status != CANCELLED`, para que los pagos se muestren también en órdenes anuladas.
+- Las acciones de orden (`Facturar`, `Anular`, etc.) se mantienen bloqueadas para órdenes canceladas, sin cambios funcionales.
+
+## Iteration 6 Order 3796 Partial Auto-Payment Actions (Current)
+
+## Plan
+- [x] Fix manual payment sheet total for `Facturar` to use outstanding balance instead of full order total.
+- [x] Hide `Eliminar pedido` when the order already has an automatic non-voided payment.
+- [x] Verify compile gate for KMP/Android.
+
+## Verification Gates
+- [x] `./gradlew --no-build-cache --no-configuration-cache :composeApp:compileKotlinMetadata :composeApp:compileDebugKotlinAndroid`
+
+## Review Notes
+- `OrderScreenManualPaymentBottomSheetHost` ahora usa `uiState.manualPayment.totalToChargeCents` (fallback a total de orden solo si viene en 0), evitando que una orden parcialmente pagada pida el monto completo al facturar.
+- `canDeleteOrder(order)` ahora retorna `false` si existe al menos un pago automático no anulado con monto neto positivo (`charged - refunded > 0`), por lo que el botón `Eliminar pedido` deja de mostrarse en ese escenario.
 
 ## Iteration 6 Order Details Generate Link Sheet UX (Current)
 
@@ -2285,3 +2443,53 @@
 - Se eliminó `NotificationsInfoCard` y sus strings asociadas del flujo de render.
 - Se añadió `rememberPullRefreshState` + `PullRefreshIndicator` y `Modifier.pullRefresh(...)` siguiendo patrón de listas existentes (Orders/Expenses/Quotes).
 - Se añadió `isRefreshing` en `NotificationsState` y `refreshNotifications()` en `NotificationsViewModel` para recarga manual por swipe.
+
+# Customer Final Consumer Create Contract TODO
+
+## Plan
+- [x] Verificar el contrato real de `POST /api/v1/customers/create` en provider/DTO y normalización de payload para cliente consumidor final.
+- [x] Corregir serialización y normalización del body para que el endpoint reciba los campos esperados (`null` explícitos cuando corresponda, sin strings vacíos espurios).
+- [x] Exigir `address_line`, `province`, `district` y `corregimiento` en creación de clientes desde Home y POS cuando el tipo no es extranjero.
+- [x] Cubrir el contrato con tests enfocados y correr compilar/tests relevantes.
+
+## Verification Gates
+- [x] `./gradlew --no-build-cache --no-configuration-cache :composeApp:testDebugUnitTest --tests '*Customer*'`
+- [x] `./gradlew --no-build-cache --no-configuration-cache :composeApp:compileKotlinMetadata :composeApp:compileDebugKotlinAndroid`
+
+## Review Notes
+- Root cause de contrato: `CustomerProvider.createCustomer(...)` serializaba con `explicitNulls = false`, por lo que el body omitía claves nulas; además, el flujo POS enviaba `""` en varios opcionales. Ahora el payload se normaliza y se envian `null` explícitos para respetar el contrato esperado por `/api/v1/customers/create`.
+- `buildCreateCustomerRequestBody(...)` quedó cubierto con test para `fe_customer_type = "02"` y los campos `email/phone/tax_id/tags/tax_retention_*` en `null`.
+- Root cause adicional confirmado por log de app: `CustomerCreatedDto` tenía campos nullable (`email/phone/tax_id/tags`) sin default, así que Kotlinx los trataba como required cuando el backend omitía `phone`, `tax_id` y `tags` en la respuesta de consumidor final. El DTO ahora acepta esos campos omitidos y también mapea `tax_exempt` / `tax_retention_*` de la respuesta esperada.
+- Home (`CustomerFormViewModel`) y POS (`AddCustomerViewModel`) comparten la regla `CustomerCreateValidation.requiredLocationMessage(...)` para bloquear creación sin `address_line`, `province`, `district` o `corregimiento` cuando el cliente no es extranjero.
+- El flujo POS reducido ahora incluye los campos de provincia/distrito/corregimiento/direccion y `createCustomer()` muestra `LoadingSheet` desde el inicio de la mutación.
+
+# Customer Create Field Alerts TODO
+
+## Plan
+- [x] Reemplazar la validación genérica al guardar por errores inline sobre los campos requeridos en Home create customer.
+- [x] Aplicar el mismo patrón de errores inline en POS create customer (full y reduced).
+- [x] Ejecutar compile gate de Android/KMP.
+
+## Verification Gates
+- [x] `./gradlew --no-build-cache --no-configuration-cache :composeApp:compileKotlinMetadata :composeApp:compileDebugKotlinAndroid`
+
+## Review Notes
+- Los formularios de creación ahora conservan estado de error por campo requerido (`name`, `province`, `district`, `corregimiento`, `addressLine`) en sus `UiState`.
+- Al tocar `Crear cliente` con campos faltantes, los `OutlinedTextField` muestran `isError + supportingText` y los `DMDropDownField` muestran borde de error con texto inline debajo, en lugar de depender de un alert genérico.
+- Los errores se limpian al corregir el campo o al volver a seleccionar provincia/distrito/corregimiento, para que la recuperación sea inmediata.
+
+# Customer Details Cedula TODO
+
+## Plan
+- [x] Confirm the customer details contract/model already exposes `cedula_cf`.
+- [x] Update `CustomerDetailsScreen` general information card to show `Cédula` when `cedula_cf` is present.
+- [x] Hide `Número RUC` and `Dígito Verificador` when rendering that `cedula_cf` branch.
+- [x] Run compile verification for the affected KMP module.
+
+## Verification Gates
+- [x] `./gradlew --no-build-cache --no-configuration-cache :composeApp:compileKotlinMetadata :composeApp:compileDebugKotlinAndroid`
+
+## Review Notes
+- `CustomerDetails` already mapped `cedula_cf`, so the change stayed in the details UI only.
+- `GeneralInfoCard` now prioritizes `Cédula` when `cedula_cf` is present on a non-foreign customer, and suppresses the `Número RUC` / `Dígito Verificador` rows for that branch.
+- Compile gate passed with existing project warnings only (`ksp`/KMP beta/deprecation warnings unrelated to this change).

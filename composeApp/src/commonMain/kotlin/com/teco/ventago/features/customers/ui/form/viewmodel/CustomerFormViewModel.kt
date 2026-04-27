@@ -138,11 +138,15 @@ class CustomerFormViewModel(
                 cedulaCF = if (value == FeCustomerType.FINAL_CONSUMER) cedulaCF else "",
                 cedulaError = null,
                 foreignIdNumber = if (value == FeCustomerType.FOREIGNER) foreignIdNumber else "",
+                addressLineError = null,
+                provinceError = null,
+                districtError = null,
+                corregimientoError = null,
             )
         }
     }
 
-    fun onNameChange(value: String) = updateState { copy(name = value) }
+    fun onNameChange(value: String) = updateState { copy(name = value, nameError = null) }
     fun onEmailChange(value: String) = updateState { copy(email = value) }
     fun onPhoneChange(value: String) = updateState { copy(phone = value) }
     fun onRucChange(value: String) = updateState { copy(ruc = value) }
@@ -159,7 +163,7 @@ class CustomerFormViewModel(
             )
         }
     }
-    fun onAddressLineChange(value: String) = updateState { copy(addressLine = value) }
+    fun onAddressLineChange(value: String) = updateState { copy(addressLine = value, addressLineError = null) }
     fun onForeignIdNumberChange(value: String) = updateState { copy(foreignIdNumber = value) }
     fun onTaxExemptChange(value: Boolean) = updateState { copy(taxExempt = value) }
 
@@ -213,6 +217,9 @@ class CustomerFormViewModel(
         updateState {
             copy(
                 selectedProvince = province,
+                provinceError = null,
+                districtError = null,
+                corregimientoError = null,
                 selectedDistrict = null,
                 selectedCorregimiento = null,
                 districtOptions = districts,
@@ -226,6 +233,8 @@ class CustomerFormViewModel(
         updateState {
             copy(
                 selectedDistrict = district,
+                districtError = null,
+                corregimientoError = null,
                 selectedCorregimiento = null,
                 corregimientoOptions = corregimientos,
             )
@@ -233,7 +242,7 @@ class CustomerFormViewModel(
     }
 
     fun onCorregimientoChange(corregimiento: String) {
-        updateState { copy(selectedCorregimiento = corregimiento) }
+        updateState { copy(selectedCorregimiento = corregimiento, corregimientoError = null) }
     }
 
     fun validateRuc() {
@@ -266,10 +275,7 @@ class CustomerFormViewModel(
         val current = uiState.value
         val normalizedCedula = normalizePanamaCedula(current.cedulaCF)
 
-        if (current.mode == CustomerFormMode.CREATE && current.name.isBlank()) {
-            viewModelScope.launch {
-                emitEvent(CustomerFormUiEvent.ValidationError("El nombre es requerido"))
-            }
+        if (current.mode == CustomerFormMode.CREATE && applyCreateFieldErrors(current)) {
             return
         }
 
@@ -433,5 +439,41 @@ class CustomerFormViewModel(
         } else {
             invalidCedulaMessage
         }
+    }
+
+    private fun applyCreateFieldErrors(state: CustomerFormState): Boolean {
+        val nameError = if (state.name.isBlank()) "El nombre es requerido" else null
+        val provinceError = if (state.customerType != FeCustomerType.FOREIGNER && state.selectedProvince.isNullOrBlank()) {
+            "Selecciona una provincia"
+        } else {
+            null
+        }
+        val districtError = if (state.customerType != FeCustomerType.FOREIGNER && state.selectedDistrict.isNullOrBlank()) {
+            "Selecciona un distrito"
+        } else {
+            null
+        }
+        val corregimientoError = if (state.customerType != FeCustomerType.FOREIGNER && state.selectedCorregimiento.isNullOrBlank()) {
+            "Selecciona un corregimiento"
+        } else {
+            null
+        }
+        val addressLineError = if (state.customerType != FeCustomerType.FOREIGNER && state.addressLine.isBlank()) {
+            "La direccion es requerida"
+        } else {
+            null
+        }
+
+        updateState {
+            copy(
+                nameError = nameError,
+                provinceError = provinceError,
+                districtError = districtError,
+                corregimientoError = corregimientoError,
+                addressLineError = addressLineError,
+            )
+        }
+
+        return listOf(nameError, provinceError, districtError, corregimientoError, addressLineError).any { it != null }
     }
 }

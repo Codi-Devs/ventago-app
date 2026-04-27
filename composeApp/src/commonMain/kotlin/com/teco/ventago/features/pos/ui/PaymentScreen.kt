@@ -32,7 +32,6 @@ import androidx.compose.material.icons.rounded.Delete
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Badge
-import androidx.compose.material3.BadgedBox
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.DatePicker
 import androidx.compose.material3.DatePickerDialog
@@ -312,14 +311,17 @@ fun PaymentScreenContent(
                         },
                         text = {
                             if (mode == PaymentFlowMode.PAYMENT_LINK) {
-                                BadgedBox(
-                                    badge = {
-                                        if (ui.showPaymentLinkNewBadge) {
-                                            Badge { Text("Nuevo") }
-                                        }
-                                    }
+                                Row(
+                                    horizontalArrangement = Arrangement.Center,
+                                    verticalAlignment = Alignment.CenterVertically
                                 ) {
                                     Text("Crear enlace de pago")
+                                    if (ui.showPaymentLinkNewBadge) {
+                                        Spacer(Modifier.width(6.dp))
+                                        Badge {
+                                            Text("Nuevo")
+                                        }
+                                    }
                                 }
                             } else {
                                 Text("Manual/Cuotas")

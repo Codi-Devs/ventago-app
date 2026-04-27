@@ -417,6 +417,7 @@ fun SettingsScreen(
                     SettingsTextButton(
                         label = "Pagos y cobros",
                         badgeText = "Nuevo",
+                        badgeColor = MaterialTheme.colorScheme.secondary,
                         onClick = {
                             navigate(PosScreens.Payments)
                         }

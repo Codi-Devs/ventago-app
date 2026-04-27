@@ -99,8 +99,10 @@ fun SettingsTextButton(
     label: String,
     color: Color? = null,
     badgeText: String? = null,
+    badgeColor: Color? = null,
     onClick: () -> Unit,
 ) {
+    val resolvedBadgeColor = badgeColor ?: MaterialTheme.colorScheme.primary
     TextButton(onClick = onClick, modifier = Modifier.padding(0.dp)) {
         Row(
             horizontalArrangement = Arrangement.SpaceBetween,
@@ -120,14 +122,14 @@ fun SettingsTextButton(
                 Box(
                     modifier = Modifier
                         .clip(CircleShape)
-                        .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.15f))
+                        .background(resolvedBadgeColor.copy(alpha = 0.15f))
                         .padding(horizontal = 10.dp, vertical = 4.dp),
                     contentAlignment = Alignment.Center
                 ) {
                     Text(
                         text = badgeText,
                         style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.SemiBold),
-                        color = MaterialTheme.colorScheme.primary
+                        color = resolvedBadgeColor
                     )
                 }
             }

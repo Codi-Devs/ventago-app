@@ -188,6 +188,9 @@ class AddCustomerViewModel(
         updateState {
             copy(
                 selectedProvince = province,
+                provinceError = null,
+                districtError = null,
+                corregimientoError = null,
                 districtOptions = districtOptions
             )
         }
@@ -204,14 +207,19 @@ class AddCustomerViewModel(
 
         val corregOptions = PanamaLocations.corregimientos(uiState.value.selectedProvince, district)
         updateState {
-            copy(selectedDistrict = district, corregOptions = corregOptions)
+            copy(
+                selectedDistrict = district,
+                districtError = null,
+                corregimientoError = null,
+                corregOptions = corregOptions
+            )
         }
 //        enableButton()
     }
 
     fun onCorregimientoChange(corregimiento: String) {
         updateState {
-            copy(selectedCorreg = corregimiento)
+            copy(selectedCorreg = corregimiento, corregimientoError = null)
         }
 //        enableButton()
     }
@@ -223,6 +231,11 @@ class AddCustomerViewModel(
                 ruc = "",
                 legalName = "",
                 name = "",
+                nameError = null,
+                addressLineError = null,
+                provinceError = null,
+                districtError = null,
+                corregimientoError = null,
                 cfCedula = "",
                 cfCedulaError = null,
             )
@@ -246,7 +259,7 @@ class AddCustomerViewModel(
 
     fun onNameChange(name: String) {
         updateState {
-            copy(name = name)
+            copy(name = name, nameError = null)
         }
     }
 
@@ -282,7 +295,7 @@ class AddCustomerViewModel(
     }
 
     fun onAddressLineChange(addressLine: String) {
-        updateState { copy(addressLine = addressLine) }
+        updateState { copy(addressLine = addressLine, addressLineError = null) }
     }
 
 
@@ -326,6 +339,11 @@ class AddCustomerViewModel(
     fun createCustomer() {
         val state = uiState.value
         val normalizedCedula = normalizePanamaCedula(state.cfCedula.orEmpty())
+
+        if (applyCreateFieldErrors(state)) {
+            return
+        }
+
         val cedulaError = getCedulaValidationError(
             customerType = state.customerType,
             cedula = normalizedCedula
@@ -348,6 +366,7 @@ class AddCustomerViewModel(
             )
         }
 
+        showLoading()
         viewModelScope.launch(Dispatchers.IO) {
 
             var foreignIdType: String? = null
@@ -358,15 +377,15 @@ class AddCustomerViewModel(
             val customer = Customer(
                 id = -1,
                 name = state.name,
-                phone = state.phone,
-                email = state.email,
-                ruc = state.ruc,
+                phone = state.phone.ifBlank { null },
+                email = state.email.ifBlank { null },
+                ruc = state.ruc.ifBlank { null },
                 invoiceCustomer = state.invoicingEnabled,
                 rucCheckDigit = state.rucCheckDigit,
-                tags = state.tags,
+                tags = state.tags.filter { it.isNotBlank() },
                 customerType = state.customerType,
                 taxPayerType = state.taxPayerType,
-                addressLine = state.addressLine,
+                addressLine = state.addressLine?.ifBlank { null },
                 province = state.selectedProvince,
                 district = state.selectedDistrict,
                 corregimiento = state.selectedCorreg,
@@ -458,6 +477,42 @@ class AddCustomerViewModel(
         val formattedName = name.ifBlank { "-" }
         val formattedRuc = ruc?.ifBlank { "-" } ?: "-"
         return "Ya existe un cliente con nombre \"$formattedName\" y RUC \"$formattedRuc\"."
+    }
+
+    private fun applyCreateFieldErrors(state: AddCustomerState): Boolean {
+        val nameError = if (state.name.isBlank()) "El nombre es requerido" else null
+        val provinceError = if (state.customerType != FeCustomerType.FOREIGNER && state.selectedProvince.isNullOrBlank()) {
+            "Selecciona una provincia"
+        } else {
+            null
+        }
+        val districtError = if (state.customerType != FeCustomerType.FOREIGNER && state.selectedDistrict.isNullOrBlank()) {
+            "Selecciona un distrito"
+        } else {
+            null
+        }
+        val corregimientoError = if (state.customerType != FeCustomerType.FOREIGNER && state.selectedCorreg.isNullOrBlank()) {
+            "Selecciona un corregimiento"
+        } else {
+            null
+        }
+        val addressLineError = if (state.customerType != FeCustomerType.FOREIGNER && state.addressLine.isNullOrBlank()) {
+            "La direccion es requerida"
+        } else {
+            null
+        }
+
+        updateState {
+            copy(
+                nameError = nameError,
+                provinceError = provinceError,
+                districtError = districtError,
+                corregimientoError = corregimientoError,
+                addressLineError = addressLineError,
+            )
+        }
+
+        return listOf(nameError, provinceError, districtError, corregimientoError, addressLineError).any { it != null }
     }
 
 }

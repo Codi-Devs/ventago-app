@@ -39,10 +39,15 @@ import androidx.compose.material.icons.rounded.Business
 import androidx.compose.material.icons.rounded.Cancel
 import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material.icons.rounded.ContentCopy
+import androidx.compose.material.icons.rounded.Delete
+import androidx.compose.material.icons.rounded.Description
 import androidx.compose.material.icons.rounded.Download
 import androidx.compose.material.icons.rounded.ErrorOutline
 import androidx.compose.material.icons.rounded.HelpOutline
 import androidx.compose.material.icons.rounded.Inventory2
+import androidx.compose.material.icons.rounded.KeyboardArrowDown
+import androidx.compose.material.icons.rounded.KeyboardArrowUp
+import androidx.compose.material.icons.rounded.Link
 import androidx.compose.material.icons.rounded.MoreVert
 import androidx.compose.material.icons.rounded.OpenInNew
 import androidx.compose.material.icons.rounded.Payment
@@ -85,6 +90,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.painter.BitmapPainter
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.graphics.vector.rememberVectorPainter
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
@@ -126,6 +132,7 @@ import com.teco.ventago.design_system.theme.labelLarge
 import com.teco.ventago.design_system.theme.labelSmall
 import com.teco.ventago.design_system.theme.titleLarge
 import com.teco.ventago.design_system.theme.titleMediumBold
+import com.teco.ventago.design_system.theme.vanishedBackgroundColor
 import com.teco.ventago.features.invoicing.domain.models.FEDocumentType
 import com.teco.ventago.features.invoicing.domain.models.InvoiceStatus
 import com.teco.ventago.features.orders.domain.PaymentLinkResolver
@@ -345,6 +352,7 @@ fun OrderDetailsScreen(
     val registerPaymentSheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     val rescheduleSheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     val voidPaymentSheetState = rememberModalBottomSheetState()
+    val cancelOrderSheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
 
     LaunchedEffect(Unit) {
         viewModel.events.collect { event ->
@@ -415,15 +423,17 @@ fun OrderDetailsScreen(
                 terms = viewModel.nonCancelledReceivableTerms(order),
                 onReschedule = { viewModel.openRescheduleSheet() }
             )
-            RegisteredPaymentsCard(
-                order = order,
-                viewModel = viewModel,
-                onVoidPayment = { paymentId -> viewModel.openVoidPaymentSheet(paymentId) },
-                onNavigateAchReview = { paymentIntentId ->
-                    navigate(AchPaymentDetailsRoute(paymentUid = paymentIntentId), null)
-                }
-            )
         }
+
+        // Registered payments must be visible even for cancelled orders.
+        RegisteredPaymentsCard(
+            order = order,
+            viewModel = viewModel,
+            onVoidPayment = { paymentId -> viewModel.openVoidPaymentSheet(paymentId) },
+            onNavigateAchReview = { paymentIntentId ->
+                navigate(AchPaymentDetailsRoute(paymentUid = paymentIntentId), null)
+            }
+        )
 
         // Invoicing card
         if (order.invoiceStatus != 0 && order.externalInvoiceNumber != null) {
@@ -442,27 +452,15 @@ fun OrderDetailsScreen(
         if (order.status != OrderStatus.CANCELLED) {
             when (order.invoiceStatus) {
                 InvoiceStatus.ISSUED.id -> {
-                    ButtonM(onClick = {
-                        viewModel.getDocumentByCufe()
-                    }) {
-                        Text("Ver factura PDF")
-                    }
-                    if (canShowReprintButton || uiState.reprintInFlight) {
-                        OutlinedButtonM(
-                            onClick = { viewModel.reprintTicket() },
-                            enabled = !uiState.reprintInFlight
-                        ) {
-                            Text(if (uiState.reprintInFlight) "Reimprimiendo..." else "Reimprimir ticket")
-                        }
-                    }
-                    if (uiState.canMarkPaid && viewModel.totalOpenReceivableCents(order) > 0L) {
-                        OutlinedButtonM(
-                            onClick = { viewModel.openRegisterPaymentSheet() },
-                            contentColor = MaterialTheme.colorScheme.secondary,
-                            border = BorderStroke(1.dp, MaterialTheme.colorScheme.secondary)
-                        ) {
-                            Text("Registrar pago")
-                        }
+                    ButtonM(
+                        onClick = { viewModel.getDocumentByCufe() },
+                        containerColor = MaterialTheme.colorScheme.secondary,
+                        contentColor = MaterialTheme.colorScheme.onSecondary
+                    ) {
+                        OrderActionButtonContent(
+                            icon = Icons.Rounded.Visibility,
+                            label = "Ver factura PDF"
+                        )
                     }
                 }
 
@@ -477,16 +475,11 @@ fun OrderDetailsScreen(
                             containerColor = Color(0xFF2E7D32),
                             contentColor = Color.White
                         ) {
-                            Text("Facturar")
+                            OrderActionButtonContent(
+                                icon = Icons.Rounded.Description,
+                                label = "Facturar"
+                            )
                         }
-                    }
-
-                    if (canShowCancelButton) {
-                        TextButtonS(
-                            modifier = Modifier.fillMaxWidth(),
-                            label = "Anular pedido",
-                            color = MaterialTheme.colorScheme.error
-                        ) { showCancelDialog = true }
                     }
                 }
 
@@ -497,55 +490,106 @@ fun OrderDetailsScreen(
 
             if (viewModel.canShowRetryInvoiceButton(order)) {
                 ButtonM(onClick = { viewModel.retryElectronicInvoice() }) {
-                    Text("Reintentar facturación")
+                    OrderActionButtonContent(
+                        icon = Icons.Rounded.Receipt,
+                        label = "Reintentar facturación"
+                    )
                 }
+            }
+
+            val hasIssuedAdditionalActions = order.invoiceStatus == InvoiceStatus.ISSUED.id &&
+                    ((canShowReprintButton || uiState.reprintInFlight) ||
+                            (uiState.canMarkPaid && viewModel.totalOpenReceivableCents(order) > 0L))
+            val hasDraftAdditionalActions = (order.invoiceStatus == InvoiceStatus.NONE.id ||
+                    order.invoiceStatus == InvoiceStatus.PENDING.id) && canShowCancelButton
+            val hasPaymentLinkActions = uiState.canCreatePaymentLink &&
+                    (canGeneratePaymentLink || canCopyOrSharePaymentLink)
+            val hasAdditionalActions = hasIssuedAdditionalActions ||
+                    hasDraftAdditionalActions ||
+                    hasPaymentLinkActions ||
+                    canShowDeleteButton
+
+            if (hasAdditionalActions) {
+                OrderActionsDivider()
+            }
+
+            if (order.invoiceStatus == InvoiceStatus.ISSUED.id) {
+                if (canShowReprintButton || uiState.reprintInFlight) {
+                    OrderOutlinedActionButton(
+                        label = if (uiState.reprintInFlight) "Reimprimiendo..." else "Reimprimir ticket",
+                        icon = Icons.Rounded.Receipt,
+                        color = MaterialTheme.colorScheme.primary,
+                        enabled = !uiState.reprintInFlight,
+                        onClick = { viewModel.reprintTicket() }
+                    )
+                }
+                if (uiState.canMarkPaid && viewModel.totalOpenReceivableCents(order) > 0L) {
+                    OrderOutlinedActionButton(
+                        label = "Registrar pago",
+                        icon = Icons.Rounded.Payment,
+                        color = MaterialTheme.colorScheme.secondary,
+                        onClick = { viewModel.openRegisterPaymentSheet() }
+                    )
+                }
+            }
+
+            if ((order.invoiceStatus == InvoiceStatus.NONE.id ||
+                        order.invoiceStatus == InvoiceStatus.PENDING.id) && canShowCancelButton
+            ) {
+                OrderOutlinedActionButton(
+                    label = "Anular pedido",
+                    icon = Icons.Rounded.Close,
+                    color = MaterialTheme.colorScheme.error,
+                    onClick = { showCancelDialog = true }
+                )
             }
 
             if (uiState.canCreatePaymentLink) {
                 if (canGeneratePaymentLink) {
-                    OutlinedButtonM(
-                        onClick = { viewModel.openGeneratePaymentLinkSheet() },
-                        contentColor = MaterialTheme.colorScheme.secondary,
-                        border = BorderStroke(1.dp, MaterialTheme.colorScheme.secondary)
-                    ) {
-                        Text("Generar Link de Pago")
-                    }
+                    OrderOutlinedActionButton(
+                        label = "Generar Link de Pago",
+                        icon = Icons.Rounded.Link,
+                        color = MaterialTheme.colorScheme.secondary,
+                        onClick = { viewModel.openGeneratePaymentLinkSheet() }
+                    )
                 }
                 if (canCopyOrSharePaymentLink) {
                     val linkUrl = resolvedPaymentLink?.url.orEmpty()
-                    OutlinedButtonM(
+                    OrderOutlinedActionButton(
+                        label = "Copiar Link de Pago",
+                        icon = Icons.Rounded.ContentCopy,
+                        color = MaterialTheme.colorScheme.secondary,
                         onClick = {
                             if (linkUrl.isNotBlank()) {
                                 viewModel.trackOrderPaymentLinkAction("copy")
                                 copyToClipboard("Link de pago", linkUrl)
                             }
                         }
-                    ) {
-                        Text("Copiar Link de Pago")
-                    }
-                    TextButtonS(
-                        modifier = Modifier.fillMaxWidth(),
-                        label = stringResource(Res.string.share_payment_link)
-                    ) {
-                        if (linkUrl.isNotBlank()) {
-                            viewModel.trackOrderPaymentLinkAction("share")
-                            shareLink(linkUrl)
+                    )
+                    OrderOutlinedActionButton(
+                        label = stringResource(Res.string.share_payment_link),
+                        icon = Icons.Rounded.Share,
+                        color = MaterialTheme.colorScheme.secondary,
+                        onClick = {
+                            if (linkUrl.isNotBlank()) {
+                                viewModel.trackOrderPaymentLinkAction("share")
+                                shareLink(linkUrl)
+                            }
                         }
-                    }
+                    )
                 }
             }
 
             if (canShowDeleteButton) {
-                OutlinedButtonM(
+                OrderOutlinedActionButton(
+                    label = "Eliminar pedido",
+                    icon = Icons.Rounded.Delete,
+                    color = MaterialTheme.colorScheme.error,
                     onClick = {
                         deleteReason = ""
                         showDeleteDialog = true
-                    },
-                    contentColor = MaterialTheme.colorScheme.error,
-                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.error.copy(alpha = 0.5f))
-                ) {
-                    Text("Eliminar pedido")
-                }
+                    }
+                )
             }
         }
 
@@ -1053,35 +1097,21 @@ fun OrderDetailsScreen(
         }
 
         if (showCancelDialog) {
-            AlertDialog(
+            ModalBottomSheet(
+                containerColor = MaterialTheme.colorScheme.background,
                 onDismissRequest = { showCancelDialog = false },
-                title = { Text("Confirmar anulación") },
-                text = {
-                    Column {
-                        Text("Ingresa el motivo de anulación del pedido.")
-                        Spacer(Modifier.height(8.dp))
-                        DMOutlinedTextField(
-                            text = cancelReason,
-                            label = "Motivo",
-                            onChange = { cancelReason = it },
-                            modifier = Modifier.fillMaxWidth(),
-                            maxLines = 3
-                        )
+                sheetState = cancelOrderSheetState
+            ) {
+                CancelOrderBottomSheet(
+                    reason = cancelReason,
+                    onReasonChange = { cancelReason = it },
+                    onDismiss = { showCancelDialog = false },
+                    onConfirm = {
+                        showCancelDialog = false
+                        viewModel.cancelOrder(cancelReason.trim())
                     }
-                },
-                confirmButton = {
-                    ButtonM(
-                        onClick = {
-                            showCancelDialog = false
-                            viewModel.cancelOrder(cancelReason.trim())
-                        },
-                        enabled = cancelReason.isNotBlank()
-                    ) { Text("Anular") }
-                },
-                dismissButton = {
-                    TextButton(onClick = { showCancelDialog = false }) { Text("Cancelar") }
-                }
-            )
+                )
+            }
         }
 
         if (showDeleteDialog) {
@@ -1251,12 +1281,7 @@ private fun OrderHeaderCard(order: Order, viewModel: OrdersDetailsViewModel) {
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    Icon(
-                        imageVector = Icons.Rounded.Receipt,
-                        contentDescription = null,
-                        tint = MaterialTheme.colorScheme.primary,
-                        modifier = Modifier.size(22.dp)
-                    )
+                    CardSectionIcon(imageVector = Icons.Rounded.Receipt)
                     Spacer(modifier = Modifier.width(8.dp))
                     Text(
                         text = "#${order.internalNumber}",
@@ -1275,8 +1300,13 @@ private fun OrderHeaderCard(order: Order, viewModel: OrdersDetailsViewModel) {
                 Spacer(modifier = Modifier.height(4.dp))
             }
             Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(12.dp))
+                    .background(MaterialTheme.colorScheme.secondary.copy(alpha = 0.08f))
+                    .padding(horizontal = 14.dp, vertical = 12.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
             ) {
                 Text(
                     text = stringResource(Res.string.total),
@@ -1284,7 +1314,7 @@ private fun OrderHeaderCard(order: Order, viewModel: OrdersDetailsViewModel) {
                 )
                 Text(
                     text = formatNumberToMoney(order.totalAmount),
-                    style = bodyMediumBold(color = MaterialTheme.colorScheme.primary)
+                    style = bodyMediumBold(color = MaterialTheme.colorScheme.secondary)
                 )
             }
         }
@@ -1293,58 +1323,143 @@ private fun OrderHeaderCard(order: Order, viewModel: OrdersDetailsViewModel) {
 
 @Composable
 private fun OrderItemsCard(order: Order) {
+    var itemsExpanded by remember(order.internalNumber) { mutableStateOf(true) }
+
     Card(
         modifier = Modifier.fillMaxWidth(),
         elevation = CardDefaults.cardElevation(2.dp),
         colors = CardDefaults.cardColors(containerColor = cardContainerColor())
     ) {
         Column(modifier = Modifier.padding(16.dp)) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Icon(
-                    imageVector = Icons.Rounded.Inventory2,
-                    contentDescription = null,
-                    tint = MaterialTheme.colorScheme.primary,
-                    modifier = Modifier.size(20.dp)
-                )
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable { itemsExpanded = !itemsExpanded },
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                CardSectionIcon(imageVector = Icons.Rounded.Inventory2)
                 Spacer(modifier = Modifier.width(8.dp))
                 Text(
                     text = stringResource(Res.string.items) + " (${order.lines.size})",
-                    style = bodyMediumBold()
+                    style = bodyMediumBold(),
+                    modifier = Modifier.weight(1f)
+                )
+                Icon(
+                    imageVector = if (itemsExpanded) {
+                        Icons.Rounded.KeyboardArrowUp
+                    } else {
+                        Icons.Rounded.KeyboardArrowDown
+                    },
+                    contentDescription = if (itemsExpanded) "Colapsar" else "Expandir",
+                    tint = MaterialTheme.colorScheme.secondary,
+                    modifier = Modifier.size(22.dp)
                 )
             }
-            Spacer(modifier = Modifier.height(8.dp))
-            order.lines.forEachIndexed { index, item ->
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween
-                ) {
-                    Column(modifier = Modifier.weight(1f)) {
-                        Text(
-                            maxLines = 2,
-                            overflow = TextOverflow.Ellipsis,
-                            text = item.itemName,
-                            style = bodyMedium()
-                        )
-                        Text(
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis,
-                            text = formatNumberToMoney(item.baseUnitPrice),
-                            style = labelSmall(color = MaterialTheme.colorScheme.onSurfaceVariant)
-                        )
+            AnimatedVisibility(
+                visible = itemsExpanded,
+                enter = fadeIn(animationSpec = tween(160)) + expandVertically(animationSpec = tween(160)),
+                exit = fadeOut(animationSpec = tween(120)) + shrinkVertically(animationSpec = tween(120))
+            ) {
+                Column {
+                    Spacer(modifier = Modifier.height(8.dp))
+                    order.lines.forEachIndexed { index, item ->
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(
+                                    maxLines = 2,
+                                    overflow = TextOverflow.Ellipsis,
+                                    text = item.itemName,
+                                    style = bodyMedium()
+                                )
+                                Text(
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis,
+                                    text = formatNumberToMoney(item.baseUnitPrice),
+                                    style = labelSmall(color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                )
+                            }
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text(
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                                text = "${item.quantity.toQuantityUiString()}x",
+                                style = bodyMediumBold()
+                            )
+                        }
+                        if (index < order.lines.lastIndex) {
+                            Divider(modifier = Modifier.padding(vertical = 4.dp))
+                        }
                     }
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Text(
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                        text = "${item.quantity.toQuantityUiString()}x",
-                        style = bodyMediumBold()
-                    )
-                }
-                if (index < order.lines.lastIndex) {
-                    Divider(modifier = Modifier.padding(vertical = 4.dp))
                 }
             }
         }
+    }
+}
+
+@Composable
+private fun CardSectionIcon(imageVector: ImageVector) {
+    Box(
+        modifier = Modifier
+            .size(34.dp)
+            .background(vanishedBackgroundColor(), CircleShape),
+        contentAlignment = Alignment.Center
+    ) {
+        Icon(
+            imageVector = imageVector,
+            contentDescription = null,
+            tint = MaterialTheme.colorScheme.secondary,
+            modifier = Modifier.size(18.dp)
+        )
+    }
+}
+
+@Composable
+private fun OrderActionsDivider() {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Divider(modifier = Modifier.weight(1f))
+        Text(
+            text = "Acciones del pedido",
+            style = labelSmall(color = MaterialTheme.colorScheme.onSurfaceVariant),
+            modifier = Modifier.padding(horizontal = 10.dp)
+        )
+        Divider(modifier = Modifier.weight(1f))
+    }
+}
+
+@Composable
+private fun OrderActionButtonContent(icon: ImageVector, label: String) {
+    Icon(
+        imageVector = icon,
+        contentDescription = null,
+        modifier = Modifier.size(18.dp)
+    )
+    Spacer(modifier = Modifier.width(8.dp))
+    Text(label)
+}
+
+@Composable
+private fun OrderOutlinedActionButton(
+    label: String,
+    icon: ImageVector,
+    color: Color,
+    enabled: Boolean = true,
+    onClick: () -> Unit
+) {
+    val actionColor = if (enabled) color else MaterialTheme.colorScheme.outline
+    OutlinedButtonM(
+        onClick = onClick,
+        enabled = enabled,
+        contentColor = actionColor,
+        containerColor = actionColor.copy(alpha = if (enabled) 0.04f else 0.02f),
+        border = BorderStroke(1.dp, actionColor.copy(alpha = if (enabled) 0.55f else 0.35f))
+    ) {
+        OrderActionButtonContent(icon = icon, label = label)
     }
 }
 
@@ -1365,12 +1480,7 @@ private fun OrderReceivablesCard(
     ) {
         Column(modifier = Modifier.padding(16.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Icon(
-                    imageVector = Icons.Rounded.Payment,
-                    contentDescription = null,
-                    tint = MaterialTheme.colorScheme.primary,
-                    modifier = Modifier.size(20.dp)
-                )
+                CardSectionIcon(imageVector = Icons.Rounded.Payment)
                 Spacer(modifier = Modifier.width(8.dp))
                 Text(text = "Cuotas de pago", style = bodyMediumBold())
             }
@@ -1491,12 +1601,7 @@ private fun RegisteredPaymentsCard(
     ) {
         Column(modifier = Modifier.padding(16.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Icon(
-                    imageVector = Icons.Rounded.Payment,
-                    contentDescription = null,
-                    tint = MaterialTheme.colorScheme.primary,
-                    modifier = Modifier.size(20.dp)
-                )
+                CardSectionIcon(imageVector = Icons.Rounded.Payment)
                 Spacer(modifier = Modifier.width(8.dp))
                 Text(text = "Pagos registrados", style = bodyMediumBold())
             }
@@ -1658,7 +1763,11 @@ private fun RegisteredPaymentsCard(
                             }
                         }
                     }
-                    if (!isVoided && payment.id != null && order.invoiceStatus == InvoiceStatus.ISSUED.id) {
+                    if (!isVoided &&
+                        !payment.isAutomatic &&
+                        payment.id != null &&
+                        order.invoiceStatus == InvoiceStatus.ISSUED.id
+                    ) {
                         TextButtonS(
                             label = "Anular pago",
                             color = MaterialTheme.colorScheme.error
@@ -1692,12 +1801,7 @@ private fun OrderInvoicingCard(order: Order, onShowCancelDialog: () -> Unit) {
     ) {
         Column(modifier = Modifier.padding(16.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Icon(
-                    imageVector = Icons.Rounded.Receipt,
-                    contentDescription = null,
-                    tint = MaterialTheme.colorScheme.primary,
-                    modifier = Modifier.size(20.dp)
-                )
+                CardSectionIcon(imageVector = Icons.Rounded.Receipt)
                 Spacer(modifier = Modifier.width(8.dp))
                 Text(
                     text = FEDocumentType.fromCode(order.orderType).description,
@@ -1811,12 +1915,7 @@ private fun OrderCustomerCard(customer: com.teco.ventago.features.orders.domain.
     ) {
         Column(modifier = Modifier.padding(16.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Icon(
-                    imageVector = Icons.Rounded.Business,
-                    contentDescription = null,
-                    tint = MaterialTheme.colorScheme.primary,
-                    modifier = Modifier.size(20.dp)
-                )
+                CardSectionIcon(imageVector = Icons.Rounded.Business)
                 Spacer(modifier = Modifier.width(8.dp))
                 Text(
                     text = stringResource(Res.string.invoice_i_client),
@@ -1900,6 +1999,98 @@ private fun InfoRow(label: String, value: String, maxLines: Int = 1) {
             overflow = TextOverflow.Ellipsis,
             modifier = Modifier.weight(0.6f)
         )
+    }
+}
+
+@Composable
+private fun CancelOrderBottomSheet(
+    reason: String,
+    onReasonChange: (String) -> Unit,
+    onDismiss: () -> Unit,
+    onConfirm: () -> Unit
+) {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp, vertical = 8.dp)
+            .navigationBarsPadding()
+            .imePadding(),
+        verticalArrangement = Arrangement.spacedBy(14.dp)
+    ) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Box(
+                modifier = Modifier
+                    .size(40.dp)
+                    .background(MaterialTheme.colorScheme.errorContainer, CircleShape),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    imageVector = Icons.Rounded.Cancel,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.error,
+                    modifier = Modifier.size(22.dp)
+                )
+            }
+            Spacer(modifier = Modifier.width(10.dp))
+            Column(modifier = Modifier.weight(1f)) {
+                Text("Anular pedido", style = titleMediumBold())
+                Text(
+                    "Esta acción requiere un motivo para continuar.",
+                    style = labelSmall(color = MaterialTheme.colorScheme.onSurfaceVariant)
+                )
+            }
+        }
+
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .clip(RoundedCornerShape(12.dp))
+                .background(MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.45f))
+                .padding(12.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Icon(
+                imageVector = Icons.Rounded.ErrorOutline,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.error,
+                modifier = Modifier.size(18.dp)
+            )
+            Spacer(modifier = Modifier.width(8.dp))
+            Text(
+                text = "El pedido quedará marcado como anulado y no se podrá procesar como una venta activa.",
+                style = bodySmall(),
+                color = MaterialTheme.colorScheme.onSurface
+            )
+        }
+
+        DMOutlinedTextField(
+            text = reason,
+            label = "Motivo de anulación",
+            onChange = onReasonChange,
+            modifier = Modifier.fillMaxWidth(),
+            maxLines = 4
+        )
+
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            OutlinedButtonM(
+                modifier = Modifier.weight(1f),
+                onClick = onDismiss
+            ) {
+                Text("Cancelar")
+            }
+            ButtonM(
+                modifier = Modifier.weight(1f),
+                onClick = onConfirm,
+                enabled = reason.isNotBlank(),
+                containerColor = MaterialTheme.colorScheme.error,
+                contentColor = MaterialTheme.colorScheme.onError
+            ) {
+                Text("Anular")
+            }
+        }
     }
 }
 
@@ -2249,7 +2440,9 @@ fun OrderScreenManualPaymentBottomSheetHost(
     onOtherDesc: (String) -> Unit,
     onConfirmManualPayment: () -> Unit
 ) {
-    val totalToCharge = order.totalAmount.toLongCents()
+    val totalToCharge = uiState.manualPayment.totalToChargeCents
+        .takeIf { it > 0L }
+        ?: order.totalAmount.toLongCents()
     val allocated = charged.values.sum()
     val remaining = (totalToCharge - allocated).coerceAtLeast(0L)
 
@@ -2471,6 +2664,14 @@ private fun canDeleteOrder(order: Order): Boolean {
     val invoiceStatus = order.invoiceStatus ?: InvoiceStatus.NONE.id
     val hasFailedOrNotInvoicedStatus = invoiceStatus == InvoiceStatus.FAILED.id ||
             invoiceStatus == InvoiceStatus.NONE.id
+
+    val hasAutomaticPaymentRegistered = order.orderPayments.any { payment ->
+        payment.isAutomatic &&
+            payment.voidedAt.isNullOrBlank() &&
+            (payment.charged.toLongCents() - payment.refunded.toLongCents()) > 0L
+    }
+
+    if (hasAutomaticPaymentRegistered) return false
 
     return order.status == OrderStatus.DRAFT || hasFailedOrNotInvoicedStatus
 }

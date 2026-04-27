@@ -39,6 +39,10 @@ import org.jetbrains.compose.resources.stringResource
 import org.koin.compose.viewmodel.koinViewModel
 import ventago.composeapp.generated.resources.Res
 import ventago.composeapp.generated.resources.customers_duplicate_dialog_title
+import ventago.composeapp.generated.resources.customers_address_line
+import ventago.composeapp.generated.resources.customers_corregimiento
+import ventago.composeapp.generated.resources.customers_district
+import ventago.composeapp.generated.resources.customers_province
 import ventago.composeapp.generated.resources.name
 import ventago.composeapp.generated.resources.phone
 import ventago.composeapp.generated.resources.pos_clients_email
@@ -60,6 +64,7 @@ fun AddCustomerScreen(viewModel: AddCustomerViewModel = koinViewModel(), navigat
                 is AddCustomerStateUiEvent.InvalidRucNumber -> {
                     // Error is rendered from state.errorMessage
                 }
+                is AddCustomerStateUiEvent.ValidationError -> Unit
             }
         }
     }
@@ -82,6 +87,7 @@ fun AddCustomerScreen(viewModel: AddCustomerViewModel = koinViewModel(), navigat
             }
         )
     }
+
 }
 
 
@@ -113,6 +119,8 @@ fun ReducedAddCustomerScreen(viewModel: AddCustomerViewModel, navigateBack: () -
             },
             maxLines = 1,
             imeAction = ImeAction.Next,
+            isError = uiState.nameError != null,
+            supportingText = uiState.nameError ?: "",
         )
 
         DMOutlinedTextField(
@@ -136,6 +144,72 @@ fun ReducedAddCustomerScreen(viewModel: AddCustomerViewModel, navigateBack: () -
             },
             maxLines = 1,
             imeAction = ImeAction.Next,
+        )
+
+        DMDropDownField(
+            label = stringResource(Res.string.customers_province),
+            items = uiState.provinceOptions,
+            selectedIndex = uiState.provinceOptions.indexOfFirst { province -> province == uiState.selectedProvince },
+            modifier = Modifier.padding(start = 16.dp, end = 16.dp, bottom = 16.dp),
+            onItemSelected = { index, _ -> viewModel.onProvinceChange(uiState.provinceOptions[index]) },
+            isError = uiState.provinceError != null,
+        )
+        uiState.provinceError?.let { error ->
+            Text(
+                text = error,
+                color = MaterialTheme.colorScheme.error,
+                style = MaterialTheme.typography.bodySmall,
+                modifier = Modifier.padding(start = 16.dp, end = 16.dp, bottom = 8.dp)
+            )
+        }
+
+        DMDropDownField(
+            label = stringResource(Res.string.customers_district),
+            items = uiState.districtOptions,
+            selectedIndex = uiState.districtOptions.indexOfFirst { district -> district == uiState.selectedDistrict },
+            modifier = Modifier.padding(start = 16.dp, end = 16.dp, bottom = 16.dp),
+            onItemSelected = { index, _ -> viewModel.onDistrictChange(uiState.districtOptions[index]) },
+            isError = uiState.districtError != null,
+            enabled = uiState.selectedProvince != null,
+        )
+        uiState.districtError?.let { error ->
+            Text(
+                text = error,
+                color = MaterialTheme.colorScheme.error,
+                style = MaterialTheme.typography.bodySmall,
+                modifier = Modifier.padding(start = 16.dp, end = 16.dp, bottom = 8.dp)
+            )
+        }
+
+        DMDropDownField(
+            label = stringResource(Res.string.customers_corregimiento),
+            items = uiState.corregOptions,
+            selectedIndex = uiState.corregOptions.indexOfFirst { correg -> correg == uiState.selectedCorreg },
+            modifier = Modifier.padding(start = 16.dp, end = 16.dp, bottom = 16.dp),
+            onItemSelected = { index, _ -> viewModel.onCorregimientoChange(uiState.corregOptions[index]) },
+            isError = uiState.corregimientoError != null,
+            enabled = uiState.selectedDistrict != null,
+        )
+        uiState.corregimientoError?.let { error ->
+            Text(
+                text = error,
+                color = MaterialTheme.colorScheme.error,
+                style = MaterialTheme.typography.bodySmall,
+                modifier = Modifier.padding(start = 16.dp, end = 16.dp, bottom = 8.dp)
+            )
+        }
+
+        DMOutlinedTextField(
+            text = uiState.addressLine ?: "",
+            label = stringResource(Res.string.customers_address_line),
+            modifier = Modifier.padding(start = 16.dp, end = 16.dp, bottom = 0.dp),
+            onChange = {
+                viewModel.onAddressLineChange(it)
+            },
+            maxLines = 1,
+            imeAction = ImeAction.Next,
+            isError = uiState.addressLineError != null,
+            supportingText = uiState.addressLineError ?: "",
         )
 
         DMOutlinedTextField(
@@ -262,6 +336,8 @@ fun FullAddCustomerScreen(viewModel: AddCustomerViewModel, navigateBack: () -> U
             },
             maxLines = 1,
             imeAction = ImeAction.Next,
+            isError = uiState.nameError != null,
+            supportingText = uiState.nameError ?: "",
         )
 
         if (uiState.customerType == FeCustomerType.FOREIGNER) {
@@ -336,8 +412,16 @@ fun FullAddCustomerScreen(viewModel: AddCustomerViewModel, navigateBack: () -> U
                 selectedIndex = uiState.provinceOptions.indexOfFirst { province -> province == uiState.selectedProvince },
                 modifier = Modifier.padding(start = 16.dp, end = 16.dp, bottom = 16.dp),
                 onItemSelected = { index, _ -> viewModel.onProvinceChange(uiState.provinceOptions[index]) },
-                isError = false,
+                isError = uiState.provinceError != null,
             )
+            uiState.provinceError?.let { error ->
+                Text(
+                    text = error,
+                    color = MaterialTheme.colorScheme.error,
+                    style = MaterialTheme.typography.bodySmall,
+                    modifier = Modifier.padding(start = 16.dp, end = 16.dp, bottom = 8.dp)
+                )
+            }
 
             // District
             DMDropDownField(
@@ -346,9 +430,17 @@ fun FullAddCustomerScreen(viewModel: AddCustomerViewModel, navigateBack: () -> U
                 selectedIndex = uiState.districtOptions.indexOfFirst { district -> district == uiState.selectedDistrict },
                 modifier = Modifier.padding(start = 16.dp, end = 16.dp, bottom = 16.dp),
                 onItemSelected = { index, _ -> viewModel.onDistrictChange(uiState.districtOptions[index]) },
-                isError = false,
+                isError = uiState.districtError != null,
                 enabled = uiState.selectedProvince != null,
             )
+            uiState.districtError?.let { error ->
+                Text(
+                    text = error,
+                    color = MaterialTheme.colorScheme.error,
+                    style = MaterialTheme.typography.bodySmall,
+                    modifier = Modifier.padding(start = 16.dp, end = 16.dp, bottom = 8.dp)
+                )
+            }
 
             // Corregimiento
             DMDropDownField(
@@ -357,9 +449,17 @@ fun FullAddCustomerScreen(viewModel: AddCustomerViewModel, navigateBack: () -> U
                 selectedIndex = uiState.corregOptions.indexOfFirst { correg -> correg == uiState.selectedCorreg },
                 modifier = Modifier.padding(start = 16.dp, end = 16.dp, bottom = 16.dp),
                 onItemSelected = { index, _ -> viewModel.onCorregimientoChange(uiState.corregOptions[index]) },
-                isError = false,
+                isError = uiState.corregimientoError != null,
                 enabled = uiState.selectedDistrict != null,
             )
+            uiState.corregimientoError?.let { error ->
+                Text(
+                    text = error,
+                    color = MaterialTheme.colorScheme.error,
+                    style = MaterialTheme.typography.bodySmall,
+                    modifier = Modifier.padding(start = 16.dp, end = 16.dp, bottom = 8.dp)
+                )
+            }
 
             // Address line
             DMOutlinedTextField(
@@ -371,6 +471,8 @@ fun FullAddCustomerScreen(viewModel: AddCustomerViewModel, navigateBack: () -> U
                 },
                 maxLines = 1,
                 imeAction = ImeAction.Next,
+                isError = uiState.addressLineError != null,
+                supportingText = uiState.addressLineError ?: "",
             )
         }
 

@@ -1,5 +1,11 @@
 # Lessons Learned
 
+- En Order Details, no limitar `Facturar` solo a `OrderStatus.DRAFT`: órdenes `payment_link` confirmadas (`CONFIRMED`) pueden seguir sin factura y requerir facturación manual si están impagas, sin `invoice_status` emitido y con total positivo.
+- En descarga de comprobantes ACH, no dependas de `ACTION_VIEW`/visores externos para PDF o imagen; guarda bytes directamente en almacenamiento del dispositivo (galería para imágenes, documentos/descargas para archivos) para evitar fallos por apps faltantes.
+- Para anulación de pagos en Order Details, no confíes solo en ocultar el botón en UI: para pagos `is_automatic=true` aplica doble guardia (render + ViewModel) para impedir aperturas programáticas del flujo.
+- En `OrderDetails`, la visibilidad de `Pagos registrados` debe ser independiente del estado cancelado de la orden: una orden anulada puede tener pagos previos y esos movimientos deben permanecer visibles para auditoría.
+- En `OrderDetails`, el bottom sheet de `Facturar` no debe recalcular desde `order.totalAmount` en UI: debe usar `manualPayment.totalToChargeCents` del ViewModel (saldo abierto) para evitar sobrecobro cuando hay pagos parciales.
+- En órdenes con pagos ACH automáticos ya registrados (no anulados), ocultar `Eliminar pedido` aunque la orden siga en borrador/sin factura para evitar estados inconsistentes en backoffice.
 - En el bottom sheet de generación de link de pago, prellena `Monto a cobrar` con el saldo pendiente calculado para reducir errores de captura y mantener paridad con web.
 - En órdenes de detalle, no asumas que `receivable_terms` siempre vendrá en payload: para decisiones de UI de cobro/link usa fallback `saldo = total_amount - pagos_netos_no_anulados` cuando la lista de términos esté vacía.
 - En detalle de órdenes con flujo `payment_link`, la visibilidad de `Copiar/Compartir Link` no debe depender solo de `hasActiveLink`; para paridad web debe usar `hasOpenLink` y cubrir estados pendientes como `requires_action`.
@@ -101,3 +107,6 @@
 - En filas con `SwipeToDismissBox` dentro de listas verticales, evita umbral por defecto: sube `positionalThreshold` (ej. `>= 0.95f` del ancho) para prevenir dismiss accidentales al hacer scroll.
 - Al incorporar `pullRefresh` de `androidx.compose.material`, recuerda agregar `@OptIn(ExperimentalMaterialApi::class)` en los composables que usan `rememberPullRefreshState`, `Modifier.pullRefresh` o `PullRefreshIndicator`, o la compilación fallará.
 - En listas cacheadas con pull-to-refresh, no reemplaces la página `offset=0` con asignación directa: fusiona por `id` sobre el estado cargado para evitar parpadeo de vacío y duplicados en recargas consecutivas.
+- En `POST /api/v1/customers/create`, no serialices opcionales con `explicitNulls = false` ni envíes `""` desde formularios: normaliza blanks a `null` y conserva claves nulas explícitas cuando el backend espera contrato completo para consumidor final.
+- En DTOs de respuesta Kotlinx, `String?` o `Int?` sin valor default siguen siendo obligatorios si el backend omite la clave. Si el API puede no enviar `phone`, `tax_id`, `tags` u otros opcionales, declara defaults (`= null` / `= false`) para que la deserialización no falle.
+- En formularios Compose con campos requeridos, no dependas de alerts genéricos post-submit: guarda errores por campo en el `UiState`, marca `isError` en inputs/dropdowns y limpia el error al editar para que el usuario vea exactamente qué completar.

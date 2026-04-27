@@ -162,6 +162,8 @@ fun CustomerFormScreen(
                 readOnly = uiState.customerType.rucNeeded(),
                 modifier = Modifier.fillMaxWidth(),
                 imeAction = ImeAction.Next,
+                isError = uiState.nameError != null,
+                supportingText = uiState.nameError ?: "",
             )
         }
 
@@ -268,29 +270,38 @@ fun CustomerFormScreen(
                 items = uiState.provinceOptions,
                 selectedIndex = uiState.provinceOptions.indexOfFirst { it == uiState.selectedProvince },
                 onItemSelected = { index, _ -> viewModel.onProvinceChange(uiState.provinceOptions[index]) },
-                isError = false,
+                isError = uiState.provinceError != null,
                 modifier = Modifier.fillMaxWidth(),
             )
+            uiState.provinceError?.let { error ->
+                Text(text = error, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall)
+            }
 
             DMDropDownField(
                 label = stringResource(Res.string.customers_district),
                 items = uiState.districtOptions,
                 selectedIndex = uiState.districtOptions.indexOfFirst { it == uiState.selectedDistrict },
                 onItemSelected = { index, _ -> viewModel.onDistrictChange(uiState.districtOptions[index]) },
-                isError = false,
+                isError = uiState.districtError != null,
                 enabled = uiState.selectedProvince != null,
                 modifier = Modifier.fillMaxWidth(),
             )
+            uiState.districtError?.let { error ->
+                Text(text = error, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall)
+            }
 
             DMDropDownField(
                 label = stringResource(Res.string.customers_corregimiento),
                 items = uiState.corregimientoOptions,
                 selectedIndex = uiState.corregimientoOptions.indexOfFirst { it == uiState.selectedCorregimiento },
                 onItemSelected = { index, _ -> viewModel.onCorregimientoChange(uiState.corregimientoOptions[index]) },
-                isError = false,
+                isError = uiState.corregimientoError != null,
                 enabled = uiState.selectedDistrict != null,
                 modifier = Modifier.fillMaxWidth(),
             )
+            uiState.corregimientoError?.let { error ->
+                Text(text = error, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall)
+            }
 
             DMOutlinedTextField(
                 text = uiState.addressLine,
@@ -298,6 +309,8 @@ fun CustomerFormScreen(
                 onChange = viewModel::onAddressLineChange,
                 modifier = Modifier.fillMaxWidth(),
                 imeAction = ImeAction.Done,
+                isError = uiState.addressLineError != null,
+                supportingText = uiState.addressLineError ?: "",
             )
         }
 

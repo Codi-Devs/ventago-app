@@ -5,6 +5,7 @@ import com.teco.ventago.features.auth.domain.IAuthService
 import com.teco.ventago.features.customers.data.repository.dto.CreateCustomerDto
 import com.teco.ventago.features.customers.domain.models.CreateBillingAddressRequest
 import com.teco.ventago.features.customers.domain.models.Customer
+import com.teco.ventago.features.customers.domain.models.nullIfBlank
 import com.teco.ventago.features.customers.domain.models.UpdateBillingAddressRequest
 import com.teco.ventago.features.customers.domain.models.UpdateCustomerDetailsRequest
 import com.teco.ventago.features.customers.domain.models.ValidateRucRequest
@@ -67,12 +68,14 @@ interface ICustomerProvider {
     ): ApiResponse
 }
 
-val json = Json {
-    ignoreUnknownKeys = true // Optional: skip unknown fields
+private val createRequestJson = Json {
+    ignoreUnknownKeys = true
     isLenient = true
     encodeDefaults = true
-    explicitNulls = false
+    explicitNulls = true
 }
+
+val json: Json = createRequestJson
 
 private val updateRequestJson = Json {
     ignoreUnknownKeys = true
@@ -84,30 +87,7 @@ private val updateRequestJson = Json {
 class CustomerProvider(private val client: HttpClient, private val authService: IAuthService) :
     ICustomerProvider {
     override suspend fun createCustomer(customer: Customer, businessId: Int): ApiResponse {
-        val customerDto = CreateCustomerDto(
-            name = customer.name,
-            email = customer.email,
-            phone = customer.phone,
-            ruc = customer.ruc,
-            countryCode = customer.countryCode,
-            tags = customer.tags.joinToString(","),
-            customerType = customer.customerType?.code,
-            taxPayerType = customer.taxPayerType?.code,
-            addressLine = customer.addressLine,
-            locationCode = customer.locationCode,
-            province = customer.province,
-            district = customer.district,
-            corregimiento = customer.corregimiento,
-            foreignIdType = customer.foreignIdType,
-            foreignIdNumber = customer.foreignIdNumber,
-            cedulaCF = customer.cedulaCF,
-            countryOtherName = null,
-            taxExempt = customer.taxExempt,
-            taxRetentionCode = customer.taxRetentionCode,
-            taxRetentionPercent = customer.taxRetentionPercent,
-        )
-
-        val requestBody = json.encodeToString(customerDto)
+        val requestBody = buildCreateCustomerRequestBody(customer)
         val res = client.post(Configs.ordersBasePath + "/api/v1/customers/create") {
             headers {
                 append(HttpHeaders.Accept, "*/*")
@@ -420,4 +400,33 @@ class CustomerProvider(private val client: HttpClient, private val authService: 
             response
         }
     }
+}
+
+internal fun buildCreateCustomerRequestBody(customer: Customer): String {
+    return createRequestJson.encodeToString(buildCreateCustomerDto(customer))
+}
+
+internal fun buildCreateCustomerDto(customer: Customer): CreateCustomerDto {
+    return CreateCustomerDto(
+        name = customer.name.trim(),
+        email = customer.email.nullIfBlank(),
+        phone = customer.phone.nullIfBlank(),
+        ruc = customer.ruc.nullIfBlank(),
+        countryCode = customer.countryCode,
+        tags = customer.tags.mapNotNull { it.nullIfBlank() }.takeIf { it.isNotEmpty() }?.joinToString(","),
+        customerType = customer.customerType?.code,
+        taxPayerType = customer.taxPayerType?.code,
+        addressLine = customer.addressLine.nullIfBlank(),
+        locationCode = customer.locationCode.nullIfBlank(),
+        province = customer.province.nullIfBlank(),
+        district = customer.district.nullIfBlank(),
+        corregimiento = customer.corregimiento.nullIfBlank(),
+        foreignIdType = customer.foreignIdType.nullIfBlank(),
+        foreignIdNumber = customer.foreignIdNumber.nullIfBlank(),
+        cedulaCF = customer.cedulaCF.nullIfBlank(),
+        countryOtherName = null,
+        taxExempt = customer.taxExempt,
+        taxRetentionCode = customer.taxRetentionCode,
+        taxRetentionPercent = customer.taxRetentionPercent,
+    )
 }

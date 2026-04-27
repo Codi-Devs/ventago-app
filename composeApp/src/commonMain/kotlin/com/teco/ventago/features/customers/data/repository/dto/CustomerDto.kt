@@ -34,11 +34,14 @@ data class CreateCustomerDto(
 data class CustomerCreatedDto(
     @SerialName("id") val id: Long,
     @SerialName("name") val name: String,
-    @SerialName("email") val email: String?,
-    @SerialName("phone") val phone: String?,
-    @SerialName("tax_id") val ruc: String?,
+    @SerialName("email") val email: String? = null,
+    @SerialName("phone") val phone: String? = null,
+    @SerialName("tax_id") val ruc: String? = null,
     @SerialName("country_code") val countryCode: String = "PA",
-    @SerialName("tags") val tags: String?, // Comma separated tags
+    @SerialName("tags") val tags: String? = null, // Comma separated tags
+    @SerialName("tax_exempt") val taxExempt: Boolean = false,
+    @SerialName("tax_retention_code") val taxRetentionCode: Int? = null,
+    @SerialName("tax_retention_percent") val taxRetentionPercent: Int? = null,
 )
 
 

@@ -6,6 +6,7 @@ import com.teco.ventago.core.changes.IChangesManager
 import com.teco.ventago.core.logger.ILoggerService
 import com.teco.ventago.core.logger.Log
 import com.teco.ventago.features.customers.data.provider.ICustomerProvider
+import com.teco.ventago.features.customers.data.provider.buildCreateCustomerRequestBody
 import com.teco.ventago.features.customers.data.repository.CustomerRepository
 import com.teco.ventago.features.customers.data.repository.ICustomerRepository
 import com.teco.ventago.features.customers.data.repository.dto.CustomerCreatedDto
@@ -13,6 +14,7 @@ import com.teco.ventago.features.customers.domain.CustomerService
 import com.teco.ventago.features.customers.domain.models.CreateBillingAddressRequest
 import com.teco.ventago.features.customers.domain.models.Customer
 import com.teco.ventago.features.customers.domain.models.CustomerAddress
+import com.teco.ventago.features.customers.domain.models.CustomerCreateValidation
 import com.teco.ventago.features.customers.domain.models.CustomerDetails
 import com.teco.ventago.features.customers.domain.models.CustomerListItem
 import com.teco.ventago.features.customers.domain.models.CustomerTaxRetentionCatalog
@@ -44,6 +46,7 @@ import kotlinx.serialization.json.decodeFromJsonElement
 import kotlinx.serialization.json.encodeToJsonElement
 import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
+import kotlin.test.assertNull
 
 class CustomerModelsAndOrdersRequestTest {
 
@@ -109,6 +112,35 @@ class CustomerModelsAndOrdersRequestTest {
         assertEquals(1, customer.taxRetentionCode)
         assertEquals(0, customer.taxRetentionPercent)
         assertEquals(1, CustomerTaxRetentionCatalog.indexOfCode(customer.taxRetentionCode))
+    }
+
+    @Test
+    fun parseCustomerCreatedResponseWithoutOptionalPhoneTaxIdAndTags() {
+        val payload = json.parseToJsonElement(
+            """
+            {
+              "id": 1022,
+              "name": "asdasd",
+              "email": "noemail@pos.com",
+              "country_code": "PA",
+              "tax_exempt": false,
+              "tax_retention_code": 0,
+              "tax_retention_percent": 0
+            }
+            """.trimIndent()
+        )
+
+        val created = json.decodeFromJsonElement<CustomerCreatedDto>(payload)
+        assertEquals(1022L, created.id)
+        assertEquals("asdasd", created.name)
+        assertEquals("noemail@pos.com", created.email)
+        assertNull(created.phone)
+        assertNull(created.ruc)
+        assertNull(created.tags)
+        assertEquals("PA", created.countryCode)
+        assertEquals(false, created.taxExempt)
+        assertEquals(0, created.taxRetentionCode)
+        assertEquals(0, created.taxRetentionPercent)
     }
 
     @Test
@@ -264,6 +296,91 @@ class CustomerModelsAndOrdersRequestTest {
                 repository.createCustomer(sampleCustomer(name = "Cliente Demo"), businessId = 1)
             }
         }
+    }
+
+    @Test
+    fun createCustomerRequestBodyKeepsExplicitNullsAndNormalizesBlankOptionals() {
+        val body = json.parseToJsonElement(
+            buildCreateCustomerRequestBody(
+                Customer(
+                    id = -1,
+                    name = "  asdasd  ",
+                    phone = "",
+                    email = " ",
+                    ruc = "",
+                    invoiceCustomer = true,
+                    rucCheckDigit = null,
+                    tags = listOf("", "   "),
+                    customerType = FeCustomerType.FINAL_CONSUMER,
+                    taxPayerType = TaxPayerType.NATURAL,
+                    addressLine = "Panama",
+                    province = "COLON",
+                    district = "COLON",
+                    corregimiento = "BARRIO SUR",
+                    locationCode = "3-1-2",
+                    foreignIdType = "",
+                    foreignIdNumber = "",
+                    cedulaCF = "8-666-9885",
+                    countryCode = "PA",
+                    taxExempt = false,
+                    taxRetentionCode = null,
+                    taxRetentionPercent = null,
+                )
+            )
+        ).jsonObject
+
+        assertEquals("\"asdasd\"", body["name"]?.toString())
+        assertEquals(JsonNull, body["email"])
+        assertEquals(JsonNull, body["phone"])
+        assertEquals(JsonNull, body["tax_id"])
+        assertEquals(JsonNull, body["tags"])
+        assertEquals("\"02\"", body["fe_customer_type"]?.toString())
+        assertEquals("\"1\"", body["taxpayer_type"]?.toString())
+        assertEquals("\"Panama\"", body["address_line"]?.toString())
+        assertEquals("\"3-1-2\"", body["location_code"]?.toString())
+        assertEquals("\"COLON\"", body["province"]?.toString())
+        assertEquals("\"COLON\"", body["district"]?.toString())
+        assertEquals("\"BARRIO SUR\"", body["corregimiento"]?.toString())
+        assertEquals(JsonNull, body["foreign_id_type"])
+        assertEquals(JsonNull, body["foreign_id_number"])
+        assertEquals("\"8-666-9885\"", body["cedula_cf"]?.toString())
+        assertEquals(JsonNull, body["country_other_name"])
+        assertEquals("false", body["tax_exempt"]?.toString())
+        assertEquals(JsonNull, body["tax_retention_code"])
+        assertEquals(JsonNull, body["tax_retention_percent"])
+    }
+
+    @Test
+    fun createCustomerValidationRequiresPanamaLocationForNonForeignCustomers() {
+        assertEquals(
+            "La provincia es requerida.",
+            CustomerCreateValidation.requiredLocationMessage(
+                customerType = FeCustomerType.FINAL_CONSUMER,
+                addressLine = "Panama",
+                province = null,
+                district = "COLON",
+                corregimiento = "BARRIO SUR",
+            )
+        )
+        assertEquals(
+            "La direccion es requerida.",
+            CustomerCreateValidation.requiredLocationMessage(
+                customerType = FeCustomerType.CONTRIBUTING,
+                addressLine = " ",
+                province = "COLON",
+                district = "COLON",
+                corregimiento = "BARRIO SUR",
+            )
+        )
+        assertNull(
+            CustomerCreateValidation.requiredLocationMessage(
+                customerType = FeCustomerType.FOREIGNER,
+                addressLine = null,
+                province = null,
+                district = null,
+                corregimiento = null,
+            )
+        )
     }
 
     @Test

@@ -7,8 +7,11 @@ import kotlinx.cinterop.ExperimentalForeignApi
 import kotlinx.cinterop.addressOf
 import kotlinx.cinterop.usePinned
 import platform.Foundation.NSData
+import platform.Foundation.NSDocumentDirectory
+import platform.Foundation.NSFileManager
 import platform.Foundation.NSURL
 import platform.Foundation.NSTemporaryDirectory
+import platform.Foundation.NSUserDomainMask
 import platform.Foundation.create
 import platform.Foundation.writeToURL
 import platform.UIKit.*
@@ -75,5 +78,20 @@ class IosPdfSharer : PdfSharer {
 
     override fun openPdf(filename: String, bytes: ByteArray) {
         sharePdf(filename, bytes)
+    }
+
+    override fun saveImageToGallery(filename: String, bytes: ByteArray, mimeType: String): Boolean {
+        val image = UIImage(data = bytes.toNSData()) ?: return false
+        UIImageWriteToSavedPhotosAlbum(image, null, null, null)
+        return true
+    }
+
+    override fun saveFileToDocuments(filename: String, bytes: ByteArray, mimeType: String): Boolean {
+        val safeName = filename.substringAfterLast('/').ifBlank { "comprobante" }
+        val urls = NSFileManager.defaultManager.URLsForDirectory(NSDocumentDirectory, NSUserDomainMask)
+        if (urls.count() == 0) return false
+        val documentsDirectory = urls[0] as? NSURL ?: return false
+        val fileUrl = documentsDirectory.URLByAppendingPathComponent(safeName) ?: return false
+        return bytes.toNSData().writeToURL(fileUrl, true)
     }
 }

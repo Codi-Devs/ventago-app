@@ -693,29 +693,28 @@ private fun ChannelsCard(
                     PaymentMethodType.Ach,
                     PaymentMethodType.Paypal,
                 )
-            }
+            }.filter { viewModel.methodVisible(it) }
 
             rows.forEachIndexed { index, method ->
-                if (viewModel.methodVisible(method)) {
-                    ChannelRow(
-                        method = method,
-                        configured = viewModel.methodConfigured(method),
-                        onClick = { onOpenMethod(method) },
-                        subtitle = when (method) {
-                            PaymentMethodType.Paypal -> uiState.availablePaymentMethods["paypal"]?.label
-                            PaymentMethodType.Ach -> uiState.availablePaymentMethods["ach"]?.label
-                            PaymentMethodType.Yappy -> null
-                        }
-                    )
-                    if (index < rows.lastIndex) {
-                        Divider()
+                ChannelRow(
+                    method = method,
+                    configured = viewModel.methodConfigured(method),
+                    onClick = { onOpenMethod(method) },
+                    subtitle = when (method) {
+                        PaymentMethodType.Paypal -> uiState.availablePaymentMethods["paypal"]?.label
+                        PaymentMethodType.Ach -> uiState.availablePaymentMethods["ach"]?.label
+                        PaymentMethodType.Yappy -> null
                     }
+                )
+                if (index < rows.lastIndex) {
+                    Divider()
                 }
             }
         }
     }
 }
 
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun ChannelRow(
     method: PaymentMethodType,
@@ -730,12 +729,15 @@ private fun ChannelRow(
             .background(MaterialTheme.colorScheme.surface)
             .clickable(onClick = onClick)
             .padding(12.dp),
-        verticalAlignment = Alignment.CenterVertically,
+        verticalAlignment = Alignment.Top,
         horizontalArrangement = Arrangement.spacedBy(12.dp)
     ) {
         ChannelLogo(method)
 
-        Column(modifier = Modifier.weight(1f)) {
+        Column(
+            modifier = Modifier.weight(1f),
+            verticalArrangement = Arrangement.spacedBy(6.dp)
+        ) {
             Text(
                 text = when (method) {
                     PaymentMethodType.Yappy -> "Yappy"
@@ -743,6 +745,8 @@ private fun ChannelRow(
                     PaymentMethodType.Paypal -> "PayPal"
                 },
                 style = bodyMediumBold(),
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis,
             )
             subtitle?.takeIf { it.isNotBlank() }?.let {
                 Text(
@@ -752,20 +756,29 @@ private fun ChannelRow(
                     overflow = TextOverflow.Ellipsis,
                 )
             }
+
+            if (configured) {
+                FlowRow(
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalArrangement = Arrangement.spacedBy(6.dp),
+                ) {
+                    StatusPill(text = "Configurado", positive = true)
+                    FeePill(method = method)
+                }
+            }
         }
 
-        if (configured) {
-            StatusPill(text = "Configurado", positive = true)
-            Spacer(modifier = Modifier.width(6.dp))
-            FeePill(method = method)
+        Box(
+            modifier = Modifier.size(32.dp),
+            contentAlignment = Alignment.Center,
+        ) {
+            Icon(
+                imageVector = Icons.Filled.ArrowForwardIos,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.size(16.dp)
+            )
         }
-
-        Icon(
-            imageVector = Icons.Filled.ArrowForwardIos,
-            contentDescription = null,
-            tint = MaterialTheme.colorScheme.primary,
-            modifier = Modifier.size(16.dp)
-        )
     }
 }
 
@@ -828,7 +841,7 @@ private fun FeePill(method: PaymentMethodType) {
             .background(MaterialTheme.colorScheme.secondaryContainer)
             .padding(horizontal = 9.dp, vertical = 4.dp)
     ) {
-        Text(text = value, style = labelSmall(color = MaterialTheme.colorScheme.onSecondaryContainer))
+        Text(text = "Comisión $value", style = labelSmall(color = MaterialTheme.colorScheme.onSecondaryContainer))
     }
 }
 

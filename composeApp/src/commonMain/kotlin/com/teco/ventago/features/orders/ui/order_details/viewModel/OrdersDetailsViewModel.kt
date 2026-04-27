@@ -567,11 +567,15 @@ class OrdersDetailsViewModel(
     fun canInvoiceDraftOrder(order: Order? = uiState.value.order): Boolean {
         val safeOrder = order ?: return false
         val invoiceStatus = safeOrder.invoiceStatus ?: InvoiceStatus.NONE.id
-        val isDraftNotInvoiced = safeOrder.status == OrderStatus.DRAFT &&
-                (invoiceStatus == InvoiceStatus.NONE.id || invoiceStatus == InvoiceStatus.PENDING.id)
+        val isNotInvoiced = invoiceStatus == InvoiceStatus.NONE.id ||
+                invoiceStatus == InvoiceStatus.PENDING.id
+        val isDraftNotInvoiced = safeOrder.status == OrderStatus.DRAFT && isNotInvoiced
+        val isConfirmedPaymentLinkNotInvoiced = safeOrder.status == OrderStatus.CONFIRMED &&
+                safeOrder.paymentFlowType.equals("payment_link", ignoreCase = true) &&
+                isNotInvoiced
         val hasOutstandingPayment = safeOrder.paymentStatus != PaymentStatus.PAID.id
         return uiState.value.canMarkPaid &&
-                isDraftNotInvoiced &&
+                (isDraftNotInvoiced || isConfirmedPaymentLinkNotInvoiced) &&
                 hasOutstandingPayment &&
                 safeOrder.totalAmount.toLongCents() > 0L
     }
@@ -1019,25 +1023,79 @@ class OrdersDetailsViewModel(
         binary: AchProofBinary,
         withLoadingFeedback: Boolean
     ) {
-        val contentType = binary.contentType.orEmpty().lowercase()
-        if (contentType.contains("pdf")) {
-            pdfSharer.openPdf(
-                filename = binary.fileName ?: "comprobante_ach.pdf",
-                bytes = binary.bytes
+        val mimeType = normalizeMimeType(binary.contentType ?: detail.proofContentType)
+        val effectiveMimeType = if (mimeType.isBlank()) "application/octet-stream" else mimeType
+        val fileName = resolveAchProofFileName(
+            suggestedName = binary.fileName ?: detail.proofFileName,
+            paymentIntentId = detail.paymentUid,
+            mimeType = effectiveMimeType
+        )
+        val isImage = effectiveMimeType.startsWith("image/")
+
+        val saved = if (isImage) {
+            pdfSharer.saveImageToGallery(
+                filename = fileName,
+                bytes = binary.bytes,
+                mimeType = effectiveMimeType
             )
-            if (withLoadingFeedback) showSuccess()
-            return
+        } else {
+            pdfSharer.saveFileToDocuments(
+                filename = fileName,
+                bytes = binary.bytes,
+                mimeType = effectiveMimeType
+            )
         }
 
-        val fallbackUrl = detail.proofFileUrl
-        if (!fallbackUrl.isNullOrBlank()) {
-            emitEvent(OrderDetailsUiEvent.OpenExternalUrl(fallbackUrl))
-            if (withLoadingFeedback) showSuccess()
-            return
+        if (saved) {
+            snackbarService.show(
+                if (isImage) "Comprobante guardado en la galería."
+                else "Comprobante guardado en documentos."
+            )
+            if (withLoadingFeedback) showSuccess() else hideLoading()
+        } else {
+            snackbarService.show("No se pudo guardar el comprobante ACH.")
+            if (withLoadingFeedback) showError() else hideLoading()
+        }
+    }
+
+    private fun normalizeMimeType(rawMimeType: String?): String {
+        return rawMimeType
+            ?.substringBefore(';')
+            ?.trim()
+            ?.lowercase()
+            .orEmpty()
+    }
+
+    private fun resolveAchProofFileName(
+        suggestedName: String?,
+        paymentIntentId: String,
+        mimeType: String
+    ): String {
+        val cleaned = suggestedName
+            ?.substringAfterLast('/')
+            ?.substringBefore('?')
+            ?.trim()
+            ?.trim('"')
+            .orEmpty()
+        val extension = inferFileExtension(mimeType)
+
+        if (cleaned.isNotBlank()) {
+            val hasExtension = cleaned.substringAfterLast('.', "").isNotBlank()
+            return if (hasExtension || extension == "bin") cleaned else "$cleaned.$extension"
         }
 
-        snackbarService.show("No hay un visor disponible para este tipo de comprobante.")
-        if (withLoadingFeedback) showError()
+        return "comprobante_ach_${paymentIntentId.ifBlank { "archivo" }}.$extension"
+    }
+
+    private fun inferFileExtension(mimeType: String): String {
+        return when {
+            mimeType.contains("pdf") -> "pdf"
+            mimeType.contains("png") -> "png"
+            mimeType.contains("jpeg") || mimeType.contains("jpg") -> "jpg"
+            mimeType.contains("webp") -> "webp"
+            mimeType.contains("gif") -> "gif"
+            else -> "bin"
+        }
     }
 
     fun getDocumentByCufe() {
@@ -1710,6 +1768,11 @@ class OrdersDetailsViewModel(
     }
 
     fun openVoidPaymentSheet(paymentId: Long) {
+        val payment = uiState.value.order
+            ?.orderPayments
+            ?.firstOrNull { it.id == paymentId }
+        if (payment?.isAutomatic == true) return
+
         analyticsService.logOrderPaymentActionOpened(mode = "void")
         updateState {
             copy(

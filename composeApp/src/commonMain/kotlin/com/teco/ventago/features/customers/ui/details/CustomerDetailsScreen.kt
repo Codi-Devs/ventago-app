@@ -82,6 +82,7 @@ import ventago.composeapp.generated.resources.customers_address_sheet_add_title
 import ventago.composeapp.generated.resources.customers_address_sheet_edit_title
 import ventago.composeapp.generated.resources.customers_address_township
 import ventago.composeapp.generated.resources.customers_billing_addresses
+import ventago.composeapp.generated.resources.customers_cedula
 import ventago.composeapp.generated.resources.customers_delete_address_confirm_message
 import ventago.composeapp.generated.resources.customers_delete_address_confirm_title
 import ventago.composeapp.generated.resources.customers_delete_customer
@@ -343,6 +344,8 @@ private fun GeneralInfoCard(
     customer: CustomerDetails,
     isForeignCustomer: Boolean,
 ) {
+    val hasCedulaCf = !customer.cedulaCf.isNullOrBlank()
+
     Card(
         modifier = Modifier.fillMaxWidth(),
         elevation = CardDefaults.cardElevation(2.dp),
@@ -373,6 +376,8 @@ private fun GeneralInfoCard(
                     stringResource(Res.string.customers_identification),
                     customer.foreignIdNumber ?: customer.rucNumber ?: "-"
                 )
+            } else if (hasCedulaCf) {
+                InfoRow(stringResource(Res.string.customers_cedula), customer.cedulaCf ?: "-")
             } else {
                 InfoRow(stringResource(Res.string.customers_ruc_label), customer.rucNumber ?: "-")
                 InfoRow(stringResource(Res.string.customers_dv_label), customer.rucCheckDigit ?: "-")

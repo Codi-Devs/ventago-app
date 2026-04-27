@@ -49,6 +49,11 @@ data class CustomerFormState(
     val taxRetentionPercent: String = "",
 
     val addressLine: String = "",
+    val nameError: String? = null,
+    val addressLineError: String? = null,
+    val provinceError: String? = null,
+    val districtError: String? = null,
+    val corregimientoError: String? = null,
     val selectedProvince: String? = null,
     val selectedDistrict: String? = null,
     val selectedCorregimiento: String? = null,
