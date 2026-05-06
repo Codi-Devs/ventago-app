@@ -126,6 +126,7 @@
     <!-- Invoice String -->
     <string name="invoice_saved">Factura guardada</string>
     <string name="invoice_title">Factura</string>
+    <string name="invoice_preview_title">Vista previa</string>
     <string name="save">Guardar</string>
     <string name="invoice_i_order">Pedido:</string>
     <string name="invoice_i_date">Fecha:</string>
@@ -576,6 +577,7 @@
     <string name="customers_empty">No hay clientes registrados</string>
     <string name="customers_search_placeholder">Buscar cliente por nombre</string>
     <string name="customers_filters_title">Filtros de clientes</string>
+    <string name="customers_filter_ruc_optional">RUC (opcional)</string>
     <string name="customers_no_customer_data">No hay datos del cliente</string>
     <string name="customers_customer_type">Tipo de cliente</string>
     <string name="customers_ruc">RUC</string>

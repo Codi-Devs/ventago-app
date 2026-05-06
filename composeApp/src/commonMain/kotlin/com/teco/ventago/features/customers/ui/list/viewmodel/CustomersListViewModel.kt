@@ -34,6 +34,11 @@ class CustomersListViewModel(
         viewModelScope.launch {
             financialProfileService.observe().onEach { profile ->
                 val newBusinessId = profile?.businessId ?: -1
+                updateState {
+                    copy(
+                        invoicingEnabled = profile?.invoicingActive == true,
+                    )
+                }
                 if (newBusinessId <= 0) return@onEach
                 if (businessId == newBusinessId && uiState.value.customers.items.isNotEmpty()) return@onEach
 

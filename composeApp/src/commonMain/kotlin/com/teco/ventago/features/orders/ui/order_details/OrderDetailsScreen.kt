@@ -145,6 +145,7 @@ import com.teco.ventago.features.orders.ui.order_details.viewModel.OrderDetailsS
 import com.teco.ventago.features.orders.ui.order_details.viewModel.OrderDetailsUiEvent
 import com.teco.ventago.features.orders.ui.order_details.viewModel.OrdersDetailsViewModel
 import com.teco.ventago.features.orders.ui.order_details.viewModel.OrderCxcValidators
+import com.teco.ventago.features.orders.ui.order_details.viewModel.MIN_CANCEL_ORDER_REASON_LENGTH
 import com.teco.ventago.features.orders.ui.order_details.viewModel.RegisterPaymentMode
 import com.teco.ventago.features.orders.ui.order_details.viewModel.RegisterPaymentState
 import com.teco.ventago.features.orders.ui.order_details.viewModel.RescheduleState
@@ -2009,6 +2010,14 @@ private fun CancelOrderBottomSheet(
     onDismiss: () -> Unit,
     onConfirm: () -> Unit
 ) {
+    val reasonValidation = OrderCxcValidators.validateCancelOrderReason(reason)
+    val showReasonError = reason.isNotBlank() && reasonValidation != null
+    val supportingText = if (showReasonError) {
+        reasonValidation.orEmpty()
+    } else {
+        "Mínimo $MIN_CANCEL_ORDER_REASON_LENGTH caracteres."
+    }
+
     Column(
         modifier = Modifier
             .fillMaxWidth()
@@ -2068,7 +2077,9 @@ private fun CancelOrderBottomSheet(
             label = "Motivo de anulación",
             onChange = onReasonChange,
             modifier = Modifier.fillMaxWidth(),
-            maxLines = 4
+            maxLines = 4,
+            supportingText = supportingText,
+            isError = showReasonError
         )
 
         Row(
@@ -2083,8 +2094,12 @@ private fun CancelOrderBottomSheet(
             }
             ButtonM(
                 modifier = Modifier.weight(1f),
-                onClick = onConfirm,
-                enabled = reason.isNotBlank(),
+                onClick = {
+                    if (reasonValidation == null) {
+                        onConfirm()
+                    }
+                },
+                enabled = reasonValidation == null,
                 containerColor = MaterialTheme.colorScheme.error,
                 contentColor = MaterialTheme.colorScheme.onError
             ) {

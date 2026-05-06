@@ -23,6 +23,7 @@ data class CustomersListState(
     val isRefreshing: Boolean = false,
     val errorMessage: String? = null,
     val canAddCustomerAction: Boolean = false,
+    val invoicingEnabled: Boolean = false,
     override val loadingBottomSheet: LoadingBottomSheetState = LoadingBottomSheetState(),
 ) : LoadableState<CustomersListState> {
     val canLoadMore: Boolean

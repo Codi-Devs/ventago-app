@@ -31,7 +31,6 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -47,7 +46,7 @@ import com.teco.ventago.design_system.buttons.TextButtonS
 import com.teco.ventago.design_system.loaders.shimmerBrush
 import com.teco.ventago.design_system.molecules.customer.CustomerRow
 import com.teco.ventago.design_system.textfields.DMOutlinedTextField
-import com.teco.ventago.features.customers.ui.list.viewmodel.CustomersListUiEvent
+import com.teco.ventago.features.customers.domain.models.CustomerListItem
 import com.teco.ventago.features.customers.ui.list.viewmodel.CustomersListViewModel
 import org.jetbrains.compose.resources.stringResource
 import org.koin.compose.viewmodel.koinViewModel
@@ -55,11 +54,11 @@ import ventago.composeapp.generated.resources.Res
 import ventago.composeapp.generated.resources.apply_filters
 import ventago.composeapp.generated.resources.clear_filters
 import ventago.composeapp.generated.resources.customers_empty
+import ventago.composeapp.generated.resources.customers_filter_ruc_optional
 import ventago.composeapp.generated.resources.customers_filters_title
 import ventago.composeapp.generated.resources.customers_search_placeholder
 import ventago.composeapp.generated.resources.email
 import ventago.composeapp.generated.resources.name
-import ventago.composeapp.generated.resources.pos_clients_ruc
 import ventago.composeapp.generated.resources.see_more
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -67,7 +66,8 @@ import ventago.composeapp.generated.resources.see_more
 fun CustomersListScreen(
     viewModel: CustomersListViewModel = koinViewModel(),
     onCreateCustomer: () -> Unit,
-    onCustomerSelected: (Long) -> Unit,
+    onCustomerSelected: (CustomerListItem) -> Unit,
+    enforceInvoiceCustomerSelection: Boolean = false,
 ) {
     val uiState by viewModel.uiState.collectAsState()
     var showFilters by remember { mutableStateOf(false) }
@@ -76,14 +76,7 @@ fun CustomersListScreen(
     var nameFilterDraft by remember { mutableStateOf("") }
     var rucFilterDraft by remember { mutableStateOf("") }
     var emailFilterDraft by remember { mutableStateOf("") }
-
-    LaunchedEffect(Unit) {
-        viewModel.events.collect { event ->
-            when (event) {
-                is CustomersListUiEvent.OpenCustomerDetails -> onCustomerSelected(event.customerId)
-            }
-        }
-    }
+    val isSearchLoading = uiState.isLoading && uiState.isRefreshing
 
     Column(
         modifier = Modifier
@@ -111,12 +104,23 @@ fun CustomersListScreen(
                 }
             )
             Spacer(modifier = Modifier.size(8.dp))
-            IconButton(onClick = viewModel::applyFilters) {
-                Icon(
-                    imageVector = Icons.Rounded.Search,
-                    contentDescription = null,
-                    tint = MaterialTheme.colorScheme.primary
-                )
+            IconButton(
+                onClick = viewModel::applyFilters,
+                enabled = !isSearchLoading
+            ) {
+                if (isSearchLoading) {
+                    CircularProgressIndicator(
+                        modifier = Modifier.size(22.dp),
+                        color = MaterialTheme.colorScheme.secondary,
+                        strokeWidth = 2.dp
+                    )
+                } else {
+                    Icon(
+                        imageVector = Icons.Rounded.Search,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.primary
+                    )
+                }
             }
         }
 
@@ -147,7 +151,16 @@ fun CustomersListScreen(
                             CustomerRow(
                                 customer = customer,
                                 selected = false,
-                                onClick = { viewModel.openCustomer(customer.id) }
+                                onClick = {
+                                    if (
+                                        enforceInvoiceCustomerSelection &&
+                                        uiState.invoicingEnabled &&
+                                        customer.invoiceCustomer <= 0
+                                    ) {
+                                        return@CustomerRow
+                                    }
+                                    onCustomerSelected(customer)
+                                }
                             )
                         }
 
@@ -249,7 +262,7 @@ private fun CustomerFiltersSheet(
 
         DMOutlinedTextField(
             text = ruc,
-            label = stringResource(Res.string.pos_clients_ruc),
+            label = stringResource(Res.string.customers_filter_ruc_optional),
             onChange = onRucChange,
             modifier = Modifier.fillMaxWidth()
         )

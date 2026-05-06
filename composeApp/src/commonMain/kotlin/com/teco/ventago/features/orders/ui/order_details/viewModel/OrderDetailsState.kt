@@ -110,6 +110,8 @@ data class VoidPaymentState(
     val errorMessage: String? = null
 )
 
+internal const val MIN_CANCEL_ORDER_REASON_LENGTH = 15
+
 internal object OrderCxcValidators {
     fun parseCents(input: String): Long = input.filter(Char::isDigit).toLongOrNull() ?: 0L
 
@@ -189,6 +191,15 @@ internal object OrderCxcValidators {
 
     fun validateVoidReason(reason: String): String? {
         if (reason.isBlank()) return "La razón es obligatoria."
+        return null
+    }
+
+    fun validateCancelOrderReason(reason: String): String? {
+        val trimmedReason = reason.trim()
+        if (trimmedReason.isBlank()) return "La razón es obligatoria."
+        if (trimmedReason.length < MIN_CANCEL_ORDER_REASON_LENGTH) {
+            return "La razón debe tener al menos $MIN_CANCEL_ORDER_REASON_LENGTH caracteres."
+        }
         return null
     }
 }

@@ -401,6 +401,15 @@ class OrdersDetailsViewModel(
     }
 
     fun cancelOrder(reason: String) {
+        val trimmedReason = reason.trim()
+        val reasonValidation = OrderCxcValidators.validateCancelOrderReason(trimmedReason)
+        if (reasonValidation != null) {
+            viewModelScope.launch {
+                snackbarService.show(reasonValidation)
+            }
+            return
+        }
+
         val order = uiState.value.order ?: return
         val businessId = business?.businessId ?: return
         showLoading()
@@ -410,7 +419,7 @@ class OrdersDetailsViewModel(
                     val response = orderService.cancelOrder(
                         businessId,
                         order.id,
-                        reason,
+                        trimmedReason,
                         authService.getUserSync()?.name ?: "App"
                     )
                     withContext(Dispatchers.Main) {

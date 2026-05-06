@@ -1,5 +1,6 @@
 package com.teco.ventago.features.pos.ui
 
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -74,6 +75,7 @@ import androidx.navigation.NavOptionsBuilder
 import com.teco.ventago.AppViewModel
 import com.teco.ventago.core.firebase.AnalyticsService
 import com.teco.ventago.design_system.buttons.ButtonM
+import com.teco.ventago.design_system.buttons.OutlinedButtonM
 import com.teco.ventago.design_system.buttons.TextButtonM
 import com.teco.ventago.design_system.buttons.TextButtonS
 import com.teco.ventago.design_system.molecules.InstallmentDueDateFieldKmp
@@ -215,6 +217,9 @@ fun PaymentScreenContent(
     val totalToCharge = remember(ui) { viewModel.amountToCharge() }
     val remaining = remember(ui) { viewModel.remainingToAllocate() }
     val hasPositiveAmount = totalToCharge > 0L
+    val canPreviewInvoice = ui.cart.isNotEmpty() &&
+        ui.finalCustomer != null &&
+        (ui.finalCustomer == true || ui.customer != null)
 
     val loadingSheetState = rememberModalBottomSheetState(confirmValueChange = { false })
 
@@ -360,8 +365,10 @@ fun PaymentScreenContent(
                         viewModel.createOrder(createPaymentLink = false, saveAsDraft = true)
                     }
                 },
+                onPreviewInvoice = { navigate(PosScreens.InvoicePreviewScreen, null) },
                 // Disable save draft for credit/debit notes
                 saveDraftEnabled = hasPositiveAmount && !isCreditOrDebitNote,
+                canPreviewInvoice = canPreviewInvoice,
                 canCreateInvoice = ui.canCreateInvoice,
                 canCreateDraft = ui.canCreateDraft,
             )
@@ -369,6 +376,8 @@ fun PaymentScreenContent(
             PaymentLinkSection(
                 totalToCharge = totalToCharge,
                 enabled = hasPositiveAmount && ui.canCreateInvoice,
+                canPreviewInvoice = canPreviewInvoice,
+                onPreviewInvoice = { navigate(PosScreens.InvoicePreviewScreen, null) },
                 onConfirm = {
                     requestGovernmentWarningOrProceed {
                         viewModel.checkPaymentMethodsConfigured { configured ->
@@ -484,7 +493,9 @@ private fun ManualAndInstallmentsSection(
     onInstallmentDate: (Int, String) -> Unit,
     onConfirm: () -> Unit,
     onSaveDraft: () -> Unit,
+    onPreviewInvoice: () -> Unit,
     saveDraftEnabled: Boolean,
+    canPreviewInvoice: Boolean,
     canCreateInvoice: Boolean,
     canCreateDraft: Boolean,
 ) {
@@ -674,6 +685,17 @@ private fun ManualAndInstallmentsSection(
                         style = labelLarge().copy(color = MaterialTheme.colorScheme.onPrimary)
                     )
                 }
+
+                Spacer(Modifier.height(8.dp))
+
+                OutlinedButtonM(
+                    onClick = onPreviewInvoice,
+                    enabled = canPreviewInvoice,
+                    contentColor = MaterialTheme.colorScheme.secondary,
+                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.secondary),
+                ) {
+                    Text("Vista previa")
+                }
             }
             // Only show save draft button for regular invoices, not credit/debit notes
             if (canCreateDraft && selectedDocType != "04" && selectedDocType != "05") {
@@ -697,6 +719,8 @@ private fun ManualAndInstallmentsSection(
 private fun PaymentLinkSection(
     totalToCharge: Long,
     enabled: Boolean,
+    canPreviewInvoice: Boolean,
+    onPreviewInvoice: () -> Unit,
     onConfirm: () -> Unit
 ) {
     ElevatedCard(
@@ -721,6 +745,15 @@ private fun PaymentLinkSection(
                     text = "Generar enlace por ${formatNumberToMoney((totalToCharge / 100.0).toString())}",
                     style = labelLarge().copy(color = MaterialTheme.colorScheme.onPrimary)
                 )
+            }
+            Spacer(Modifier.height(8.dp))
+            OutlinedButtonM(
+                onClick = onPreviewInvoice,
+                enabled = canPreviewInvoice,
+                contentColor = MaterialTheme.colorScheme.secondary,
+                border = BorderStroke(1.dp, MaterialTheme.colorScheme.secondary),
+            ) {
+                Text("Vista previa")
             }
         }
     }

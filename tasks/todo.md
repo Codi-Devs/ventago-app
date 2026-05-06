@@ -1,3 +1,91 @@
+# Order Cancel Reason Minimum Length TODO
+
+## Plan
+- [x] Add a shared cancel-order reason minimum length rule for order details.
+- [x] Block the `Anular pedido` confirmation until the trimmed reason has at least 15 characters and show field-level guidance.
+- [x] Guard the ViewModel cancel path with the same validation to prevent programmatic bypass.
+- [x] Add focused validator tests for blank, short, and valid reasons.
+- [x] Run targeted test and KMP/Android compile verification.
+
+## Verification Gates
+- [x] `./gradlew --no-build-cache --no-configuration-cache :composeApp:testDebugUnitTest --tests com.teco.ventago.features.orders.ui.order_details.viewModel.OrdersDetailsViewModelCxcTest`
+- [x] `./gradlew --no-build-cache --no-configuration-cache :composeApp:compileKotlinMetadata :composeApp:compileDebugKotlinAndroid`
+
+## Review Notes
+- Cancel-order reason validation now uses a shared 15-character trimmed minimum rule.
+- The cancel-order bottom sheet shows minimum-length guidance, marks short reasons as an input error, and disables `Anular` until valid.
+- `OrdersDetailsViewModel.cancelOrder(...)` trims the reason and rejects blank/short reasons before opening `LoadingSheet`, covering programmatic calls.
+- Targeted validator test and KMP/Android compile gates passed with existing KSP/Kotlin, cinterop commonization, and deprecation warnings.
+
+# Customers List Search UX TODO
+
+## Plan
+- [x] Show a secondary-colored circular loader in the top search icon button while search/filter refresh is running.
+- [x] Add a filter-specific RUC label so add/edit customer forms keep their existing tax-identification label.
+- [x] Run focused compile verification.
+
+## Verification Gates
+- [x] `./gradlew --no-build-cache --no-configuration-cache :composeApp:compileKotlinMetadata :composeApp:compileDebugKotlinAndroid`
+
+## Review Notes
+- Top search action now displays a 22.dp secondary `CircularProgressIndicator` while `applyFilters()`/reset refresh is loading.
+- Customer filter sheet now uses `customers_filter_ruc_optional` (`RUC (opcional)` / `RUC (Optional)`) instead of the shared add/edit customer fiscal-identification label.
+- Compile verification passed with existing KSP/Kotlin, cinterop commonization, manifest, and deprecation warnings.
+
+# POS Customer Picker Redesign TODO
+
+## Plan
+- [x] Update `CustomersListScreen` so callers can receive the full `CustomerListItem` while preserving customer-management navigation.
+- [x] Wire POS customer picker routes to the reusable customers list UI with FAB creation and saved-state return to POS.
+- [x] Preserve the existing invoice-customer guard for POS selection when invoicing is enabled.
+- [x] Run focused compile verification.
+
+## Verification Gates
+- [x] `./gradlew --no-build-cache --no-configuration-cache :composeApp:compileKotlinMetadata :composeApp:compileDebugKotlinAndroid`
+
+## Review Notes
+- POS `SearchCustomerScreen` and the compatible `CustomersScreen` route now render `CustomersListScreen` directly.
+- Customer rows now return the full `CustomerListItem`; the customer-management graph still opens details using `customer.id`.
+- POS selection writes the serialized customer into the POS graph saved state and pops back to `POSScreen`.
+- POS picker routes use the existing FAB to open `AddCustomerScreen`; the old app-bar add action was removed from these routes.
+- Compile verification passed with existing KSP/Kotlin, cinterop commonization, and deprecation warnings.
+
+# POS Invoice Preview Screen TODO
+
+## Follow-up: Secondary Section Headers
+- [x] Set invoice preview section icons and titles to `MaterialTheme.colorScheme.secondary`.
+- [x] Run a focused compile verification.
+
+## Follow-up: Secondary Bold Totals
+- [x] Set bold ITBMS breakdown total text to `MaterialTheme.colorScheme.secondary`.
+- [x] Set final invoice total label and amount to `MaterialTheme.colorScheme.secondary`.
+- [x] Run a focused compile verification.
+
+## Follow-up: Preview Button Position
+- [x] Move the invoice preview button under the `Confirmar cobro` primary action.
+- [x] Run a focused compile verification.
+
+## Plan
+- [x] Add a pure invoice preview model/builder from current POS state and business data.
+- [x] Add a full-screen POS invoice preview route that shares the existing POS ViewModel.
+- [x] Add an optional `Vista previa` action on the payment step without changing payment confirmation behavior.
+- [x] Render the mobile Compose preview with banner, DGI header, issuer/receptor/meta, items, ITBMS, payments, and totals.
+- [x] Add focused common tests for preview model data, totals, tax grouping, and payments.
+- [x] Run KMP/Android compile and targeted test verification gates.
+
+## Verification Gates
+- [x] `./gradlew --no-build-cache --no-configuration-cache :composeApp:compileKotlinMetadata :composeApp:compileDebugKotlinAndroid`
+- [x] `./gradlew --no-build-cache --no-configuration-cache :composeApp:testDebugUnitTest --tests com.teco.ventago.features.pos.InvoicePreviewBuilderTest`
+
+## Review Notes
+- Follow-up: invoice preview now renders beneath the primary payment action in manual/installment and payment-link sections.
+- Follow-up: bold ITBMS breakdown total and final invoice total now use `MaterialTheme.colorScheme.secondary`.
+- Follow-up: invoice preview section icons and titles now use `MaterialTheme.colorScheme.secondary`.
+- Added a local-only POS invoice preview builder and full-screen Compose preview route sharing the POS graph ViewModel.
+- `PaymentScreen` now exposes an optional `Vista previa` action without changing confirm, draft, or payment-link submission paths.
+- Preview renders issuer, receptor, fiscal metadata, line items, ITBMS breakdown, payments, and totals from current POS state.
+- Verification passed with existing project warnings about KSP/Kotlin version, cinterop commonization, and deprecated APIs.
+
 # Payment Methods Channels Responsive Layout TODO
 
 ## Plan

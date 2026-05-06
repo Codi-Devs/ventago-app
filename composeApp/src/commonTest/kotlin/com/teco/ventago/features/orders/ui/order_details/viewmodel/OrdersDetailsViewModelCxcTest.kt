@@ -106,4 +106,15 @@ class OrdersDetailsViewModelCxcTest {
         assertEquals("La razón es obligatoria.", blank)
         assertNull(ok)
     }
+
+    @Test
+    fun validateCancelOrderReasonRequiresAtLeastFifteenCharacters() {
+        val blank = OrderCxcValidators.validateCancelOrderReason("   ")
+        val short = OrderCxcValidators.validateCancelOrderReason("12345678901234")
+        val valid = OrderCxcValidators.validateCancelOrderReason("123456789012345")
+
+        assertEquals("La razón es obligatoria.", blank)
+        assertEquals("La razón debe tener al menos 15 caracteres.", short)
+        assertNull(valid)
+    }
 }

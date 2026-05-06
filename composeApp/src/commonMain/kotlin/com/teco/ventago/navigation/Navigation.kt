@@ -48,7 +48,6 @@ import com.teco.ventago.features.branches.ui.billing_point.manage.BillingPointMa
 import com.teco.ventago.features.branches.ui.billing_point.manage.BillingPointManageScreen
 import com.teco.ventago.features.branches.ui.billing_point.manage.viewmodel.BillingPointsManageViewModel
 import com.teco.ventago.features.branches.ui.branches.manage.BranchesManageScreen
-import com.teco.ventago.features.customers.data.provider.json
 import com.teco.ventago.features.customers.domain.models.CustomerListItem
 import com.teco.ventago.features.customers.ui.details.CustomerDetailsScreen
 import com.teco.ventago.features.customers.ui.form.CustomerFormScreen
@@ -88,10 +87,8 @@ import com.teco.ventago.features.pos.ui.PosProductScreen
 import com.teco.ventago.features.pos.ui.PosProductScreenBottomBar
 import com.teco.ventago.features.pos.ui.PosScreen
 import com.teco.ventago.features.pos.ui.SuccessScreen
+import com.teco.ventago.features.pos.ui.invoice_preview.InvoicePreviewScreen
 import com.teco.ventago.features.pos.ui.customer.add.AddCustomerScreen
-import com.teco.ventago.features.pos.ui.customer.list.ClientListActions
-import com.teco.ventago.features.pos.ui.customer.list.ClientListScreen
-import com.teco.ventago.features.pos.ui.customer.search.SearchCustomerView
 import com.teco.ventago.features.pos.ui.viewmodel.PosViewModel
 import com.teco.ventago.features.product.ui.category.add.AddCategoryScreen
 import com.teco.ventago.features.product.ui.category.add.ModifyCategoryScreen
@@ -138,6 +135,7 @@ import ventago.composeapp.generated.resources.edit
 import ventago.composeapp.generated.resources.home
 import ventago.composeapp.generated.resources.home_summary_tab
 import ventago.composeapp.generated.resources.invoice_title
+import ventago.composeapp.generated.resources.invoice_preview_title
 import ventago.composeapp.generated.resources.invoicing
 import ventago.composeapp.generated.resources.invoicing_landing_title
 import ventago.composeapp.generated.resources.items
@@ -239,6 +237,7 @@ enum class PosScreens(
     PaymentScreen(
         Res.string.pos_payment
     ),
+    InvoicePreviewScreen(Res.string.invoice_preview_title),
     SuccessScreen(Res.string.pos, false), PosInvoiceScreen(
         Res.string.invoice_title,
         true
@@ -256,13 +255,9 @@ enum class PosScreens(
             QuoteDetailsActions(backStackEntry, navigate, navigateAny)
         }
     ),
-    CustomersScreen(
-        Res.string.pos_clients,
-        actions = { backStackEntry, navigate, _ -> ClientListActions(backStackEntry, navigate) }),
+    CustomersScreen(Res.string.pos_clients),
 
-    SearchCustomerScreen(
-        Res.string.search,
-        actions = { backStackEntry, navigate, _ -> ClientListActions(backStackEntry, navigate) }),
+    SearchCustomerScreen(Res.string.search),
 
     AddCustomerScreen(Res.string.pos_clients),
 
@@ -350,7 +345,7 @@ enum class PosScreens(
 
 
     fun isPosScreens(): Boolean {
-        return this == POSProductScreen || this == CartScreen || this == PaymentScreen || this == SuccessScreen || this == CustomersScreen || this == AddCustomerScreen || this == PosInvoiceScreen
+        return this == POSProductScreen || this == CartScreen || this == PaymentScreen || this == InvoicePreviewScreen || this == SuccessScreen || this == CustomersScreen || this == AddCustomerScreen || this == PosInvoiceScreen
     }
 }
 
@@ -586,6 +581,32 @@ private fun NavGraphBuilder.addProductsNavigation(
 private fun NavGraphBuilder.addPOSNavigation(
     navController: NavHostController, appViewModel: AppViewModel, analyticsService: AnalyticsService
 ) {
+    fun returnSelectedCustomerToPos(customer: CustomerListItem) {
+        val payload = Json.encodeToString(customer)
+        val posEntry = navController.getBackStackEntry(PosScreens.POS.name)
+        posEntry.savedStateHandle[NavResults.KEY_SELECTED_CUSTOMER] = payload
+
+        val hasPosScreen = runCatching {
+            navController.getBackStackEntry(PosScreens.POSScreen.name)
+        }.isSuccess
+
+        if (hasPosScreen) {
+            navController.popBackStack(
+                route = PosScreens.POSScreen.name,
+                inclusive = false,
+                saveState = false
+            )
+        } else {
+            var guard = 0
+            while (navController.currentDestination?.route?.contains("pos_note") == false) {
+                val ok = navController.navigateUp()
+                if (!ok) return
+                guard++
+                if (guard > 100) return
+            }
+        }
+    }
+
     navigation(
         route = PosScreens.POS.name, startDestination = PosScreens.POSScreen.name
     ) {
@@ -752,6 +773,15 @@ private fun NavGraphBuilder.addPOSNavigation(
             }
         }
 
+        composable(route = PosScreens.InvoicePreviewScreen.name) {
+            val backStackEntry = remember { navController.getBackStackEntry(PosScreens.POS.name) }
+            val viewModel: PosViewModel = koinViewModel(viewModelStoreOwner = backStackEntry)
+            analyticsService.logScreenView("InvoicePreviewScreen")
+            InvoicePreviewScreen(viewModel) {
+                navController.navigateUp()
+            }
+        }
+
         composable(route = PosScreens.SuccessScreen.name) {
             val backStackEntry = remember { navController.getBackStackEntry(PosScreens.POS.name) }
             val viewModel: PosViewModel = koinViewModel(viewModelStoreOwner = backStackEntry)
@@ -769,49 +799,21 @@ private fun NavGraphBuilder.addPOSNavigation(
         }
 
         composable(route = PosScreens.SearchCustomerScreen.name) {
-            SearchCustomerView {
-                navController.navigate(PosScreens.CustomersScreen.name)
-            }
-
+            analyticsService.logScreenView("POSCustomerPickerScreen")
+            CustomersListScreen(
+                onCreateCustomer = { navController.navigate(PosScreens.AddCustomerScreen.name) },
+                onCustomerSelected = ::returnSelectedCustomerToPos,
+                enforceInvoiceCustomerSelection = true,
+            )
         }
 
         composable(route = PosScreens.CustomersScreen.name) {
-//            val backStackEntry = remember { navController.getBackStackEntry(PosScreens.POS.name) }
-//            val viewModel: PosViewModel = koinViewModel(viewModelStoreOwner = backStackEntry)
             analyticsService.logScreenView("ClientsScreen")
-            ClientListScreen(
-                onCustomerSelected = { customer ->
-                    val payload = Json.encodeToString(customer)
-                    val posEntry = navController.getBackStackEntry(PosScreens.POS.name)
-                    posEntry.savedStateHandle[NavResults.KEY_SELECTED_CUSTOMER] = payload
-                    // Go back to POS
-
-                    val hasPosScreen = runCatching { navController.getBackStackEntry(PosScreens.POSScreen.name) }.isSuccess
-
-                    if (hasPosScreen) {
-                        navController.popBackStack(
-                            route = PosScreens.POSScreen.name, // 👈 your actual POS screen route
-                            inclusive = false, // keep the POS itself
-                            saveState = false
-                        )
-                    } else {
-                        var guard = 0
-                        while (navController.currentDestination?.route?.contains("pos_note") == false) {
-                            val ok = navController.navigateUp()
-                            if (!ok) return@ClientListScreen // can't go further
-                            guard++
-                            if (guard > 100) return@ClientListScreen // can't go further
-                        }
-//                        navController.popBackStack(
-//                            route = "pos_note", // 👈 your actual POS screen route
-//                            inclusive = false, // keep the POS itself
-//                            saveState = false
-//                        )
-                    }
-                }
-            ) {
-                navController.navigateUp()
-            }
+            CustomersListScreen(
+                onCreateCustomer = { navController.navigate(PosScreens.AddCustomerScreen.name) },
+                onCustomerSelected = ::returnSelectedCustomerToPos,
+                enforceInvoiceCustomerSelection = true,
+            )
         }
 
         composable(route = PosScreens.AddCustomerScreen.name) {
@@ -1172,8 +1174,8 @@ private fun NavGraphBuilder.addCustomersNavigation(
             analyticsService.logScreenView("CustomersListScreen")
             CustomersListScreen(
                 onCreateCustomer = { navController.navigate(PosScreens.CustomerCreateScreen.name) },
-                onCustomerSelected = { customerId ->
-                    navController.navigate(CustomerDetailsRoute(customerId = customerId))
+                onCustomerSelected = { customer ->
+                    navController.navigate(CustomerDetailsRoute(customerId = customer.id))
                 }
             )
         }
