@@ -1,3 +1,74 @@
+# POS Success Home Tap Regression TODO
+
+## Plan
+- [x] Fix the success-screen home icon tap target so the visible icon receives clicks.
+- [x] Keep the existing direct Home navigation behavior unchanged.
+- [x] Run KMP/Android compile verification.
+
+## Verification Gates
+- [x] `./gradlew --no-build-cache --no-configuration-cache :composeApp:compileKotlinMetadata :composeApp:compileDebugKotlinAndroid`
+
+## Review Notes
+- Root cause: the full-screen scrollable `Column` was composed after the home `IconButton`, so it could sit above the visible icon in hit-test order.
+- The home `IconButton` is now composed after the scroll content inside the `Box`, preserving the visual position while making the tap target active.
+- Compile gate passed with existing project warnings (`ksp` version, cinterop commonization, manifest provider replacement, expect/actual beta, deprecations).
+
+# POS Success Home/Icon Follow-up TODO
+
+## Plan
+- [x] Route the success-screen home icon directly to the Home screen.
+- [x] Switch the success-screen home, client, RUC, and email icons to outlined variants.
+- [x] Run KMP/Android compile verification.
+
+## Verification Gates
+- [x] `./gradlew --no-build-cache --no-configuration-cache :composeApp:compileKotlinMetadata :composeApp:compileDebugKotlinAndroid`
+
+## Review Notes
+- Success-screen home now navigates directly with `navController.navigate(PosScreens.HomeScreen.name)` and clears the current stack so the icon exits POS reliably.
+- Home, client, RUC, and email icons now use `Icons.Outlined`.
+- Compile gate passed with existing project warnings (`ksp` version, cinterop commonization, manifest provider replacement, expect/actual beta, deprecations).
+
+# POS Success Screen Follow-up Fixes TODO
+
+## Plan
+- [x] Show compact POS order numbers on success cards (`#0000000521` instead of the full prefixed order number).
+- [x] Use a document-style icon for RUC rows.
+- [x] Fix invoice sharing so Android uses a real send/share PDF intent.
+- [x] Make the top home icon navigate to Home instead of starting another POS sale.
+- [x] Prevent order details auto-open from re-triggering after returning to the orders list.
+- [x] Run KMP/Android compile verification.
+
+## Verification Gates
+- [x] `./gradlew --no-build-cache --no-configuration-cache :composeApp:compileKotlinMetadata :composeApp:compileDebugKotlinAndroid`
+
+## Review Notes
+- Success order display now strips prefixed order numbers to their final segment, e.g. `ORD-4-000-865-0000000521` renders as `#0000000521`.
+- RUC rows now use the document icon treatment.
+- The top success home icon now resets POS state and navigates to `HomeScreen`; `Hacer otra orden` still returns to POS for a new sale.
+- `OrdersScreenRoute(orderNumber=...)` now consumes the initial order-number auto-open once per back stack entry, preventing detail re-open loops after pressing back from details.
+- Android PDF sharing now uses `ACTION_SEND` with `EXTRA_STREAM`, `ClipData`, and URI grants, instead of trying to share through an `ACTION_VIEW` intent.
+- Compile gate passed with existing project warnings (`ksp` version, cinterop commonization, manifest provider replacement, expect/actual beta, deprecations).
+
+
+# POS Success Screen UI Remake TODO
+
+## Plan
+- [x] Keep existing POS order creation, invoicing, PDF, payment-link, notification, and navigation logic unchanged.
+- [x] Replace the successful mobile/tablet content in `SuccessScreen.kt` with the requested friendly card-based invoice and payment-link variants.
+- [x] Use existing `PosViewModel` state for order number, amount, customer details, payment method totals, PDF, and payment link data.
+- [x] Run KMP/Android compile verification.
+
+## Verification Gates
+- [x] `./gradlew --no-build-cache --no-configuration-cache :composeApp:compileKotlinMetadata :composeApp:compileDebugKotlinAndroid`
+
+## Review Notes
+- `SuccessScreen` now renders a friendly success hero on `vanishedBackgroundColor()` with a centered card layout for both phone and tablet success flows.
+- Invoice success shows order amount/detail navigation, optional customer rows, payment method plus paid amount in the same summary card, a PDF invoice card action, a secondary `Hacer otra orden` CTA, and an outlined share action.
+- Payment-link success shows order/customer details, QR generation from the existing payment link, copy and WhatsApp actions, a 24-hour expiry notice, a secondary new-order CTA, and an outlined link share action.
+- Failed order handling still delegates to the existing `PosSuccessScreen` failure UI, and notification permission logic remains scoped to non-failed successful results.
+- `PosViewModel.sharePdfDocument()` was added as a small wrapper around the existing `PdfSharer.sharePdf` dependency so the invoice share CTA can share the generated PDF without touching order creation or invoicing logic.
+- Compile gate passed with existing project warnings (`ksp` version, cinterop commonization, expect/actual beta, deprecations).
+
 # Order Cancel Reason Minimum Length TODO
 
 ## Plan
@@ -2581,3 +2652,40 @@
 - `CustomerDetails` already mapped `cedula_cf`, so the change stayed in the details UI only.
 - `GeneralInfoCard` now prioritizes `Cédula` when `cedula_cf` is present on a non-foreign customer, and suppresses the `Número RUC` / `Dígito Verificador` rows for that branch.
 - Compile gate passed with existing project warnings only (`ksp`/KMP beta/deprecation warnings unrelated to this change).
+
+# POS Success Notification Permission TODO
+
+## Plan
+- [x] Remove notification permission request from `HomeScreen` first-entry flow.
+- [x] Request notification permission from POS `SuccessScreen` for non-failed order success flows.
+- [x] Preserve existing Android/iOS platform permission implementations.
+- [x] Run compile and static verification gates.
+
+## Verification Gates
+- [x] `./gradlew --no-build-cache --no-configuration-cache :composeApp:compileKotlinMetadata :composeApp:compileDebugKotlinAndroid`
+- [x] Static check: `HomeScreen` no longer calls `requestNotificationPermission()`.
+- [x] Static check: failed order UI path does not request notification permission.
+
+## Review Notes
+- `HomeScreen` still creates `platformState` for the existing support email action, but no longer requests notification permission when Home becomes visible.
+- `SuccessScreen` now collects POS state and requests notification permission only when there is a non-failed successful order/payment-link result.
+- Android/iOS platform permission code was not changed.
+- Compile gate passed with existing project warnings (`ksp` version, cinterop commonization, manifest/provider, expect/actual beta, and deprecations).
+
+# Notification Order Details Deep Link TODO
+
+## Plan
+- [x] Resolve in-app notification order detail URLs to internal order navigation instead of browser.
+- [x] Reuse existing `OrdersScreenRoute(orderNumber=...)` flow so order details load by order number.
+- [x] Add focused resolver tests for `ventago.tecodigi.com/orders/order-details.html?orderNumber=...`.
+- [x] Run notification tests and KMP/Android compile verification.
+
+## Verification Gates
+- [x] `./gradlew --no-build-cache --no-configuration-cache :composeApp:testDebugUnitTest --tests com.teco.ventago.features.notifications.NotificationActionResolverTest`
+- [x] `./gradlew --no-build-cache --no-configuration-cache :composeApp:compileKotlinMetadata :composeApp:compileDebugKotlinAndroid`
+
+## Review Notes
+- Notification resolver now maps `/orders/order-details.html?orderNumber=...` URLs to an internal order-details action.
+- `NotificationsViewModel` emits `NavigateToOrderDetails`, and `NotificationsScreen` navigates through `OrdersScreenRoute(orderNumber=...)` so the existing order lookup endpoint and details flow are reused.
+- Unknown absolute URLs still open externally, and ACH notification links keep their existing internal ACH route.
+- Targeted resolver test and compile gate passed with existing project warnings (`ksp` version, cinterop commonization, expect/actual beta, and deprecations).

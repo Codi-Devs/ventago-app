@@ -39,6 +39,17 @@ class NotificationActionResolverTest {
     }
 
     @Test
+    fun resolvesOrderDetailsNavigationFromVentagoUrl() {
+        val orderNumber = "ORD-4-0000-865-0000000449"
+        val result = NotificationActionResolver.resolve(
+            "https://ventago.tecodigi.com/orders/order-details.html?orderNumber=$orderNumber"
+        )
+
+        assertIs<NotificationActionResolution.NavigateToOrderDetails>(result)
+        assertEquals(orderNumber, result.orderNumber)
+    }
+
+    @Test
     fun routesUnknownAbsoluteUrlToExternalBrowser() {
         val result = NotificationActionResolver.resolve(
             "https://tecodigi.com/some/path?x=1"

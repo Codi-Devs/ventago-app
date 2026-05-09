@@ -2888,6 +2888,17 @@ class PosViewModel(
         pdfSharer.openPdf(filename, pdfBytes)
     }
 
+    fun sharePdfDocument() {
+        val state = uiState.value
+        if (state.pdfDocument.isBlank()) return
+        val pdfB64 = state.pdfDocument
+
+        @OptIn(ExperimentalEncodingApi::class)
+        val pdfBytes = Base64.decode(pdfB64)
+        val filename = "${state.orderNumber}.pdf"
+        pdfSharer.sharePdf(filename, pdfBytes)
+    }
+
     private fun observeQuoteSettings() {
         viewModelScope.launch {
             quotesService.quoteSettings().collect { settings ->

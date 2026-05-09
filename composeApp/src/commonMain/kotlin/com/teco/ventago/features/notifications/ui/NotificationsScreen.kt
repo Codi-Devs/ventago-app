@@ -77,6 +77,7 @@ import com.teco.ventago.features.notifications.domain.models.derivedState
 import com.teco.ventago.features.notifications.ui.viewmodel.NotificationsUiEvent
 import com.teco.ventago.features.notifications.ui.viewmodel.NotificationsViewModel
 import com.teco.ventago.navigation.AchPaymentDetailsRoute
+import com.teco.ventago.navigation.OrdersScreenRoute
 import com.teco.ventago.utils.openCustomTab
 import kotlinx.datetime.Clock
 import kotlinx.datetime.DateTimeUnit
@@ -187,6 +188,10 @@ fun NotificationsScreen(
             when (event) {
                 is NotificationsUiEvent.NavigateToAchPayment -> {
                     navigateAny(AchPaymentDetailsRoute(paymentUid = event.paymentUid))
+                }
+
+                is NotificationsUiEvent.NavigateToOrderDetails -> {
+                    navigateAny(OrdersScreenRoute(orderNumber = event.orderNumber))
                 }
 
                 is NotificationsUiEvent.OpenExternalUrl -> openCustomTab(event.url)

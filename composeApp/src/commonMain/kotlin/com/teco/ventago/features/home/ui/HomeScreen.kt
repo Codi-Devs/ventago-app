@@ -166,9 +166,7 @@ fun HomeScreen(
     var showQuotesWelcomeSheet by remember { mutableStateOf(false) }
     val quotesWelcomeSheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
 
-    // Request notification permission when user successfully logs in and lands on home screen
     LaunchedEffect(Unit) {
-        platformState.requestNotificationPermission()
         viewModel.onHomeVisible()
     }
 

@@ -92,6 +92,9 @@ class NotificationsViewModel(
                 is NotificationActionResolution.NavigateToAchPayment ->
                     emitEvent(NotificationsUiEvent.NavigateToAchPayment(action.paymentUid))
 
+                is NotificationActionResolution.NavigateToOrderDetails ->
+                    emitEvent(NotificationsUiEvent.NavigateToOrderDetails(action.orderNumber))
+
                 is NotificationActionResolution.OpenExternalUrl ->
                     emitEvent(NotificationsUiEvent.OpenExternalUrl(action.url))
 

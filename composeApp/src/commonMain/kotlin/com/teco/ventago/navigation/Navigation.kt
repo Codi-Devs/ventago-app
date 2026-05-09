@@ -5,8 +5,11 @@ import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Settings
@@ -1102,6 +1105,9 @@ private fun NavGraphBuilder.addOrdersNavigation(
 //            )
             val ordersOwner = rememberGraphOwner(navController, PosScreens.Orders.name)
             val viewModel: OrdersViewModel = koinViewModel(viewModelStoreOwner = ordersOwner)
+            var consumedInitialOrderNumber by rememberSaveable(orderNumber) {
+                mutableStateOf(false)
+            }
 
             analyticsService.logScreenView("OrdersScreen")
 
@@ -1110,7 +1116,8 @@ private fun NavGraphBuilder.addOrdersNavigation(
                 if (paymentStatus != null) {
                     viewModel.applyPaymentStatusFilter(paymentStatus)
                 }
-                if (!orderNumber.isNullOrEmpty()) {
+                if (!orderNumber.isNullOrEmpty() && !consumedInitialOrderNumber) {
+                    consumedInitialOrderNumber = true
                     viewModel.findOrderByOrderNumber(orderNumber)
                 }
             }

@@ -1,5 +1,7 @@
 # Lessons Learned
 
+- En Compose, si un control flotante en un `Box` se ve pero no recibe taps, revisar orden de composición/hit-test: un hijo `fillMaxSize()` agregado después puede cubrirlo aunque sea transparente. Componer overlays accionables al final o elevarlos explícitamente.
+- En pantallas de éxito POS que necesitan salir a una ruta raíz (Home), usar navegación directa del `NavController` hacia el route raíz y limpiar back stack; no depender de wrappers locales del grafo POS para saltos cross-root.
 - En Order Details, no limitar `Facturar` solo a `OrderStatus.DRAFT`: órdenes `payment_link` confirmadas (`CONFIRMED`) pueden seguir sin factura y requerir facturación manual si están impagas, sin `invoice_status` emitido y con total positivo.
 - En descarga de comprobantes ACH, no dependas de `ACTION_VIEW`/visores externos para PDF o imagen; guarda bytes directamente en almacenamiento del dispositivo (galería para imágenes, documentos/descargas para archivos) para evitar fallos por apps faltantes.
 - Para anulación de pagos en Order Details, no confíes solo en ocultar el botón en UI: para pagos `is_automatic=true` aplica doble guardia (render + ViewModel) para impedir aperturas programáticas del flujo.
@@ -110,3 +112,5 @@
 - En `POST /api/v1/customers/create`, no serialices opcionales con `explicitNulls = false` ni envíes `""` desde formularios: normaliza blanks a `null` y conserva claves nulas explícitas cuando el backend espera contrato completo para consumidor final.
 - En DTOs de respuesta Kotlinx, `String?` o `Int?` sin valor default siguen siendo obligatorios si el backend omite la clave. Si el API puede no enviar `phone`, `tax_id`, `tags` u otros opcionales, declara defaults (`= null` / `= false`) para que la deserialización no falle.
 - En formularios Compose con campos requeridos, no dependas de alerts genéricos post-submit: guarda errores por campo en el `UiState`, marca `isError` en inputs/dropdowns y limpia el error al editar para que el usuario vea exactamente qué completar.
+- En rutas que auto-abren detalle desde un argumento (`orderNumber`, deep link, notificación), consume el argumento una sola vez por back stack entry (`rememberSaveable`) para que al volver del detalle no se dispare nuevamente el mismo `LaunchedEffect`.
+- En Android, no implementes compartir PDF con `ACTION_VIEW`; usa `ACTION_SEND` + `EXTRA_STREAM` + `ClipData` y concede permisos del `FileProvider` a los targets del chooser para evitar errores de archivo no recibido.

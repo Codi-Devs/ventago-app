@@ -1,6 +1,7 @@
 package com.teco.ventago.core
 
 import android.content.ActivityNotFoundException
+import android.content.ClipData
 import android.content.ContentValues
 import android.content.Context
 import android.content.Intent
@@ -23,10 +24,19 @@ class AndroidPdfSharer(
             context, "${context.packageName}.provider", file
         )
 
-        val intent = Intent(Intent.ACTION_VIEW).apply {
+        val intent = Intent(Intent.ACTION_SEND).apply {
             type = "application/pdf"
             putExtra(Intent.EXTRA_STREAM, uri)
+            clipData = ClipData.newRawUri(filename, uri)
             addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+        }
+        val resInfoList = context.packageManager.queryIntentActivities(intent, 0)
+        for (resInfo in resInfoList) {
+            context.grantUriPermission(
+                resInfo.activityInfo.packageName,
+                uri,
+                Intent.FLAG_GRANT_READ_URI_PERMISSION
+            )
         }
         context.startActivity(
             Intent.createChooser(intent, "Compartir factura PDF")
