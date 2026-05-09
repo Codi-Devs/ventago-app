@@ -1,3 +1,39 @@
+# Orders Yesterday Filter Payload TODO
+
+## Plan
+- [x] Make quick emission-date chips submit date-only filters so `Yesterday` matches the web request payload.
+- [x] Centralize Orders list request serialization/date formatting so the exact API payload can be tested.
+- [x] Add a focused serialization test for the requested May 7, 2026 payload.
+- [x] Run targeted test and compile verification.
+
+## Verification Gates
+- [x] `./gradlew --no-build-cache --no-configuration-cache :composeApp:testDebugUnitTest --tests com.teco.ventago.features.orders.ListOrdersRequestTest`
+- [x] `./gradlew --no-build-cache --no-configuration-cache :composeApp:compileKotlinMetadata :composeApp:compileDebugKotlinAndroid`
+
+## Review Notes
+- Quick date chips now execute immediately as date-only searches, clearing payment status, invoice type, customer RUC, and customer ID filters before refreshing orders.
+- `ListOrdersRequest.toApiJsonString()` omits null filters and preserves default pagination fields, matching the web payload shape.
+- `ListOrdersRequestTest.yesterdayDateOnlyRequestMatchesWebPayloadShape` verifies the exact requested payload for `2026-05-07T00:00:00-05:00` through `2026-05-07T23:59:59-05:00`.
+- Verification passed with existing project warnings (`ksp` version, cinterop commonization, expect/actual beta, deprecations).
+
+# Orders List Filters TODO
+
+## Plan
+- [x] Review existing Orders and Quotes list filtering flows plus project architecture/conventions.
+- [x] Replace the Orders list API body for `get-orders` with a typed request model covering page, date range, invoice type, customer RUC, and payment status.
+- [x] Thread the typed filters through provider, repository, service, and `OrdersViewModel` without changing unrelated order flows.
+- [x] Add Orders list filter UI: payment status chips, filter sheet, invoice type selector, customer RUC, calendar-backed start/end dates, and quick date range chips.
+- [x] Run focused compile verification and document results.
+
+## Verification Gates
+- [x] `./gradlew --no-build-cache --no-configuration-cache :composeApp:compileKotlinMetadata :composeApp:compileDebugKotlinAndroid`
+
+## Review Notes
+- Added a typed `ListOrdersRequest` for `/api/v1/orders/get-orders`; null filter fields are omitted in the serialized list payload.
+- Orders filters now flow through provider, repository, service, and `OrdersViewModel` with existing pagination preserved.
+- Orders list now shows payment-status filter chips and a filter sheet for invoice type, customer RUC, emission start/end dates, and quick ranges: today, yesterday, this week, this month, and last 30 days.
+- Compile verification passed with existing project warnings (`ksp` version, cinterop commonization, expect/actual beta, deprecations).
+
 # POS Success Home Tap Regression TODO
 
 ## Plan

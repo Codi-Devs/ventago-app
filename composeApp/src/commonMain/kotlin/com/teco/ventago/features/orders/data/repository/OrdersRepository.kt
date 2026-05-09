@@ -14,6 +14,7 @@ import com.teco.ventago.features.orders.domain.models.requests.CancelOrderReques
 import com.teco.ventago.features.orders.domain.models.requests.CreatePaymentLinkRequest
 import com.teco.ventago.features.orders.domain.models.requests.CreateOrderRequest
 import com.teco.ventago.features.orders.domain.models.requests.DeleteOrderRequest
+import com.teco.ventago.features.orders.domain.models.requests.ListOrdersRequest
 import com.teco.ventago.features.orders.domain.models.requests.RejectAchPaymentRequest
 import com.teco.ventago.features.orders.domain.models.requests.RescheduleReceivablesRequest
 import com.teco.ventago.features.orders.domain.models.requests.RescheduleReceivablesResponse
@@ -69,36 +70,16 @@ class OrdersRepository(private val provider: IOrdersProvider, private val logger
     }
 
     override suspend fun loadOrders(
-        businessId: Int,
-        pageSize: Int,
-        page: Int,
-        paymentStatus: Int?,
-        customerId: Long?
+        request: ListOrdersRequest
     ): List<Order> {
-        return loadOrdersPaged(
-            businessId = businessId,
-            pageSize = pageSize,
-            page = page,
-            paymentStatus = paymentStatus,
-            customerId = customerId
-        ).items
+        return loadOrdersPaged(request).items
     }
 
     override suspend fun loadOrdersPaged(
-        businessId: Int,
-        pageSize: Int,
-        page: Int,
-        paymentStatus: Int?,
-        customerId: Long?
+        request: ListOrdersRequest
     ): Paged<Order> {
         try {
-            val response = provider.loadOrders(
-                businessId = businessId,
-                pageSize = pageSize,
-                page = page,
-                paymentStatus = paymentStatus,
-                customerId = customerId
-            )
+            val response = provider.loadOrders(request)
 
             if (response.error.isError()) {
                 throw BadRequestException(response.toJson())
@@ -119,14 +100,14 @@ class OrdersRepository(private val provider: IOrdersProvider, private val logger
 
             // Optionally log pagination meta (for debugging or caching)
             val total = dataObj["total"]?.jsonPrimitive?.longOrNull ?: -1L
-            val size = dataObj["size"]?.jsonPrimitive?.intOrNull ?: pageSize
-            val pageNum = dataObj["page"]?.jsonPrimitive?.intOrNull ?: page
+            val size = dataObj["size"]?.jsonPrimitive?.intOrNull ?: request.pageSize
+            val pageNum = dataObj["page"]?.jsonPrimitive?.intOrNull ?: request.page
 
             logger.sendLog(
                 Log(
                     LogLevel.INFO,
                     "loadOrders",
-                    "Loaded ${orders.size} orders of total $total (page=$pageNum, size=$size, paymentStatus=${paymentStatus ?: "ALL"}, customerId=${customerId ?: "ALL"})"
+                    "Loaded ${orders.size} orders of total $total (page=$pageNum, size=$size, paymentStatus=${request.paymentStatus ?: "ALL"}, customerId=${request.customerId ?: "ALL"}, customerRuc=${request.customerRuc ?: "ALL"}, orderType=${request.orderType ?: "ALL"}, emissionStart=${request.emissionStartDate ?: "ALL"}, emissionEnd=${request.emissionEndDate ?: "ALL"})"
                 )
             )
 
@@ -140,7 +121,7 @@ class OrdersRepository(private val provider: IOrdersProvider, private val logger
             logger.sendLog(
                 Log(
                     LogLevel.ERROR, "loadOrders",
-                    "Error loading orders. Error: ${e.message ?: "UNKNOWN"}, businessId: $businessId, pageSize: $pageSize, page: $page, paymentStatus: ${paymentStatus ?: "ALL"}, customerId: ${customerId ?: "ALL"}"
+                    "Error loading orders. Error: ${e.message ?: "UNKNOWN"}, businessId: ${request.businessId}, pageSize: ${request.pageSize}, page: ${request.page}, paymentStatus: ${request.paymentStatus ?: "ALL"}, customerId: ${request.customerId ?: "ALL"}, customerRuc: ${request.customerRuc ?: "ALL"}, orderType: ${request.orderType ?: "ALL"}, emissionStart: ${request.emissionStartDate ?: "ALL"}, emissionEnd: ${request.emissionEndDate ?: "ALL"}"
                 )
             )
             throw e

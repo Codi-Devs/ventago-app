@@ -16,6 +16,10 @@ data class OrdersState(
     val canCreateOrderEntry: Boolean = false,
     val paymentStatusFilter: Int? = null,
     val customerIdFilter: Long? = null,
+    val orderTypeFilter: String? = null,
+    val customerRucFilter: String = "",
+    val emissionStartDate: String = "",
+    val emissionEndDate: String = "",
     val showScanner: Boolean = false,
     val showPermissionRationalDialog: Boolean = false,
 

@@ -5,6 +5,7 @@ import com.teco.ventago.features.orders.domain.models.requests.CancelOrderReques
 import com.teco.ventago.features.orders.domain.models.requests.CreatePaymentLinkRequest
 import com.teco.ventago.features.orders.domain.models.requests.CreateOrderRequest
 import com.teco.ventago.features.orders.domain.models.requests.DeleteOrderRequest
+import com.teco.ventago.features.orders.domain.models.requests.ListOrdersRequest
 import com.teco.ventago.features.orders.domain.models.requests.RejectAchPaymentRequest
 import com.teco.ventago.features.orders.domain.models.requests.RescheduleReceivablesRequest
 import com.teco.ventago.features.orders.domain.models.requests.RegisterManualPaymentsRequest
@@ -52,11 +53,7 @@ interface IOrdersProvider {
     suspend fun isBusinessRegistered(businessId: Int): ApiResponse
 
     suspend fun loadOrders(
-        businessId: Int,
-        pageSize: Int,
-        page: Int,
-        paymentStatus: Int? = null,
-        customerId: Long? = null
+        request: ListOrdersRequest
     ): ApiResponse
 
     suspend fun changeOrderStatus(order: Order, status: Int, businessId: Int): ApiResponse

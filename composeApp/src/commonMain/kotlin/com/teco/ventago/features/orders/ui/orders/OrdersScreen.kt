@@ -2,16 +2,20 @@ package com.teco.ventago.features.orders.ui.orders
 
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.animation.core.RepeatMode
@@ -26,6 +30,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Add
 import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material.icons.rounded.QrCodeScanner
+import androidx.compose.material.icons.rounded.Tune
 import androidx.compose.material.pullrefresh.PullRefreshIndicator
 import androidx.compose.material.pullrefresh.pullRefresh
 import androidx.compose.material.pullrefresh.rememberPullRefreshState
@@ -38,6 +43,9 @@ import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.ModalBottomSheet
+import androidx.compose.material3.SheetState
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Tab
 import androidx.compose.material3.TabRow
 import androidx.compose.material3.TabRowDefaults
@@ -69,12 +77,19 @@ import com.teco.ventago.core.camera.PermissionCallback
 import com.teco.ventago.core.camera.PermissionStatus
 import com.teco.ventago.core.camera.PermissionType
 import com.teco.ventago.core.camera.createPermissionsManager
+import com.teco.ventago.design_system.buttons.ButtonM
+import com.teco.ventago.design_system.buttons.OutlinedButtonM
 import com.teco.ventago.design_system.buttons.TextButtonS
 import com.teco.ventago.design_system.loaders.shimmerBrush
 import com.teco.ventago.design_system.molecules.DMAlertDialog
+import com.teco.ventago.design_system.molecules.InstallmentDueDateFieldKmp
 import com.teco.ventago.design_system.molecules.orders.OrderListItem
 import com.teco.ventago.design_system.organism.LoadingSheet
+import com.teco.ventago.design_system.textfields.DMOutlinedTextField
+import com.teco.ventago.design_system.textfields.helpers.DMDropDownField
 import com.teco.ventago.design_system.theme.latoFontFamily
+import com.teco.ventago.features.invoicing.domain.models.FEDocumentType
+import com.teco.ventago.features.orders.domain.models.PaymentStatus
 import com.teco.ventago.features.quotes.ui.list.QuotesListScreen
 import com.teco.ventago.features.quotes.ui.list.QuotesListViewModel
 import com.teco.ventago.features.orders.ui.orders.viewmodel.OrdersUiEvent
@@ -88,16 +103,37 @@ import org.jetbrains.compose.resources.stringResource
 import org.koin.compose.viewmodel.koinViewModel
 import org.koin.compose.koinInject
 import ventago.composeapp.generated.resources.Res
+import ventago.composeapp.generated.resources.all_invoice_types
+import ventago.composeapp.generated.resources.apply_filters
+import ventago.composeapp.generated.resources.cancelled
+import ventago.composeapp.generated.resources.clear_filters
+import ventago.composeapp.generated.resources.customer_ruc
+import ventago.composeapp.generated.resources.emission_date
+import ventago.composeapp.generated.resources.emission_end_date
+import ventago.composeapp.generated.resources.emission_start_date
 import ventago.composeapp.generated.resources.filter_all
-import ventago.composeapp.generated.resources.filter_failed
-import ventago.composeapp.generated.resources.filter_new
-import ventago.composeapp.generated.resources.filter_processing
+import ventago.composeapp.generated.resources.filters
+import ventago.composeapp.generated.resources.invoice_type
+import ventago.composeapp.generated.resources.last_30_days
 import ventago.composeapp.generated.resources.orders
 import ventago.composeapp.generated.resources.orders_empty
+import ventago.composeapp.generated.resources.paid
+import ventago.composeapp.generated.resources.payment_status
+import ventago.composeapp.generated.resources.payment_status_partial
+import ventago.composeapp.generated.resources.payment_status_pending
+import ventago.composeapp.generated.resources.payment_status_refunded
 import ventago.composeapp.generated.resources.quotes
 import ventago.composeapp.generated.resources.see_more
 import ventago.composeapp.generated.resources.tax_empty
+import ventago.composeapp.generated.resources.this_month
+import ventago.composeapp.generated.resources.this_week
+import ventago.composeapp.generated.resources.today
+import ventago.composeapp.generated.resources.yesterday
 import kotlinx.coroutines.delay
+import kotlinx.datetime.Clock
+import kotlinx.datetime.LocalDate
+import kotlinx.datetime.TimeZone
+import kotlinx.datetime.toLocalDateTime
 
 private const val KEY_ORDERS_QUOTES_TAB_HINT_SHOWN = "orders_quotes_tab_hint_shown"
 
@@ -191,6 +227,8 @@ fun OrdersScreen(
     val storage: LocalStorage = koinInject()
     var selectedTabIndex by rememberSaveable { mutableStateOf(0) }
     var showQuotesTabHint by remember { mutableStateOf(false) }
+    var showFilters by remember { mutableStateOf(false) }
+    val filterSheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
 
     val hintPulseTransition = rememberInfiniteTransition(label = "quotes_tab_hint")
     val hintPulse by hintPulseTransition.animateFloat(
@@ -329,6 +367,15 @@ fun OrdersScreen(
             return
         }
 
+        OrdersFilterHeader(
+            paymentStatusFilter = uiState.paymentStatusFilter,
+            activeFilterCount = viewModel.activeFilterCount(),
+            onPaymentStatusSelected = { status ->
+                viewModel.applyPaymentStatusFilter(status)
+            },
+            onOpenFilters = { showFilters = true }
+        )
+
         if (uiState.isLoadingOrders && uiState.orders.isEmpty()) {
             LoadingOrdersView()
         } else if (uiState.orders.isEmpty()) {
@@ -459,6 +506,250 @@ fun OrdersScreen(
             show = uiState.showPermissionRationalDialog
         )
     }
+
+    if (showFilters) {
+        OrdersFilterSheet(
+            viewModel = viewModel,
+            onDismiss = { showFilters = false },
+            sheetState = filterSheetState
+        )
+    }
+}
+
+@Composable
+private fun OrdersFilterHeader(
+    paymentStatusFilter: Int?,
+    activeFilterCount: Int,
+    onPaymentStatusSelected: (Int?) -> Unit,
+    onOpenFilters: () -> Unit,
+) {
+    val statusOptions = listOf(
+        null to stringResource(Res.string.filter_all),
+        PaymentStatus.UNPAID.id to stringResource(Res.string.payment_status_pending),
+        PaymentStatus.PARTIAL.id to stringResource(Res.string.payment_status_partial),
+        PaymentStatus.PAID.id to stringResource(Res.string.paid),
+        PaymentStatus.REFUNDED.id to stringResource(Res.string.payment_status_refunded),
+        PaymentStatus.CANCELLED.id to stringResource(Res.string.cancelled)
+    )
+
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(top = 8.dp, bottom = 4.dp)
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween
+        ) {
+            Text(
+                text = stringResource(Res.string.payment_status),
+                style = MaterialTheme.typography.titleSmall
+            )
+            Box {
+                IconButton(onClick = onOpenFilters) {
+                    Icon(
+                        imageVector = Icons.Rounded.Tune,
+                        contentDescription = stringResource(Res.string.filters),
+                        tint = MaterialTheme.colorScheme.primary
+                    )
+                }
+                if (activeFilterCount > 0) {
+                    Surface(
+                        modifier = Modifier
+                            .align(Alignment.TopEnd)
+                            .size(18.dp),
+                        shape = CircleShape,
+                        color = MaterialTheme.colorScheme.secondary,
+                        contentColor = MaterialTheme.colorScheme.onSecondary
+                    ) {
+                        Box(contentAlignment = Alignment.Center) {
+                            Text(
+                                text = activeFilterCount.toString(),
+                                style = MaterialTheme.typography.labelSmall,
+                                textAlign = TextAlign.Center
+                            )
+                        }
+                    }
+                }
+            }
+        }
+
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .horizontalScroll(rememberScrollState())
+                .padding(horizontal = 16.dp),
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            statusOptions.forEach { (value, label) ->
+                FilterChip(
+                    selected = paymentStatusFilter == value,
+                    onClick = { onPaymentStatusSelected(value) },
+                    label = { Text(label) },
+                    colors = FilterChipDefaults.filterChipColors()
+                )
+            }
+        }
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun OrdersFilterSheet(
+    viewModel: OrdersViewModel,
+    onDismiss: () -> Unit,
+    sheetState: SheetState,
+) {
+    val uiState by viewModel.uiState.collectAsState()
+    val documentTypes = remember { listOf<FEDocumentType?>(null) + FEDocumentType.entries }
+    val selectedDocumentTypeIndex = documentTypes.indexOfFirst { it?.code == uiState.orderTypeFilter }
+        .takeIf { it >= 0 } ?: 0
+    val allInvoiceTypesLabel = stringResource(Res.string.all_invoice_types)
+
+    ModalBottomSheet(
+        onDismissRequest = onDismiss,
+        sheetState = sheetState,
+        containerColor = MaterialTheme.colorScheme.background
+    ) {
+        LazyColumn(
+            modifier = Modifier
+                .fillMaxWidth()
+                .navigationBarsPadding(),
+            contentPadding = PaddingValues(24.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            item {
+                Text(
+                    text = stringResource(Res.string.apply_filters),
+                    style = MaterialTheme.typography.titleMedium
+                )
+            }
+            item {
+                DMDropDownField(
+                    label = stringResource(Res.string.invoice_type),
+                    items = documentTypes,
+                    selectedIndex = selectedDocumentTypeIndex,
+                    onItemSelected = { _, item -> viewModel.setOrderTypeFilter(item?.code) },
+                    selectedItemToString = { item ->
+                        item?.let { "${it.code} - ${it.description}" }
+                            ?: allInvoiceTypesLabel
+                    }
+                )
+            }
+            item {
+                DMOutlinedTextField(
+                    label = stringResource(Res.string.customer_ruc),
+                    modifier = Modifier.fillMaxWidth(),
+                    text = uiState.customerRucFilter,
+                    onChange = { viewModel.setCustomerRucFilter(it) }
+                )
+            }
+            item {
+                Text(
+                    text = stringResource(Res.string.emission_date),
+                    style = MaterialTheme.typography.titleSmall,
+                    color = MaterialTheme.colorScheme.onSurface
+                )
+            }
+            item {
+                QuickDateRangeChips(
+                    onRangeSelected = { startDate, endDate ->
+                        viewModel.applyQuickEmissionDateRange(startDate, endDate)
+                        onDismiss()
+                    }
+                )
+            }
+            item {
+                InstallmentDueDateFieldKmp(
+                    valueIso = uiState.emissionStartDate,
+                    onDatePickedIso = { viewModel.setEmissionStartDate(it) },
+                    label = stringResource(Res.string.emission_start_date)
+                )
+            }
+            item {
+                InstallmentDueDateFieldKmp(
+                    valueIso = uiState.emissionEndDate,
+                    onDatePickedIso = { viewModel.setEmissionEndDate(it) },
+                    label = stringResource(Res.string.emission_end_date)
+                )
+            }
+            item {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    OutlinedButtonM(
+                        modifier = Modifier.weight(1f),
+                        onClick = {
+                            viewModel.clearFilters()
+                            onDismiss()
+                        }
+                    ) {
+                        Text(text = stringResource(Res.string.clear_filters))
+                    }
+                    ButtonM(
+                        modifier = Modifier.weight(1f),
+                        onClick = {
+                            viewModel.applyFilters()
+                            onDismiss()
+                        },
+                        containerColor = MaterialTheme.colorScheme.secondary,
+                        contentColor = MaterialTheme.colorScheme.onSecondary
+                    ) {
+                        Text(text = stringResource(Res.string.apply_filters))
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun QuickDateRangeChips(
+    onRangeSelected: (String, String) -> Unit,
+) {
+    val today = remember { todayLocalDate() }
+    val options = listOf(
+        stringResource(Res.string.today) to (today to today),
+        stringResource(Res.string.yesterday) to (today.minusDays(1) to today.minusDays(1)),
+        stringResource(Res.string.this_week) to (today.minusDays(today.dayOfWeek.ordinal) to today),
+        stringResource(Res.string.this_month) to (LocalDate(today.year, today.monthNumber, 1) to today),
+        stringResource(Res.string.last_30_days) to (today.minusDays(29) to today),
+    )
+
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .horizontalScroll(rememberScrollState()),
+        horizontalArrangement = Arrangement.spacedBy(8.dp)
+    ) {
+        options.forEach { (label, range) ->
+            FilterChip(
+                selected = false,
+                onClick = { onRangeSelected(range.first.toIsoDate(), range.second.toIsoDate()) },
+                label = { Text(label) },
+                colors = FilterChipDefaults.filterChipColors()
+            )
+        }
+    }
+}
+
+private fun todayLocalDate(): LocalDate {
+    return Clock.System.now().toLocalDateTime(TimeZone.currentSystemDefault()).date
+}
+
+private fun LocalDate.minusDays(days: Int): LocalDate {
+    return LocalDate.fromEpochDays(toEpochDays() - days)
+}
+
+private fun LocalDate.toIsoDate(): String {
+    val yearString = year.toString().padStart(4, '0')
+    val monthString = monthNumber.toString().padStart(2, '0')
+    val dayString = dayOfMonth.toString().padStart(2, '0')
+    return "$yearString-$monthString-$dayString"
 }
 
 @Composable

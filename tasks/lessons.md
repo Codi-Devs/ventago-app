@@ -1,5 +1,6 @@
 # Lessons Learned
 
+- En filtros rápidos de listas, no reutilices silenciosamente filtros previos si negocio espera paridad con web: define si el chip es "shortcut de fecha" combinable o "búsqueda rápida" date-only, y cubre el payload exacto con test de serialización.
 - En Compose, si un control flotante en un `Box` se ve pero no recibe taps, revisar orden de composición/hit-test: un hijo `fillMaxSize()` agregado después puede cubrirlo aunque sea transparente. Componer overlays accionables al final o elevarlos explícitamente.
 - En pantallas de éxito POS que necesitan salir a una ruta raíz (Home), usar navegación directa del `NavController` hacia el route raíz y limpiar back stack; no depender de wrappers locales del grafo POS para saltos cross-root.
 - En Order Details, no limitar `Facturar` solo a `OrderStatus.DRAFT`: órdenes `payment_link` confirmadas (`CONFIRMED`) pueden seguir sin factura y requerir facturación manual si están impagas, sin `invoice_status` emitido y con total positivo.

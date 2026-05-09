@@ -14,6 +14,7 @@ import com.teco.ventago.features.orders.domain.models.requests.CancelOrderReques
 import com.teco.ventago.features.orders.domain.models.requests.CreatePaymentLinkRequest
 import com.teco.ventago.features.orders.domain.models.requests.DeleteOrderRequest
 import com.teco.ventago.features.orders.domain.models.requests.ManualPaymentItemRequest
+import com.teco.ventago.features.orders.domain.models.requests.ListOrdersRequest
 import com.teco.ventago.features.orders.domain.models.requests.PaymentApplicationRequest
 import com.teco.ventago.features.orders.domain.models.requests.RejectAchPaymentRequest
 import com.teco.ventago.features.orders.domain.models.requests.RescheduleReceivableTermRequest
@@ -88,14 +89,24 @@ class OrderService(private val repository: IOrdersRepository) {
     suspend fun loadOrders(
         businessId: Int,
         paymentStatus: Int? = null,
-        customerId: Long? = null
+        customerId: Long? = null,
+        emissionStartDate: String? = null,
+        emissionEndDate: String? = null,
+        orderType: String? = null,
+        customerRuc: String? = null,
     ): List<Order> {
         val newOrders = repository.loadOrders(
-            businessId = businessId,
-            pageSize = pageSize,
-            page = page,
-            paymentStatus = paymentStatus,
-            customerId = customerId
+            ListOrdersRequest(
+                businessId = businessId,
+                pageSize = pageSize,
+                page = page,
+                paymentStatus = paymentStatus,
+                customerId = customerId,
+                emissionStartDate = emissionStartDate,
+                emissionEndDate = emissionEndDate,
+                orderType = orderType,
+                customerRuc = customerRuc
+            )
         )
         if (newOrders.isEmpty()) {
             return emptyList()
@@ -115,14 +126,26 @@ class OrderService(private val repository: IOrdersRepository) {
     suspend fun resetOrders(
         businessId: Int,
         paymentStatus: Int? = null,
-        customerId: Long? = null
+        customerId: Long? = null,
+        emissionStartDate: String? = null,
+        emissionEndDate: String? = null,
+        orderType: String? = null,
+        customerRuc: String? = null,
     ): List<Order> {
         mutex.withLock {
             page = INITIAL_PAGE
             orders.clear()
             ordersFlow.value = emptyList()
         }
-        return loadOrders(businessId, paymentStatus, customerId)
+        return loadOrders(
+            businessId = businessId,
+            paymentStatus = paymentStatus,
+            customerId = customerId,
+            emissionStartDate = emissionStartDate,
+            emissionEndDate = emissionEndDate,
+            orderType = orderType,
+            customerRuc = customerRuc
+        )
     }
 
     suspend fun listOrdersForCustomerPaged(
@@ -132,11 +155,13 @@ class OrderService(private val repository: IOrdersRepository) {
         page: Int = 0
     ): Paged<Order> {
         return repository.loadOrdersPaged(
-            businessId = businessId,
-            pageSize = pageSize,
-            page = page,
-            paymentStatus = null,
-            customerId = customerId
+            ListOrdersRequest(
+                businessId = businessId,
+                pageSize = pageSize,
+                page = page,
+                paymentStatus = null,
+                customerId = customerId
+            )
         )
     }
 

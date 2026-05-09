@@ -13,6 +13,8 @@ import com.teco.ventago.features.business.domain.model.Business
 import com.teco.ventago.features.orders.domain.OrderService
 import com.teco.ventago.features.orders.domain.models.Order
 import com.teco.ventago.features.orders.domain.models.OrderStatus
+import com.teco.ventago.features.orders.domain.models.requests.orderEmissionEndDate
+import com.teco.ventago.features.orders.domain.models.requests.orderEmissionStartDate
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.IO
 import kotlinx.coroutines.delay
@@ -111,7 +113,11 @@ class OrdersViewModel(
                     val aux = orderService.loadOrders(
                         businessId = businessId,
                         paymentStatus = uiState.value.paymentStatusFilter,
-                        customerId = uiState.value.customerIdFilter
+                        customerId = uiState.value.customerIdFilter,
+                        emissionStartDate = orderEmissionStartDate(uiState.value.emissionStartDate),
+                        emissionEndDate = orderEmissionEndDate(uiState.value.emissionEndDate),
+                        orderType = uiState.value.orderTypeFilter,
+                        customerRuc = uiState.value.customerRucFilter.ifBlank { null },
                     )
                     withContext(Dispatchers.Main) {
                         if (aux.isEmpty()) {
@@ -149,7 +155,11 @@ class OrdersViewModel(
                     orderService.resetOrders(
                         businessId = businessId,
                         paymentStatus = uiState.value.paymentStatusFilter,
-                        customerId = uiState.value.customerIdFilter
+                        customerId = uiState.value.customerIdFilter,
+                        emissionStartDate = orderEmissionStartDate(uiState.value.emissionStartDate),
+                        emissionEndDate = orderEmissionEndDate(uiState.value.emissionEndDate),
+                        orderType = uiState.value.orderTypeFilter,
+                        customerRuc = uiState.value.customerRucFilter.ifBlank { null },
                     )
                     withContext(Dispatchers.Main) {
                         filterOrders(uiState.value.filterSelected)
@@ -318,6 +328,94 @@ class OrdersViewModel(
             )
         }
         refreshOrders()
+    }
+
+    fun setPaymentStatusFilter(paymentStatus: Int?) {
+        updateState { copy(paymentStatusFilter = paymentStatus) }
+    }
+
+    fun setOrderTypeFilter(orderType: String?) {
+        updateState { copy(orderTypeFilter = orderType) }
+    }
+
+    fun setCustomerRucFilter(customerRuc: String) {
+        updateState { copy(customerRucFilter = customerRuc) }
+    }
+
+    fun setEmissionStartDate(value: String) {
+        updateState { copy(emissionStartDate = value) }
+    }
+
+    fun setEmissionEndDate(value: String) {
+        updateState { copy(emissionEndDate = value) }
+    }
+
+    fun setEmissionDateRange(startDate: String, endDate: String) {
+        updateState {
+            copy(
+                emissionStartDate = startDate,
+                emissionEndDate = endDate
+            )
+        }
+    }
+
+    fun applyQuickEmissionDateRange(startDate: String, endDate: String) {
+        updateState {
+            copy(
+                paymentStatusFilter = null,
+                customerIdFilter = null,
+                orderTypeFilter = null,
+                customerRucFilter = "",
+                emissionStartDate = startDate,
+                emissionEndDate = endDate,
+                orders = emptyList(),
+                noMoreOrders = false,
+                filterSelected = 0,
+                selectedChip = 0
+            )
+        }
+        refreshOrders()
+    }
+
+    fun applyFilters() {
+        updateState {
+            copy(
+                orders = emptyList(),
+                noMoreOrders = false,
+                filterSelected = 0,
+                selectedChip = 0
+            )
+        }
+        refreshOrders()
+    }
+
+    fun clearFilters() {
+        updateState {
+            copy(
+                paymentStatusFilter = null,
+                customerIdFilter = null,
+                orderTypeFilter = null,
+                customerRucFilter = "",
+                emissionStartDate = "",
+                emissionEndDate = "",
+                orders = emptyList(),
+                noMoreOrders = false,
+                filterSelected = 0,
+                selectedChip = 0
+            )
+        }
+        refreshOrders()
+    }
+
+    fun activeFilterCount(): Int {
+        val state = uiState.value
+        return listOf(
+            state.paymentStatusFilter != null,
+            state.customerIdFilter != null,
+            state.orderTypeFilter != null,
+            state.customerRucFilter.isNotBlank(),
+            state.emissionStartDate.isNotBlank() || state.emissionEndDate.isNotBlank()
+        ).count { it }
     }
 
     fun applyCustomerFilter(customerId: Long?) {

@@ -41,6 +41,19 @@
     <string name="filters">Filtros</string>
     <string name="apply_filters">Aplicar filtros</string>
     <string name="clear_filters">Limpiar filtros</string>
+    <string name="emission_date">Fecha de emisión</string>
+    <string name="emission_start_date">Fecha inicial</string>
+    <string name="emission_end_date">Fecha final</string>
+    <string name="invoice_type">Tipo de factura</string>
+    <string name="all_invoice_types">Todos los tipos de factura</string>
+    <string name="today">Hoy</string>
+    <string name="yesterday">Ayer</string>
+    <string name="this_week">Esta semana</string>
+    <string name="this_month">Este mes</string>
+    <string name="last_30_days">Últimos 30 días</string>
+    <string name="payment_status_pending">Pendiente / Sin pagar</string>
+    <string name="payment_status_partial">Pagado parcialmente</string>
+    <string name="payment_status_refunded">Reembolsado</string>
 
     <!-- Order Statuses Strings   -->
     <string name="order_status_new">Pedido creado</string>

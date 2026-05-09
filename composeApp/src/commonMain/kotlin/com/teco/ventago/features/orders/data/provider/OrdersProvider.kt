@@ -8,10 +8,12 @@ import com.teco.ventago.features.orders.domain.models.requests.CreatePaymentLink
 import com.teco.ventago.features.orders.domain.models.requests.CreateOrderRequest
 import com.teco.ventago.features.orders.domain.models.requests.DeleteOrderRequest
 import com.teco.ventago.features.orders.domain.models.requests.FindOrderByIdRequest
+import com.teco.ventago.features.orders.domain.models.requests.ListOrdersRequest
 import com.teco.ventago.features.orders.domain.models.requests.RejectAchPaymentRequest
 import com.teco.ventago.features.orders.domain.models.requests.RescheduleReceivablesRequest
 import com.teco.ventago.features.orders.domain.models.requests.RegisterManualPaymentsRequest
 import com.teco.ventago.features.orders.domain.models.requests.VoidOrderPaymentRequest
+import com.teco.ventago.features.orders.domain.models.requests.toApiJsonString
 import com.teco.ventago.utils.ApiError
 import com.teco.ventago.utils.ApiResponse
 import io.ktor.client.HttpClient
@@ -393,21 +395,17 @@ class OrdersProvider(private val client: HttpClient, private val authService: IA
 
 
     override suspend fun loadOrders(
-        businessId: Int,
-        pageSize: Int,
-        page: Int,
-        paymentStatus: Int?,
-        customerId: Long?
+        request: ListOrdersRequest
     ): ApiResponse {
         val res = client.post(Configs.ordersBasePath+"/api/v1/orders/get-orders") {
             headers {
                 append(HttpHeaders.Accept, "*/*")
                 append(HttpHeaders.Authorization, "Bearer ${authService.getJwtToken()}")
                 append(HttpHeaders.ContentType, "application/json")
-                append("X-Business-ID", "$businessId")
+                append("X-Business-ID", "${request.businessId}")
             }
             contentType(ContentType.Application.Json)
-            setBody(OrdersRequests.loadOrders(businessId, pageSize, page, paymentStatus, customerId))
+            setBody(request.toApiJsonString())
         }
 
         val body = res.body<JsonObject>()
@@ -415,7 +413,7 @@ class OrdersProvider(private val client: HttpClient, private val authService: IA
         if (response.error == ApiError.AUTH_001 || res.status == HttpStatusCode.Unauthorized) {
             return try {
                 authService.refreshToken(client)
-                loadOrders(businessId, pageSize, page, paymentStatus, customerId)
+                loadOrders(request)
             } catch (e: Exception) {
                 response
             }
