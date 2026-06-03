@@ -168,7 +168,12 @@ class AddCustomerViewModel(
     }
 
     fun onCountrySelected(code: String) {
-        updateState { copy(selectedCountryCode = code) }
+        updateState {
+            copy(
+                selectedCountryCode = code,
+                validationMessage = null,
+            )
+        }
     }
 
 
@@ -191,7 +196,8 @@ class AddCustomerViewModel(
                 provinceError = null,
                 districtError = null,
                 corregimientoError = null,
-                districtOptions = districtOptions
+                districtOptions = districtOptions,
+                validationMessage = null,
             )
         }
 //        enableButton()
@@ -211,7 +217,8 @@ class AddCustomerViewModel(
                 selectedDistrict = district,
                 districtError = null,
                 corregimientoError = null,
-                corregOptions = corregOptions
+                corregOptions = corregOptions,
+                validationMessage = null,
             )
         }
 //        enableButton()
@@ -219,7 +226,11 @@ class AddCustomerViewModel(
 
     fun onCorregimientoChange(corregimiento: String) {
         updateState {
-            copy(selectedCorreg = corregimiento, corregimientoError = null)
+            copy(
+                selectedCorreg = corregimiento,
+                corregimientoError = null,
+                validationMessage = null,
+            )
         }
 //        enableButton()
     }
@@ -238,13 +249,17 @@ class AddCustomerViewModel(
                 corregimientoError = null,
                 cfCedula = "",
                 cfCedulaError = null,
+                validationMessage = null,
             )
         }
     }
 
     fun onTaxIdChange(taxId: String) {
         updateState {
-            copy(ruc = taxId)
+            copy(
+                ruc = taxId,
+                validationMessage = null,
+            )
         }
         if (uiState.value.customerType == FeCustomerType.CONTRIBUTING || uiState.value.customerType == FeCustomerType.GOVERNMENT) {
             updateState {
@@ -252,6 +267,7 @@ class AddCustomerViewModel(
                     legalName = "",
                     rucCheckDigit = "",
                     name = "",
+                    validationMessage = null,
                 )
             }
         }
@@ -259,16 +275,20 @@ class AddCustomerViewModel(
 
     fun onNameChange(name: String) {
         updateState {
-            copy(name = name, nameError = null)
+            copy(
+                name = name,
+                nameError = null,
+                validationMessage = null,
+            )
         }
     }
 
     fun onForeignIdTypeSelected(type: ForeignIdType) {
-        updateState { copy(selectedForeignIdType = type) }
+        updateState { copy(selectedForeignIdType = type, validationMessage = null) }
     }
 
     fun onForeignIdNumberChange(value: String) {
-        updateState { copy(foreignIdNumber = value) }
+        updateState { copy(foreignIdNumber = value, validationMessage = null) }
     }
 
     fun onCedulaChanges(cedula: String) {
@@ -279,28 +299,35 @@ class AddCustomerViewModel(
                 cfCedulaError = getCedulaValidationError(
                     customerType = customerType,
                     cedula = normalizedCedula
-                )
+                ),
+                validationMessage = null,
             )
         }
     }
 
     fun onPhoneChange(phone: String) {
         updateState {
-            copy(phone = phone)
+            copy(phone = phone, validationMessage = null)
         }
     }
 
     fun onEmailChange(email: String) {
-        updateState { copy(email = email) }
+        updateState { copy(email = email, validationMessage = null) }
     }
 
     fun onAddressLineChange(addressLine: String) {
-        updateState { copy(addressLine = addressLine, addressLineError = null) }
+        updateState {
+            copy(
+                addressLine = addressLine,
+                addressLineError = null,
+                validationMessage = null,
+            )
+        }
     }
 
 
     fun onTagsChange(tags: List<String>) {
-        updateState { copy(tags = tags) }
+        updateState { copy(tags = tags, validationMessage = null) }
     }
 
 
@@ -362,6 +389,7 @@ class AddCustomerViewModel(
             copy(
                 cfCedula = normalizedCedula,
                 cfCedulaError = null,
+                validationMessage = null,
                 errorMessage = null,
             )
         }
@@ -496,8 +524,8 @@ class AddCustomerViewModel(
         } else {
             null
         }
-        val addressLineError = if (state.customerType != FeCustomerType.FOREIGNER && state.addressLine.isNullOrBlank()) {
-            "La direccion es requerida"
+        val addressLineError = if (state.customerType != FeCustomerType.FOREIGNER && !hasMinimumAddressCharacters(state.addressLine)) {
+            "La direccion debe tener al menos 5 caracteres no vacios"
         } else {
             null
         }
@@ -509,6 +537,13 @@ class AddCustomerViewModel(
                 districtError = districtError,
                 corregimientoError = corregimientoError,
                 addressLineError = addressLineError,
+                validationMessage = if (
+                    listOf(nameError, provinceError, districtError, corregimientoError, addressLineError).any { it != null }
+                ) {
+                    "Revisa los campos marcados en rojo para continuar."
+                } else {
+                    null
+                },
             )
         }
 

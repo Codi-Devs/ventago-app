@@ -1,5 +1,6 @@
 package com.teco.ventago.features.pos.ui.invoice_preview
 
+import com.teco.ventago.features.branches.domain.model.Branch
 import com.teco.ventago.features.business.domain.model.Business
 import com.teco.ventago.features.pos.domain.models.CartLine
 import com.teco.ventago.features.pos.ui.viewmodel.CartCalc
@@ -14,6 +15,7 @@ import kotlin.math.roundToInt
 
 data class InvoicePreview(
     val issuer: InvoicePreviewIssuer,
+    val branch: InvoicePreviewBranch?,
     val receptor: InvoicePreviewReceptor,
     val meta: InvoicePreviewMeta,
     val items: List<InvoicePreviewItem>,
@@ -27,6 +29,15 @@ data class InvoicePreviewIssuer(
     val ruc: String,
     val address: String,
     val logoUrl: String,
+)
+
+data class InvoicePreviewBranch(
+    val code: String,
+    val name: String,
+    val tradeName: String?,
+    val addressLine: String,
+    val logoUrl: String?,
+    val billingPoint: String,
 )
 
 data class InvoicePreviewReceptor(
@@ -96,6 +107,11 @@ object InvoicePreviewBuilder {
         val previewItems = buildItems(state)
         val summary = CartCalc.summarize(state)
         val globalChargeParts = globalChargeParts(state)
+        val selectedBranch = state.branches.getOrNull(state.selectedBranchIndex)
+        val selectedBillingPoint = state.billingPoints
+            .getOrNull(state.selectedBillingPointIndex)
+            ?.billingPoint
+            .orEmpty()
 
         return InvoicePreview(
             issuer = InvoicePreviewIssuer(
@@ -104,17 +120,24 @@ object InvoicePreviewBuilder {
                 address = business?.address?.placeAddress
                     ?.takeIf { it.isNotBlank() && !it.equals("null", ignoreCase = true) }
                     ?: "DIRECCIÓN DEL NEGOCIO",
-                logoUrl = business?.logo.orEmpty(),
+                logoUrl = resolveDocumentLogo(selectedBranch, business),
             ),
+            branch = selectedBranch?.let { branch ->
+                InvoicePreviewBranch(
+                    code = branch.branchCode,
+                    name = branch.name,
+                    tradeName = branch.tradeName,
+                    addressLine = branch.addressLine,
+                    logoUrl = branch.logoUrl,
+                    billingPoint = selectedBillingPoint,
+                )
+            },
             receptor = buildReceptor(state),
             meta = InvoicePreviewMeta(
                 invoiceTypeTitle = invoiceTypeTitle(state.selectedDocType),
                 number = "VISTA PREVIA",
                 issuedAt = formatDateTime(issuedAt),
-                billingPoint = state.billingPoints
-                    .getOrNull(state.selectedBillingPointIndex)
-                    ?.billingPoint
-                    .orEmpty(),
+                billingPoint = selectedBillingPoint,
                 consultationUrl = CONSULTATION_URL,
                 cufe = "Pendiente - se genera al emitir la factura",
             ),
@@ -310,4 +333,14 @@ object InvoicePreviewBuilder {
             "${parts.first()}.$decimals"
         }
     }
+}
+
+fun resolveDocumentLogo(branch: Branch?, business: Business?): String {
+    return branch?.logoUrl?.takeIf { it.isValidLogoValue() }
+        ?: business?.logo?.takeIf { it.isValidLogoValue() }
+        ?: ""
+}
+
+private fun String.isValidLogoValue(): Boolean {
+    return isNotBlank() && !equals("null", ignoreCase = true)
 }

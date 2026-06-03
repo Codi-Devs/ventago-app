@@ -211,45 +211,93 @@ Key response additions consumed:
 {
   "success": true,
   "data": {
+    "business_id": 4,
     "payment_summary": {
       "onboarding_completed": true,
-      "pending_charges": 2.14,
-      "next_billing_date": "2026-04-25T00:00:00-05:00",
+      "next_billing_date": "2026-06-15T03:00:00Z",
       "fee_billing": {
         "currency_code": "USD",
-        "pending_due_amount": 1.07,
-        "overdue_amount": 0,
-        "accrued_current_period_amount": 0.54,
-        "paid_amount": 5.35,
-        "next_batch_generation_at": "2026-04-20T00:00:00-05:00",
-        "next_due_at": "2026-04-25T00:00:00-05:00"
+        "pending_due_amount": "0.00",
+        "overdue_amount": "1.89",
+        "accrued_current_period_amount": "0.00",
+        "paid_amount": "0.00",
+        "next_batch_generation_at": "2026-07-01T05:10:00Z",
+        "next_due_at": "2026-06-16T04:59:59Z"
       },
       "payment_methods": {
         "yappy": {
           "visible": true,
-          "linked_account": true
+          "linked_account": false
         },
         "paypal": {
           "visible": true,
-          "linked_account": true,
-          "email": "merchant@paypal.com"
+          "linked_account": false,
+          "email": ""
         },
         "ach": {
           "visible": true,
-          "configured": true,
+          "configured": true
+        },
+        "manual_transference": {
+          "visible": true,
           "enabled": true,
-          "pending_review_count": 2,
-          "account": {
-            "bank_name": "Banco General",
-            "bank_code": "BANCO_GENERAL",
-            "account_type": "checking",
-            "account_number_masked": "****1234",
-            "account_holder_name": "Comercio Demo"
-          }
+          "payment_instructions": ""
         }
       },
-      "linked_paypal_billing_agreement": true,
-      "auto_invoice_on_payment_success": true
+      "linked_paypal_billing_agreement": false,
+      "auto_invoice_on_payment_success": false
+    },
+    "invoicing_active": true,
+    "invoice_plan": {
+      "plan_total_dte": 2404,
+      "plan_available_dte": 1542,
+      "active_subscriptions": [
+        {
+          "subscription_id": 1,
+          "plan_id": 1,
+          "plan_name": "150 folios",
+          "initial_dte": 2400,
+          "available_dte": 1538,
+          "activation_date": "2025-11-03",
+          "expiry_date": "2028-01-21"
+        },
+        {
+          "subscription_id": 95,
+          "plan_id": 12,
+          "plan_name": "1 folio",
+          "initial_dte": 1,
+          "available_dte": 1,
+          "activation_date": "2026-05-15",
+          "expiry_date": "2027-05-15"
+        },
+        {
+          "subscription_id": 101,
+          "plan_id": 12,
+          "plan_name": "1 folio",
+          "initial_dte": 1,
+          "available_dte": 1,
+          "activation_date": "2026-05-28",
+          "expiry_date": "2027-05-28"
+        },
+        {
+          "subscription_id": 102,
+          "plan_id": 12,
+          "plan_name": "1 folio",
+          "initial_dte": 1,
+          "available_dte": 1,
+          "activation_date": "2026-05-28",
+          "expiry_date": "2027-05-28"
+        },
+        {
+          "subscription_id": 103,
+          "plan_id": 12,
+          "plan_name": "1 folio",
+          "initial_dte": 1,
+          "available_dte": 1,
+          "activation_date": "2026-05-29",
+          "expiry_date": "2027-05-29"
+        }
+      ]
     }
   },
   "error": null

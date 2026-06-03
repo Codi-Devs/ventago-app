@@ -1,3 +1,99 @@
+# Branch Logo and Trade Name TODO
+
+## Plan
+- [x] Extend branch domain parsing with `trade_name` and `logo_url`.
+- [x] Add branch logo upload/delete API integration through provider, repository, and service.
+- [x] Update Branches UI to show trade names, logo status/actions, upload/delete loading, and confirmation.
+- [x] Apply branch-first logo fallback to POS invoice preview.
+- [x] Add focused tests and run compile verification.
+
+## Verification Gates
+- [ ] `./gradlew --no-build-cache --no-configuration-cache :composeApp:testDebugUnitTest`
+- [x] `./gradlew --no-build-cache --no-configuration-cache :composeApp:compileKotlinMetadata :composeApp:compileDebugKotlinAndroid`
+
+## Review Notes
+- `Branch` now parses and serializes optional `trade_name` and `logo_url` without breaking payloads that omit them.
+- Branch logo upload/delete flows call `/api/v1/invoicing/branches/{branchCode}/logo` with `X-Business-ID`, use multipart upload, and reload branches after successful mutations.
+- Branches UI now shows trade name, branch code, logo status, add/replace/view/delete actions, inline logo loaders, and Spanish snackbar/confirm copy.
+- POS invoice preview now resolves document logo as branch logo, then business logo, then empty fallback, and displays selected branch identity.
+- Focused verification passed: `./gradlew --no-build-cache --no-configuration-cache :composeApp:testDebugUnitTest --tests com.teco.ventago.features.branches.BranchModelTest --tests com.teco.ventago.features.branches.BranchServiceLogoTest --tests com.teco.ventago.features.pos.InvoicePreviewBuilderTest`.
+- Full `:composeApp:testDebugUnitTest` is currently blocked by existing unrelated failure `AuthzNavigationTest.subUserBottomNavOmitsSummaryAndUnauthorizedSections` at `AuthzNavigationTest.kt:65`.
+
+# Config Summary Active Subscriptions Response TODO
+
+## Plan
+- [x] Update the financial-profile DTOs for `invoice_plan.active_subscriptions[]` while retaining legacy cached date fields.
+- [x] Derive the existing Home aggregate folio-plan dates from the earliest activation and latest expiry dates.
+- [x] Remove temporary config-summary debug prints and refresh the payment replication contract example.
+- [x] Add focused parsing regression tests for the new endpoint payload and legacy cached payload.
+- [x] Run targeted unit and KMP/Android compile verification gates.
+
+## Verification Gates
+- [x] `./gradlew --no-build-cache --no-configuration-cache :composeApp:testDebugUnitTest --tests com.teco.ventago.features.financialProfile.FinancialProfileParsingTest`
+- [x] `./gradlew --no-build-cache --no-configuration-cache :composeApp:compileKotlinMetadata :composeApp:compileDebugKotlinAndroid`
+
+## Review Notes
+- `InvoiceSummary` now decodes `active_subscriptions[]`, keeps optional legacy cache dates, and exposes aggregate date helpers for the earliest activation and latest expiry.
+- Home keeps its existing aggregate folio-plan card and now uses the aggregate date helpers without changing UI layout.
+- Config-summary payment defaults remain intact: omitted `pending_charges` is `0`, string fee amounts decode to cents, and omitted ACH `enabled` remains `true`.
+- Temporary config-summary `ASDASD` prints were removed while repository failures still log structured context including `businessId`.
+- Focused parser regression test and KMP/Android compile gate passed with existing project warnings (`ksp` version, cinterop commonization, expect/actual beta, deprecations).
+
+# Add Customer Validation Feedback TODO
+
+## Plan
+- [x] Document the add-customer regression caused by silent validation failure after the address rule change.
+- [x] Keep the minimum-address rule, but surface explicit submit-level feedback so the add button no longer appears dead.
+- [x] Run focused verification and capture the lesson learned.
+
+## Verification Gates
+- [x] `./gradlew --no-build-cache --no-configuration-cache :composeApp:testDebugUnitTest --tests com.teco.ventago.features.pos.ui.customer.add.viewmodel.AddCustomerValidatorsTest`
+- [x] `./gradlew --no-build-cache --no-configuration-cache :composeApp:compileKotlinMetadata :composeApp:compileDebugKotlinAndroid`
+
+## Review Notes
+- Root cause: `createCustomer()` already blocked invalid submits, but after tightening the address rule the screen still gave no submit-level feedback, so the primary CTA looked dead when validation failed.
+- The add-customer state now carries a `validationMessage`, the ViewModel sets `Revisa los campos marcados en rojo para continuar.` on failed submit, and that message clears on subsequent edits.
+- Both reduced and full add-customer variants render the validation message immediately above the primary button, while preserving field-level errors and the 5 non-blank character address rule.
+- Verification passed after the usual local cache cleanup for this workspace (`./gradlew --stop`, remove `composeApp/build/kspCaches`, `composeApp/build/generated/ksp`, and `composeApp/build/tmp/kotlin-classes/debug`), then rerun the focused test and compile gates.
+
+# Add Customer Address Minimum Length TODO
+
+## Plan
+- [x] Require address input to contain at least 5 non-blank characters in add-customer validation for invoicing.
+- [x] Keep the existing field-level error rendering on `AddCustomerScreen`.
+- [x] Add a focused validator test for blank, short, and valid address inputs.
+- [x] Run focused test and KMP/Android compile verification and record the result.
+
+## Verification Gates
+- [x] `./gradlew --no-build-cache --no-configuration-cache :composeApp:testDebugUnitTest --tests com.teco.ventago.features.pos.ui.customer.add.viewmodel.AddCustomerValidatorsTest`
+- [x] `./gradlew --no-build-cache --no-configuration-cache :composeApp:compileKotlinMetadata :composeApp:compileDebugKotlinAndroid`
+
+## Review Notes
+- Address validation now requires at least 5 non-blank characters, so whitespace-only padding cannot satisfy the field.
+- The existing `addressLineError` path remains the single UI error source for both reduced and full add-customer forms.
+- Added `AddCustomerValidatorsTest` to cover null, blank, short, and valid address values.
+- Verification passed. A stale local KSP/Kotlin build cache had to be cleared first (`composeApp/build/kspCaches`, `composeApp/build/generated/ksp`, `composeApp/build/tmp/kotlin-classes/debug`), then both Gradle gates succeeded with existing project warnings.
+
+# Backend Session ID Header TODO
+
+## Plan
+- [x] Add shared session-id service with SecureStorage-backed persistence, 3-day sliding TTL, forced rotation, and clear behavior.
+- [x] Append `X-SESSION-ID` to VentaGo backend requests only through the shared Ktor client interceptor.
+- [x] Rotate the session id before login/register backend calls and clear it on logout/account deletion.
+- [x] Add focused common tests for id format, reuse, expiry, TTL refresh, rotation, clearing, and backend URL matching.
+- [x] Run targeted unit and KMP/Android compile verification gates.
+
+## Verification Gates
+- [x] `./gradlew --no-build-cache --no-configuration-cache :composeApp:testDebugUnitTest --tests com.teco.ventago.core.session.SessionIdServiceTest`
+- [x] `./gradlew --no-build-cache --no-configuration-cache :composeApp:compileKotlinMetadata :composeApp:compileDebugKotlinAndroid`
+
+## Review Notes
+- Added `SessionIdService` with a SecureStorage-backed store, 32-character alphanumeric UUID-derived ids, 3-day sliding TTL refresh, forced rotation, and clear support.
+- The shared Ktor client now appends `X-SESSION-ID` only for parsed `Configs.serverBasePath` and `Configs.ordersBasePath` origins, avoiding external uploads and lookalike hosts.
+- Login/register flows rotate the session before their backend request; logout and successful account deletion clear it, including finally-style cleanup paths.
+- Focused session tests cover id format, reuse, TTL refresh, expiry replacement, forced rotation, clearing, and backend URL matching.
+- Verification passed with existing project warnings (`ksp` version, cinterop commonization, expect/actual beta, deprecations).
+
 # Orders Yesterday Filter Payload TODO
 
 ## Plan
@@ -2725,3 +2821,21 @@
 - `NotificationsViewModel` emits `NavigateToOrderDetails`, and `NotificationsScreen` navigates through `OrdersScreenRoute(orderNumber=...)` so the existing order lookup endpoint and details flow are reused.
 - Unknown absolute URLs still open externally, and ACH notification links keep their existing internal ACH route.
 - Targeted resolver test and compile gate passed with existing project warnings (`ksp` version, cinterop commonization, expect/actual beta, and deprecations).
+
+# Order Cancel API Error Mapping TODO
+
+## Plan
+- [x] Extend shared order/API error parsing so cancel-order backend codes `INV_003` and `INV_004` are treated as real errors.
+- [x] Map cancel-order failures to the backend-provided message when available, with durable fallbacks for known invoice-cancellation codes.
+- [x] Surface the mapped cancel-order failure message from `OrdersDetailsViewModel` into the order details cancel flow.
+- [x] Add focused regression tests and run targeted verification gates.
+
+## Verification Gates
+- [x] `./gradlew --no-build-cache --no-configuration-cache :composeApp:testDebugUnitTest --tests com.teco.ventago.features.orders.ui.order_details.viewModel.OrderMutationErrorMapperTest --tests com.teco.ventago.features.orders.ui.order_details.viewModel.OrdersDetailsViewModelCxcTest`
+- [x] `./gradlew --no-build-cache --no-configuration-cache :composeApp:compileKotlinMetadata :composeApp:compileDebugKotlinAndroid`
+
+## Review Notes
+- `INV_003` and `INV_004` are now recognized by shared API parsing, and order cancel now treats any `success=false/errorCode!=null` response as a failure instead of silently returning `false`.
+- Cancel-order error messages now prefer the backend `data.message`, so the saas-e-invoice responses render the exact Spanish copy returned by Ventago.
+- `OrderDetailsScreen` keeps the cancel sheet open on backend failure, shows the mapped message inline in the same visual danger treatment, and also emits the snackbar/error loading feedback already used by the screen.
+- Focused test and compile gates passed after stopping Gradle and clearing the affected Kotlin/KSP cache directories to avoid the existing incremental-cache file-lock issue when the initial verification was run in parallel.

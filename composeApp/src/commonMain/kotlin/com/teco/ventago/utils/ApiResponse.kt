@@ -89,6 +89,8 @@ enum class ApiError(val error: String?){
     PAY_PP_001("PAY_PP_001"),
     INV_001("INV_001"),
     INV_002("INV_002"),
+    INV_003("INV_003"),
+    INV_004("INV_004"),
     UNDEFINED("U_001"),
     INVALID_RUC("CU_001"),
     RUC_NOT_FOUND("CU_002"),
@@ -122,6 +124,8 @@ enum class ApiError(val error: String?){
                 "PAY_PP_001" -> PAY_PP_001
                 "INV_001" -> INV_001
                 "INV_002" -> INV_002
+                "INV_003" -> INV_003
+                "INV_004" -> INV_004
                 "CU_004" -> CUSTOMER_ALREADY_EXISTS
                 else -> NO_ERROR
             }

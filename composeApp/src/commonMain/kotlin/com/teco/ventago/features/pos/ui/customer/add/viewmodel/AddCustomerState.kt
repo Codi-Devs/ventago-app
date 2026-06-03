@@ -66,6 +66,7 @@ data class AddCustomerState(
     val selectedCountryCode: String = "PA", // default Panama
 
     val invoicingEnabled: Boolean = false,
+    val validationMessage: String? = null,
     val errorMessage: String? = null,
     override val loadingBottomSheet: LoadingBottomSheetState = LoadingBottomSheetState(),
 ) : LoadableState<AddCustomerState> {

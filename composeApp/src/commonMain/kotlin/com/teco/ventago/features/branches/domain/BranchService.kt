@@ -3,6 +3,7 @@ package com.teco.ventago.features.branches.domain
 import com.teco.ventago.core.cache.CacheUtils
 import com.teco.ventago.core.cache.ICacheService
 import com.teco.ventago.core.changes.IChangesManager
+import com.teco.ventago.core.file.SharedFile
 import com.teco.ventago.features.branches.data.repository.IBranchRepository
 import com.teco.ventago.features.branches.domain.model.Branch
 import com.teco.ventago.features.branches.domain.model.FiscalBillingPoint
@@ -43,7 +44,6 @@ class BranchService(
         appScope.launch(Dispatchers.IO) {
             // 1) try cache fast-path
             cacheGet()?.let {
-                println("ASDASD: Loaded branches from cache: $it")
                 state.value = it
             } ?: run {
                 refresh(businessId)
@@ -122,6 +122,25 @@ class BranchService(
             }
         }
         return true
+    }
+
+    suspend fun uploadBranchLogo(
+        businessId: Int,
+        branchCode: String,
+        logo: SharedFile,
+    ): Boolean {
+        val ok = branchRepository.uploadBranchLogo(businessId, branchCode, logo)
+        if (ok) refresh(businessId)
+        return ok
+    }
+
+    suspend fun deleteBranchLogo(
+        businessId: Int,
+        branchCode: String,
+    ): Boolean {
+        val ok = branchRepository.deleteBranchLogo(businessId, branchCode)
+        if (ok) refresh(businessId)
+        return ok
     }
 
     private fun startRealtimeSync() {

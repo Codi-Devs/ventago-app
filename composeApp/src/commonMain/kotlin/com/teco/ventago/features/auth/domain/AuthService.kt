@@ -5,6 +5,7 @@ import com.teco.ventago.core.SecureStorage
 import com.teco.ventago.core.authz.AuthzJwtDecoder
 import com.teco.ventago.core.cache.ICacheService
 import com.teco.ventago.core.changes.IChangesManager
+import com.teco.ventago.core.session.ISessionIdService
 import com.teco.ventago.features.auth.data.repository.IAuthRepository
 import com.teco.ventago.features.auth.domain.model.User
 import com.teco.ventago.features.auth.domain.model.firebase.FirebaseUserDM
@@ -55,7 +56,8 @@ class AuthService(
     private val userRepository: IUserRepository,
     private val cache: ICacheService,
     private val changesManager: IChangesManager,
-    private val client: HttpClient
+    private val client: HttpClient,
+    private val sessionIdService: ISessionIdService
 ) : IAuthService {
     var user = MutableStateFlow<User?>(null)
     private var userChangesJob: Job? = null
@@ -165,6 +167,7 @@ class AuthService(
 
     override suspend fun googleLogin(googleToken: String): AuthResponse {
         try {
+            sessionIdService.startSession(forceNew = true)
             val res = repository.googleLogin(googleToken)
             if (res.providerToken.isBlank()) {
                 throw AuthException(ApiError.F_AUTH_007)
@@ -196,6 +199,7 @@ class AuthService(
 
     override suspend fun emailLogin(request: EmailLoginRequest): AuthResponse {
         try {
+            sessionIdService.startSession(forceNew = true)
             val res = repository.emailLogin(request)
             if (res.providerToken.isBlank()) {
                 throw AuthException(ApiError.F_AUTH_007)
@@ -225,6 +229,7 @@ class AuthService(
 
     override suspend fun emailRegister(request: CreateUserRequest): AuthResponse {
         try {
+            sessionIdService.startSession(forceNew = true)
             val res = repository.emailRegister(request)
             if (res.providerToken.isBlank()) {
                 throw AuthException(ApiError.F_AUTH_007)
@@ -277,6 +282,8 @@ class AuthService(
             store.deleteObject(SecureConstants.JWT_TOKEN)
             store.deleteObject(SecureConstants.REFRESH_JWT_TOKEN)
         } catch (_: Exception) {
+        } finally {
+            sessionIdService.clearSession()
         }
     }
 
@@ -311,11 +318,15 @@ class AuthService(
     override suspend fun deleteAccount(token: String): Boolean {
         val res = userRepository.deleteAccount(token)
         if (res) {
-            firebase.deleteAccount()
-            changesManager.removeListeners()
-            cache.clearAllCache()
-            user.update {
-                null
+            try {
+                firebase.deleteAccount()
+                changesManager.removeListeners()
+                cache.clearAllCache()
+                user.update {
+                    null
+                }
+            } finally {
+                sessionIdService.clearSession()
             }
         }
         return res

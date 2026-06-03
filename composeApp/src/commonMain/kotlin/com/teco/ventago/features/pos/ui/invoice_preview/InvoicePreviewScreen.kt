@@ -148,6 +148,19 @@ private fun HeaderCard(preview: InvoicePreview) {
         InfoRow("Emisor", preview.issuer.name.ifBlank { "N/A" })
         InfoRow("RUC", preview.issuer.ruc.ifBlank { "N/A" })
         InfoRow("Direccion", preview.issuer.address, maxLines = 2)
+        preview.branch?.let { branch ->
+            Divider(Modifier.padding(vertical = 8.dp))
+            InfoRow("Sucursal", "${branch.code} - ${branch.name}", maxLines = 2)
+            branch.tradeName
+                ?.takeIf { it.isNotBlank() && !it.equals("null", ignoreCase = true) }
+                ?.let { InfoRow("Nombre comercial", it, maxLines = 2) }
+            if (branch.addressLine.isNotBlank() && !branch.addressLine.equals("null", ignoreCase = true)) {
+                InfoRow("Direccion sucursal", branch.addressLine, maxLines = 2)
+            }
+            if (branch.billingPoint.isNotBlank()) {
+                InfoRow("Punto de Facturacion", branch.billingPoint)
+            }
+        }
     }
 }
 

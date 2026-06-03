@@ -25,7 +25,6 @@ class FinancialProfileRepository (val provider: IFinancialProfileProvider, priva
     override suspend fun getFinancialProfile(businessId: Int): BusinessFinancialProfile {
         try {
             val response = provider.getFinancialProfile(businessId)
-            println("ASDASD: Response from backend: ${response.toJson()}")
             if (response.error.isError()) {
                 throw BadRequestException(response.toJson())
             }
@@ -37,8 +36,7 @@ class FinancialProfileRepository (val provider: IFinancialProfileProvider, priva
                 throw BadRequestException(response.toJson())
             }
         } catch (e: Exception) {
-            println("ASDASD: Error getting business financial profile. Error: ${e.message ?: "UNKNOWN" }")
-            logger.sendLog(Log(LogLevel.ERROR, "FinancialProfileRepository::getFinancialProfile", "Error getting business financial profile. Error: ${e.message ?: "UNKNOWN" }"))
+            logger.sendLog(Log(LogLevel.ERROR, "FinancialProfileRepository::getFinancialProfile", "Error getting business financial profile for businessId=$businessId. Error: ${e.message ?: "UNKNOWN" }"))
             throw e
         }
     }

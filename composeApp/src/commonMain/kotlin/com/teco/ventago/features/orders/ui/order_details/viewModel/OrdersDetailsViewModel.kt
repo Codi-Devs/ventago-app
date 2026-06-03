@@ -400,6 +400,10 @@ class OrdersDetailsViewModel(
         }
     }
 
+    fun clearCancelOrderError() {
+        updateState { copy(cancelOrderErrorMessage = null) }
+    }
+
     fun cancelOrder(reason: String) {
         val trimmedReason = reason.trim()
         val reasonValidation = OrderCxcValidators.validateCancelOrderReason(trimmedReason)
@@ -412,6 +416,7 @@ class OrdersDetailsViewModel(
 
         val order = uiState.value.order ?: return
         val businessId = business?.businessId ?: return
+        clearCancelOrderError()
         showLoading()
         viewModelScope.launch {
             withContext(Dispatchers.IO) {
@@ -425,12 +430,22 @@ class OrdersDetailsViewModel(
                     withContext(Dispatchers.Main) {
                         if (response) {
                             refreshOrder(order.id)
+                            emitEvent(OrderDetailsUiEvent.OrderCancelled)
                         } else {
                             showError()
                         }
                     }
                 } catch (e: Exception) {
                     withContext(Dispatchers.Main) {
+                        val errorMessage = mapOrderMutationError(
+                            error = e,
+                            fallback = "No se pudo anular el pedido.",
+                            codeOverrides = mapOf("O_RP_001" to "No se pudo anular el pedido.")
+                        )
+                        updateState {
+                            copy(cancelOrderErrorMessage = errorMessage)
+                        }
+                        snackbarService.show(errorMessage)
                         showError()
                     }
                 }
@@ -2112,23 +2127,12 @@ class OrdersDetailsViewModel(
         return "$year-$month-${day}T$hour:$minute:$second-05:00"
     }
 
-    private fun mapOrderMutationError(error: Throwable, fallback: String): String {
-        val raw = error.message.orEmpty()
-        val errorCode = Regex("\"error\":\"([^\"]+)\"").find(raw)?.groupValues?.getOrNull(1)
-            ?: Regex("\"errorCode\":\"([^\"]+)\"").find(raw)?.groupValues?.getOrNull(1)
-        return when (errorCode) {
-            "O_RP_001" -> "No tienes permisos para realizar esta accion."
-            "O_RP_002" -> "La suma de los nuevos vencimientos debe coincidir exactamente con el saldo abierto total."
-            "O_RP_004" -> "No se encontro la orden o pago solicitado."
-            "O_RP_005" -> "No se puede completar la accion por el estado actual del recurso."
-            "PAY_001" -> "No fue posible procesar la operacion de pago."
-            "PAY_002" -> "No hay metodos de pago configurados para continuar."
-            "PAY_PP_001" -> "No fue posible completar la operacion con PayPal."
-            "INV_001" -> "No fue posible emitir la factura en este momento."
-            "INV_002" -> "La factura no esta disponible para esta operacion."
-            null, "", "null" -> fallback
-            else -> "$fallback Código: $errorCode"
-        }
+    private fun mapOrderMutationError(
+        error: Throwable,
+        fallback: String,
+        codeOverrides: Map<String, String> = emptyMap()
+    ): String {
+        return OrderMutationErrorMapper.messageFor(error, fallback, codeOverrides)
     }
 
 

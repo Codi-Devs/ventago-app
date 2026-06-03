@@ -115,8 +115,8 @@ class HomeViewModel(
                         InvoicingPlanState(
                             availableDtes = invoiceSummary.planAvailableDte,
                             totalDtes = invoiceSummary.planTotalDte,
-                            activationDate = invoiceSummary.planStartDate,
-                            expirationDate = invoiceSummary.planExpiryDate
+                            activationDate = invoiceSummary.aggregateActivationDate(),
+                            expirationDate = invoiceSummary.aggregateExpiryDate()
                         )
                     }
 

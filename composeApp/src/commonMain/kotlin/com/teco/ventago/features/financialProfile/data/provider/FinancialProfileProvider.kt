@@ -31,7 +31,6 @@ class FinancialProfileProvider(private val client: HttpClient, private val authS
         }
 
         val body = res.body<JsonObject>()
-        println("ASDASD: Response from backend: $body")
         val response = ApiResponse.fromJson(body)
         if (response.error == ApiError.AUTH_001) {
             return try {

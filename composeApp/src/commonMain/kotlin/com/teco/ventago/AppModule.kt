@@ -14,6 +14,12 @@ import com.teco.ventago.core.firebase.AnalyticsService
 import com.teco.ventago.core.logger.ILoggerService
 import com.teco.ventago.core.logger.LoggerService
 import com.teco.ventago.core.logger.printLog
+import com.teco.ventago.core.session.ISessionIdService
+import com.teco.ventago.core.session.SecureStorageSessionIdStore
+import com.teco.ventago.core.session.SessionIdBackendUrlMatcher
+import com.teco.ventago.core.session.SessionIdConstants
+import com.teco.ventago.core.session.SessionIdService
+import com.teco.ventago.core.session.SessionIdStore
 import com.teco.ventago.features.auth.data.provider.AuthProvider
 import com.teco.ventago.features.auth.data.provider.IAuthProvider
 import com.teco.ventago.features.auth.data.repository.AuthRepository
@@ -315,12 +321,28 @@ internal fun appModule() = module {
         SnackbarService()
     }
 
+    single<SessionIdStore> {
+        SecureStorageSessionIdStore(get())
+    }
+
+    single<ISessionIdService> {
+        SessionIdService(store = get())
+    }
+
     single<HttpClient> {
+        val sessionIdService = get<ISessionIdService>()
         client.plugin(HttpSend).intercept { request ->
             val originalUA = request.headers[HttpHeaders.UserAgent] ?: ""
             val customUA = "App ver ${AppInfo.VERSION}"
             request.headers.remove(HttpHeaders.UserAgent)
             request.headers.append(HttpHeaders.UserAgent, "$customUA $originalUA".trim())
+            if (SessionIdBackendUrlMatcher.isVentaGoBackendUrl(request.url.toString())) {
+                request.headers.remove(SessionIdConstants.HEADER_NAME)
+                request.headers.append(
+                    SessionIdConstants.HEADER_NAME,
+                    sessionIdService.sessionIdForBackendRequest()
+                )
+            }
             execute(request)
         }
         client
@@ -387,7 +409,8 @@ internal fun appModule() = module {
             ),
             cache = get(),
             changesManager = get(),
-            client = get()
+            client = get(),
+            sessionIdService = get()
         )
     }
 

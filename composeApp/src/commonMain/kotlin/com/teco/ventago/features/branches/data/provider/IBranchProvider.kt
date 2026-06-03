@@ -1,5 +1,6 @@
 package com.teco.ventago.features.branches.data.provider
 
+import com.teco.ventago.core.file.SharedFile
 import com.teco.ventago.utils.ApiResponse
 
 interface IBranchProvider {
@@ -16,5 +17,8 @@ interface IBranchProvider {
         name: String,
         status: Int,
     ): ApiResponse
-}
 
+    suspend fun uploadBranchLogo(businessId: Int, branchCode: String, logo: SharedFile): ApiResponse
+
+    suspend fun deleteBranchLogo(businessId: Int, branchCode: String): ApiResponse
+}

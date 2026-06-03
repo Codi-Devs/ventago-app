@@ -1,5 +1,6 @@
 package com.teco.ventago.features.pos
 
+import com.teco.ventago.features.branches.domain.model.Branch
 import com.teco.ventago.features.branches.domain.model.FiscalBillingPoint
 import com.teco.ventago.features.business.domain.model.Business
 import com.teco.ventago.features.business.domain.model.BusinessAddress
@@ -11,6 +12,7 @@ import com.teco.ventago.features.pos.domain.models.Discount
 import com.teco.ventago.features.pos.domain.models.Tax
 import com.teco.ventago.design_system.molecules.pos.GlobalDiscountMode
 import com.teco.ventago.features.pos.ui.invoice_preview.InvoicePreviewBuilder
+import com.teco.ventago.features.pos.ui.invoice_preview.resolveDocumentLogo
 import com.teco.ventago.features.pos.ui.viewmodel.InstallmentUI
 import com.teco.ventago.features.pos.ui.viewmodel.PosState
 import com.teco.ventago.features.product.domain.model.Item
@@ -157,6 +159,37 @@ class InvoicePreviewBuilderTest {
         assertEquals(2308, preview.totals.totalCents)
     }
 
+    @Test
+    fun branchLogoTakesPriorityOverBusinessLogoInPreview() {
+        val preview = InvoicePreviewBuilder.build(
+            state = baseState(
+                branches = listOf(branch(logoUrl = "https://cdn.example.com/branch-logo.jpg")),
+            ),
+            business = business(logo = "https://cdn.example.com/business-logo.jpg"),
+        )
+
+        assertEquals("https://cdn.example.com/branch-logo.jpg", preview.issuer.logoUrl)
+        assertEquals("VentaGo Centro", preview.branch?.tradeName)
+    }
+
+    @Test
+    fun documentLogoFallsBackToBusinessLogoThenEmpty() {
+        assertEquals(
+            "https://cdn.example.com/business-logo.jpg",
+            resolveDocumentLogo(
+                branch = branch(logoUrl = null),
+                business = business(logo = "https://cdn.example.com/business-logo.jpg"),
+            )
+        )
+        assertEquals(
+            "",
+            resolveDocumentLogo(
+                branch = branch(logoUrl = "null"),
+                business = business(logo = "null"),
+            )
+        )
+    }
+
     private fun baseState(
         finalCustomer: Boolean? = true,
         finalName: String? = null,
@@ -175,6 +208,7 @@ class InvoicePreviewBuilderTest {
         ),
         charged: Map<Int, Long> = emptyMap(),
         installments: List<InstallmentUI> = emptyList(),
+        branches: List<Branch> = emptyList(),
         globalShippingCents: Long? = null,
         globalInsuranceCents: Long? = null,
         globalOtherChargesCents: Long? = null,
@@ -188,6 +222,7 @@ class InvoicePreviewBuilderTest {
             finalName = finalName,
             finalIdNumber = finalIdNumber,
             customer = customer,
+            branches = branches,
             billingPoints = listOf(FiscalBillingPoint("001", "Principal", 1)),
             charged = charged,
             installments = installments,
@@ -196,6 +231,21 @@ class InvoicePreviewBuilderTest {
             globalOtherChargesCents = globalOtherChargesCents,
             globalDiscountMode = globalDiscountMode,
             globalDiscountFixedCents = globalDiscountFixedCents,
+        )
+    }
+
+    private fun branch(logoUrl: String?): Branch {
+        return Branch(
+            branchCode = "0000",
+            name = "Sucursal Principal",
+            addressLine = "Calle 50",
+            locationCode = "",
+            longitude = "",
+            latitude = "",
+            status = 1,
+            fiscalBillingPoints = emptyList(),
+            tradeName = "VentaGo Centro",
+            logoUrl = logoUrl,
         )
     }
 
@@ -225,14 +275,14 @@ class InvoicePreviewBuilderTest {
         )
     }
 
-    private fun business(): Business {
+    private fun business(logo: String = ""): Business {
         return Business(
             businessId = 1,
             name = "TECO MARK, S.A.",
             description = "",
             active = true,
             currency = Currency(140, "US Dollar", "USD", "$"),
-            logo = "",
+            logo = logo,
             socialNetwork = BusinessSocialNetwork(JsonObject(emptyMap())),
             phone = "",
             address = BusinessAddress("", "Panama", 0.0, 0.0),

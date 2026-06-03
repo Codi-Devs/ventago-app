@@ -239,7 +239,7 @@ class OrdersRepository(private val provider: IOrdersProvider, private val logger
         try {
             val response = provider.cancelOrder(businessId, request)
 
-            if (response.error.isError()) {
+            if (!response.successful || response.error.isError() || !response.errorCode.isNullOrBlank()) {
                 throw BadRequestException(response.toJson())
             }
 

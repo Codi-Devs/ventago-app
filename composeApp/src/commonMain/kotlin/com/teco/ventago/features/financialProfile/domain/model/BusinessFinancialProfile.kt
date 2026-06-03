@@ -23,8 +23,34 @@ data class BusinessFinancialProfile(
 data class InvoiceSummary(
     @SerialName("plan_total_dte") val planTotalDte: Int,
     @SerialName("plan_available_dte") val planAvailableDte: Int,
-    @SerialName("plan_start_date") val planStartDate: String,
-    @SerialName("plan_expiry_date") val planExpiryDate: String,
+    @SerialName("plan_start_date") val planStartDate: String? = null,
+    @SerialName("plan_expiry_date") val planExpiryDate: String? = null,
+    @SerialName("active_subscriptions") val activeSubscriptions: List<InvoiceSubscriptionSummary> = emptyList(),
+) {
+    fun aggregateActivationDate(): String =
+        activeSubscriptions
+            .map(InvoiceSubscriptionSummary::activationDate)
+            .filter(String::isNotBlank)
+            .minOrNull()
+            ?: planStartDate.orEmpty()
+
+    fun aggregateExpiryDate(): String =
+        activeSubscriptions
+            .map(InvoiceSubscriptionSummary::expiryDate)
+            .filter(String::isNotBlank)
+            .maxOrNull()
+            ?: planExpiryDate.orEmpty()
+}
+
+@Serializable
+data class InvoiceSubscriptionSummary(
+    @SerialName("subscription_id") val subscriptionId: Int,
+    @SerialName("plan_id") val planId: Int,
+    @SerialName("plan_name") val planName: String,
+    @SerialName("initial_dte") val initialDte: Int,
+    @SerialName("available_dte") val availableDte: Int,
+    @SerialName("activation_date") val activationDate: String,
+    @SerialName("expiry_date") val expiryDate: String,
 )
 
 @Serializable

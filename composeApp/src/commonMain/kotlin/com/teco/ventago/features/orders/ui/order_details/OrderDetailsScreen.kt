@@ -358,6 +358,10 @@ fun OrderDetailsScreen(
     LaunchedEffect(Unit) {
         viewModel.events.collect { event ->
             when (event) {
+                is OrderDetailsUiEvent.OrderCancelled -> {
+                    showCancelDialog = false
+                    cancelReason = ""
+                }
                 is OrderDetailsUiEvent.OrderDeleted -> {
                     navigate(PosScreens.OrdersScreen) {
                         popUpTo(PosScreens.OrdersScreen.name) { inclusive = false }
@@ -440,7 +444,10 @@ fun OrderDetailsScreen(
         if (order.invoiceStatus != 0 && order.externalInvoiceNumber != null) {
             OrderInvoicingCard(
                 order = order,
-                onShowCancelDialog = { showCancelDialog = true }
+                onShowCancelDialog = {
+                    viewModel.clearCancelOrderError()
+                    showCancelDialog = true
+                }
             )
         }
 
@@ -541,7 +548,10 @@ fun OrderDetailsScreen(
                     label = "Anular pedido",
                     icon = Icons.Rounded.Close,
                     color = MaterialTheme.colorScheme.error,
-                    onClick = { showCancelDialog = true }
+                    onClick = {
+                        viewModel.clearCancelOrderError()
+                        showCancelDialog = true
+                    }
                 )
             }
 
@@ -1100,15 +1110,24 @@ fun OrderDetailsScreen(
         if (showCancelDialog) {
             ModalBottomSheet(
                 containerColor = MaterialTheme.colorScheme.background,
-                onDismissRequest = { showCancelDialog = false },
+                onDismissRequest = {
+                    showCancelDialog = false
+                    viewModel.clearCancelOrderError()
+                },
                 sheetState = cancelOrderSheetState
             ) {
                 CancelOrderBottomSheet(
                     reason = cancelReason,
-                    onReasonChange = { cancelReason = it },
-                    onDismiss = { showCancelDialog = false },
-                    onConfirm = {
+                    apiErrorMessage = uiState.cancelOrderErrorMessage,
+                    onReasonChange = {
+                        cancelReason = it
+                        viewModel.clearCancelOrderError()
+                    },
+                    onDismiss = {
                         showCancelDialog = false
+                        viewModel.clearCancelOrderError()
+                    },
+                    onConfirm = {
                         viewModel.cancelOrder(cancelReason.trim())
                     }
                 )
@@ -2006,6 +2025,7 @@ private fun InfoRow(label: String, value: String, maxLines: Int = 1) {
 @Composable
 private fun CancelOrderBottomSheet(
     reason: String,
+    apiErrorMessage: String?,
     onReasonChange: (String) -> Unit,
     onDismiss: () -> Unit,
     onConfirm: () -> Unit
@@ -2081,6 +2101,30 @@ private fun CancelOrderBottomSheet(
             supportingText = supportingText,
             isError = showReasonError
         )
+
+        if (!apiErrorMessage.isNullOrBlank()) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(12.dp))
+                    .background(MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.65f))
+                    .padding(12.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Icon(
+                    imageVector = Icons.Rounded.ErrorOutline,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.error,
+                    modifier = Modifier.size(18.dp)
+                )
+                Spacer(modifier = Modifier.width(8.dp))
+                Text(
+                    text = apiErrorMessage,
+                    style = bodySmall(),
+                    color = MaterialTheme.colorScheme.onSurface
+                )
+            }
+        }
 
         Row(
             modifier = Modifier.fillMaxWidth(),

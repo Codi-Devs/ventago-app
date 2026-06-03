@@ -1,5 +1,6 @@
 package com.teco.ventago.features.branches.data.repository
 
+import com.teco.ventago.core.file.SharedFile
 import com.teco.ventago.core.logger.ILoggerService
 import com.teco.ventago.core.logger.Log
 import com.teco.ventago.core.logger.LogLevel
@@ -111,6 +112,52 @@ class BranchRepository(private val provider: IBranchProvider, private val logger
                     LogLevel.ERROR,
                     "BranchRepository::updateBillingPoint",
                     "Error updating Billing point. Error: ${e.message ?: "UNKNOWN"}"
+                )
+            )
+            throw e
+        }
+    }
+
+    override suspend fun uploadBranchLogo(
+        businessId: Int,
+        branchCode: String,
+        logo: SharedFile,
+    ): Boolean {
+        return try {
+            val response = provider.uploadBranchLogo(businessId, branchCode, logo)
+
+            if (response.error.isError()) {
+                throw BadRequestException(response.toJson())
+            }
+
+            response.successful
+        } catch (e: Exception) {
+            logger.sendLog(
+                Log(
+                    LogLevel.ERROR,
+                    "BranchRepository::uploadBranchLogo",
+                    "Error uploading branch logo. businessId=$businessId branchCode=$branchCode Error: ${e.message ?: "UNKNOWN"}"
+                )
+            )
+            throw e
+        }
+    }
+
+    override suspend fun deleteBranchLogo(businessId: Int, branchCode: String): Boolean {
+        return try {
+            val response = provider.deleteBranchLogo(businessId, branchCode)
+
+            if (response.error.isError()) {
+                throw BadRequestException(response.toJson())
+            }
+
+            response.successful
+        } catch (e: Exception) {
+            logger.sendLog(
+                Log(
+                    LogLevel.ERROR,
+                    "BranchRepository::deleteBranchLogo",
+                    "Error deleting branch logo. businessId=$businessId branchCode=$branchCode Error: ${e.message ?: "UNKNOWN"}"
                 )
             )
             throw e

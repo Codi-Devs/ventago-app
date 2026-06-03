@@ -18,6 +18,7 @@ data class OrderDetailsState(
     val manualPaymentDescription: String = "",
 
     val showPaymentLinkSheet: Boolean = false,
+    val cancelOrderErrorMessage: String? = null,
     val havePaymentsConfigured: Boolean = false,
     val invoicingEnabled: Boolean = false,
     val canMarkPaid: Boolean = false,
@@ -58,6 +59,7 @@ data class OrderDetailsState(
 sealed class OrderDetailsUiEvent {
     data class ShowPaymentLinkSheet(val url: String) : OrderDetailsUiEvent()
     data class OpenExternalUrl(val url: String) : OrderDetailsUiEvent()
+    data object OrderCancelled : OrderDetailsUiEvent()
     data object OrderDeleted : OrderDetailsUiEvent()
 }
 

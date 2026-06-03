@@ -22,6 +22,8 @@ data class Branch (
     val latitude : String,
     val status: Int,
     val fiscalBillingPoints: List<FiscalBillingPoint>,
+    val tradeName: String? = null,
+    val logoUrl: String? = null,
 ){
 
     constructor(response: JsonObject) : this(
@@ -33,6 +35,8 @@ data class Branch (
         response["latitude"]?.jsonPrimitive?.contentOrNull ?: "",
         response["status"]?.jsonPrimitive?.intOrNull ?: 0,
         FiscalBillingPoint.listFromMap(response["billing_points"]?.jsonArray ?: JsonArray(emptyList())),
+        response["trade_name"]?.jsonPrimitive?.contentOrNull,
+        response["logo_url"]?.jsonPrimitive?.contentOrNull,
     )
 
     val asJSONObject: JsonObject?
@@ -42,10 +46,12 @@ data class Branch (
             try {
                 data["code"] = JsonPrimitive(branchCode)
                 data["name"] = JsonPrimitive(name)
+                tradeName?.let { data["trade_name"] = JsonPrimitive(it) }
                 data["address_line"] = JsonPrimitive(addressLine)
                 data["location_code"] = JsonPrimitive(locationCode)
                 data["longitude"] = JsonPrimitive(longitude)
                 data["latitude"] = JsonPrimitive(latitude)
+                logoUrl?.let { data["logo_url"] = JsonPrimitive(it) }
                 data["status"] = JsonPrimitive(status)
                 data["billing_points"] = JsonArray(fiscalBillingPoints.mapNotNull { it.asJSONObject })
                 jsonObject = JsonObject(data)
@@ -69,4 +75,3 @@ data class Branch (
         }
     }
 }
-
