@@ -224,12 +224,7 @@ fun OrderDetailsActions(backStackEntry: NavBackStackEntry?,  navigateAny: (Any) 
     val uiState by viewModel.uiState.collectAsState()
     val order = uiState.order
 
-    val phoneNumber = when {
-        !uiState.order?.customer?.phone.isNullOrBlank() &&
-                uiState.order?.customer?.phone != uiState.order?.customer?.id?.toString() -> uiState.order?.customer?.phone
-
-        else -> null
-    }
+    val phoneNumber = uiState.order?.displayCustomerPhone()
 
     IconButton(onClick = {
         copyToClipboard("Order Details", viewModel.getOrderDetailsMessage())
@@ -293,9 +288,9 @@ fun OrderDetailsActions(backStackEntry: NavBackStackEntry?,  navigateAny: (Any) 
                                     cufe = cufe,
                                     createdAt = order.createdAt,
                                     customerId = order.customer?.id,
-                                    customerName = order.customer?.name,
+                                    customerName = order.displayCustomerName(),
                                     customerEmail = order.customer?.email,
-                                    customerphone = order.customer?.phone,
+                                    customerphone = order.displayCustomerPhone(),
                                     customerRuc = order.customer?.ruc,
                                     customerStatus = order.customer?.status ?: 1,
                                     customerInvoiceID = order.customer?.customerInvoiceID,
@@ -316,9 +311,9 @@ fun OrderDetailsActions(backStackEntry: NavBackStackEntry?,  navigateAny: (Any) 
                                     cufe = cufe,
                                     createdAt = order.createdAt,
                                     customerId = order.customer?.id,
-                                    customerName = order.customer?.name,
+                                    customerName = order.displayCustomerName(),
                                     customerEmail = order.customer?.email,
-                                    customerphone = order.customer?.phone,
+                                    customerphone = order.displayCustomerPhone(),
                                     customerRuc = order.customer?.ruc,
                                     customerStatus = order.customer?.status ?: 1,
                                     customerInvoiceID = order.customer?.customerInvoiceID,
@@ -377,12 +372,7 @@ fun OrderDetailsScreen(
         }
     }
 
-    val phoneNumber = when {
-        !uiState.order?.customer?.phone.isNullOrBlank() &&
-                uiState.order?.customer?.phone != uiState.order?.customer?.id?.toString() -> uiState.order?.customer?.phone
-
-        else -> null
-    }
+    val phoneNumber = uiState.order?.displayCustomerPhone()
 
     val order = uiState.order ?: run {
         OrderDetailsLoadingSkeleton()
@@ -452,7 +442,7 @@ fun OrderDetailsScreen(
         }
 
         // Customer card
-        order.customer?.let { customer ->
+        order.displayCustomerSnapshot()?.let { customer ->
             OrderCustomerCard(customer = customer, phoneNumber = phoneNumber)
         }
 

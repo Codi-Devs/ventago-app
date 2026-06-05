@@ -5,9 +5,12 @@ import com.teco.ventago.design_system.molecules.pos.GlobalDiscountMode
 import com.teco.ventago.design_system.organism.LoadingBottomSheetState
 import com.teco.ventago.features.branches.domain.model.Branch
 import com.teco.ventago.features.branches.domain.model.FiscalBillingPoint
+import com.teco.ventago.features.customers.ui.form.viewmodel.CustomerCountries
+import com.teco.ventago.features.customers.ui.form.viewmodel.CustomerCountryOption
 import com.teco.ventago.features.customers.domain.models.CustomerAddress
 import com.teco.ventago.features.customers.domain.models.Customer
 import com.teco.ventago.features.customers.domain.models.CustomerListItem
+import com.teco.ventago.features.invoicing.domain.PostCreateInvoiceWarningState
 import com.teco.ventago.features.invoicing.domain.models.BottomNoteSettings
 import com.teco.ventago.features.invoicing.domain.models.InvoiceStatus
 
@@ -20,6 +23,16 @@ import kotlin.math.roundToLong
 
 enum class PaymentFlowMode { MANUAL_OR_INSTALLMENTS, PAYMENT_LINK }
 enum class ProductViewMode { LIST, GRID }
+
+data class PosCartCustomerDisplay(
+    val name: String,
+    val email: String? = null,
+    val identificationLabel: String? = null,
+    val identificationValue: String? = null,
+    val customerTypeLabel: String? = null,
+    val isRegisteredCustomer: Boolean,
+    val invoiceCustomer: Int? = null,
+)
 
 data class PosProductCategoryFilter(
     val id: Int,
@@ -88,7 +101,9 @@ data class PosState(
     val finalIdTypeIndex: Int = 0,
     val finalIdType: String = "cedula",
     val finalIdNumber: String? = null,
-    val finalPassportCountry: String? = null,
+    val finalIdNumberError: String? = null,
+    val finalCustomerCountryCode: String? = null,
+    val finalCustomerCountryOptions: List<CustomerCountryOption> = CustomerCountries.options,
 
 
     // === Global discounts / charges ===
@@ -168,6 +183,7 @@ data class PosState(
     val pdfDocument: String = "", // base64
     val paymentLink: String = "",
     val orderNumber: String = "",
+    val postCreateInvoiceWarning: PostCreateInvoiceWarningState = PostCreateInvoiceWarningState(),
 
     val orderCreationFailed: Boolean = false,
 
@@ -180,6 +196,45 @@ data class PosState(
 
 enum class FlowMode {
     SALE, QUOTE
+}
+
+fun PosState.cartCustomerDisplay(): PosCartCustomerDisplay? {
+    customer?.let { savedCustomer ->
+        return PosCartCustomerDisplay(
+            name = savedCustomer.name,
+            email = savedCustomer.email?.trim()?.takeIf { it.isNotEmpty() },
+            identificationLabel = savedCustomer.ruc?.trim()?.takeIf { it.isNotEmpty() }?.let { "Ruc" },
+            identificationValue = savedCustomer.ruc?.trim()?.takeIf { it.isNotEmpty() },
+            isRegisteredCustomer = true,
+            invoiceCustomer = savedCustomer.invoiceCustomer,
+        )
+    }
+
+    if (finalCustomer != true) return null
+
+    val normalizedName = finalName?.trim()?.takeIf { it.isNotEmpty() }
+    val normalizedEmail = finalEmail?.trim()?.takeIf { it.isNotEmpty() }
+    val normalizedIdNumber = finalIdNumber?.trim()?.takeIf { it.isNotEmpty() }
+    val hasTypedIdentity = normalizedName != null || normalizedEmail != null || normalizedIdNumber != null
+    if (!hasTypedIdentity) return null
+
+    return PosCartCustomerDisplay(
+        name = normalizedName ?: "Consumidor final",
+        email = normalizedEmail,
+        identificationLabel = normalizedIdNumber?.let { finalCustomerIdentificationLabel(finalIdType) },
+        identificationValue = normalizedIdNumber,
+        customerTypeLabel = "Consumidor final",
+        isRegisteredCustomer = false,
+    )
+}
+
+internal fun finalCustomerIdentificationLabel(finalIdType: String): String {
+    return when (finalIdType) {
+        "cedula" -> "Cédula"
+        "passport" -> "Pasaporte"
+        "foreing_taxid" -> "Identificación extranjera"
+        else -> "Identificación"
+    }
 }
 
 sealed class PosStateUiEvent {

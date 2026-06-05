@@ -22,6 +22,7 @@ data class InvoicePreview(
     val itbmsBreakdown: List<InvoicePreviewTaxBreakdown>,
     val payments: List<InvoicePreviewPayment>,
     val totals: InvoicePreviewTotals,
+    val bottomNote: InvoicePreviewBottomNote?,
 )
 
 data class InvoicePreviewIssuer(
@@ -95,6 +96,11 @@ data class InvoicePreviewTotals(
     val totalCents: Long,
 )
 
+data class InvoicePreviewBottomNote(
+    val title: String,
+    val body: String,
+)
+
 object InvoicePreviewBuilder {
     private const val CONSULTATION_URL = "https://dgi-fep.mef.gob.pa/Consultas/FacturasPorCUFE"
 
@@ -162,7 +168,17 @@ object InvoicePreviewBuilder {
                 otherChargesCents = globalChargeParts.otherChargesCents,
                 totalCents = summary.totalBeforeTip,
             ),
+            bottomNote = buildBottomNote(state),
         )
+    }
+
+    private fun buildBottomNote(state: PosState): InvoicePreviewBottomNote? {
+        val settings = state.bottomNoteSettings ?: return null
+        if (state.includeBottomNote != true) return null
+        val title = settings.title.trim()
+        val body = htmlToPreviewText(settings.body)
+        if (title.isBlank() || body.isBlank()) return null
+        return InvoicePreviewBottomNote(title = title, body = body)
     }
 
     private fun buildReceptor(state: PosState): InvoicePreviewReceptor {
@@ -332,6 +348,23 @@ object InvoicePreviewBuilder {
             val decimals = parts.getOrNull(1).orEmpty().padEnd(2, '0').take(2)
             "${parts.first()}.$decimals"
         }
+    }
+
+    private fun htmlToPreviewText(value: String): String {
+        return value
+            .replace(Regex("<\\s*br\\s*/?\\s*>", RegexOption.IGNORE_CASE), "\n")
+            .replace(Regex("</\\s*(p|div|h[1-6]|blockquote|li|ol|ul)\\s*>", RegexOption.IGNORE_CASE), "\n")
+            .replace(Regex("<\\s*li\\b[^>]*>", RegexOption.IGNORE_CASE), "- ")
+            .replace(Regex("<[^>]+>"), "")
+            .replace("&nbsp;", " ")
+            .replace("&amp;", "&")
+            .replace("&lt;", "<")
+            .replace("&gt;", ">")
+            .replace("&quot;", "\"")
+            .lines()
+            .map { it.trim() }
+            .filter { it.isNotBlank() }
+            .joinToString("\n")
     }
 }
 

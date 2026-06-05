@@ -97,6 +97,7 @@ import ventago.composeapp.generated.resources.rejected
 fun OrderListItem(order: Order, onClick: () -> Unit, statusOnClick: () -> Unit) {
 
     val totalItems = order.lines.size
+    val customerName = order.displayCustomerName()
     val paymentMethodLabel = run {
         val methods = order.orderPayments
             .mapNotNull { it.paymentMethod.name.takeIf { name -> name.isNotBlank() } }
@@ -162,15 +163,18 @@ fun OrderListItem(order: Order, onClick: () -> Unit, statusOnClick: () -> Unit) 
                     text = "#${order.formattedInternalNumber()}",
                     style = bodyMediumBold(color = MaterialTheme.colorScheme.primary),
                 )
+                if (!customerName.isNullOrBlank()) {
+                    Text(
+                        modifier = Modifier.padding(top = 6.dp),
+                        text = customerName,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        style = labelMedium(color = MaterialTheme.colorScheme.onSurfaceVariant),
+                    )
+                }
                 Text(
-                    modifier = Modifier.padding(top = 10.dp),
+                    modifier = Modifier.padding(top = 6.dp),
                     text = "$totalItems ${stringResource(Res.string.items)}",
-                    textAlign = TextAlign.Center,
-                    style = labelMedium(color = MaterialTheme.colorScheme.onSurfaceVariant),
-                )
-                Text(
-                    modifier = Modifier.padding(top = 4.dp),
-                    text = "Pago: $paymentMethodLabel",
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                     style = labelMedium(color = MaterialTheme.colorScheme.onSurfaceVariant),
@@ -194,6 +198,14 @@ fun OrderListItem(order: Order, onClick: () -> Unit, statusOnClick: () -> Unit) 
                     modifier = Modifier.padding(top = 8.dp),
                     text = formatNumberToMoney(order.totalAmount),
                     style = bodyMediumBold(color = MaterialTheme.colorScheme.primary)
+                )
+                Text(
+                    modifier = Modifier.padding(top = 6.dp),
+                    text = paymentMethodLabel,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    style = labelMedium(color = MaterialTheme.colorScheme.onSurfaceVariant),
+                    textAlign = TextAlign.End,
                 )
             }
         }

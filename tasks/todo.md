@@ -1,3 +1,163 @@
+# Spanish Country Catalog TODO
+
+## Plan
+- [x] Translate the shared customer country catalog names from English to Spanish while preserving ISO codes and catalog size.
+- [x] Reuse the shared country catalog from the POS add-customer flow instead of maintaining a separate English list.
+- [x] Update focused country catalog assertions and run verification gates.
+
+## Verification Gates
+- [x] `./gradlew --no-build-cache --no-configuration-cache :composeApp:testDebugUnitTest --tests com.teco.ventago.features.customers.CustomerModelsAndOrdersRequestTest`
+- [x] `./gradlew --no-build-cache --no-configuration-cache :composeApp:compileKotlinMetadata :composeApp:compileDebugKotlinAndroid`
+
+## Review Notes
+- `CustomerCountries.options` now keeps the same 219 ISO country codes while displaying Spanish country names.
+- POS add-customer now maps from `CustomerCountries.options`, removing the separate shorter English list from `AddCustomerViewModel`.
+- Focused customer catalog/request tests and the KMP/Android compile gate passed with existing KSP version, cinterop commonization, expect/actual beta, and unrelated deprecation warnings.
+
+# Orders List Customer Row TODO
+
+## Plan
+- [x] Add customer display name to order list rows using the shared `Order.displayCustomerName()` helper.
+- [x] Move the payment method metadata to the trailing column below the order amount and remove the `Pago:` prefix.
+- [x] Run the requested KMP/Android compile verification and document the result.
+
+## Verification Gates
+- [x] `./gradlew --no-build-cache --no-configuration-cache :composeApp:compileKotlinMetadata :composeApp:compileDebugKotlinAndroid`
+
+## Review Notes
+- `OrderListItem` now shows the optional customer display name below the order number, keeps item count as muted metadata, and moves the raw payment method label under the amount on the trailing side.
+- The compile verification passed with existing KSP version, cinterop commonization, expect/actual beta, and unrelated deprecation warnings.
+
+# POS Invoice Warning Confirmation TODO
+
+## Plan
+- [x] Normalize invoice warning code/message fields across create-order, retry-invoice, and shared order models.
+- [x] Add a shared create-confirmation invoice warning resolver and wire POS state/create flow to it without treating order creation as failed.
+- [x] Update POS confirmation UIs and retry-invoice messaging/action gating to honor the new warning policy.
+- [x] Add focused regression coverage and run the requested verification gates.
+
+## Verification Gates
+- [x] `./gradlew --no-build-cache --no-configuration-cache :composeApp:testDebugUnitTest --tests com.teco.ventago.features.orders.CreateOrderResponseParsingTest --tests com.teco.ventago.features.orders.InvoicePostCreateWarningPolicyTest --tests com.teco.ventago.features.orders.ui.order_details.viewmodel.OrdersDetailsViewModelCxcTest`
+- [x] `./gradlew --no-build-cache --no-configuration-cache :composeApp:compileKotlinMetadata :composeApp:compileDebugKotlinAndroid`
+
+## Review Notes
+- `CreateOrderResponse`, `RetryInvoiceResponse`, and `Order` now normalize `invoice_warning_code` / `invoiceWarningCode` and `invoice_warning_message` / `invoiceWarningMessage`, so both create and refresh payloads can drive the same UX logic.
+- Added a shared `resolvePostCreateInvoiceWarning(...)` policy in invoicing domain, and `PosViewModel.createOrder()` now preserves order success while storing an explicit post-create warning state instead of coercing `invoiceStatus == NONE` into `FAILED`.
+- Phone and legacy POS confirmation UIs now switch to an error-themed warning presentation when invoice generation is pending/manual-failure, keep the order summary/navigation available, and disable open/download/share together when policy says invoice access should be blocked.
+- Retry invoice flow now keeps backend refresh as the primary truth source, falls back to the retry response warning message, and otherwise shows the generic pending-verification copy. The retry CTA is now limited to paid orders with `invoiceStatus` `NONE` or `PENDING` that are not cancelled.
+- Focused parsing/policy/retry tests passed, and the compile verification passed with the existing workspace warnings about KSP version mismatch, disabled cinterop commonization, manifest replacement noise, expect/actual beta, and unrelated deprecations.
+
+## Correction Notes
+- [x] Hide the invoice download card entirely on `SuccessScreen` when invoice actions are not available instead of rendering it disabled after invoice-generation failure/warning states.
+
+# POS Final Customer Cart Identity TODO
+
+## Plan
+- [x] Add a shared POS cart customer-display helper that derives either the saved customer or the typed final-customer identity without overloading the selected-customer domain state.
+- [x] Update the cart customer section to render typed final-customer name/ID with an explicit `Consumidor final` declaration and keep edit/clear actions appropriate for that flow.
+- [x] Add focused regression coverage for the display helper, run targeted verification, and document the result.
+
+## Verification Gates
+- [x] `./gradlew --no-build-cache --no-configuration-cache :composeApp:testDebugUnitTest --tests com.teco.ventago.features.pos.PosFinalCustomerValidationTest`
+- [x] `./gradlew --no-build-cache --no-configuration-cache :composeApp:compileKotlinMetadata :composeApp:compileDebugKotlinAndroid`
+
+## Review Notes
+- Root cause: `CartOrganism` only rendered `uiState.customer`, while typed final-customer identity stayed isolated in `finalName` / `finalIdNumber` / `finalEmail`, so the cart collapsed back to the generic `Consumidor Final` placeholder.
+- Added a shared `cartCustomerDisplay()` projection in `PosState` so cart UI can consume one derived display model for both saved and typed final customers without mutating the actual selected-customer state.
+- The cart now shows the typed final-customer name plus `Tipo: Consumidor final` and the corresponding identification label (`Cédula`, `Pasaporte`, or `Identificación extranjera`), with edit routing back to `POSScreen` and clear resetting only the typed final-customer fields.
+- Focused POS validation/display tests and the KMP/Android compile gates passed with the existing workspace warnings about KSP version, cinterop commonization, expect/actual beta, and unrelated deprecations.
+
+# Add Item Optional Image Layout TODO
+
+## Plan
+- [x] Move the optional image picker out of the first required card and into the "Identificación y control" card.
+- [x] Default the personalized-product "Guardar producto" option to unchecked.
+- [x] Run a targeted compile gate and document the result.
+
+## Verification Gates
+- [x] `./gradlew --no-build-cache --no-configuration-cache :composeApp:compileKotlinMetadata :composeApp:compileDebugKotlinAndroid`
+
+## Review Notes
+- `AddItemScreen` now keeps the required "Información básica" card focused on mandatory fields, while the optional product image picker renders inside the collapsible "Identificación y control" card.
+- Personalized-product mode now starts with `Guardar producto` unchecked through the shared item state default and the personalized-mode initializer, so the checkbox does not restore to checked when entering that flow.
+- The targeted KMP/Android compile gate passed with the existing workspace warnings about KSP version, cinterop commonization, FileProvider manifest replacement, expect/actual beta, and unrelated deprecations.
+
+# Order Details Phone Placeholder TODO
+
+## Plan
+- [x] Treat `"0000"` the same as empty for order customer/receiver phone resolution.
+- [x] Keep the change in the shared order phone helper so Order Details and related actions inherit it automatically.
+- [x] Add focused regression coverage and run the targeted order contract test.
+
+## Verification Gates
+- [x] `./gradlew --no-build-cache --no-configuration-cache :composeApp:testDebugUnitTest --tests com.teco.ventago.features.orders.CxcOrderDetailsContractTest`
+
+## Review Notes
+- `displayCustomerPhone()` now treats `"0000"` as a placeholder for both `customer.phone` and `receiver_phone`, so Order Details no longer renders or reuses that value for share/call actions.
+- Added a focused order contract test that covers both branches: a `"0000"` customer phone now falls back to a valid receiver phone, and a `"0000"` receiver phone is hidden entirely when no valid customer phone exists.
+
+# POS Final Customer Cedula Validation TODO
+
+## Plan
+- [x] Reuse the existing Panama cédula validator in the POS final-customer order flow instead of accepting any cedula string.
+- [x] Surface the cedula validation error inline in the additional info card and block both "continuar" and `createOrder()` when the cedula is invalid.
+- [x] Add focused regression coverage for the POS validation helper, run targeted verification, and record the lesson.
+
+## Verification Gates
+- [x] `./gradlew --no-build-cache --no-configuration-cache :composeApp:testDebugUnitTest --tests com.teco.ventago.features.pos.PosFinalCustomerValidationTest :composeApp:compileKotlinMetadata :composeApp:compileDebugKotlinAndroid`
+
+## Review Notes
+- POS final-customer identification now reuses the shared Panama cédula validator and normalization path, so `cedula` values are uppercased/trimmed and rejected when the format is invalid.
+- The additional info card now renders an inline error for invalid cédulas, and the same validation blocks both the customer-step "Siguiente" action and the final `createOrder()` call as a double guard.
+- Added focused regression coverage for cedula rejection, cedula normalization/acceptance, and non-cedula passthrough; the targeted test plus KMP/Android compile gate passed with the existing workspace warnings about KSP version, cinterop commonization, and deprecations.
+
+# Orders Receiver Name TODO
+
+## Plan
+- [x] Extend the shared order model to decode top-level `receiver_name` / `receiver_phone` and resolve the display customer name for final-consumer orders.
+- [x] Update order detail flows to use the shared display name/phone fallback instead of only `customer.name` and `customer.phone`.
+- [x] Add focused regression coverage for the `get-orders` payload shape and run targeted verification.
+
+## Verification Gates
+- [x] `./gradlew --no-build-cache --no-configuration-cache :composeApp:testDebugUnitTest --tests com.teco.ventago.features.orders.CxcOrderDetailsContractTest`
+
+## Review Notes
+- `Order` now decodes top-level `receiver_name` and `receiver_phone`, and centralizes customer display fallback in shared helpers so final-consumer orders prefer a non-blank receiver name like `EMPRESA PRUEBA`.
+- `OrderDetailsScreen` now uses the shared helpers for customer name/phone display and for the note-generation prefill, so the order detail flow no longer depends exclusively on `customer.name`.
+- Added focused regression coverage for both final-consumer override behavior and the non-final-customer fallback; the targeted order contract test passed with the existing workspace warnings about KSP version, cinterop commonization, and deprecations.
+
+# POS Passport Final Customer Payload TODO
+
+## Plan
+- [x] Add a focused serialization check for passport final-customer info with `country_code = "US"`.
+- [x] Run the targeted order request test.
+- [x] Document the verification result.
+
+## Verification Gates
+- [x] `./gradlew --no-build-cache --no-configuration-cache :composeApp:testDebugUnitTest --tests com.teco.ventago.features.orders.CreateOrderRequestTest`
+
+## Review Notes
+- Added `createOrderSerializesFinalPassportCustomerCountryCode`, which asserts `John Smith`, `passport`, `US123456789`, and `country_code = "US"` in `final_customer_info`.
+- Targeted order request serialization test passed with existing Gradle warnings about KSP version and cinterop commonization.
+
+# POS Final Customer Country Selector TODO
+
+## Plan
+- [x] Reuse the customer form country catalog in the POS final-customer additional information UI.
+- [x] Show a country dropdown when the final customer identification type is passport or foreign tax ID, and keep it hidden for cédula.
+- [x] Send the selected country code through `final_customer_info.country_code` in the order creation payload.
+- [x] Add focused regression coverage and run targeted verification.
+
+## Verification Gates
+- [x] `./gradlew --no-build-cache --no-configuration-cache :composeApp:testDebugUnitTest --tests com.teco.ventago.features.orders.CreateOrderRequestTest --tests com.teco.ventago.features.customers.CustomerModelsAndOrdersRequestTest`
+- [x] `./gradlew --no-build-cache --no-configuration-cache :composeApp:compileKotlinMetadata :composeApp:compileDebugKotlinAndroid`
+
+## Review Notes
+- POS final-customer additional information now uses a country dropdown backed by `CustomerCountries.options` when the ID type is `passport` or `foreing_taxid`.
+- Selecting a foreign/passport ID type defaults the country code to `PA` if no country is selected yet; switching back to cédula clears the country code to avoid stale payload values.
+- Order creation maps the selected country to `final_customer_info.country_code`; quote-building follows the renamed state field as well.
+- Focused tests cover the shared country catalog and the requested final-customer payload shape with `country_code = "AD"`.
+
 # Customer Foreign Country List TODO
 
 ## Plan
@@ -59,6 +219,23 @@
 - Added `GET /api/v1/invoicing/settings` and `PUT /api/v1/invoicing/settings/include-address` integration through provider, repository, service, and business-scoped LocalStorage cache.
 - Settings now renders `Incluir dirección del cliente en la factura` in the existing `Preferencias de Facturación` card with the requested help text, secondary switch styling, GET skeleton, and PUT skeleton/rollback behavior.
 - Focused service tests cover cache hydration and the explicit update path for `include_address_on_invoice`.
+
+# Invoice Preview Bottom Note Card TODO
+
+## Plan
+- [x] Add optional bottom-note data to `InvoicePreview`.
+- [x] Build the note from configured title/body only when the POS include switch is enabled.
+- [x] Render the note as a new invoice-preview card when present.
+- [x] Add focused preview-builder coverage and run verification gates.
+
+## Verification Gates
+- [x] `./gradlew --no-build-cache --no-configuration-cache :composeApp:testDebugUnitTest --tests com.teco.ventago.features.pos.InvoicePreviewBuilderTest`
+- [x] `./gradlew --no-build-cache --no-configuration-cache :composeApp:compileKotlinMetadata :composeApp:compileDebugKotlinAndroid`
+
+## Review Notes
+- Invoice preview now includes a new card for the configured bottom-note title/body only when the POS include switch is enabled.
+- The preview body is converted from simple HTML into readable plain text for the card, preserving list-like line breaks.
+- Focused builder tests cover include/exclude behavior and HTML normalization.
 
 # Branch Logo and Trade Name TODO
 
@@ -2901,3 +3078,18 @@
 - Cancel-order error messages now prefer the backend `data.message`, so the saas-e-invoice responses render the exact Spanish copy returned by Ventago.
 - `OrderDetailsScreen` keeps the cancel sheet open on backend failure, shows the mapped message inline in the same visual danger treatment, and also emits the snackbar/error loading feedback already used by the screen.
 - Focused test and compile gates passed after stopping Gradle and clearing the affected Kotlin/KSP cache directories to avoid the existing incremental-cache file-lock issue when the initial verification was run in parallel.
+
+# Panama Cedula Prefix Short Format TODO
+
+## Plan
+- [x] Adjust the shared Panama cédula validator so prefixed `E-` and `N-` formats accept the reported short-group valid shapes (`E-8-9856`, `N-8-9856`).
+- [x] Add focused regression coverage for those valid inputs plus nearby invalid variants.
+- [x] Run the targeted validator verification gate and document the result.
+
+## Verification Gates
+- [x] `./gradlew --no-build-cache --no-configuration-cache :composeApp:testDebugUnitTest --tests com.teco.ventago.utils.PanamaCedulaUtilsTest`
+
+## Review Notes
+- The shared Panama cédula validator now accepts the reported prefixed short formats `E-8-9856` and `N-8-9856` without broadening the prefix rules to previously invalid mid-length variants like `E-123-12345` or `N-123-1234`.
+- Regression coverage now includes both new valid examples and nearby invalid shapes (`E-12345-1234`, `N-123456-1234`, `N-8-985`) so future regex edits keep the prefix branches narrow.
+- The focused validator gate passed with the existing workspace warnings only (`ksp` version mismatch, disabled cinterop commonization, manifest replacement, expect/actual beta, and unrelated deprecations).

@@ -196,7 +196,7 @@ object QuoteRequestBuilder {
                 phone = state.finalPhone,
                 idType = state.finalIdType,
                 idNumber = state.finalIdNumber,
-                country = state.finalPassportCountry
+                country = state.finalCustomerCountryCode
             )
         } else null
 

@@ -344,55 +344,9 @@ fun AddItemScreen(
             modifier = Modifier.padding(start = 16.dp, end = 16.dp, top = 16.dp, bottom = 0.dp),
             badge = { StatusBadge(text = "Requerida", color = badgeColorBlue) }
         ) {
-            // Image picker
-            imageBitmap?.let { image ->
-                Box(modifier = Modifier.padding(bottom = 8.dp)) {
-                    Image(
-                        bitmap = image,
-                        contentDescription = "Product Image",
-                        contentScale = ContentScale.Fit,
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(150.dp),
-                    )
-
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(150.dp),
-                        horizontalArrangement = Arrangement.End
-                    ) {
-                        IconButton(onClick = {
-                            showUploadImageSheet = true
-                        }) {
-                            Icon(
-                                modifier = Modifier
-                                    .background(
-                                        color = MaterialTheme.colorScheme.surface,
-                                        shape = RoundedCornerShape(50)
-                                    )
-                                    .padding(8.dp)
-                                    .height(24.dp)
-                                    .width(24.dp),
-                                imageVector = Icons.Outlined.Edit,
-                                contentDescription = "Edit Image",
-                                tint = MaterialTheme.colorScheme.primary
-                            )
-                        }
-                    }
-                }
-            } ?: DottedButton(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(bottom = 8.dp)
-                    .height(150.dp),
-                onClick = {
-                    showUploadImageSheet = true
-                }
-            )
             DMOutlinedTextField(
                 text = uiState.name,
-                label = stringResource(Res.string.name),
+                label = "Nombre del producto o servicio",
                 modifier = Modifier.padding(bottom = 0.dp),
                 onChange = {
                     viewModel.onNameChange(it.take(500))
@@ -488,6 +442,11 @@ fun AddItemScreen(
             modifier = Modifier.padding(start = 16.dp, end = 16.dp, top = 16.dp),
             badge = { StatusBadge(text = "Opcional", color = Color(0xFFB0B0B0)) }
         ) {
+            ProductImagePicker(
+                imageBitmap = imageBitmap,
+                onClick = { showUploadImageSheet = true }
+            )
+
             DMOutlinedTextField(
                 text = uiState.sku,
                 label = "Referencia interna (SKU)",
@@ -759,6 +718,54 @@ private fun StatusBadge(text: String, color: Color) {
             )
         )
     }
+}
+
+@Composable
+private fun ProductImagePicker(
+    imageBitmap: ImageBitmap?,
+    onClick: () -> Unit
+) {
+    imageBitmap?.let { image ->
+        Box(modifier = Modifier.padding(bottom = 8.dp)) {
+            Image(
+                bitmap = image,
+                contentDescription = "Product Image",
+                contentScale = ContentScale.Fit,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(150.dp),
+            )
+
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(150.dp),
+                horizontalArrangement = Arrangement.End
+            ) {
+                IconButton(onClick = onClick) {
+                    Icon(
+                        modifier = Modifier
+                            .background(
+                                color = MaterialTheme.colorScheme.surface,
+                                shape = RoundedCornerShape(50)
+                            )
+                            .padding(8.dp)
+                            .height(24.dp)
+                            .width(24.dp),
+                        imageVector = Icons.Outlined.Edit,
+                        contentDescription = "Edit Image",
+                        tint = MaterialTheme.colorScheme.primary
+                    )
+                }
+            }
+        }
+    } ?: DottedButton(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(bottom = 8.dp)
+            .height(150.dp),
+        onClick = onClick
+    )
 }
 
 @Composable

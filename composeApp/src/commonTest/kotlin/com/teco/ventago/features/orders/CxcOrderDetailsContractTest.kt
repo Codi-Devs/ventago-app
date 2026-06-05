@@ -167,6 +167,157 @@ class CxcOrderDetailsContractTest {
     }
 
     @Test
+    fun finalConsumerOrderPrefersNonBlankReceiverName() {
+        val payload = """
+            {
+              "id": 5980,
+              "order_type": "01",
+              "business_id": 4,
+              "internal_number": "ORD-4-0000-865-0000000587",
+              "invoice_status": 2,
+              "currency_code": "USD",
+              "lines": [],
+              "subtotal": "1.50",
+              "discount_total": "0.00",
+              "taxable_base": "1.50",
+              "tax_total": "0.11",
+              "tips_total": "0.00",
+              "total_amount": "1.61",
+              "status": 2,
+              "payment_status": 2,
+              "receiver_name": "EMPRESA PRUEBA",
+              "receiver_phone": "00000",
+              "order_histories": [],
+              "order_payments": [],
+              "customer": {
+                "id": 15,
+                "name": "CONSUMIDOR FINAL",
+                "email": "cf@pos.com",
+                "phone": "15",
+                "fe_customer_type": "02",
+                "status": 1
+              },
+              "created_at": "2026-06-05T20:45:10Z"
+            }
+        """.trimIndent()
+
+        val parsed = json.decodeFromString(Order.serializer(), payload)
+
+        assertEquals("EMPRESA PRUEBA", parsed.displayCustomerName())
+        assertEquals("00000", parsed.displayCustomerPhone())
+        assertEquals("EMPRESA PRUEBA", parsed.displayCustomerSnapshot()?.name)
+    }
+
+    @Test
+    fun nonFinalConsumerOrderKeepsCustomerNameWhenReceiverNameExists() {
+        val payload = """
+            {
+              "id": 5981,
+              "order_type": "01",
+              "business_id": 4,
+              "internal_number": "ORD-4-0000-865-0000000588",
+              "invoice_status": 2,
+              "currency_code": "USD",
+              "lines": [],
+              "subtotal": "10.00",
+              "discount_total": "0.00",
+              "taxable_base": "10.00",
+              "tax_total": "0.00",
+              "tips_total": "0.00",
+              "total_amount": "10.00",
+              "status": 2,
+              "payment_status": 2,
+              "receiver_name": "EMPRESA PRUEBA",
+              "order_histories": [],
+              "order_payments": [],
+              "customer": {
+                "id": 16,
+                "name": "Cliente registrado",
+                "phone": "61234567",
+                "fe_customer_type": "01",
+                "status": 1
+              },
+              "created_at": "2026-06-05T20:45:10Z"
+            }
+        """.trimIndent()
+
+        val parsed = json.decodeFromString(Order.serializer(), payload)
+
+        assertEquals("Cliente registrado", parsed.displayCustomerName())
+        assertEquals("61234567", parsed.displayCustomerPhone())
+    }
+
+    @Test
+    fun displayCustomerPhoneHidesPlaceholderPhoneValues() {
+        val customerPhonePayload = """
+            {
+              "id": 5982,
+              "order_type": "01",
+              "business_id": 4,
+              "internal_number": "ORD-4-0000-865-0000000589",
+              "invoice_status": 2,
+              "currency_code": "USD",
+              "lines": [],
+              "subtotal": "10.00",
+              "discount_total": "0.00",
+              "taxable_base": "10.00",
+              "tax_total": "0.00",
+              "tips_total": "0.00",
+              "total_amount": "10.00",
+              "status": 2,
+              "payment_status": 2,
+              "receiver_phone": "7777",
+              "order_histories": [],
+              "order_payments": [],
+              "customer": {
+                "id": 17,
+                "name": "Cliente registrado",
+                "phone": "0000",
+                "fe_customer_type": "01",
+                "status": 1
+              },
+              "created_at": "2026-06-05T20:45:10Z"
+            }
+        """.trimIndent()
+        val receiverPhonePayload = """
+            {
+              "id": 5983,
+              "order_type": "01",
+              "business_id": 4,
+              "internal_number": "ORD-4-0000-865-0000000590",
+              "invoice_status": 2,
+              "currency_code": "USD",
+              "lines": [],
+              "subtotal": "10.00",
+              "discount_total": "0.00",
+              "taxable_base": "10.00",
+              "tax_total": "0.00",
+              "tips_total": "0.00",
+              "total_amount": "10.00",
+              "status": 2,
+              "payment_status": 2,
+              "receiver_phone": "0000",
+              "order_histories": [],
+              "order_payments": [],
+              "customer": {
+                "id": 18,
+                "name": "Cliente final",
+                "phone": "",
+                "fe_customer_type": "02",
+                "status": 1
+              },
+              "created_at": "2026-06-05T20:45:10Z"
+            }
+        """.trimIndent()
+
+        val customerPhoneParsed = json.decodeFromString(Order.serializer(), customerPhonePayload)
+        val receiverPhoneParsed = json.decodeFromString(Order.serializer(), receiverPhonePayload)
+
+        assertEquals("7777", customerPhoneParsed.displayCustomerPhone())
+        assertNull(receiverPhoneParsed.displayCustomerPhone())
+    }
+
+    @Test
     fun registerManualPaymentsAutomaticPayloadOmitsApplications() {
         val request = RegisterManualPaymentsRequest(
             payments = listOf(

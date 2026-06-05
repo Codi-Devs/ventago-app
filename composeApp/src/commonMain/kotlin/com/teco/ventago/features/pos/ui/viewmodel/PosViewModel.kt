@@ -23,6 +23,7 @@ import com.teco.ventago.features.customers.domain.models.CustomerListItem
 import com.teco.ventago.features.customers.domain.models.CustomerTaxRetentionCatalog
 import com.teco.ventago.features.financialProfile.domain.FinancialProfileService
 import com.teco.ventago.features.invoicing.domain.InvoicingSettingsService
+import com.teco.ventago.features.invoicing.domain.resolvePostCreateInvoiceWarning
 import com.teco.ventago.features.invoicing.domain.models.InvoiceStatus
 import com.teco.ventago.features.orders.domain.models.CustomerSnapshot
 import com.teco.ventago.features.orders.domain.models.Order
@@ -76,6 +77,8 @@ import com.teco.ventago.navigation.PosNoteRoute
 import com.teco.ventago.features.orders.domain.models.OrderLineDto
 import kotlinx.serialization.json.Json as KotlinJson
 import com.teco.ventago.utils.dbFormat
+import com.teco.ventago.utils.isValidPanamaCedula
+import com.teco.ventago.utils.normalizePanamaCedula
 import com.teco.ventago.utils.normalizeQuantity
 import com.teco.ventago.utils.randomUUID
 import com.teco.ventago.utils.toDecimalString
@@ -114,6 +117,8 @@ import kotlin.math.roundToInt
 import kotlin.time.Clock.System.now
 import kotlin.time.ExperimentalTime
 
+internal const val INVALID_FINAL_CUSTOMER_CEDULA_MESSAGE =
+    "Cedula invalida. Revise el formato (ej: 1-1234-12345, 8-88-8456, PE-123-12345, E-1234-12345, N-12345-1234, 1AV1234-12345, 1PI-1234-1234)."
 
 class PosViewModel(
     private val authService: IAuthService,
@@ -938,7 +943,8 @@ class PosViewModel(
                 finalIdTypeIndex = 0,
                 finalIdType = "cedula",
                 finalIdNumber = null,
-                finalPassportCountry = null,
+                finalIdNumberError = null,
+                finalCustomerCountryCode = null,
 
                 globalDiscountMode = GlobalDiscountMode.NONE,
                 globalDiscountPercent = 0,
@@ -1002,6 +1008,8 @@ class PosViewModel(
                 pdfDocument = "", // base64
                 paymentLink = "",
                 orderNumber = "",
+                postCreateInvoiceWarning = com.teco.ventago.features.invoicing.domain.PostCreateInvoiceWarningState(),
+                orderCreationFailed = false,
 
                 )
         }
@@ -1026,6 +1034,15 @@ class PosViewModel(
 
 
     fun createOrder(createPaymentLink: Boolean = false, saveAsDraft: Boolean) {
+        if (!validateFinalCustomerSelection()) {
+            return
+        }
+        updateState {
+            copy(
+                orderCreationFailed = false,
+                postCreateInvoiceWarning = com.teco.ventago.features.invoicing.domain.PostCreateInvoiceWarningState(),
+            )
+        }
         if (saveAsDraft) {
             analyticsService.logOrderCreationPaymentOptionSelected(mode = "DRAFT")
         }
@@ -1054,13 +1071,13 @@ class PosViewModel(
                     println("ASDASD: ${json.encodeToString(request)}")
                   val response = posService.createOrder(business!!.businessId, request)
                   val hasValidOrderNumber = response.orderNumber.isNotBlank()
-                  var invoiceStatusFromResponse = InvoiceStatus.fromId(response.invoiceStatus)
-                  
-                  // If creating a confirmed order (not draft, not payment link) and invoice status is NONE,
-                  // treat it as invoice generation failure
-                  if (!effectiveCreatePaymentLink && !saveAsDraft && invoiceStatusFromResponse == InvoiceStatus.NONE) {
-                      invoiceStatusFromResponse = InvoiceStatus.FAILED
-                  }
+                  val invoiceStatusFromResponse = InvoiceStatus.fromId(response.invoiceStatus)
+                  val postCreateInvoiceWarning = resolvePostCreateInvoiceWarning(
+                      invoiceStatus = response.invoiceStatus,
+                      invoiceWarningCode = response.invoiceWarningCode,
+                      invoiceWarningMessage = response.invoiceWarningMessage,
+                      isImmediateInvoiceCreate = !effectiveCreatePaymentLink && !saveAsDraft
+                  )
                   
                   updateState {
                       copy(
@@ -1069,6 +1086,7 @@ class PosViewModel(
                           paymentLink = response.links?.firstOrNull { link -> link.action == "payer_action" }?.url
                               ?: "",
                           orderNumber = response.orderNumber,
+                          postCreateInvoiceWarning = postCreateInvoiceWarning,
                           orderCreationFailed = !hasValidOrderNumber
                       )
                   }
@@ -1157,7 +1175,18 @@ class PosViewModel(
         }
 
         var finalCustomerInfo: FinalCustomerInfo? = null
-        if (isFinalCustomer && (state.finalName != null || state.finalIdNumber != null || state.finalEmail != null)) {
+        val finalCustomerCountryCode = state.finalCustomerCountryCode
+            ?.takeIf { finalIdTypeRequiresCountry(state.finalIdType) }
+
+        if (
+            isFinalCustomer &&
+            (
+                state.finalName != null ||
+                    state.finalIdNumber != null ||
+                    state.finalEmail != null ||
+                    finalCustomerCountryCode != null
+                )
+        ) {
             var idType: String? = null
             if (state.finalIdNumber != null) {
                 idType = state.finalIdType
@@ -1167,7 +1196,7 @@ class PosViewModel(
                 email = state.finalEmail,
                 identificationType = idType,
                 identificationNumber = state.finalIdNumber,
-                countryCode = state.finalPassportCountry
+                countryCode = finalCustomerCountryCode
             )
         }
 
@@ -1948,8 +1977,17 @@ class PosViewModel(
                 finalPhone = if (isFinalCustomer) finalPhone else null,
                 finalIdTypeIndex = if (isFinalCustomer) finalIdTypeIndex else 0,
                 finalIdType = if (isFinalCustomer) resolvedFinalIdType else current.finalIdType,
-                finalIdNumber = if (isFinalCustomer) finalIdNumber else null,
-                finalPassportCountry = if (isFinalCustomer) finalCountry else null,
+                finalIdNumber = if (isFinalCustomer) {
+                    normalizeFinalCustomerIdentificationNumber(resolvedFinalIdType, finalIdNumber)
+                } else {
+                    null
+                },
+                finalIdNumberError = if (isFinalCustomer) {
+                    validateFinalCustomerIdentification(resolvedFinalIdType, finalIdNumber)
+                } else {
+                    null
+                },
+                finalCustomerCountryCode = if (isFinalCustomer) finalCountry else null,
                 customerAddresses = emptyList(),
                 selectedCustomerAddressId = null,
                 customerAddressesLoading = false,
@@ -2034,8 +2072,17 @@ class PosViewModel(
                 finalPhone = if (isFinalCustomer) finalPhone else null,
                 finalIdTypeIndex = if (isFinalCustomer) finalIdTypeIndex else 0,
                 finalIdType = if (isFinalCustomer) resolvedFinalIdType else current.finalIdType,
-                finalIdNumber = if (isFinalCustomer) finalIdNumber else null,
-                finalPassportCountry = if (isFinalCustomer) finalCountry else null,
+                finalIdNumber = if (isFinalCustomer) {
+                    normalizeFinalCustomerIdentificationNumber(resolvedFinalIdType, finalIdNumber)
+                } else {
+                    null
+                },
+                finalIdNumberError = if (isFinalCustomer) {
+                    validateFinalCustomerIdentification(resolvedFinalIdType, finalIdNumber)
+                } else {
+                    null
+                },
+                finalCustomerCountryCode = if (isFinalCustomer) finalCountry else null,
                 customerAddresses = emptyList(),
                 selectedCustomerAddressId = null,
                 customerAddressesLoading = false,
@@ -2201,12 +2248,30 @@ class PosViewModel(
                 customer = if (isFinal) null else customer,
                 customerAddresses = if (isFinal) emptyList() else customerAddresses,
                 selectedCustomerAddressId = if (isFinal) null else selectedCustomerAddressId,
-                customerAddressesLoading = false
+                customerAddressesLoading = false,
+                finalIdNumberError = if (isFinal) {
+                    validateFinalCustomerIdentification(finalIdType, finalIdNumber)
+                } else {
+                    null
+                }
             )
         }
         if (!isFinal) {
             fetchCustomerAddresses()
         }
+    }
+
+    fun clearFinalCustomerInfo() = updateState {
+        copy(
+            finalName = null,
+            finalEmail = null,
+            finalPhone = null,
+            finalIdTypeIndex = 0,
+            finalIdType = "cedula",
+            finalIdNumber = null,
+            finalIdNumberError = null,
+            finalCustomerCountryCode = null
+        )
     }
 
     fun onFinalNameChanged(v: String) = updateState { copy(finalName = v) }
@@ -2221,16 +2286,63 @@ class PosViewModel(
     )
     
     private fun finalIdTypeKeys(): List<String> = listOf("cedula", "passport", "foreing_taxid")
+
+    private fun finalIdTypeRequiresCountry(type: String): Boolean {
+        return type == "passport" || type == "foreing_taxid"
+    }
     
     fun onFinalIdTypeSelected(idx: Int) {
         val types = finalIdTypeKeys()
         if (idx in types.indices) {
-            updateState { copy(finalIdTypeIndex = idx, finalIdType = types[idx]) }
+            val selectedType = types[idx]
+            updateState {
+                val normalizedIdNumber = normalizeFinalCustomerIdentificationNumber(selectedType, finalIdNumber)
+                copy(
+                    finalIdTypeIndex = idx,
+                    finalIdType = selectedType,
+                    finalIdNumber = normalizedIdNumber,
+                    finalIdNumberError = validateFinalCustomerIdentification(selectedType, normalizedIdNumber),
+                    finalCustomerCountryCode = if (finalIdTypeRequiresCountry(selectedType)) {
+                        finalCustomerCountryCode ?: "PA"
+                    } else {
+                        null
+                    }
+                )
+            }
         }
     }
 
-    fun onFinalIdNumberChanged(v: String) = updateState { copy(finalIdNumber = v) }
-    fun onFinalPassportCountryChanged(v: String) = updateState { copy(finalPassportCountry = v) }
+    fun onFinalIdNumberChanged(v: String) = updateState {
+        val normalizedIdNumber = normalizeFinalCustomerIdentificationNumber(finalIdType, v)
+        copy(
+            finalIdNumber = normalizedIdNumber,
+            finalIdNumberError = validateFinalCustomerIdentification(finalIdType, normalizedIdNumber)
+        )
+    }
+    fun onFinalCustomerCountrySelected(code: String) = updateState { copy(finalCustomerCountryCode = code) }
+
+    fun validateFinalCustomerSelection(showFeedback: Boolean = true): Boolean {
+        val state = uiState.value
+        val normalizedIdNumber = normalizeFinalCustomerIdentificationNumber(state.finalIdType, state.finalIdNumber)
+        val error = validateFinalCustomerIdentification(state.finalIdType, normalizedIdNumber)
+
+        if (normalizedIdNumber != state.finalIdNumber || error != state.finalIdNumberError) {
+            updateState {
+                copy(
+                    finalIdNumber = normalizedIdNumber,
+                    finalIdNumberError = error
+                )
+            }
+        }
+
+        if (error != null && showFeedback) {
+            viewModelScope.launch {
+                snackbarService.show(error)
+            }
+        }
+
+        return error == null
+    }
 
 
     // ---------- Per-line extras ----------
@@ -3015,5 +3127,26 @@ class PosViewModel(
                 hideLoading()
             }
         }
+    }
+}
+
+internal fun normalizeFinalCustomerIdentificationNumber(finalIdType: String, finalIdNumber: String?): String? {
+    val trimmedIdNumber = finalIdNumber?.trim()?.takeIf { it.isNotEmpty() } ?: return null
+    return if (finalIdType == "cedula") {
+        normalizePanamaCedula(trimmedIdNumber)
+    } else {
+        trimmedIdNumber
+    }
+}
+
+internal fun validateFinalCustomerIdentification(finalIdType: String, finalIdNumber: String?): String? {
+    val normalizedIdNumber = normalizeFinalCustomerIdentificationNumber(finalIdType, finalIdNumber)
+    if (finalIdType != "cedula" || normalizedIdNumber.isNullOrBlank()) {
+        return null
+    }
+    return if (isValidPanamaCedula(normalizedIdNumber)) {
+        null
+    } else {
+        INVALID_FINAL_CUSTOMER_CEDULA_MESSAGE
     }
 }

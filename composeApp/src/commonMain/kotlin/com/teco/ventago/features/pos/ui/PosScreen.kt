@@ -60,6 +60,7 @@ import com.teco.ventago.design_system.theme.bodyMedium
 import com.teco.ventago.design_system.theme.bodySmall
 import com.teco.ventago.design_system.theme.labelMedium
 import com.teco.ventago.design_system.theme.vanishedBackgroundColor
+import com.teco.ventago.features.customers.ui.form.viewmodel.CustomerCountryOption
 import com.teco.ventago.features.pos.ui.viewmodel.PosState
 import com.teco.ventago.features.pos.ui.viewmodel.PosViewModel
 import com.teco.ventago.features.pos.ui.viewmodel.FlowMode
@@ -202,7 +203,7 @@ fun PosScreen(
             onFinalPhone = { viewModel.onFinalPhoneChanged(it) },
             onIdType = { idx -> viewModel.onFinalIdTypeSelected(idx) },   // "cedula" | "passport" | "foreing_taxid"
             onIdNumber = { viewModel.onFinalIdNumberChanged(it) },
-            onPassportCountry = { viewModel.onFinalPassportCountryChanged(it) },
+            onCountrySelected = { viewModel.onFinalCustomerCountrySelected(it) },
             navigate = navigate
         )
 
@@ -223,7 +224,9 @@ fun PosScreen(
 
         ButtonM(
             onClick = {
-                navigate(PosScreens.POSProductScreen)
+                if (viewModel.validateFinalCustomerSelection()) {
+                    navigate(PosScreens.POSProductScreen)
+                }
             },
             modifier = Modifier.padding(start = 16.dp, end = 16.dp, bottom = 24.dp),
             enabled = canContinue
@@ -261,7 +264,7 @@ private fun CustomerSelectorCard(
     onFinalPhone: (String) -> Unit,
     onIdType: (Int) -> Unit,
     onIdNumber: (String) -> Unit,
-    onPassportCountry: (String) -> Unit,
+    onCountrySelected: (String) -> Unit,
     navigate: (PosScreens) -> Unit
 ) {
     // local state only for collapsing the optional fields (persist across rotations)
@@ -378,14 +381,16 @@ private fun CustomerSelectorCard(
                     finalIdTypeIndex = uiState.finalIdTypeIndex,
                     finalIdType = uiState.finalIdType,
                     finalIdNumber = uiState.finalIdNumber,
-                    finalPassportCountry = uiState.finalPassportCountry,
+                    finalIdNumberError = uiState.finalIdNumberError,
+                    finalCustomerCountryCode = uiState.finalCustomerCountryCode,
+                    finalCustomerCountryOptions = uiState.finalCustomerCountryOptions,
                     idTypeDisplayNames = viewModel.finalIdTypeDisplayNames(),
                     onFinalName = onFinalName,
                     onFinalEmail = onFinalEmail,
                     onFinalPhone = onFinalPhone,
                     onIdType = onIdType,
                     onIdNumber = onIdNumber,
-                    onPassportCountry = onPassportCountry
+                    onCountrySelected = onCountrySelected
                 )
             }
         }
@@ -494,16 +499,19 @@ private fun AdditionalInfoCollapsibleCard(
     finalIdTypeIndex: Int,
     finalIdType: String,             // "cedula" | "passport" | "foreing_taxid"
     finalIdNumber: String?,
-    finalPassportCountry: String?,
+    finalIdNumberError: String?,
+    finalCustomerCountryCode: String?,
+    finalCustomerCountryOptions: List<CustomerCountryOption>,
     idTypeDisplayNames: List<String>,
     onFinalName: (String) -> Unit,
     onFinalEmail: (String) -> Unit,
     onFinalPhone: (String) -> Unit,
     onIdType: (Int) -> Unit,
     onIdNumber: (String) -> Unit,
-    onPassportCountry: (String) -> Unit,
+    onCountrySelected: (String) -> Unit,
 ) {
     val rotation by animateFloatAsState(if (expanded) 180f else 0f)
+    val shouldShowCountrySelector = finalIdType == "passport" || finalIdType == "foreing_taxid"
 
     ElevatedCard(
         modifier = Modifier
@@ -583,17 +591,21 @@ private fun AdditionalInfoCollapsibleCard(
                     modifier = Modifier.padding(vertical = 6.dp),
                     onChange = onIdNumber,
                     maxLines = 1,
-                    imeAction = ImeAction.Next
+                    imeAction = ImeAction.Next,
+                    isError = finalIdNumberError != null,
+                    supportingText = finalIdNumberError ?: ""
                 )
 
-                if (finalIdType == "passport") {
-                    DMOutlinedTextField(
-                        text = finalPassportCountry ?: "",
-                        label = "País del pasaporte",
+                if (shouldShowCountrySelector) {
+                    DMDropDownField(
+                        label = "País del cliente",
+                        items = finalCustomerCountryOptions.map { "${it.name} (${it.code})" },
+                        selectedIndex = finalCustomerCountryOptions.indexOfFirst { it.code == finalCustomerCountryCode },
                         modifier = Modifier.padding(vertical = 6.dp),
-                        onChange = onPassportCountry,
-                        maxLines = 1,
-                        imeAction = ImeAction.Done
+                        onItemSelected = { index, _ ->
+                            onCountrySelected(finalCustomerCountryOptions[index].code)
+                        },
+                        isError = false
                     )
                 }
             }

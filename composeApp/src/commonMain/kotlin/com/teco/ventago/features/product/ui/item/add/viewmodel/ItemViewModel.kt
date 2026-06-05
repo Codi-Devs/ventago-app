@@ -413,7 +413,12 @@ abstract class ItemViewModel(private val productService: ProductService) :
     }
 
     fun setPersonalizedProductMode(isPersonalized: Boolean) {
-        updateState { copy(isPersonalizedProduct = isPersonalized) }
+        updateState {
+            copy(
+                isPersonalizedProduct = isPersonalized,
+                saveProduct = if (isPersonalized) false else saveProduct
+            )
+        }
     }
 
     fun onSaveProductChange(saveProduct: Boolean) {

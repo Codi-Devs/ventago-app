@@ -18,6 +18,7 @@ import com.teco.ventago.features.pos.ui.viewmodel.PosState
 import com.teco.ventago.features.product.domain.model.Item
 import com.teco.ventago.features.product.domain.model.OTITax
 import com.teco.ventago.features.product.domain.model.ProductType
+import com.teco.ventago.features.invoicing.domain.models.BottomNoteSettings
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlinx.datetime.LocalDateTime
@@ -190,6 +191,38 @@ class InvoicePreviewBuilderTest {
         )
     }
 
+    @Test
+    fun includesBottomNoteOnlyWhenSelectedAndConfigured() {
+        val preview = InvoicePreviewBuilder.build(
+            state = baseState(
+                bottomNoteSettings = BottomNoteSettings(
+                    title = "Información de pago",
+                    body = "<ol><li><strong>Notas</strong>:</li><li>Enviar comprobante.</li></ol><blockquote>Gracias</blockquote>",
+                    includeOnInvoice = true,
+                ),
+                includeBottomNote = true,
+            ),
+            business = business(),
+        )
+
+        assertEquals("Información de pago", preview.bottomNote?.title)
+        assertEquals("- Notas:\n- Enviar comprobante.\nGracias", preview.bottomNote?.body)
+
+        val excludedPreview = InvoicePreviewBuilder.build(
+            state = baseState(
+                bottomNoteSettings = BottomNoteSettings(
+                    title = "Información de pago",
+                    body = "<p>Enviar comprobante.</p>",
+                    includeOnInvoice = true,
+                ),
+                includeBottomNote = false,
+            ),
+            business = business(),
+        )
+
+        assertEquals(null, excludedPreview.bottomNote)
+    }
+
     private fun baseState(
         finalCustomer: Boolean? = true,
         finalName: String? = null,
@@ -214,6 +247,8 @@ class InvoicePreviewBuilderTest {
         globalOtherChargesCents: Long? = null,
         globalDiscountMode: GlobalDiscountMode = GlobalDiscountMode.NONE,
         globalDiscountFixedCents: Long = 0L,
+        bottomNoteSettings: BottomNoteSettings? = null,
+        includeBottomNote: Boolean? = null,
     ): PosState {
         return PosState(
             items = items,
@@ -231,6 +266,8 @@ class InvoicePreviewBuilderTest {
             globalOtherChargesCents = globalOtherChargesCents,
             globalDiscountMode = globalDiscountMode,
             globalDiscountFixedCents = globalDiscountFixedCents,
+            bottomNoteSettings = bottomNoteSettings,
+            includeBottomNote = includeBottomNote,
         )
     }
 

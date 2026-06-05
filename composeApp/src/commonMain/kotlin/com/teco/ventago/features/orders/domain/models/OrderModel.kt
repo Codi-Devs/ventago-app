@@ -1,6 +1,8 @@
 package com.teco.ventago.features.orders.domain.models
 
 import com.teco.ventago.features.invoicing.domain.models.InvoiceStatus
+import com.teco.ventago.features.invoicing.domain.models.FeCustomerType
+import kotlinx.serialization.ExperimentalSerializationApi
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.KSerializer
 import kotlinx.serialization.Serializable
@@ -13,10 +15,12 @@ import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonDecoder
 import kotlinx.serialization.json.JsonNull
 import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.JsonNames
 import kotlinx.serialization.json.doubleOrNull
 import kotlinx.serialization.json.intOrNull
 import kotlinx.serialization.json.longOrNull
 
+@OptIn(ExperimentalSerializationApi::class)
 @Serializable
 data class Order(
     val id: Int,
@@ -43,6 +47,8 @@ data class Order(
 
     val status: Int,
     @SerialName("payment_status") val paymentStatus: Int = PaymentStatus.UNPAID.id,
+    @SerialName("receiver_name") val receiverName: String? = null,
+    @SerialName("receiver_phone") val receiverPhone: String? = null,
 
     @SerialName("order_histories") val orderHistories: List<OrderHistoryDto> = emptyList(),
     @SerialName("order_payments")  val orderPayments:  List<OrderPaymentDto> = emptyList(),
@@ -51,6 +57,8 @@ data class Order(
     @SerialName("payment_link") val paymentLink: String? = null,
     @SerialName("payment_links") val paymentLinks: List<OrderPaymentLinkDto> = emptyList(),
     @SerialName("links") val links: List<OrderPaymentLinkDto> = emptyList(),
+    @JsonNames("invoiceWarningCode") @SerialName("invoice_warning_code") val invoiceWarningCode: String? = null,
+    @JsonNames("invoiceWarningMessage") @SerialName("invoice_warning_message") val invoiceWarningMessage: String? = null,
     @SerialName("external_uuid") val externalUuid: String? = null,
     @SerialName("payment_flow_type") val paymentFlowType: String? = null,
     @SerialName("ticket_enabled") val ticketEnabled: Boolean? = null,
@@ -63,6 +71,50 @@ data class Order(
 
     fun formattedInternalNumber(): String {
         return internalNumber.substringAfterLast('-')
+    }
+
+    fun displayCustomerName(): String? {
+        val customerName = customer?.name?.trim().takeUnless { it.isNullOrEmpty() }
+        val normalizedReceiverName = receiverName?.trim().takeUnless { it.isNullOrEmpty() }
+        val shouldUseReceiverName = normalizedReceiverName != null &&
+            (customer?.feCustomerType == FeCustomerType.FINAL_CONSUMER.code || customer == null)
+
+        return when {
+            shouldUseReceiverName -> normalizedReceiverName
+            customerName != null -> customerName
+            else -> normalizedReceiverName
+        }
+    }
+
+    fun displayCustomerPhone(): String? {
+        val customerPhone = customer?.phone?.trim().takeUnless {
+            it.isNullOrEmpty() || it == customer?.id?.toString() || it == "0000"
+        }
+        val normalizedReceiverPhone = receiverPhone?.trim().takeUnless {
+            it.isNullOrEmpty() || it == "00000"
+        }
+        return customerPhone ?: normalizedReceiverPhone
+    }
+
+    fun displayCustomerSnapshot(): CustomerSnapshot? {
+        val displayName = displayCustomerName() ?: return customer
+        val displayPhone = displayCustomerPhone()
+
+        return when {
+            customer == null -> CustomerSnapshot(
+                id = 0,
+                name = displayName,
+                phone = displayPhone,
+                feCustomerType = if (receiverName.isNullOrBlank()) null else FeCustomerType.FINAL_CONSUMER.code,
+            )
+
+            displayName == customer.name && displayPhone == customer.phone -> customer
+
+            else -> customer.copy(
+                name = displayName,
+                phone = displayPhone ?: customer.phone,
+            )
+        }
     }
 }
 
@@ -145,6 +197,7 @@ data class CustomerSnapshot(
     val email: String? = null,
     val phone: String? = null,
     val ruc: String? = null,
+    @SerialName("fe_customer_type") val feCustomerType: String? = null,
     val status: Int = 1,
     @SerialName("customer_invoice_id") val customerInvoiceID: Int? = null,
 )

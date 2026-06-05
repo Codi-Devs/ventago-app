@@ -3,6 +3,7 @@ package com.teco.ventago.features.orders
 import com.teco.ventago.features.orders.domain.models.requests.Branch
 import com.teco.ventago.features.orders.domain.models.requests.CreateOrderRequest
 import com.teco.ventago.features.orders.domain.models.requests.CreateOrderTotals
+import com.teco.ventago.features.orders.domain.models.requests.FinalCustomerInfo
 import com.teco.ventago.features.orders.domain.models.requests.Invoice
 import com.teco.ventago.json
 import kotlinx.serialization.encodeToString
@@ -39,7 +40,56 @@ class CreateOrderRequestTest {
         assertEquals(JsonNull, payload["include_bottom_note"])
     }
 
-    private fun sampleRequest(includeBottomNote: Boolean?): CreateOrderRequest {
+    @Test
+    fun createOrderSerializesFinalForeignCustomerCountryCode() {
+        val payload = json.parseToJsonElement(
+            json.encodeToString(
+                sampleRequest(
+                    includeBottomNote = null,
+                    finalCustomerInfo = FinalCustomerInfo(
+                        name = "Prueba",
+                        identificationType = "foreing_taxid",
+                        identificationNumber = "1231321312",
+                        countryCode = "AD"
+                    )
+                )
+            )
+        ).jsonObject
+        val finalCustomerInfo = payload["final_customer_info"]!!.jsonObject
+
+        assertEquals("\"Prueba\"", finalCustomerInfo["name"].toString())
+        assertEquals("\"foreing_taxid\"", finalCustomerInfo["identification_type"].toString())
+        assertEquals("\"1231321312\"", finalCustomerInfo["identification_number"].toString())
+        assertEquals("\"AD\"", finalCustomerInfo["country_code"].toString())
+    }
+
+    @Test
+    fun createOrderSerializesFinalPassportCustomerCountryCode() {
+        val payload = json.parseToJsonElement(
+            json.encodeToString(
+                sampleRequest(
+                    includeBottomNote = null,
+                    finalCustomerInfo = FinalCustomerInfo(
+                        name = "John Smith",
+                        identificationType = "passport",
+                        identificationNumber = "US123456789",
+                        countryCode = "US"
+                    )
+                )
+            )
+        ).jsonObject
+        val finalCustomerInfo = payload["final_customer_info"]!!.jsonObject
+
+        assertEquals("\"John Smith\"", finalCustomerInfo["name"].toString())
+        assertEquals("\"passport\"", finalCustomerInfo["identification_type"].toString())
+        assertEquals("\"US123456789\"", finalCustomerInfo["identification_number"].toString())
+        assertEquals("\"US\"", finalCustomerInfo["country_code"].toString())
+    }
+
+    private fun sampleRequest(
+        includeBottomNote: Boolean?,
+        finalCustomerInfo: FinalCustomerInfo? = null
+    ): CreateOrderRequest {
         return CreateOrderRequest(
             invoice = Invoice(
                 type = "01",
@@ -47,6 +97,8 @@ class CreateOrderRequestTest {
                 operationDestination = "1",
             ),
             branch = Branch(code = "0000", billingPoint = "001"),
+            finalCustomer = if (finalCustomerInfo != null) true else null,
+            finalCustomerInfo = finalCustomerInfo,
             totals = CreateOrderTotals(
                 quantityItems = 1,
                 subtotal = "10.00",

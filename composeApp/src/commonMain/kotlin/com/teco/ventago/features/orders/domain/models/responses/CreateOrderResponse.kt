@@ -1,9 +1,12 @@
 package com.teco.ventago.features.orders.domain.models.responses
 
 import com.teco.ventago.features.printers.domain.model.TicketDocumentPayload
+import kotlinx.serialization.ExperimentalSerializationApi
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.json.JsonNames
 
+@OptIn(ExperimentalSerializationApi::class)
 @Serializable
 data class CreateOrderResponse(
     @SerialName("id")
@@ -26,6 +29,14 @@ data class CreateOrderResponse(
 
     @SerialName("invoice_status")
     val invoiceStatus: Int,
+
+    @JsonNames("invoiceWarningCode")
+    @SerialName("invoice_warning_code")
+    val invoiceWarningCode: String? = null,
+
+    @JsonNames("invoiceWarningMessage")
+    @SerialName("invoice_warning_message")
+    val invoiceWarningMessage: String? = null,
 
     @SerialName("links")
     val links: List<CreateOrderLinkDto>? = null,

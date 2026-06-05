@@ -128,6 +128,7 @@ import com.teco.ventago.features.pos.domain.models.Tax
 import com.teco.ventago.features.pos.ui.viewmodel.ProductViewMode
 import com.teco.ventago.features.pos.ui.viewmodel.PosState
 import com.teco.ventago.features.pos.ui.viewmodel.PosViewModel
+import com.teco.ventago.features.pos.ui.viewmodel.cartCustomerDisplay
 import com.teco.ventago.navigation.PosScreens
 import com.teco.ventago.utils.formatNumberToMoney
 import com.teco.ventago.utils.generateQR
@@ -207,7 +208,9 @@ fun CartOrganism(
                 // Customer Section
                 item { Spacer(modifier = Modifier.height(16.dp)) }
                 item {
-                    uiState.customer?.let { customer ->
+                    val cartCustomer = uiState.cartCustomerDisplay()
+                    cartCustomer?.let { customer ->
+                        val isRegisteredCustomer = customer.isRegisteredCustomer
                         Row(
                             modifier = Modifier.fillMaxWidth().padding(start = 24.dp, end = 8.dp),
                             horizontalArrangement = Arrangement.SpaceBetween,
@@ -217,7 +220,11 @@ fun CartOrganism(
                                 modifier = Modifier, text = "Cliente", style = bodyMediumBold()
                             )
 
-                            if (uiState.invoicingEnabled && customer.invoiceCustomer <= 0) {
+                            if (
+                                isRegisteredCustomer &&
+                                uiState.invoicingEnabled &&
+                                (customer.invoiceCustomer ?: 0) <= 0
+                            ) {
                                 Icon(
                                     imageVector = Icons.Filled.Warning,
                                     contentDescription = null,
@@ -233,7 +240,13 @@ fun CartOrganism(
 
                             IconButton(
                                 onClick = {
-                                    navigate(PosScreens.SearchCustomerScreen)
+                                    navigate(
+                                        if (isRegisteredCustomer) {
+                                            PosScreens.SearchCustomerScreen
+                                        } else {
+                                            PosScreens.POSScreen
+                                        }
+                                    )
                                 },
                             ) {
                                 Icon(
@@ -245,7 +258,11 @@ fun CartOrganism(
 
                             IconButton(
                                 onClick = {
-                                    viewModel.selectCustomer(null)
+                                    if (isRegisteredCustomer) {
+                                        viewModel.selectCustomer(null)
+                                    } else {
+                                        viewModel.clearFinalCustomerInfo()
+                                    }
                                 },
                             ) {
                                 Icon(
@@ -270,7 +287,7 @@ fun CartOrganism(
                             )
                         }
 
-                        if (customer.ruc != null && customer.ruc.isNotEmpty()) {
+                        customer.customerTypeLabel?.let { customerTypeLabel ->
                             Row(
                                 modifier = Modifier.fillMaxWidth()
                                     .padding(bottom = 8.dp, start = 24.dp, end = 16.dp),
@@ -278,7 +295,21 @@ fun CartOrganism(
                             ) {
                                 Text(
                                     modifier = Modifier,
-                                    text = "Ruc: ${customer.ruc}",
+                                    text = "Tipo: $customerTypeLabel",
+                                    style = bodyMedium()
+                                )
+                            }
+                        }
+
+                        if (!customer.identificationValue.isNullOrEmpty()) {
+                            Row(
+                                modifier = Modifier.fillMaxWidth()
+                                    .padding(bottom = 8.dp, start = 24.dp, end = 16.dp),
+                                horizontalArrangement = Arrangement.SpaceBetween
+                            ) {
+                                Text(
+                                    modifier = Modifier,
+                                    text = "${customer.identificationLabel ?: "Identificación"}: ${customer.identificationValue}",
                                     style = bodyMedium()
                                 )
                             }
@@ -1121,10 +1152,10 @@ fun PosSuccessScreen(
 
     // Determine screen state from viewModel state
     val orderFailed = uiState.orderCreationFailed
-    // Invoice failed if: order succeeded, order number exists, and invoice status is FAILED
-    val invoiceFailed = !orderFailed &&
-            uiState.orderNumber.isNotEmpty() &&
-            uiState.invoiceStatus == InvoiceStatus.FAILED
+    val invoiceWarning = !orderFailed &&
+        uiState.orderNumber.isNotEmpty() &&
+        uiState.postCreateInvoiceWarning.isWarning
+    val invoiceWarningMessage = uiState.postCreateInvoiceWarning.warningMessage.orEmpty()
 
     // State to control invoice failure alert dialog
     // Track which order number we've already shown the alert for to avoid showing it multiple times
@@ -1134,8 +1165,8 @@ fun PosSuccessScreen(
     var showInvoiceFailureAlert by remember { mutableStateOf(false) }
 
     // Trigger showing the alert dialog when invoice failure is detected for a new order
-    LaunchedEffect(uiState.orderNumber, uiState.invoiceStatus, invoiceFailed) {
-        val shouldShow = invoiceFailed &&
+    LaunchedEffect(uiState.orderNumber, invoiceWarning) {
+        val shouldShow = invoiceWarning &&
                 uiState.orderNumber.isNotEmpty() &&
                 shownAlertForOrderNumber != uiState.orderNumber
 
@@ -1146,12 +1177,11 @@ fun PosSuccessScreen(
             // Double-check conditions after delay (in case state changed)
             // Re-read from uiState to get latest values
             val currentOrderNumber = uiState.orderNumber
-            val currentInvoiceStatus = uiState.invoiceStatus
             val currentOrderFailed = uiState.orderCreationFailed
 
             val stillFailed = !currentOrderFailed &&
                     currentOrderNumber.isNotEmpty() &&
-                    currentInvoiceStatus == InvoiceStatus.FAILED &&
+                    uiState.postCreateInvoiceWarning.isWarning &&
                     shownAlertForOrderNumber != currentOrderNumber
 
             if (stillFailed) {
@@ -1164,7 +1194,7 @@ fun PosSuccessScreen(
     }
 
     // Use failure animation if order failed, success animation otherwise
-    val animationFile = if (orderFailed) {
+    val animationFile = if (orderFailed || invoiceWarning) {
         "files/wrong.json"
     } else {
         "files/57767-done.json"
@@ -1278,15 +1308,18 @@ fun PosSuccessScreen(
 
             Spacer(modifier = Modifier.weight(1f, fill = true))
 
-            Text(stringResource(Res.string.ready), style = titleLarge())
+            Text(
+                if (invoiceWarning) "Orden creada con advertencia" else stringResource(Res.string.ready),
+                style = titleLarge(),
+                color = if (invoiceWarning) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurface
+            )
             Text(
                 formatNumberToMoney(viewModel.legalInvoiceTotal().toDecimalString()),
                 modifier = Modifier.padding(8.dp),
                 style = headlineMediumBold(color = Color(0xFF5A6372))
             )
 
-            // Show invoice warning if invoice failed
-            if (invoiceFailed) {
+            if (invoiceWarning) {
                 Spacer(modifier = Modifier.height(16.dp))
                 Card(
                     modifier = Modifier
@@ -1315,7 +1348,7 @@ fun PosSuccessScreen(
                                 color = MaterialTheme.colorScheme.onSurface
                             )
                             Text(
-                                text = "La factura electrónica no se pudo generar. El pedido fue creado exitosamente, pero deberás generar la factura manualmente.",
+                                text = invoiceWarningMessage,
                                 style = bodyMedium(),
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                                 modifier = Modifier.padding(top = 4.dp)
@@ -1364,7 +1397,10 @@ fun PosSuccessScreen(
                 Text(stringResource(Res.string.pos_see_orders))
             }
 
-            if (uiState.invoiceStatus == InvoiceStatus.ISSUED && uiState.pdfDocument.isNotEmpty()) {
+            if (uiState.postCreateInvoiceWarning.invoiceActionsEnabled &&
+                uiState.invoiceStatus == InvoiceStatus.ISSUED &&
+                uiState.pdfDocument.isNotEmpty()
+            ) {
                 OutlinedButtonM(
                     modifier = Modifier.padding(start = 16.dp, end = 16.dp, bottom = 8.dp),
                     onClick = {
@@ -1389,8 +1425,8 @@ fun PosSuccessScreen(
 
     // Invoice failure alert dialog - shows automatically when invoice fails
     DMSimpleAlertDialog(
-        title = "Advertencia: Factura no generada",
-        message = "La factura electrónica no se pudo generar. El pedido fue creado exitosamente (N° ${uiState.orderNumber}), pero deberás generar la factura manualmente desde la sección de pedidos.",
+        title = "Advertencia de facturación",
+        message = "$invoiceWarningMessage${if (uiState.orderNumber.isNotBlank()) " (N° ${uiState.orderNumber})" else ""}",
         show = showInvoiceFailureAlert,
         onDismiss = {
             // Hide dialog and mark that we've shown it for this order

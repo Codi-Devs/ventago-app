@@ -86,6 +86,7 @@ fun InvoicePreviewScreen(
         ItemsCard(preview.items)
         TaxAndPaymentCard(preview)
         TotalsCard(preview.totals)
+        preview.bottomNote?.let { BottomNoteCard(it) }
         OutlinedButtonM(
             onClick = onBack,
             modifier = Modifier.padding(bottom = 8.dp),
@@ -340,6 +341,17 @@ private fun TotalsCard(totals: InvoicePreviewTotals) {
                 textAlign = TextAlign.End,
             )
         }
+    }
+}
+
+@Composable
+private fun BottomNoteCard(note: InvoicePreviewBottomNote) {
+    PreviewCard {
+        SectionTitle(note.title, Icons.Outlined.Info)
+        Text(
+            text = note.body,
+            style = bodyMedium(color = MaterialTheme.colorScheme.onSurfaceVariant),
+        )
     }
 }
 

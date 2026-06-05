@@ -1,5 +1,10 @@
 package com.teco.ventago.features.orders.ui.order_details.viewModel
 
+import com.teco.ventago.features.orders.domain.models.Order
+import com.teco.ventago.features.orders.domain.models.OrderStatus
+import com.teco.ventago.features.orders.domain.models.PaymentStatus
+import com.teco.ventago.features.orders.domain.models.requests.RetryInvoiceResponse
+import com.teco.ventago.features.invoicing.domain.models.InvoiceStatus
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNotNull
@@ -116,5 +121,122 @@ class OrdersDetailsViewModelCxcTest {
         assertEquals("La razón es obligatoria.", blank)
         assertEquals("La razón debe tener al menos 15 caracteres.", short)
         assertNull(valid)
+    }
+
+    @Test
+    fun resolveRetryInvoiceFeedbackReturnsSuccessWhenRefreshedOrderIsIssuedWithCufe() {
+        val result = resolveRetryInvoiceFeedback(
+            freshOrder = sampleOrder(
+                invoiceStatus = InvoiceStatus.ISSUED.id,
+                externalInvoiceNumber = "CUFE-123"
+            ),
+            retryResponse = RetryInvoiceResponse(invoiceWarningMessage = "Pendiente")
+        )
+
+        assertEquals(RetryInvoiceFeedback.Success, result)
+    }
+
+    @Test
+    fun resolveRetryInvoiceFeedbackUsesRetryWarningMessageBeforeGenericPendingMessage() {
+        val result = resolveRetryInvoiceFeedback(
+            freshOrder = sampleOrder(invoiceStatus = InvoiceStatus.PENDING.id),
+            retryResponse = RetryInvoiceResponse(invoiceWarningMessage = "Respuesta backend")
+        )
+
+        assertEquals(RetryInvoiceFeedback.Warning("Respuesta backend"), result)
+    }
+
+    @Test
+    fun resolveRetryInvoiceFeedbackFallsBackToGenericPendingVerificationMessage() {
+        val result = resolveRetryInvoiceFeedback(
+            freshOrder = sampleOrder(invoiceStatus = InvoiceStatus.PENDING.id),
+            retryResponse = RetryInvoiceResponse(invoiceWarningMessage = "  ")
+        )
+
+        assertEquals(
+            RetryInvoiceFeedback.Warning(RETRY_INVOICE_PENDING_VERIFICATION_MESSAGE),
+            result
+        )
+    }
+
+    @Test
+    fun shouldShowRetryInvoiceButtonRequiresPaidNotYetInvoicedAndNotCancelled() {
+        assertTrue(
+            shouldShowRetryInvoiceButton(
+                sampleOrder(
+                    paymentStatus = PaymentStatus.PAID.id,
+                    invoiceStatus = InvoiceStatus.NONE.id,
+                    status = OrderStatus.CONFIRMED
+                )
+            )
+        )
+
+        assertEquals(
+            false,
+            shouldShowRetryInvoiceButton(
+                sampleOrder(
+                    paymentStatus = PaymentStatus.UNPAID.id,
+                    invoiceStatus = InvoiceStatus.NONE.id,
+                    status = OrderStatus.CONFIRMED
+                )
+            )
+        )
+        assertEquals(
+            false,
+            shouldShowRetryInvoiceButton(
+                sampleOrder(
+                    paymentStatus = PaymentStatus.PAID.id,
+                    invoiceStatus = InvoiceStatus.ISSUED.id,
+                    status = OrderStatus.CONFIRMED,
+                    externalInvoiceNumber = "CUFE-123"
+                )
+            )
+        )
+        assertEquals(
+            false,
+            shouldShowRetryInvoiceButton(
+                sampleOrder(
+                    paymentStatus = PaymentStatus.PAID.id,
+                    invoiceStatus = InvoiceStatus.FAILED.id,
+                    status = OrderStatus.CONFIRMED
+                )
+            )
+        )
+        assertEquals(
+            false,
+            shouldShowRetryInvoiceButton(
+                sampleOrder(
+                    paymentStatus = PaymentStatus.PAID.id,
+                    invoiceStatus = InvoiceStatus.PENDING.id,
+                    status = OrderStatus.CANCELLED
+                )
+            )
+        )
+    }
+
+    private fun sampleOrder(
+        paymentStatus: Int = PaymentStatus.PAID.id,
+        invoiceStatus: Int = InvoiceStatus.NONE.id,
+        status: Int = OrderStatus.CONFIRMED,
+        externalInvoiceNumber: String? = null
+    ): Order {
+        return Order(
+            id = 1,
+            orderType = "sale",
+            businessId = 4,
+            internalNumber = "ORD-4-0000-865-0000000594",
+            externalInvoiceNumber = externalInvoiceNumber,
+            invoiceStatus = invoiceStatus,
+            currencyCode = "USD",
+            subtotal = "1.50",
+            discountTotal = "0.00",
+            taxableBase = "1.50",
+            taxTotal = "0.11",
+            tipsTotal = "0.00",
+            totalAmount = "1.61",
+            status = status,
+            paymentStatus = paymentStatus,
+            createdAt = "2026-06-05T16:41:30.212815-05:00"
+        )
     }
 }

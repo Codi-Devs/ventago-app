@@ -33,6 +33,7 @@ import androidx.compose.material.icons.filled.Description
 import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Share
+import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material.icons.outlined.Description
 import androidx.compose.material.icons.outlined.Email
 import androidx.compose.material.icons.outlined.Home
@@ -209,8 +210,14 @@ private fun FriendlySuccessScreen(
 
     val isPaymentLink = uiState.paymentLink.isNotBlank() ||
             uiState.paymentFlowMode == PaymentFlowMode.PAYMENT_LINK
+    val invoiceWarningState = uiState.postCreateInvoiceWarning
+    val showInvoiceWarning = !isPaymentLink && invoiceWarningState.isWarning
+    val canOpenInvoiceActions = !isPaymentLink &&
+        invoiceWarningState.invoiceActionsEnabled &&
+        uiState.pdfDocument.isNotBlank()
     val successGreen = Color(0xFF087A16)
     val paidGreen = Color(0xFF0A8F22)
+    val warningColor = MaterialTheme.colorScheme.error
     val secondary = MaterialTheme.colorScheme.secondary
     val amount = formatNumberToMoney(viewModel.amountToCharge().toDecimalString())
     val snackbarService: SnackbarService = koinInject()
@@ -232,9 +239,19 @@ private fun FriendlySuccessScreen(
             verticalArrangement = Arrangement.Top
         ) {
             SuccessHero(
-                title = if (isPaymentLink) "¡Link generado!" else "¡Factura completada!",
-                subtitle = "Tu orden fue procesada correctamente.",
-                color = successGreen
+                title = when {
+                    isPaymentLink -> "¡Link generado!"
+                    showInvoiceWarning -> "Orden creada con advertencia"
+                    else -> "¡Factura completada!"
+                },
+                subtitle = when {
+                    isPaymentLink -> "Tu orden fue procesada correctamente."
+                    showInvoiceWarning -> "La orden fue creada, pero la factura requiere atención."
+                    else -> "Tu orden fue procesada correctamente."
+                },
+                color = if (showInvoiceWarning) warningColor else successGreen,
+                icon = if (showInvoiceWarning) Icons.Filled.Warning else Icons.Filled.Check,
+                circleColor = if (showInvoiceWarning) warningColor.copy(alpha = 0.14f) else Color(0xFFD7F2D1)
             )
 
             Spacer(modifier = Modifier.height(28.dp))
@@ -256,6 +273,13 @@ private fun FriendlySuccessScreen(
 
             Spacer(modifier = Modifier.height(16.dp))
 
+            if (showInvoiceWarning) {
+                InvoiceWarningCard(
+                    message = invoiceWarningState.warningMessage.orEmpty()
+                )
+                Spacer(modifier = Modifier.height(16.dp))
+            }
+
             if (isPaymentLink) {
                 PaymentLinkCard(
                     link = uiState.paymentLink,
@@ -274,9 +298,9 @@ private fun FriendlySuccessScreen(
                         }
                     }
                 )
-            } else {
+            } else if (canOpenInvoiceActions) {
                 InvoiceDownloadCard(
-                    enabled = uiState.pdfDocument.isNotBlank(),
+                    enabled = true,
                     onClick = { viewModel.openPdfDocument() }
                 )
             }
@@ -304,7 +328,7 @@ private fun FriendlySuccessScreen(
                         viewModel.sharePdfDocument()
                     }
                 },
-                enabled = if (isPaymentLink) uiState.paymentLink.isNotBlank() else uiState.pdfDocument.isNotBlank(),
+                enabled = if (isPaymentLink) uiState.paymentLink.isNotBlank() else canOpenInvoiceActions,
                 contentColor = secondary,
                 border = BorderStroke(1.dp, secondary),
                 modifier = Modifier.widthIn(max = 520.dp)
@@ -343,17 +367,19 @@ private fun FriendlySuccessScreen(
 private fun SuccessHero(
     title: String,
     subtitle: String,
-    color: Color
+    color: Color,
+    icon: ImageVector,
+    circleColor: Color
 ) {
     Box(contentAlignment = Alignment.Center) {
         Box(
             modifier = Modifier
                 .size(92.dp)
                 .clip(CircleShape)
-                .background(Color(0xFFD7F2D1))
+                .background(circleColor)
         )
         Icon(
-            imageVector = Icons.Filled.Check,
+            imageVector = icon,
             contentDescription = null,
             tint = color,
             modifier = Modifier.size(48.dp)
@@ -371,6 +397,37 @@ private fun SuccessHero(
         style = bodyMedium(color = MaterialTheme.colorScheme.onSurfaceVariant),
         textAlign = TextAlign.Center
     )
+}
+
+@Composable
+private fun InvoiceWarningCard(
+    message: String
+) {
+    SuccessCard {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.Top
+        ) {
+            Icon(
+                imageVector = Icons.Filled.Warning,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.error,
+                modifier = Modifier.size(24.dp)
+            )
+            Spacer(modifier = Modifier.width(12.dp))
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = "Estado de facturación",
+                    style = bodyMediumBold(color = MaterialTheme.colorScheme.error)
+                )
+                Spacer(modifier = Modifier.height(6.dp))
+                Text(
+                    text = message,
+                    style = bodyMedium(color = MaterialTheme.colorScheme.onSurfaceVariant)
+                )
+            }
+        }
+    }
 }
 
 @Composable

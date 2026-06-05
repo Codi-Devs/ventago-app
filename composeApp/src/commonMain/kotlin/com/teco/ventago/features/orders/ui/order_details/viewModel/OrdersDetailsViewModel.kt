@@ -30,6 +30,7 @@ import com.teco.ventago.features.orders.domain.models.OrderPaymentDto
 import com.teco.ventago.features.orders.domain.models.PaymentStatus
 import com.teco.ventago.features.orders.domain.models.ReceivableTermDto
 import com.teco.ventago.features.orders.domain.models.OrderStatus
+import com.teco.ventago.features.orders.domain.models.requests.RetryInvoiceResponse
 import com.teco.ventago.features.printers.domain.PrinterService
 import com.teco.ventago.utils.doubleTryParse
 import com.teco.ventago.utils.toLongCents
@@ -496,9 +497,8 @@ class OrdersDetailsViewModel(
             }.onSuccess { result ->
                 val retryResponse = result.first
                 val freshOrder = result.second ?: uiState.value.order
-                val issued = freshOrder?.invoiceStatus == InvoiceStatus.ISSUED.id &&
-                    !freshOrder.externalInvoiceNumber.isNullOrBlank()
-                if (issued) {
+                when (val feedback = resolveRetryInvoiceFeedback(freshOrder, retryResponse)) {
+                    RetryInvoiceFeedback.Success -> {
                     updateState {
                         copy(
                             order = freshOrder,
@@ -510,21 +510,21 @@ class OrdersDetailsViewModel(
                         )
                     }
                     showSuccess()
-                } else {
-                    val warningMessage = retryResponse.invoiceWarningMessage
-                        ?.takeIf { it.isNotBlank() }
-                        ?: "La factura aún está en verificación. Intenta nuevamente en unos minutos."
+                    }
+
+                    is RetryInvoiceFeedback.Warning -> {
                     updateState {
                         copy(
                             order = freshOrder,
                             invoiceRetryState = invoiceRetryState.copy(
                                 showSuccessDialog = false,
                                 showWarningDialog = true,
-                                warningMessage = warningMessage
+                                warningMessage = feedback.message
                             )
                         )
                     }
                     hideLoading()
+                    }
                 }
             }.onFailure { error ->
                 snackbarService.show(mapOrderMutationError(error, "No se pudo reintentar la facturación."))
@@ -564,11 +564,7 @@ class OrdersDetailsViewModel(
     }
 
     fun canShowRetryInvoiceButton(order: Order? = uiState.value.order): Boolean {
-        val safeOrder = order ?: return false
-        if (safeOrder.status == OrderStatus.CANCELLED) return false
-        val isPaid = safeOrder.paymentStatus == PaymentStatus.PAID.id
-        val invoiceStatus = safeOrder.invoiceStatus ?: InvoiceStatus.NONE.id
-        return isPaid && invoiceStatus != InvoiceStatus.ISSUED.id && invoiceStatus != InvoiceStatus.CANCELLED.id
+        return shouldShowRetryInvoiceButton(order)
     }
 
     fun canGeneratePaymentLink(order: Order? = uiState.value.order): Boolean {
@@ -2302,4 +2298,40 @@ class OrdersDetailsViewModel(
             )
         }
     }
+}
+
+internal const val RETRY_INVOICE_PENDING_VERIFICATION_MESSAGE: String =
+    "La facturación se está verificando. Revisa el estado de la orden en unos minutos."
+
+internal sealed interface RetryInvoiceFeedback {
+    data object Success : RetryInvoiceFeedback
+    data class Warning(val message: String) : RetryInvoiceFeedback
+}
+
+internal fun resolveRetryInvoiceFeedback(
+    freshOrder: Order?,
+    retryResponse: RetryInvoiceResponse,
+): RetryInvoiceFeedback {
+    val issued = freshOrder?.invoiceStatus == InvoiceStatus.ISSUED.id &&
+        !freshOrder.externalInvoiceNumber.isNullOrBlank()
+    if (issued) return RetryInvoiceFeedback.Success
+
+    val warningMessage = retryResponse.invoiceWarningMessage
+        ?.trim()
+        ?.takeIf { it.isNotEmpty() }
+        ?: RETRY_INVOICE_PENDING_VERIFICATION_MESSAGE
+
+    return RetryInvoiceFeedback.Warning(warningMessage)
+}
+
+internal fun shouldShowRetryInvoiceButton(order: Order?): Boolean {
+    val safeOrder = order ?: return false
+    if (safeOrder.status == OrderStatus.CANCELLED) return false
+
+    val isPaid = safeOrder.paymentStatus == PaymentStatus.PAID.id
+    val invoiceStatus = safeOrder.invoiceStatus ?: InvoiceStatus.NONE.id
+    val isNotYetInvoiced = invoiceStatus == InvoiceStatus.NONE.id ||
+        invoiceStatus == InvoiceStatus.PENDING.id
+
+    return isPaid && isNotYetInvoiced
 }

@@ -78,7 +78,7 @@ data class ItemState(
 
     // Personalized product mode
     val isPersonalizedProduct: Boolean = false,
-    val saveProduct: Boolean = true,
+    val saveProduct: Boolean = false,
     val showNoCategoryAlert: Boolean = false,
 
     override val loadingBottomSheet: LoadingBottomSheetState = LoadingBottomSheetState(),

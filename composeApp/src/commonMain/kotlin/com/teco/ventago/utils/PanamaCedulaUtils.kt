@@ -3,8 +3,8 @@ package com.teco.ventago.utils
 private val PANAMA_CEDULA_PATTERNS = listOf(
     Regex("^[1-9]\\d?-\\d{2,4}-\\d{2,5}$"),
     Regex("^PE-\\d{3,4}-\\d{5}$"),
-    Regex("^E-\\d{4}-\\d{5,6}$"),
-    Regex("^N-\\d{4,5}-\\d{4}$"),
+    Regex("^E-(?:\\d|\\d{4})-\\d{4,6}$"),
+    Regex("^N-(?:\\d|\\d{4,5})-\\d{4}$"),
     Regex("^[1-9]\\d?AV-?\\d{4}-\\d{5}$"),
     Regex("^[1-9]\\d?PI-\\d{4}-\\d{4,5}$"),
 )

@@ -27,6 +27,7 @@ import com.teco.ventago.features.invoicing.domain.models.FeCustomerType
 import com.teco.ventago.features.orders.data.provider.OrdersRequests
 import com.teco.ventago.features.orders.domain.models.requests.AdditionalAddress
 import com.teco.ventago.features.orders.domain.models.Order
+import com.teco.ventago.features.pos.ui.viewmodel.PosState
 import com.teco.ventago.utils.ApiError
 import com.teco.ventago.utils.ApiResponse
 import com.teco.ventago.utils.DuplicateCustomerException
@@ -59,11 +60,18 @@ class CustomerModelsAndOrdersRequestTest {
         val countriesByCode = countries.associateBy { it.code }
 
         assertEquals(219, countries.size)
-        assertEquals("Afghanistan", countries.first().name)
+        assertEquals("Afganistán", countries.first().name)
         assertEquals("Zimbabwe", countries.last().name)
         assertEquals("Anguilla", countriesByCode["AI"]?.name)
-        assertEquals("Turks and Caicos Islands", countriesByCode["TC"]?.name)
-        assertEquals("Virgin Islands (U.S.)", countriesByCode["VI"]?.name)
+        assertEquals("Panamá", countriesByCode["PA"]?.name)
+        assertEquals("Estados Unidos", countriesByCode["US"]?.name)
+        assertEquals("Islas Turcas y Caicos", countriesByCode["TC"]?.name)
+        assertEquals("Islas Vírgenes (EE. UU.)", countriesByCode["VI"]?.name)
+    }
+
+    @Test
+    fun posFinalCustomerCountrySelectorUsesCustomerFormCatalog() {
+        assertEquals(CustomerFormState().countryOptions, PosState().finalCustomerCountryOptions)
     }
 
     @Test
