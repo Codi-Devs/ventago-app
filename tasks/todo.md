@@ -1,3 +1,23 @@
+# Invoice Bottom Note Settings TODO
+
+## Plan
+- [x] Add bottom-note settings API models, provider, repository, service, and LocalStorage cache.
+- [x] Add Settings UI to create/update/delete "Texto predeterminado para facturas" with title/body/include defaults.
+- [x] Add POS Additional information checkbox in the commercial information section with cache-first/background-refresh behavior.
+- [x] Extend create-order payload with nullable `include_bottom_note`.
+- [x] Add focused tests and run compile/unit verification.
+
+## Verification Gates
+- [x] `./gradlew --no-build-cache --no-configuration-cache :composeApp:testDebugUnitTest --tests com.teco.ventago.features.invoicing.BottomNoteSettingsServiceTest --tests com.teco.ventago.features.orders.CreateOrderRequestTest`
+- [x] `./gradlew --no-build-cache --no-configuration-cache :composeApp:compileKotlinMetadata :composeApp:compileDebugKotlinAndroid`
+
+## Review Notes
+- Added invoicing bottom-note settings integration for `GET/POST/PUT/DELETE /api/v1/invoicing/settings/bottom-note`, with business-scoped `LocalStorage` cache and a shared observable service.
+- Settings now shows `Preferencias de Facturación` with `Texto predeterminado para facturas`, opening a rich-text modal for title/body/include default plus delete.
+- POS Additional information now shows an `Información comercial` checkbox only when a complete bottom-note config is available and the latest refresh did not fail.
+- Order creation now sends nullable `include_bottom_note`; refresh failure or unavailable config sends `null`.
+- Focused service/cache and request serialization tests passed, and KMP/Android compile verification passed with existing project warnings.
+
 # Branch Logo and Trade Name TODO
 
 ## Plan

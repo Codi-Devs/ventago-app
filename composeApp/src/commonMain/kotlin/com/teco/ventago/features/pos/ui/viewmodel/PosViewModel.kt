@@ -22,6 +22,7 @@ import com.teco.ventago.features.customers.domain.models.CustomerDetails
 import com.teco.ventago.features.customers.domain.models.CustomerListItem
 import com.teco.ventago.features.customers.domain.models.CustomerTaxRetentionCatalog
 import com.teco.ventago.features.financialProfile.domain.FinancialProfileService
+import com.teco.ventago.features.invoicing.domain.InvoicingSettingsService
 import com.teco.ventago.features.invoicing.domain.models.InvoiceStatus
 import com.teco.ventago.features.orders.domain.models.CustomerSnapshot
 import com.teco.ventago.features.orders.domain.models.Order
@@ -123,6 +124,7 @@ class PosViewModel(
     private val posService: PosService,
     private val financialProfileService: FinancialProfileService,
     private val quotesService: QuotesService,
+    private val invoicingSettingsService: InvoicingSettingsService,
     private val pdfSharer: PdfSharer,
     private val localStorage: LocalStorage,
     private val betaService: BetaService,
@@ -275,6 +277,9 @@ class PosViewModel(
                             invoicingEnabled = it.invoicingActive
                         )
                     }
+                    if (it.invoicingActive) {
+                        refreshBottomNoteSettingsInBackground()
+                    }
                 }
             }.launchIn(this)
 
@@ -290,8 +295,29 @@ class PosViewModel(
                         )
                     }
                     refreshPaymentLinkBadge(it.businessId)
+                    invoicingSettingsService.loadCachedBottomNoteSettingsForCurrentBusiness()
+                    refreshBottomNoteSettingsInBackground()
                     applyPersistedBranchBillingPointSelectionIfPossible()
                     fetchCustomerAddresses()
+                }
+            }.launchIn(this)
+
+            invoicingSettingsService.bottomNoteSettings().onEach { bottomNoteState ->
+                val settings = bottomNoteState.settings
+                updateState {
+                    val shouldShow = settings != null &&
+                        !bottomNoteState.refreshFailed &&
+                        settings.title.isNotBlank() &&
+                        settings.body.isNotBlank()
+                    copy(
+                        bottomNoteSettings = settings,
+                        bottomNoteRefreshFailed = bottomNoteState.refreshFailed,
+                        includeBottomNote = if (shouldShow) {
+                            includeBottomNote ?: settings.includeOnInvoice
+                        } else {
+                            null
+                        },
+                    )
                 }
             }.launchIn(this)
         }
@@ -922,6 +948,16 @@ class PosViewModel(
                 globalOtherChargesCents = 0L,
                 referencedNoteCUFE = "",
                 referencedCreatedAt = "",
+                includeBottomNote = if (
+                    !currentState.bottomNoteRefreshFailed &&
+                    currentState.bottomNoteSettings != null &&
+                    currentState.bottomNoteSettings.title.isNotBlank() &&
+                    currentState.bottomNoteSettings.body.isNotBlank()
+                ) {
+                    currentState.bottomNoteSettings.includeOnInvoice
+                } else {
+                    null
+                },
 
                 logisticsInfo = "",
                 logisticsVehiclePlate = "",
@@ -1576,8 +1612,41 @@ class PosViewModel(
             commercialAddenda = commercialAddenda,
             links = links,
             formats = formats,
+            includeBottomNote = if (
+                state.bottomNoteRefreshFailed ||
+                state.bottomNoteSettings == null ||
+                state.bottomNoteSettings.title.isBlank() ||
+                state.bottomNoteSettings.body.isBlank()
+            ) {
+                null
+            } else {
+                state.includeBottomNote
+            },
             saveAs = if (saveAsDraft) "draft" else "confirmed"
         )
+    }
+
+    fun setIncludeBottomNote(include: Boolean) {
+        updateState {
+            copy(
+                includeBottomNote = if (
+                    bottomNoteSettings != null &&
+                    !bottomNoteRefreshFailed &&
+                    bottomNoteSettings.title.isNotBlank() &&
+                    bottomNoteSettings.body.isNotBlank()
+                ) {
+                    include
+                } else {
+                    null
+                },
+            )
+        }
+    }
+
+    private fun refreshBottomNoteSettingsInBackground() {
+        viewModelScope.launch(Dispatchers.IO) {
+            invoicingSettingsService.refreshBottomNoteSettings()
+        }
     }
 
     private fun loggerPrintFailure(orderNumber: String, throwable: Throwable) {

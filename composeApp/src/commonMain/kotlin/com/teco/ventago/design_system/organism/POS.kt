@@ -1448,8 +1448,15 @@ private fun AdditionalInfoSheet(
     var openDelivery by rememberSaveable { mutableStateOf(false) }
     var openRetentions by rememberSaveable { mutableStateOf(false) }
     var openExport by rememberSaveable { mutableStateOf(uiState.expandExportSection) }
+    var openCommercial by rememberSaveable {
+        mutableStateOf(uiState.bottomNoteSettings != null && !uiState.bottomNoteRefreshFailed)
+    }
 
     val isExport = uiState.selectedDocType == "03" || uiState.selectedDocType == "10" // Exportación
+    val showBottomNoteOption = uiState.bottomNoteSettings != null &&
+        !uiState.bottomNoteRefreshFailed &&
+        uiState.bottomNoteSettings.title.isNotBlank() &&
+        uiState.bottomNoteSettings.body.isNotBlank()
 
     Column(
         Modifier
@@ -1471,7 +1478,51 @@ private fun AdditionalInfoSheet(
             }
         }
 
-        // ===== 1) Logistics =====
+        // ===== 1) Commercial information =====
+        if (showBottomNoteOption) {
+            CollapsibleCard(
+                title = "Información comercial",
+                expanded = openCommercial,
+                onToggle = { openCommercial = !openCommercial }
+            ) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable {
+                            viewModel.setIncludeBottomNote(!(uiState.includeBottomNote ?: false))
+                        }
+                        .padding(horizontal = 16.dp, vertical = 8.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Checkbox(
+                        checked = uiState.includeBottomNote ?: false,
+                        onCheckedChange = viewModel::setIncludeBottomNote
+                    )
+                    Column(
+                        modifier = Modifier
+                            .weight(1f)
+                            .padding(start = 8.dp)
+                    ) {
+                        Text(
+                            text = "Incluir texto predeterminado al pie de la factura",
+                            style = MaterialTheme.typography.bodyMedium
+                        )
+                        uiState.bottomNoteSettings?.title?.takeIf { it.isNotBlank() }?.let { title ->
+                            Text(
+                                text = title,
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                                modifier = Modifier.padding(top = 2.dp)
+                            )
+                        }
+                    }
+                }
+            }
+        }
+
+        // ===== 2) Logistics =====
         CollapsibleCard(
             title = "Logística",
             expanded = openLogistics,
@@ -1553,7 +1604,7 @@ private fun AdditionalInfoSheet(
             }
         }
 
-        // ===== 2) Delivery Location =====
+        // ===== 3) Customer addresses =====
         if (uiState.finalCustomer == false && uiState.customer != null) {
             CollapsibleCard(
                 title = "Direcciones del cliente",
@@ -1665,7 +1716,7 @@ private fun AdditionalInfoSheet(
             }
         }
 
-        // ===== 3) Delivery Location =====
+        // ===== 4) Delivery Location =====
         CollapsibleCard(
             title = "Lugar de entrega",
             expanded = openDelivery,
@@ -1760,7 +1811,7 @@ private fun AdditionalInfoSheet(
             )
         }
 
-        // ===== 4) Retenciones =====
+        // ===== 5) Retenciones =====
         CollapsibleCard(
             title = "Retenciones",
             expanded = openRetentions,
@@ -1789,7 +1840,7 @@ private fun AdditionalInfoSheet(
             }
         }
 
-        // ===== 5) Exportación =====
+        // ===== 6) Exportación =====
         if (isExport) {
             CollapsibleCard(
                 title = "Exportación",

@@ -68,6 +68,18 @@ data class SettingsState(
     val actualDefaultQuoteIncludePaymentButton: Boolean = false,
     val defaultQuoteIncludePaymentButton: Boolean = false,
 
+    // Invoicing bottom note
+    val bottomNoteConfigured: Boolean = false,
+    val actualBottomNoteTitle: String = "",
+    val bottomNoteTitle: String = "",
+    val actualBottomNoteBody: String = "",
+    val bottomNoteBody: String = "",
+    val bottomNoteBodyWasEdited: Boolean = false,
+    val actualBottomNoteIncludeOnInvoice: Boolean = false,
+    val bottomNoteIncludeOnInvoice: Boolean = false,
+    val bottomNoteTitleError: String? = null,
+    val bottomNoteBodyError: String? = null,
+
     // Loading state
     override val loadingBottomSheet: LoadingBottomSheetState = LoadingBottomSheetState(),
 ) : LoadableState<SettingsState> {

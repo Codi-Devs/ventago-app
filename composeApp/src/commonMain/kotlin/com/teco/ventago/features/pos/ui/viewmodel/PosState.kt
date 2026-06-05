@@ -8,6 +8,7 @@ import com.teco.ventago.features.branches.domain.model.FiscalBillingPoint
 import com.teco.ventago.features.customers.domain.models.CustomerAddress
 import com.teco.ventago.features.customers.domain.models.Customer
 import com.teco.ventago.features.customers.domain.models.CustomerListItem
+import com.teco.ventago.features.invoicing.domain.models.BottomNoteSettings
 import com.teco.ventago.features.invoicing.domain.models.InvoiceStatus
 
 import com.teco.ventago.features.pos.domain.models.CartLine
@@ -106,6 +107,9 @@ data class PosState(
     // === Additional Info Sheet ===
     val showAdditionalSheet: Boolean = false,
     val expandExportSection: Boolean = false,
+    val bottomNoteSettings: BottomNoteSettings? = null,
+    val bottomNoteRefreshFailed: Boolean = false,
+    val includeBottomNote: Boolean? = null,
 
     // Logistics
     val logisticsInfo: String = "",

@@ -56,6 +56,13 @@ import com.teco.ventago.features.home.data.repository.HomeSummaryRepository
 import com.teco.ventago.features.home.data.repository.IHomeSummaryRepository
 import com.teco.ventago.features.home.domain.HomeSummaryService
 import com.teco.ventago.features.home.ui.viewmodel.HomeViewModel
+import com.teco.ventago.features.invoicing.data.provider.IInvoicingSettingsProvider
+import com.teco.ventago.features.invoicing.data.provider.InvoicingSettingsProvider
+import com.teco.ventago.features.invoicing.data.repository.IInvoicingSettingsRepository
+import com.teco.ventago.features.invoicing.data.repository.InvoicingSettingsRepository
+import com.teco.ventago.features.invoicing.domain.InvoicingSettingsService
+import com.teco.ventago.features.invoicing.domain.InvoicingSettingsStore
+import com.teco.ventago.features.invoicing.domain.LocalStorageInvoicingSettingsStore
 import com.teco.ventago.features.orders.data.provider.OrdersProvider
 import com.teco.ventago.features.orders.data.repository.OrdersRepository
 import com.teco.ventago.features.orders.domain.OrderService
@@ -555,6 +562,37 @@ internal fun appModule() = module {
             authService = get(),
             storage = get(),
             json = json
+        )
+    }
+
+    single<IInvoicingSettingsProvider> {
+        InvoicingSettingsProvider(
+            client = get(),
+            authService = get(),
+        )
+    }
+
+    single<IInvoicingSettingsRepository> {
+        InvoicingSettingsRepository(
+            provider = get(),
+            logger = get(),
+        )
+    }
+
+    single<InvoicingSettingsStore> {
+        LocalStorageInvoicingSettingsStore(
+            storage = get(),
+        )
+    }
+
+    single {
+        InvoicingSettingsService(
+            repository = get(),
+            businessService = get(),
+            authService = get(),
+            store = get(),
+            json = json,
+            appScope = get(named("AppScope")),
         )
     }
 

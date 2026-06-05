@@ -25,6 +25,7 @@ data class CreateOrderRequest(
     @SerialName("commercial_addenda") val commercialAddenda: CommercialAddenda? = null,
     val links: PaymentLinksBlock? = null,              // exclusive with payments
     val formats: List<String> = emptyList(),
+    @SerialName("include_bottom_note") val includeBottomNote: Boolean? = null,
 
     @SerialName("save_as") val saveAs: String = "confirmed"
 )

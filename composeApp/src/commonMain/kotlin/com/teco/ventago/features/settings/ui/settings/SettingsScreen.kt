@@ -85,6 +85,7 @@ import com.teco.ventago.design_system.theme.cardContainerColor
 import com.teco.ventago.design_system.theme.titleMedium
 import com.teco.ventago.design_system.theme.titleSmallBold
 import com.teco.ventago.features.auth.ui.register.user.viewmodel.RegisterUiEvent
+import com.teco.ventago.features.invoicing.ui.settings.BottomNoteSettingsSheet
 import com.teco.ventago.features.settings.ui.settings.viewmodel.SettingsState
 import com.teco.ventago.features.settings.ui.settings.viewmodel.SettingsStateUiEvent
 import com.teco.ventago.features.settings.ui.settings.viewmodel.SettingsViewModel
@@ -171,6 +172,7 @@ fun SettingsScreen(
     // End of State for the upload image bottom sheet
 
     var pendingEvent by remember { mutableStateOf<SettingsStateUiEvent?>(null) }
+    var showBottomNoteSheet by remember { mutableStateOf(false) }
     LaunchedEffect(Unit) {
         viewModel.events.collect { event ->
             pendingEvent = event
@@ -405,6 +407,30 @@ fun SettingsScreen(
                 )
             }
 
+            if (uiState.invoicingEnabled && uiState.canModifySettings) {
+                Card(modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp),
+                    elevation = CardDefaults.elevatedCardElevation(4.dp),
+                    colors = CardDefaults.cardColors(
+                        containerColor = cardContainerColor(),
+                    ),
+                    shape = RoundedCornerShape(10.dp),
+                    onClick = {})
+                {
+                    Text(
+                        modifier = Modifier.padding(top = 16.dp, start = 16.dp, end = 16.dp),
+                        text = "Preferencias de Facturación",
+                        style = titleMedium()
+                    )
+                    SettingsTextButton(
+                        label = "Texto predeterminado para facturas",
+                        onClick = {
+                            viewModel.resetBottomNoteDraft()
+                            showBottomNoteSheet = true
+                        }
+                    )
+                }
+            }
+
             Card(modifier = Modifier.fillMaxWidth().padding(all = 16.dp),
                 elevation = CardDefaults.elevatedCardElevation(4.dp),
                 colors = CardDefaults.cardColors(
@@ -549,6 +575,37 @@ fun SettingsScreen(
                         }
                     }
                 }
+            }
+        }
+
+        if (showBottomNoteSheet) {
+            val bottomNoteSheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+            ModalBottomSheet(
+                containerColor = cardContainerColor(),
+                sheetState = bottomNoteSheetState,
+                onDismissRequest = {
+                    viewModel.resetBottomNoteDraft()
+                    showBottomNoteSheet = false
+                },
+            ) {
+                BottomNoteSettingsSheet(
+                    title = uiState.bottomNoteTitle,
+                    body = uiState.bottomNoteBody,
+                    includeOnInvoice = uiState.bottomNoteIncludeOnInvoice,
+                    configured = uiState.bottomNoteConfigured,
+                    titleError = uiState.bottomNoteTitleError,
+                    bodyError = uiState.bottomNoteBodyError,
+                    enabled = uiState.canModifySettings,
+                    onTitleChange = viewModel::setBottomNoteTitle,
+                    onBodyChange = viewModel::setBottomNoteBody,
+                    onIncludeChange = viewModel::setBottomNoteIncludeOnInvoice,
+                    onSave = viewModel::saveBottomNoteSettings,
+                    onDelete = viewModel::deleteBottomNoteSettings,
+                    onDismiss = {
+                        viewModel.resetBottomNoteDraft()
+                        showBottomNoteSheet = false
+                    },
+                )
             }
         }
 
