@@ -1,3 +1,20 @@
+# Customer Foreign Country List TODO
+
+## Plan
+- [x] Replace the truncated foreign-customer country dropdown with the full provided country list.
+- [x] Add focused regression coverage for the customer form country catalog.
+- [x] Run targeted verification and document results.
+
+## Verification Gates
+- [x] `./gradlew --no-build-cache --no-configuration-cache :composeApp:testDebugUnitTest --tests com.teco.ventago.features.customers.CustomerModelsAndOrdersRequestTest`
+- [x] `./gradlew --no-build-cache --no-configuration-cache :composeApp:compileKotlinMetadata :composeApp:compileDebugKotlinAndroid`
+
+## Review Notes
+- Root cause: `CustomerFormState.countryOptions` was hardcoded to five countries, so the foreign-customer country dropdown could not expose the full backend-accepted country list.
+- Added `CustomerCountries.options` with the 219-entry provided catalog and wired the customer form state default to that list.
+- Added a customer regression test that verifies the full catalog size and representative countries near the beginning/end of the list.
+- Verification passed with existing Gradle warnings about KSP version, cinterop commonization, expect/actual beta, and deprecations.
+
 # Invoice Bottom Note Settings TODO
 
 ## Plan
@@ -17,6 +34,31 @@
 - POS Additional information now shows an `Información comercial` checkbox only when a complete bottom-note config is available and the latest refresh did not fail.
 - Order creation now sends nullable `include_bottom_note`; refresh failure or unavailable config sends `null`.
 - Focused service/cache and request serialization tests passed, and KMP/Android compile verification passed with existing project warnings.
+- Correction: bottom-note body is sanitized before saving so rich editor helper markup like `ql-ui` spans, `data-list`, and `contenteditable` is not sent to the backend.
+- Correction: bottom-note save now reads the current rich editor HTML at click time and keeps body sync active across multiple edits in one focus session, preventing stale body payloads.
+
+## Correction Notes
+- [x] Sanitize rich editor helper markup before saving bottom-note body so backend receives clean HTML without `ql-ui` spans or `data-list` attributes.
+- [x] Fix bottom-note rich editor synchronization so saving after multiple body edits sends the latest editor HTML, not the previous ViewModel value.
+- [x] Move the default include control out of the bottom-note editor sheet, show it as a settings-card switch above the edit button, and use a switch instead of a checkbox in the POS commercial information section.
+- [x] Adjust bottom-note settings UI: move the switch below the configure action, save switch changes immediately with a local skeleton loader, show GET skeleton loading, disable the switch with no configured note, add body placeholder copy, and use secondary color for save/switch controls.
+
+# Invoicing Customer Address Preference TODO
+
+## Plan
+- [x] Add general invoicing settings API models and provider/repository/service methods for customer-address invoice visibility.
+- [x] Add Settings ViewModel state and immediate PUT handling with loading/rollback behavior.
+- [x] Render the address switch in the existing `Preferencias de Facturación` card with requested copy and secondary switch styling.
+- [x] Add focused service coverage and run verification gates.
+
+## Verification Gates
+- [x] `./gradlew --no-build-cache --no-configuration-cache :composeApp:testDebugUnitTest --tests com.teco.ventago.features.invoicing.BottomNoteSettingsServiceTest`
+- [x] `./gradlew --no-build-cache --no-configuration-cache :composeApp:compileKotlinMetadata :composeApp:compileDebugKotlinAndroid`
+
+## Review Notes
+- Added `GET /api/v1/invoicing/settings` and `PUT /api/v1/invoicing/settings/include-address` integration through provider, repository, service, and business-scoped LocalStorage cache.
+- Settings now renders `Incluir dirección del cliente en la factura` in the existing `Preferencias de Facturación` card with the requested help text, secondary switch styling, GET skeleton, and PUT skeleton/rollback behavior.
+- Focused service tests cover cache hydration and the explicit update path for `include_address_on_invoice`.
 
 # Branch Logo and Trade Name TODO
 

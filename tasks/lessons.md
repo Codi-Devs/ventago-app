@@ -1,5 +1,7 @@
 # Lessons Learned
 
+- En editores rich text Compose, no dependas solo de un collector con flags de foco para persistir el valor: el botón de guardar debe leer `richTextState.toHtml()` en ese instante y pasarlo al ViewModel para evitar enviar HTML anterior.
+- En campos HTML guardados desde `richeditor`, no envíes directo `toHtml()` a APIs que esperan HTML limpio: normaliza antes de guardar removiendo artefactos internos como `<span class="ql-ui"...>` y atributos `data-list`, y cubre el payload con test de regresión.
 - En filtros rápidos de listas, no reutilices silenciosamente filtros previos si negocio espera paridad con web: define si el chip es "shortcut de fecha" combinable o "búsqueda rápida" date-only, y cubre el payload exacto con test de serialización.
 - En Compose, si un control flotante en un `Box` se ve pero no recibe taps, revisar orden de composición/hit-test: un hijo `fillMaxSize()` agregado después puede cubrirlo aunque sea transparente. Componer overlays accionables al final o elevarlos explícitamente.
 - En pantallas de éxito POS que necesitan salir a una ruta raíz (Home), usar navegación directa del `NavController` hacia el route raíz y limpiar back stack; no depender de wrappers locales del grafo POS para saltos cross-root.

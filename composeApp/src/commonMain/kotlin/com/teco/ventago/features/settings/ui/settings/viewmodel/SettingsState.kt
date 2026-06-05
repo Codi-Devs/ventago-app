@@ -79,6 +79,12 @@ data class SettingsState(
     val bottomNoteIncludeOnInvoice: Boolean = false,
     val bottomNoteTitleError: String? = null,
     val bottomNoteBodyError: String? = null,
+    val bottomNoteSettingsLoading: Boolean = false,
+    val bottomNoteIncludeSaving: Boolean = false,
+    val includeCustomerAddressOnInvoice: Boolean = false,
+    val actualIncludeCustomerAddressOnInvoice: Boolean = false,
+    val invoicingSettingsLoading: Boolean = false,
+    val includeCustomerAddressSaving: Boolean = false,
 
     // Loading state
     override val loadingBottomSheet: LoadingBottomSheetState = LoadingBottomSheetState(),

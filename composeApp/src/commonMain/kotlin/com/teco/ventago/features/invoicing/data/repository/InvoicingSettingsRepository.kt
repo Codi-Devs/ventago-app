@@ -6,6 +6,8 @@ import com.teco.ventago.core.logger.LogLevel
 import com.teco.ventago.features.invoicing.data.provider.IInvoicingSettingsProvider
 import com.teco.ventago.features.invoicing.domain.models.BottomNoteSettings
 import com.teco.ventago.features.invoicing.domain.models.BottomNoteSettingsRequest
+import com.teco.ventago.features.invoicing.domain.models.InvoicingSettings
+import com.teco.ventago.features.invoicing.domain.models.IncludeAddressOnInvoiceRequest
 import com.teco.ventago.json
 import com.teco.ventago.utils.BadRequestException
 import com.teco.ventago.utils.isError
@@ -17,6 +19,36 @@ class InvoicingSettingsRepository(
     private val provider: IInvoicingSettingsProvider,
     private val logger: ILoggerService,
 ) : IInvoicingSettingsRepository {
+    override suspend fun getInvoicingSettings(businessId: Int): InvoicingSettings {
+        return try {
+            val response = provider.getInvoicingSettings(businessId)
+            if (response.error.isError()) {
+                throw BadRequestException(response.toJson())
+            }
+            val data = response.data?.jsonObject ?: throw BadRequestException("Missing data")
+            json.decodeFromJsonElement(InvoicingSettings.serializer(), data)
+        } catch (e: Exception) {
+            logError("getInvoicingSettings", businessId, e)
+            throw e
+        }
+    }
+
+    override suspend fun updateIncludeAddressOnInvoice(
+        businessId: Int,
+        request: IncludeAddressOnInvoiceRequest,
+    ): Boolean {
+        return try {
+            val response = provider.updateIncludeAddressOnInvoice(businessId, request)
+            if (response.error.isError()) {
+                throw BadRequestException(response.toJson())
+            }
+            response.successful
+        } catch (e: Exception) {
+            logError("updateIncludeAddressOnInvoice", businessId, e)
+            throw e
+        }
+    }
+
     override suspend fun getBottomNoteSettings(businessId: Int): BottomNoteSettings? {
         return try {
             val response = provider.getBottomNoteSettings(businessId)

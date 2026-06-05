@@ -25,3 +25,18 @@ data class BottomNoteSettingsState(
     val settings: BottomNoteSettings? = null,
     val refreshFailed: Boolean = false,
 )
+
+@Serializable
+data class InvoicingSettings(
+    @SerialName("include_address_on_invoice") val includeAddressOnInvoice: Boolean = false,
+)
+
+@Serializable
+data class IncludeAddressOnInvoiceRequest(
+    @SerialName("include_address_on_invoice") val includeAddressOnInvoice: Boolean,
+)
+
+data class InvoicingSettingsState(
+    val settings: InvoicingSettings = InvoicingSettings(),
+    val refreshFailed: Boolean = false,
+)

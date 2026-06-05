@@ -17,7 +17,6 @@ import androidx.compose.material.icons.filled.FormatItalic
 import androidx.compose.material.icons.filled.FormatListBulleted
 import androidx.compose.material.icons.filled.FormatListNumbered
 import androidx.compose.material.icons.filled.FormatUnderlined
-import androidx.compose.material3.Checkbox
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -30,9 +29,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
@@ -54,15 +51,13 @@ import kotlinx.coroutines.flow.distinctUntilChanged
 fun BottomNoteSettingsSheet(
     title: String,
     body: String,
-    includeOnInvoice: Boolean,
     configured: Boolean,
     titleError: String?,
     bodyError: String?,
     enabled: Boolean,
     onTitleChange: (String) -> Unit,
     onBodyChange: (String) -> Unit,
-    onIncludeChange: (Boolean) -> Unit,
-    onSave: () -> Unit,
+    onSave: (String) -> Unit,
     onDelete: () -> Unit,
     onDismiss: () -> Unit,
 ) {
@@ -73,22 +68,21 @@ fun BottomNoteSettingsSheet(
     val isUnderline = currentSpanStyle.textDecoration?.contains(TextDecoration.Underline) == true
     val isOrderedList = richTextState.isOrderedList
     val isUnorderedList = richTextState.isUnorderedList
-    var editBaselineHtml by remember { mutableStateOf<String?>(null) }
+    var lastSyncedHtml by remember { mutableStateOf<String?>(null) }
 
     LaunchedEffect(body) {
-        if (body != richTextState.toHtml()) {
+        if (body != richTextState.toHtml() && body != lastSyncedHtml) {
             richTextState.setHtml(body)
+            lastSyncedHtml = body
         }
-        editBaselineHtml = null
     }
 
     LaunchedEffect(richTextState) {
         snapshotFlow { richTextState.toHtml() }
             .distinctUntilChanged()
             .collectLatest { html ->
-                val baseline = editBaselineHtml ?: return@collectLatest
-                if (html != baseline) {
-                    editBaselineHtml = html
+                if (html != lastSyncedHtml) {
+                    lastSyncedHtml = html
                     onBodyChange(html)
                 }
             }
@@ -170,17 +164,11 @@ fun BottomNoteSettingsSheet(
         Spacer(Modifier.height(8.dp))
         OutlinedRichTextEditor(
             state = richTextState,
-            modifier = Modifier
-                .fillMaxWidth()
-                .onFocusChanged { focus ->
-                    if (focus.isFocused && editBaselineHtml == null) {
-                        editBaselineHtml = richTextState.toHtml()
-                    }
-                    if (!focus.isFocused) {
-                        editBaselineHtml = null
-                    }
-                },
+            modifier = Modifier.fillMaxWidth(),
             enabled = enabled,
+            placeholder = {
+                Text("Aquí puedes definir métodos de pago, términos y condiciones, entre otros.")
+            },
             minLines = 5,
             maxLines = 10,
             supportingText = {
@@ -195,28 +183,12 @@ fun BottomNoteSettingsSheet(
             },
         )
 
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(top = 8.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Checkbox(
-                checked = includeOnInvoice,
-                onCheckedChange = onIncludeChange,
-                enabled = enabled,
-            )
-            Text(
-                text = "Incluir este texto en las facturas por defecto",
-                style = MaterialTheme.typography.bodyMedium,
-                modifier = Modifier.weight(1f),
-            )
-        }
-
         Spacer(Modifier.height(16.dp))
         ButtonM(
-            onClick = onSave,
+            onClick = { onSave(richTextState.toHtml()) },
             enabled = enabled,
+            containerColor = MaterialTheme.colorScheme.secondary,
+            contentColor = MaterialTheme.colorScheme.onSecondary,
         ) {
             Text(if (configured) "Guardar cambios" else "Crear texto predeterminado")
         }

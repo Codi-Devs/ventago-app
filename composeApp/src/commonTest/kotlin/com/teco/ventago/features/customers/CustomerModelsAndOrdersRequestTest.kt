@@ -21,6 +21,7 @@ import com.teco.ventago.features.customers.domain.models.CustomerTaxRetentionCat
 import com.teco.ventago.features.customers.domain.models.UpdateBillingAddressRequest
 import com.teco.ventago.features.customers.domain.models.UpdateCustomerDetailsRequest
 import com.teco.ventago.features.customers.domain.models.ValidateRucResponse
+import com.teco.ventago.features.customers.ui.form.viewmodel.CustomerFormState
 import com.teco.ventago.features.invoicing.domain.TaxPayerType
 import com.teco.ventago.features.invoicing.domain.models.FeCustomerType
 import com.teco.ventago.features.orders.data.provider.OrdersRequests
@@ -51,6 +52,19 @@ import kotlin.test.assertNull
 class CustomerModelsAndOrdersRequestTest {
 
     private val json = Json { ignoreUnknownKeys = true }
+
+    @Test
+    fun customerFormStateUsesFullForeignCountryCatalog() {
+        val countries = CustomerFormState().countryOptions
+        val countriesByCode = countries.associateBy { it.code }
+
+        assertEquals(219, countries.size)
+        assertEquals("Afghanistan", countries.first().name)
+        assertEquals("Zimbabwe", countries.last().name)
+        assertEquals("Anguilla", countriesByCode["AI"]?.name)
+        assertEquals("Turks and Caicos Islands", countriesByCode["TC"]?.name)
+        assertEquals("Virgin Islands (U.S.)", countriesByCode["VI"]?.name)
+    }
 
     @Test
     fun parseCustomerDetailsPayload() {

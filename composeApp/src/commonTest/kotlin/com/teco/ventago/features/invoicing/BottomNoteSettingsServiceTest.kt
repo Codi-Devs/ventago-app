@@ -21,6 +21,8 @@ import com.teco.ventago.features.invoicing.domain.InvoicingSettingsService
 import com.teco.ventago.features.invoicing.domain.InvoicingSettingsStore
 import com.teco.ventago.features.invoicing.domain.models.BottomNoteSettings
 import com.teco.ventago.features.invoicing.domain.models.BottomNoteSettingsRequest
+import com.teco.ventago.features.invoicing.domain.models.InvoicingSettings
+import com.teco.ventago.features.invoicing.domain.models.IncludeAddressOnInvoiceRequest
 import com.teco.ventago.features.product.data.repository.IProductsRepository
 import com.teco.ventago.features.product.domain.ProductService
 import com.teco.ventago.features.product.domain.model.Category
@@ -130,6 +132,97 @@ class BottomNoteSettingsServiceTest {
         assertFalse(store.keys().any { it.contains("invoicing_bottom_note_settings_cache") })
     }
 
+    @Test
+    fun explicitUpdateBottomNoteSettingsUsesUpdateRepositoryPath() = runTest {
+        val repository = FakeInvoicingSettingsRepository(remoteSettings = sampleSettings())
+        val businessService = fakeBusinessService().also {
+            it.business.value = sampleBusiness()
+        }
+        val service = InvoicingSettingsService(
+            repository = repository,
+            businessService = businessService,
+            authService = FakeAuthService(),
+            store = FakeInvoicingSettingsStore(),
+            json = json,
+            appScope = backgroundScope,
+        )
+
+        val request = BottomNoteSettingsRequest(
+            title = "Información de pago",
+            body = "<ol><li>ACH</li></ol>",
+            includeOnInvoice = false,
+        )
+
+        val updated = service.updateBottomNoteSettings(request)
+
+        assertNotNull(updated)
+        assertEquals(0, repository.createCalls)
+        assertEquals(1, repository.updateCalls)
+        assertEquals(request.body, service.bottomNoteSettings().value.settings?.body)
+        assertFalse(service.bottomNoteSettings().value.settings?.includeOnInvoice ?: true)
+    }
+
+    @Test
+    fun refreshInvoicingSettingsStoresAndLoadsCachedAddressPreference() = runTest {
+        val store = FakeInvoicingSettingsStore()
+        val businessService = fakeBusinessService().also {
+            it.business.value = sampleBusiness()
+        }
+        val remote = InvoicingSettings(includeAddressOnInvoice = true)
+        val service = InvoicingSettingsService(
+            repository = FakeInvoicingSettingsRepository(remoteInvoicingSettings = remote),
+            businessService = businessService,
+            authService = FakeAuthService(),
+            store = store,
+            json = json,
+            appScope = backgroundScope,
+        )
+
+        service.refreshInvoicingSettings()
+
+        assertTrue(service.invoicingSettings().value.settings.includeAddressOnInvoice)
+        assertFalse(service.invoicingSettings().value.refreshFailed)
+
+        val cachedService = InvoicingSettingsService(
+            repository = FakeInvoicingSettingsRepository(failRefresh = true),
+            businessService = businessService,
+            authService = FakeAuthService(),
+            store = store,
+            json = json,
+            appScope = backgroundScope,
+        )
+        cachedService.loadCachedInvoicingSettingsForCurrentBusiness()
+
+        assertTrue(cachedService.invoicingSettings().value.settings.includeAddressOnInvoice)
+        assertFalse(cachedService.invoicingSettings().value.refreshFailed)
+    }
+
+    @Test
+    fun updateIncludeAddressOnInvoiceUsesRepositoryPathAndUpdatesCache() = runTest {
+        val store = FakeInvoicingSettingsStore()
+        val repository = FakeInvoicingSettingsRepository(
+            remoteInvoicingSettings = InvoicingSettings(includeAddressOnInvoice = false),
+        )
+        val businessService = fakeBusinessService().also {
+            it.business.value = sampleBusiness()
+        }
+        val service = InvoicingSettingsService(
+            repository = repository,
+            businessService = businessService,
+            authService = FakeAuthService(),
+            store = store,
+            json = json,
+            appScope = backgroundScope,
+        )
+
+        service.refreshInvoicingSettings()
+        assertTrue(service.updateIncludeAddressOnInvoice(true))
+
+        assertEquals(1, repository.updateIncludeAddressCalls)
+        assertTrue(service.invoicingSettings().value.settings.includeAddressOnInvoice)
+        assertTrue(store.keys().any { it.contains("invoicing_settings_cache") })
+    }
+
     private fun fakeBusinessService(): BusinessService {
         val auth = FakeAuthService()
         val changes = FakeChangesManager()
@@ -191,9 +284,30 @@ class BottomNoteSettingsServiceTest {
     }
 
     private class FakeInvoicingSettingsRepository(
+        private val remoteInvoicingSettings: InvoicingSettings = InvoicingSettings(),
         private val remoteSettings: BottomNoteSettings? = null,
         private val failRefresh: Boolean = false,
     ) : IInvoicingSettingsRepository {
+        var createCalls = 0
+            private set
+        var updateCalls = 0
+            private set
+        var updateIncludeAddressCalls = 0
+            private set
+
+        override suspend fun getInvoicingSettings(businessId: Int): InvoicingSettings {
+            if (failRefresh) error("network failed")
+            return remoteInvoicingSettings
+        }
+
+        override suspend fun updateIncludeAddressOnInvoice(
+            businessId: Int,
+            request: IncludeAddressOnInvoiceRequest,
+        ): Boolean {
+            updateIncludeAddressCalls += 1
+            return true
+        }
+
         override suspend fun getBottomNoteSettings(businessId: Int): BottomNoteSettings? {
             if (failRefresh) error("network failed")
             return remoteSettings
@@ -202,20 +316,28 @@ class BottomNoteSettingsServiceTest {
         override suspend fun createBottomNoteSettings(
             businessId: Int,
             request: BottomNoteSettingsRequest,
-        ): BottomNoteSettings = BottomNoteSettings(
-            id = 1,
-            businessId = businessId,
-            title = request.title,
-            body = request.body,
-            includeOnInvoice = request.includeOnInvoice,
-        )
+        ): BottomNoteSettings {
+            createCalls += 1
+            return request.toSettings(businessId)
+        }
 
         override suspend fun updateBottomNoteSettings(
             businessId: Int,
             request: BottomNoteSettingsRequest,
-        ): BottomNoteSettings = createBottomNoteSettings(businessId, request)
+        ): BottomNoteSettings {
+            updateCalls += 1
+            return request.toSettings(businessId)
+        }
 
         override suspend fun deleteBottomNoteSettings(businessId: Int): Boolean = true
+
+        private fun BottomNoteSettingsRequest.toSettings(businessId: Int): BottomNoteSettings = BottomNoteSettings(
+            id = 1,
+            businessId = businessId,
+            title = title,
+            body = body,
+            includeOnInvoice = includeOnInvoice,
+        )
     }
 
     private class FakeAuthService : IAuthService {

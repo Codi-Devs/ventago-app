@@ -7,6 +7,9 @@ import com.teco.ventago.features.invoicing.data.repository.IInvoicingSettingsRep
 import com.teco.ventago.features.invoicing.domain.models.BottomNoteSettings
 import com.teco.ventago.features.invoicing.domain.models.BottomNoteSettingsRequest
 import com.teco.ventago.features.invoicing.domain.models.BottomNoteSettingsState
+import com.teco.ventago.features.invoicing.domain.models.InvoicingSettings
+import com.teco.ventago.features.invoicing.domain.models.InvoicingSettingsState
+import com.teco.ventago.features.invoicing.domain.models.IncludeAddressOnInvoiceRequest
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -39,6 +42,7 @@ class InvoicingSettingsService(
     private val json: Json,
     appScope: CoroutineScope,
 ) {
+    private val invoicingSettingsState = MutableStateFlow(InvoicingSettingsState())
     private val bottomNoteState = MutableStateFlow(BottomNoteSettingsState())
     private var loadedBusinessId: Int? = null
 
@@ -48,18 +52,58 @@ class InvoicingSettingsService(
                 val businessId = business?.businessId
                 if (businessId == null) {
                     loadedBusinessId = null
+                    invoicingSettingsState.value = InvoicingSettingsState()
                     bottomNoteState.value = BottomNoteSettingsState()
                 } else if (businessId != loadedBusinessId) {
+                    loadCachedInvoicingSettings(businessId)
                     loadCachedBottomNoteSettings(businessId)
                 }
             }
             .launchIn(appScope)
     }
 
+    fun invoicingSettings(): StateFlow<InvoicingSettingsState> = invoicingSettingsState.asStateFlow()
+
     fun bottomNoteSettings(): StateFlow<BottomNoteSettingsState> = bottomNoteState.asStateFlow()
+
+    fun loadCachedInvoicingSettingsForCurrentBusiness() {
+        businessId()?.let(::loadCachedInvoicingSettings)
+    }
 
     fun loadCachedBottomNoteSettingsForCurrentBusiness() {
         businessId()?.let(::loadCachedBottomNoteSettings)
+    }
+
+    suspend fun refreshInvoicingSettings(): InvoicingSettings {
+        if (!authService.isAuthenticated() || authService.getJwtToken().isNullOrBlank()) {
+            return invoicingSettingsState.value.settings
+        }
+        val businessId = businessId() ?: return invoicingSettingsState.value.settings
+        loadCachedInvoicingSettings(businessId)
+        return runCatching { repository.getInvoicingSettings(businessId) }
+            .onSuccess { settings ->
+                invoicingSettingsState.value = InvoicingSettingsState(settings = settings, refreshFailed = false)
+                storeCachedInvoicingSettings(businessId, settings)
+            }
+            .onFailure {
+                invoicingSettingsState.value = invoicingSettingsState.value.copy(refreshFailed = true)
+            }
+            .getOrDefault(invoicingSettingsState.value.settings)
+    }
+
+    suspend fun updateIncludeAddressOnInvoice(include: Boolean): Boolean {
+        if (!authService.isAuthenticated()) return false
+        val businessId = businessId() ?: return false
+        val updated = repository.updateIncludeAddressOnInvoice(
+            businessId,
+            IncludeAddressOnInvoiceRequest(includeAddressOnInvoice = include),
+        )
+        if (updated) {
+            val settings = invoicingSettingsState.value.settings.copy(includeAddressOnInvoice = include)
+            invoicingSettingsState.value = InvoicingSettingsState(settings = settings, refreshFailed = false)
+            storeCachedInvoicingSettings(businessId, settings)
+        }
+        return updated
     }
 
     suspend fun refreshBottomNoteSettings(): BottomNoteSettings? {
@@ -97,6 +141,15 @@ class InvoicingSettingsService(
         return settings
     }
 
+    suspend fun updateBottomNoteSettings(request: BottomNoteSettingsRequest): BottomNoteSettings? {
+        if (!authService.isAuthenticated()) return null
+        val businessId = businessId() ?: return null
+        val settings = repository.updateBottomNoteSettings(businessId, request)
+        bottomNoteState.value = BottomNoteSettingsState(settings = settings, refreshFailed = false)
+        storeCachedBottomNoteSettings(businessId, settings)
+        return settings
+    }
+
     suspend fun deleteBottomNoteSettings(): Boolean {
         if (!authService.isAuthenticated()) return false
         val businessId = businessId() ?: return false
@@ -114,6 +167,11 @@ class InvoicingSettingsService(
         bottomNoteState.value = BottomNoteSettingsState()
     }
 
+    fun clearInvoicingSettings() {
+        loadedBusinessId?.let(::clearCachedInvoicingSettings)
+        invoicingSettingsState.value = InvoicingSettingsState()
+    }
+
     private fun businessId(): Int? = businessService.business.value?.businessId
 
     private fun loadCachedBottomNoteSettings(businessId: Int) {
@@ -127,6 +185,20 @@ class InvoicingSettingsService(
         bottomNoteState.value = BottomNoteSettingsState(settings = parsed, refreshFailed = false)
     }
 
+    private fun loadCachedInvoicingSettings(businessId: Int) {
+        loadedBusinessId = businessId
+        val cached = store.string(invoicingSettingsCacheKey(businessId))
+        val parsed = cached?.let {
+            runCatching {
+                json.decodeFromString(InvoicingSettings.serializer(), it)
+            }.getOrNull()
+        }
+        invoicingSettingsState.value = InvoicingSettingsState(
+            settings = parsed ?: InvoicingSettings(),
+            refreshFailed = false,
+        )
+    }
+
     private fun storeCachedBottomNoteSettings(businessId: Int, settings: BottomNoteSettings) {
         runCatching {
             store.set(
@@ -136,13 +208,29 @@ class InvoicingSettingsService(
         }
     }
 
+    private fun storeCachedInvoicingSettings(businessId: Int, settings: InvoicingSettings) {
+        runCatching {
+            store.set(
+                invoicingSettingsCacheKey(businessId),
+                json.encodeToString(InvoicingSettings.serializer(), settings),
+            )
+        }
+    }
+
     private fun clearCachedBottomNoteSettings(businessId: Int) {
         store.deleteObject(cacheKey(businessId))
     }
 
+    private fun clearCachedInvoicingSettings(businessId: Int) {
+        store.deleteObject(invoicingSettingsCacheKey(businessId))
+    }
+
     private fun cacheKey(businessId: Int): String = "$CACHE_KEY_PREFIX.$businessId"
+
+    private fun invoicingSettingsCacheKey(businessId: Int): String = "$SETTINGS_CACHE_KEY_PREFIX.$businessId"
 
     private companion object {
         const val CACHE_KEY_PREFIX = "invoicing_bottom_note_settings_cache"
+        const val SETTINGS_CACHE_KEY_PREFIX = "invoicing_settings_cache"
     }
 }

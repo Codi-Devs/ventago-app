@@ -19,6 +19,7 @@ import com.teco.ventago.features.business.domain.BusinessService
 import com.teco.ventago.features.business.domain.model.BusinessAddress
 import com.teco.ventago.features.customers.domain.CustomerService
 import com.teco.ventago.features.financialProfile.domain.FinancialProfileService
+import com.teco.ventago.features.invoicing.domain.InvoiceHtmlSanitizer
 import com.teco.ventago.features.invoicing.domain.InvoicingSettingsService
 import com.teco.ventago.features.invoicing.domain.models.BottomNoteSettings
 import com.teco.ventago.features.invoicing.domain.models.BottomNoteSettingsRequest
@@ -253,6 +254,7 @@ class SettingsViewModel(
             orderService.clear()
             printerService.clear()
             invoicingSettingsService.clearBottomNoteSettings()
+            invoicingSettingsService.clearInvoicingSettings()
 
         }
 //        state.signOut.value = true
@@ -288,7 +290,13 @@ class SettingsViewModel(
                 quoteAdditionalInfoWasEdited = false,
                 defaultQuoteStyle = actualDefaultQuoteStyle,
                 quotePrefix = actualQuotePrefix,
-                defaultQuoteIncludePaymentButton = actualDefaultQuoteIncludePaymentButton
+                defaultQuoteIncludePaymentButton = actualDefaultQuoteIncludePaymentButton,
+                bottomNoteTitle = actualBottomNoteTitle,
+                bottomNoteBody = actualBottomNoteBody,
+                bottomNoteBodyWasEdited = false,
+                bottomNoteIncludeOnInvoice = actualBottomNoteIncludeOnInvoice,
+                bottomNoteTitleError = null,
+                bottomNoteBodyError = null,
             )
         }
     }
@@ -355,6 +363,79 @@ class SettingsViewModel(
         updateState { copy(bottomNoteIncludeOnInvoice = value) }
     }
 
+    fun updateBottomNoteIncludeOnInvoice(value: Boolean) {
+        val state = uiState.value
+        if (!state.canModifySettings ||
+            !state.invoicingEnabled ||
+            !state.bottomNoteConfigured ||
+            state.bottomNoteIncludeSaving ||
+            state.bottomNoteSettingsLoading
+        ) {
+            return
+        }
+        updateState {
+            copy(
+                bottomNoteIncludeOnInvoice = value,
+                bottomNoteIncludeSaving = true,
+            )
+        }
+        viewModelScope.launch(Dispatchers.IO) {
+            val saved = updateBottomNoteSettingsRequest(
+                title = state.actualBottomNoteTitle.ifBlank { state.bottomNoteTitle }.trim(),
+                body = InvoiceHtmlSanitizer.sanitizeRichTextHtmlForSave(
+                    draftHtml = state.actualBottomNoteBody.ifBlank { state.bottomNoteBody },
+                    latestEditorHtml = null,
+                ),
+                includeOnInvoice = value,
+            )
+            updateState {
+                if (saved != null) {
+                    copy(bottomNoteIncludeSaving = false)
+                } else {
+                    copy(
+                        bottomNoteIncludeOnInvoice = actualBottomNoteIncludeOnInvoice,
+                        bottomNoteIncludeSaving = false,
+                    )
+                }
+            }
+        }
+    }
+
+    fun updateIncludeCustomerAddressOnInvoice(value: Boolean) {
+        val state = uiState.value
+        if (!state.canModifySettings ||
+            !state.invoicingEnabled ||
+            state.includeCustomerAddressSaving ||
+            state.invoicingSettingsLoading
+        ) {
+            return
+        }
+        updateState {
+            copy(
+                includeCustomerAddressOnInvoice = value,
+                includeCustomerAddressSaving = true,
+            )
+        }
+        viewModelScope.launch(Dispatchers.IO) {
+            val updated = runCatching {
+                invoicingSettingsService.updateIncludeAddressOnInvoice(value)
+            }.getOrDefault(false)
+            updateState {
+                if (updated) {
+                    copy(
+                        actualIncludeCustomerAddressOnInvoice = value,
+                        includeCustomerAddressSaving = false,
+                    )
+                } else {
+                    copy(
+                        includeCustomerAddressOnInvoice = actualIncludeCustomerAddressOnInvoice,
+                        includeCustomerAddressSaving = false,
+                    )
+                }
+            }
+        }
+    }
+
     fun resetBottomNoteDraft() {
         updateState {
             copy(
@@ -384,6 +465,18 @@ class SettingsViewModel(
                 applyBottomNoteSettings(state.settings)
             }
         }
+        viewModelScope.launch {
+            invoicingSettingsService.invoicingSettings().collect { state ->
+                updateState {
+                    copy(
+                        actualIncludeCustomerAddressOnInvoice = state.settings.includeAddressOnInvoice,
+                        includeCustomerAddressOnInvoice = state.settings.includeAddressOnInvoice,
+                        invoicingSettingsLoading = false,
+                        includeCustomerAddressSaving = false,
+                    )
+                }
+            }
+        }
     }
 
     private fun refreshQuoteSettingsInBackground() {
@@ -393,9 +486,23 @@ class SettingsViewModel(
     }
 
     private fun refreshBottomNoteSettingsInBackground() {
+        invoicingSettingsService.loadCachedInvoicingSettingsForCurrentBusiness()
         invoicingSettingsService.loadCachedBottomNoteSettingsForCurrentBusiness()
+        updateState {
+            copy(
+                invoicingSettingsLoading = true,
+                bottomNoteSettingsLoading = true,
+            )
+        }
         viewModelScope.launch(Dispatchers.IO) {
-            invoicingSettingsService.refreshBottomNoteSettings()
+            runCatching { invoicingSettingsService.refreshInvoicingSettings() }
+            runCatching { invoicingSettingsService.refreshBottomNoteSettings() }
+            updateState {
+                copy(
+                    invoicingSettingsLoading = false,
+                    bottomNoteSettingsLoading = false,
+                )
+            }
         }
     }
 
@@ -474,6 +581,8 @@ class SettingsViewModel(
                         bottomNoteIncludeOnInvoice = false,
                         bottomNoteTitleError = null,
                         bottomNoteBodyError = null,
+                        bottomNoteSettingsLoading = false,
+                        bottomNoteIncludeSaving = false,
                     )
                 }
             } else {
@@ -492,16 +601,21 @@ class SettingsViewModel(
                     },
                     bottomNoteTitleError = null,
                     bottomNoteBodyError = null,
+                    bottomNoteSettingsLoading = false,
+                    bottomNoteIncludeSaving = false,
                 )
             }
         }
     }
 
-    fun saveBottomNoteSettings() {
+    fun saveBottomNoteSettings(latestBody: String? = null) {
         val state = uiState.value
         if (!state.canModifySettings || !state.invoicingEnabled) return
         val title = state.bottomNoteTitle.trim()
-        val body = state.bottomNoteBody.trim()
+        val body = InvoiceHtmlSanitizer.sanitizeRichTextHtmlForSave(
+            draftHtml = state.bottomNoteBody,
+            latestEditorHtml = latestBody,
+        )
         val normalizedBody = normalizeHtmlForComparison(body)
         val titleError = when {
             title.isBlank() -> "Ingresa un título"
@@ -517,17 +631,18 @@ class SettingsViewModel(
             updateState { copy(bottomNoteTitleError = titleError, bottomNoteBodyError = bodyError) }
             return
         }
+        if (latestBody != null && latestBody != state.bottomNoteBody) {
+            updateState {
+                copy(
+                    bottomNoteBody = latestBody,
+                    bottomNoteBodyWasEdited = true,
+                    bottomNoteBodyError = null,
+                )
+            }
+        }
         showLoading()
         viewModelScope.launch(Dispatchers.IO) {
-            val saved = runCatching {
-                invoicingSettingsService.saveBottomNoteSettings(
-                    BottomNoteSettingsRequest(
-                        title = title,
-                        body = body,
-                        includeOnInvoice = state.bottomNoteIncludeOnInvoice,
-                    ),
-                )
-            }.getOrNull()
+            val saved = saveBottomNoteSettingsRequest(title, body, state.bottomNoteIncludeOnInvoice)
             if (saved != null) {
                 showSuccess()
             } else {
@@ -535,6 +650,34 @@ class SettingsViewModel(
             }
         }
     }
+
+    private suspend fun saveBottomNoteSettingsRequest(
+        title: String,
+        body: String,
+        includeOnInvoice: Boolean,
+    ): BottomNoteSettings? = runCatching {
+        invoicingSettingsService.saveBottomNoteSettings(
+            BottomNoteSettingsRequest(
+                title = title,
+                body = body,
+                includeOnInvoice = includeOnInvoice,
+            ),
+        )
+    }.getOrNull()
+
+    private suspend fun updateBottomNoteSettingsRequest(
+        title: String,
+        body: String,
+        includeOnInvoice: Boolean,
+    ): BottomNoteSettings? = runCatching {
+        invoicingSettingsService.updateBottomNoteSettings(
+            BottomNoteSettingsRequest(
+                title = title,
+                body = body,
+                includeOnInvoice = includeOnInvoice,
+            ),
+        )
+    }.getOrNull()
 
     fun deleteBottomNoteSettings() {
         if (!uiState.value.canModifySettings || !uiState.value.invoicingEnabled) return

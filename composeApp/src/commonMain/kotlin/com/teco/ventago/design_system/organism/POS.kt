@@ -64,6 +64,8 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.Switch
+import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.rememberModalBottomSheetState
@@ -1494,14 +1496,10 @@ private fun AdditionalInfoSheet(
                         .padding(horizontal = 16.dp, vertical = 8.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Checkbox(
-                        checked = uiState.includeBottomNote ?: false,
-                        onCheckedChange = viewModel::setIncludeBottomNote
-                    )
                     Column(
                         modifier = Modifier
                             .weight(1f)
-                            .padding(start = 8.dp)
+                            .padding(end = 12.dp)
                     ) {
                         Text(
                             text = "Incluir texto predeterminado al pie de la factura",
@@ -1518,6 +1516,15 @@ private fun AdditionalInfoSheet(
                             )
                         }
                     }
+                    Switch(
+                        checked = uiState.includeBottomNote ?: false,
+                        onCheckedChange = viewModel::setIncludeBottomNote,
+                        colors = SwitchDefaults.colors(
+                            checkedThumbColor = MaterialTheme.colorScheme.onSecondary,
+                            checkedTrackColor = MaterialTheme.colorScheme.secondary,
+                            checkedBorderColor = MaterialTheme.colorScheme.secondary,
+                        )
+                    )
                 }
             }
         }

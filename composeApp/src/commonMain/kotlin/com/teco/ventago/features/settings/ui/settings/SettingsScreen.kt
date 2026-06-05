@@ -34,6 +34,8 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Surface
+import androidx.compose.material3.Switch
+import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.rememberModalBottomSheetState
@@ -421,13 +423,30 @@ fun SettingsScreen(
                         text = "Preferencias de Facturación",
                         style = titleMedium()
                     )
-                    SettingsTextButton(
-                        label = "Texto predeterminado para facturas",
-                        onClick = {
-                            viewModel.resetBottomNoteDraft()
-                            showBottomNoteSheet = true
-                        }
-                    )
+                    if (uiState.bottomNoteSettingsLoading || uiState.invoicingSettingsLoading) {
+                        BottomNoteSettingsSkeleton()
+                    } else {
+                        SettingsTextButton(
+                            label = "Texto predeterminado para facturas",
+                            onClick = {
+                                viewModel.resetBottomNoteDraft()
+                                showBottomNoteSheet = true
+                            }
+                        )
+                        BottomNoteIncludeSwitchRow(
+                            checked = uiState.bottomNoteIncludeOnInvoice,
+                            enabled = uiState.canModifySettings && uiState.bottomNoteConfigured && !uiState.bottomNoteIncludeSaving,
+                            loading = uiState.bottomNoteIncludeSaving,
+                            onCheckedChange = viewModel::updateBottomNoteIncludeOnInvoice,
+                        )
+                        Divider(modifier = Modifier.padding(horizontal = 16.dp))
+                        IncludeCustomerAddressSwitchRow(
+                            checked = uiState.includeCustomerAddressOnInvoice,
+                            enabled = uiState.canModifySettings && !uiState.includeCustomerAddressSaving,
+                            loading = uiState.includeCustomerAddressSaving,
+                            onCheckedChange = viewModel::updateIncludeCustomerAddressOnInvoice,
+                        )
+                    }
                 }
             }
 
@@ -591,14 +610,12 @@ fun SettingsScreen(
                 BottomNoteSettingsSheet(
                     title = uiState.bottomNoteTitle,
                     body = uiState.bottomNoteBody,
-                    includeOnInvoice = uiState.bottomNoteIncludeOnInvoice,
                     configured = uiState.bottomNoteConfigured,
                     titleError = uiState.bottomNoteTitleError,
                     bodyError = uiState.bottomNoteBodyError,
                     enabled = uiState.canModifySettings,
                     onTitleChange = viewModel::setBottomNoteTitle,
                     onBodyChange = viewModel::setBottomNoteBody,
-                    onIncludeChange = viewModel::setBottomNoteIncludeOnInvoice,
                     onSave = viewModel::saveBottomNoteSettings,
                     onDelete = viewModel::deleteBottomNoteSettings,
                     onDismiss = {
@@ -629,6 +646,142 @@ fun SettingsScreen(
 
 
 
+}
+
+@Composable
+private fun BottomNoteSettingsSkeleton() {
+    val brush = shimmerBrush()
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp, vertical = 12.dp),
+        verticalArrangement = Arrangement.spacedBy(12.dp),
+    ) {
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(48.dp)
+                .background(brush, RoundedCornerShape(8.dp))
+        )
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Column(modifier = Modifier.weight(1f)) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth(0.7f)
+                        .height(14.dp)
+                        .background(brush, RoundedCornerShape(50))
+                )
+                Spacer(Modifier.height(8.dp))
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth(0.9f)
+                        .height(12.dp)
+                        .background(brush, RoundedCornerShape(50))
+                )
+            }
+            Box(
+                modifier = Modifier
+                    .width(52.dp)
+                    .height(32.dp)
+                    .background(brush, RoundedCornerShape(50))
+            )
+        }
+    }
+}
+
+@Composable
+private fun BottomNoteIncludeSwitchRow(
+    checked: Boolean,
+    enabled: Boolean,
+    loading: Boolean,
+    onCheckedChange: (Boolean) -> Unit,
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(start = 16.dp, end = 16.dp, top = 4.dp, bottom = 14.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                text = "Incluir texto predeterminado",
+                style = bodyMediumBold(),
+            )
+            Text(
+                text = "Se agregará al pie de las facturas.",
+                style = bodySmall(color = MaterialTheme.colorScheme.onSurfaceVariant),
+                modifier = Modifier.padding(top = 2.dp),
+            )
+        }
+        if (loading) {
+            Box(
+                modifier = Modifier
+                    .width(52.dp)
+                    .height(32.dp)
+                    .background(shimmerBrush(), RoundedCornerShape(50))
+            )
+        } else {
+            Switch(
+                checked = checked,
+                onCheckedChange = onCheckedChange,
+                enabled = enabled,
+                colors = SwitchDefaults.colors(
+                    checkedThumbColor = MaterialTheme.colorScheme.onSecondary,
+                    checkedTrackColor = MaterialTheme.colorScheme.secondary,
+                    checkedBorderColor = MaterialTheme.colorScheme.secondary,
+                )
+            )
+        }
+    }
+}
+
+@Composable
+private fun IncludeCustomerAddressSwitchRow(
+    checked: Boolean,
+    enabled: Boolean,
+    loading: Boolean,
+    onCheckedChange: (Boolean) -> Unit,
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(start = 16.dp, end = 16.dp, top = 14.dp, bottom = 14.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                text = "Incluir dirección del cliente en la factura",
+                style = bodyMediumBold(),
+            )
+            Text(
+                text = "Al activar esta opción, la dirección de facturación del cliente aparecerá en el archivo de factura.",
+                style = bodySmall(color = MaterialTheme.colorScheme.onSurfaceVariant),
+                modifier = Modifier.padding(top = 2.dp),
+            )
+        }
+        if (loading) {
+            Box(
+                modifier = Modifier
+                    .width(52.dp)
+                    .height(32.dp)
+                    .background(shimmerBrush(), RoundedCornerShape(50))
+            )
+        } else {
+            Switch(
+                checked = checked,
+                onCheckedChange = onCheckedChange,
+                enabled = enabled,
+                colors = SwitchDefaults.colors(
+                    checkedThumbColor = MaterialTheme.colorScheme.onSecondary,
+                    checkedTrackColor = MaterialTheme.colorScheme.secondary,
+                    checkedBorderColor = MaterialTheme.colorScheme.secondary,
+                )
+            )
+        }
+    }
 }
 
 @Composable
