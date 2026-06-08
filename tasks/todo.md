@@ -1,3 +1,25 @@
+# Production AAB Orders URL Guard TODO
+
+## Plan
+- [x] Add a release-bundle sanity check that reads the active `ReleaseConfigs.ordersBasePath` value from `Platform.kt`.
+- [x] Fail Android AAB build tasks when the release orders URL is anything other than `https://invoice-vg.tecodigi.com`.
+- [x] Verify the guard passes with the production URL and fails with a temporary local-IP value.
+
+## Verification Gates
+- [x] `./gradlew --no-build-cache --no-configuration-cache :composeApp:validateReleaseOrdersBasePath`
+- [x] `./gradlew --no-build-cache --no-configuration-cache :composeApp:bundleRelease --dry-run`
+- [x] Temporary local-IP negative check with `./gradlew --no-build-cache --no-configuration-cache :composeApp:validateReleaseOrdersBasePath`
+- [x] `./gradlew --configuration-cache :composeApp:validateReleaseOrdersBasePath`
+- [x] Repeated `./gradlew --configuration-cache :composeApp:validateReleaseOrdersBasePath` to verify cache reuse.
+- [x] `./gradlew --configuration-cache :composeApp:bundleRelease --dry-run`
+
+## Review Notes
+- Added `validateReleaseOrdersBasePath` in `composeApp/build.gradle.kts`; it parses only the uncommented `ReleaseConfigs.ordersBasePath` constant and requires `https://invoice-vg.tecodigi.com`.
+- Hooked the guard into `preReleaseBuild` and release bundle tasks, so `:composeApp:bundleRelease` runs the check before AAB packaging work.
+- Positive validation passed with the production URL. A temporary `http://192.168.0.3:5001` release URL failed with `Release AAB blocked... It looks like a local development URL`, then `Platform.kt` was restored to production and the positive validation passed again.
+- Correction: converted the validation from a closure-based `DefaultTask` action to a typed `ValidateReleaseOrdersBasePathTask` with Gradle `RegularFileProperty` and `Property<String>` inputs so configuration cache can serialize the task state.
+- Configuration-cache verification now stores and reuses successfully for the direct validation task; the temporary local-IP negative check also fails while reusing configuration cache. `bundleRelease --dry-run` stores configuration cache and keeps the guard before `preReleaseBuild`.
+
 # Spanish Country Catalog TODO
 
 ## Plan

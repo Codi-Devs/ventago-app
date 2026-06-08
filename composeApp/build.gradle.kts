@@ -1,4 +1,14 @@
+import org.gradle.api.GradleException
+import org.gradle.api.DefaultTask
+import org.gradle.api.file.RegularFileProperty
+import org.gradle.api.provider.Property
+import org.gradle.api.tasks.Input
+import org.gradle.api.tasks.InputFile
+import org.gradle.api.tasks.PathSensitive
+import org.gradle.api.tasks.PathSensitivity
+import org.gradle.api.tasks.TaskAction
 import org.jetbrains.kotlin.gradle.dsl.JvmTarget
+import java.net.URI
 
 plugins {
     alias(libs.plugins.kotlinMultiplatform)
@@ -10,6 +20,64 @@ plugins {
     alias(libs.plugins.ksp)
     alias(libs.plugins.room)
     alias(libs.plugins.kotlinSerialization)
+}
+
+val productionOrdersBasePath = "https://invoice-vg.tecodigi.com"
+
+abstract class ValidateReleaseOrdersBasePathTask : DefaultTask() {
+    @get:InputFile
+    @get:PathSensitive(PathSensitivity.RELATIVE)
+    abstract val platformConfig: RegularFileProperty
+
+    @get:Input
+    abstract val expectedOrdersBasePath: Property<String>
+
+    init {
+        group = "verification"
+        description = "Fails release AAB builds when ReleaseConfigs.ordersBasePath is not production."
+    }
+
+    @TaskAction
+    fun validate() {
+        val platformConfigFile = platformConfig.get().asFile
+        val configText = platformConfigFile.readText()
+        val releaseConfigsBlock = Regex(
+            pattern = """object\s+ReleaseConfigs\s*\{(.*?)^\}""",
+            options = setOf(RegexOption.DOT_MATCHES_ALL, RegexOption.MULTILINE)
+        ).find(configText)?.groupValues?.get(1)
+            ?: throw GradleException("Release AAB blocked: ReleaseConfigs was not found in $platformConfigFile.")
+
+        val configuredOrdersBasePath = Regex(
+            pattern = "(?m)^\\s*const\\s+val\\s+ordersBasePath\\s*:\\s*String\\s*=\\s*\"([^\"]+)\""
+        ).find(releaseConfigsBlock)?.groupValues?.get(1)?.trimEnd('/')
+            ?: throw GradleException("Release AAB blocked: ReleaseConfigs.ordersBasePath was not found in $platformConfigFile.")
+
+        val expectedOrdersBasePath = expectedOrdersBasePath.get().trimEnd('/')
+        if (configuredOrdersBasePath != expectedOrdersBasePath) {
+            val host = runCatching { URI(configuredOrdersBasePath).host.orEmpty() }.getOrDefault("")
+            val localUrlHint = if (isLocalBuildHost(host)) {
+                " It looks like a local development URL."
+            } else {
+                ""
+            }
+            throw GradleException(
+                "Release AAB blocked: ReleaseConfigs.ordersBasePath is \"$configuredOrdersBasePath\". " +
+                    "Expected \"$expectedOrdersBasePath\".$localUrlHint"
+            )
+        }
+    }
+
+    private fun isLocalBuildHost(host: String): Boolean =
+        host.equals("localhost", ignoreCase = true) ||
+            host == "127.0.0.1" ||
+            host.startsWith("192.168.") ||
+            host.startsWith("10.") ||
+            Regex("""^172\.(1[6-9]|2\d|3[01])\.""").containsMatchIn(host)
+}
+
+val validateReleaseOrdersBasePath by tasks.registering(ValidateReleaseOrdersBasePathTask::class) {
+    platformConfig.set(layout.projectDirectory.file("src/commonMain/kotlin/com/teco/ventago/Platform.kt"))
+    expectedOrdersBasePath.set(productionOrdersBasePath)
 }
 
 kotlin {
@@ -139,8 +207,8 @@ android {
         applicationId = "com.teco.ventago"
         minSdk = libs.versions.android.minSdk.get().toInt()
         targetSdk = libs.versions.android.targetSdk.get().toInt()
-        versionCode = 40
-        versionName = "1.5.3"
+        versionCode = 41
+        versionName = "1.5.4"
     }
     packaging {
         resources {
@@ -171,4 +239,10 @@ dependencies {
     add("kspAndroid", libs.androidx.room.compiler)
     add("kspIosSimulatorArm64", libs.androidx.room.compiler)
     add("kspIosArm64", libs.androidx.room.compiler)
+}
+
+tasks.configureEach {
+    if (name == "preReleaseBuild" || name == "bundleRelease" || (name.startsWith("bundle") && name.endsWith("Release"))) {
+        dependsOn(validateReleaseOrdersBasePath)
+    }
 }

@@ -1,5 +1,6 @@
 # Lessons Learned
 
+- En tareas Gradle que deben ser compatibles con configuration cache, no uses `doLast`/closures que capturan funciones o propiedades del script Kotlin DSL; define una clase de tarea tipada con `@Input`/`@InputFile` y `@TaskAction` para que Gradle serialice solo estado declarativo.
 - En flujos POS donde la creación de la orden y la facturación son resultados distintos, no derives la UX final solo desde `invoiceStatus` ni conviertas `NONE` en `FAILED`: normaliza `invoice_warning_code/message`, resuelve una política compartida de post-creación y bloquea/permite acciones de factura explícitamente según esa política.
 - En `SuccessScreen` de POS, si una acción de factura no está permitida por la política de warning/fallo, no la dejes visible en estado deshabilitado si negocio espera ocultarla: para descarga de factura, ocultar la card completa evita sugerir que existe un PDF cuando la factura no fue generada.
 - En pantallas POS que muestran “cliente” en resumen/carrito, no asumas que toda identidad facturable vive en `selectedCustomer`: si el flujo soporta consumidor final tipeado, deriva un modelo de display compartido desde `finalName`/documento y úsalo en UI sin convertirlo artificialmente en cliente guardado.
