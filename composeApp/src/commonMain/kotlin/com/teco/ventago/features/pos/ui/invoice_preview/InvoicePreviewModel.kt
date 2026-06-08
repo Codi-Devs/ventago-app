@@ -2,6 +2,7 @@ package com.teco.ventago.features.pos.ui.invoice_preview
 
 import com.teco.ventago.features.branches.domain.model.Branch
 import com.teco.ventago.features.business.domain.model.Business
+import com.teco.ventago.features.customers.domain.models.CustomerTaxRetentionCatalog
 import com.teco.ventago.features.pos.domain.models.CartLine
 import com.teco.ventago.features.pos.ui.viewmodel.CartCalc
 import com.teco.ventago.features.pos.ui.viewmodel.InstallmentUI
@@ -12,6 +13,7 @@ import kotlinx.datetime.LocalDateTime
 import kotlinx.datetime.TimeZone
 import kotlinx.datetime.toLocalDateTime
 import kotlin.math.roundToInt
+import kotlin.math.roundToLong
 
 data class InvoicePreview(
     val issuer: InvoicePreviewIssuer,
@@ -21,6 +23,7 @@ data class InvoicePreview(
     val items: List<InvoicePreviewItem>,
     val itbmsBreakdown: List<InvoicePreviewTaxBreakdown>,
     val payments: List<InvoicePreviewPayment>,
+    val retention: InvoicePreviewRetention?,
     val totals: InvoicePreviewTotals,
     val bottomNote: InvoicePreviewBottomNote?,
 )
@@ -81,6 +84,11 @@ data class InvoicePreviewPayment(
     val amountCents: Long,
 )
 
+data class InvoicePreviewRetention(
+    val label: String,
+    val amountCents: Long,
+)
+
 data class InvoicePreviewTotals(
     val netTotalCents: Long,
     val exemptItbmsCents: Long,
@@ -118,6 +126,24 @@ object InvoicePreviewBuilder {
             .getOrNull(state.selectedBillingPointIndex)
             ?.billingPoint
             .orEmpty()
+        val totals = InvoicePreviewTotals(
+            netTotalCents = summary.subtotal,
+            exemptItbmsCents = previewItems
+                .filter { state.taxExempt || it.taxRatePercent == 0 }
+                .sumOf { it.taxableBaseCents },
+            taxableItbmsCents = previewItems
+                .filter { !state.taxExempt && it.taxRatePercent > 0 }
+                .sumOf { it.taxableBaseCents },
+            itbmsCents = summary.itbms,
+            iscCents = summary.isc,
+            otiCents = summary.oti,
+            totalTaxCents = summary.tax,
+            discountCents = summary.globalDiscount,
+            freightCents = globalChargeParts.freightCents,
+            insuranceCents = globalChargeParts.insuranceCents,
+            otherChargesCents = globalChargeParts.otherChargesCents,
+            totalCents = summary.totalBeforeTip,
+        )
 
         return InvoicePreview(
             issuer = InvoicePreviewIssuer(
@@ -150,24 +176,8 @@ object InvoicePreviewBuilder {
             items = previewItems,
             itbmsBreakdown = buildItbmsBreakdown(previewItems),
             payments = buildPayments(state),
-            totals = InvoicePreviewTotals(
-                netTotalCents = summary.subtotal,
-                exemptItbmsCents = previewItems
-                    .filter { state.taxExempt || it.taxRatePercent == 0 }
-                    .sumOf { it.taxableBaseCents },
-                taxableItbmsCents = previewItems
-                    .filter { !state.taxExempt && it.taxRatePercent > 0 }
-                    .sumOf { it.taxableBaseCents },
-                itbmsCents = summary.itbms,
-                iscCents = summary.isc,
-                otiCents = summary.oti,
-                totalTaxCents = summary.tax,
-                discountCents = summary.globalDiscount,
-                freightCents = globalChargeParts.freightCents,
-                insuranceCents = globalChargeParts.insuranceCents,
-                otherChargesCents = globalChargeParts.otherChargesCents,
-                totalCents = summary.totalBeforeTip,
-            ),
+            retention = buildRetention(state, totals.itbmsCents),
+            totals = totals,
             bottomNote = buildBottomNote(state),
         )
     }
@@ -260,6 +270,26 @@ object InvoicePreviewBuilder {
             )
         }
         return manualPayments + installments
+    }
+
+    private fun buildRetention(state: PosState, itbmsCents: Long): InvoicePreviewRetention? {
+        if (itbmsCents <= 0L) return null
+        val option = CustomerTaxRetentionCatalog.options.getOrNull(state.retentionCodeIndex)
+            ?: return null
+        val normalizedCode = CustomerTaxRetentionCatalog.normalizeCode(option.code)
+        if (normalizedCode.isEmpty()) return null
+        val rate = when {
+            option.defaultRate != null -> option.defaultRate.toDouble()
+            normalizedCode == "8" -> state.retentionAmount.toDoubleOrNull()
+            else -> null
+        } ?: return null
+        if (rate <= 0.0) return null
+        val amountCents = (itbmsCents * rate / 100.0).roundToLong()
+        if (amountCents <= 0L) return null
+        return InvoicePreviewRetention(
+            label = option.label,
+            amountCents = amountCents,
+        )
     }
 
     private data class GlobalChargeParts(

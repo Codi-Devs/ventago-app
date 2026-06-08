@@ -85,7 +85,7 @@ fun InvoicePreviewScreen(
         ReceptorAndMetaCard(preview)
         ItemsCard(preview.items)
         TaxAndPaymentCard(preview)
-        TotalsCard(preview.totals)
+        TotalsCard(preview)
         preview.bottomNote?.let { BottomNoteCard(it) }
         OutlinedButtonM(
             onClick = onBack,
@@ -310,11 +310,63 @@ private fun TaxAndPaymentCard(preview: InvoicePreview) {
                 InfoRow(payment.label, money(payment.amountCents))
             }
         }
+        preview.retention?.let { retention ->
+            Divider(Modifier.padding(vertical = 12.dp))
+            RetentionSection(retention)
+        }
     }
 }
 
 @Composable
-private fun TotalsCard(totals: InvoicePreviewTotals) {
+private fun RetentionSection(retention: InvoicePreviewRetention) {
+    SectionTitle("Retención", Icons.Outlined.Info)
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .background(
+                MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.32f),
+                RoundedCornerShape(2.dp),
+            )
+            .padding(horizontal = 8.dp, vertical = 6.dp),
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(
+            "Objeto de retención",
+            style = labelSmall(MaterialTheme.colorScheme.onSurface),
+            modifier = Modifier.weight(1f),
+        )
+        Text(
+            "Valor",
+            style = labelSmall(MaterialTheme.colorScheme.onSurface),
+            textAlign = TextAlign.End,
+            modifier = Modifier.width(86.dp),
+        )
+    }
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 8.dp, vertical = 6.dp),
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        verticalAlignment = Alignment.Top,
+    ) {
+        Text(
+            retention.label,
+            style = bodyMedium(),
+            modifier = Modifier.weight(1f),
+        )
+        Text(
+            money(retention.amountCents),
+            style = bodyMedium(),
+            textAlign = TextAlign.End,
+            modifier = Modifier.width(86.dp),
+        )
+    }
+}
+
+@Composable
+private fun TotalsCard(preview: InvoicePreview) {
+    val totals = preview.totals
     PreviewCard {
         SectionTitle("Totales", Icons.Outlined.Info)
         TotalRow("Total Neto", totals.netTotalCents)
@@ -328,6 +380,9 @@ private fun TotalsCard(totals: InvoicePreviewTotals) {
         if (totals.freightCents > 0) TotalRow("Acarreos", totals.freightCents)
         if (totals.insuranceCents > 0) TotalRow("Seguros", totals.insuranceCents)
         if (totals.otherChargesCents > 0) TotalRow("Otros Cargos", totals.otherChargesCents)
+        preview.retention?.let { retention ->
+            TotalRow("Retención", retention.amountCents)
+        }
         Divider(Modifier.padding(vertical = 10.dp))
         Row(
             modifier = Modifier.fillMaxWidth(),

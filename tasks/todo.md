@@ -1,3 +1,21 @@
+# POS Invoice Preview Retention TODO
+
+## Plan
+- [x] Extend the invoice preview model/builder with a retention row derived from selected retention code/rate and ITBMS amount.
+- [x] Render the retention message and amount under the payment form in `InvoicePreviewScreen`.
+- [x] Render the same retention amount in the totals breakdown before the final total.
+- [x] Add focused regression coverage and run targeted verification.
+
+## Verification Gates
+- [x] `./gradlew --no-build-cache --no-configuration-cache :composeApp:testDebugUnitTest --tests com.teco.ventago.features.pos.InvoicePreviewBuilderTest`
+- [x] `./gradlew --no-build-cache --no-configuration-cache :composeApp:compileKotlinMetadata :composeApp:compileDebugKotlinAndroid`
+
+## Review Notes
+- `InvoicePreviewBuilder` now derives an optional retention row from the selected retention catalog entry and applies the configured rate over the computed ITBMS amount.
+- `InvoicePreviewScreen` renders the retention block directly under `Forma de Pago`, with the retention object/message on the left and formatted retention amount on the right.
+- Added a regression test for the 50% state retention case where `$0.60` ITBMS produces `$0.30` retention, and verified the default preview does not render a retention row.
+- Correction: totals breakdown now also lists `Retención` before the final `Total`, and the regression test confirms the invoice total remains unchanged.
+
 # Production AAB Orders URL Guard TODO
 
 ## Plan

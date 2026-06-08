@@ -130,6 +130,38 @@ class InvoicePreviewBuilderTest {
     }
 
     @Test
+    fun includesRetentionAppliedOverItbmsAmount() {
+        val preview = InvoicePreviewBuilder.build(
+            state = baseState(
+                cart = listOf(
+                    CartLine(
+                        lineId = "line-1",
+                        itemId = 1,
+                        name = "Correo empresarial",
+                        baseUnitPrice = 857,
+                        quantity = 1.0,
+                        tax = Tax(id = 7, name = "ITBMS", rateBps = 700),
+                    )
+                ),
+                retentionCodeIndex = 2,
+            ),
+            business = business(),
+        )
+
+        assertEquals(60, preview.totals.itbmsCents)
+        assertEquals("Pago por venta de bienes/servicios al estado 50%", preview.retention?.label)
+        assertEquals(30, preview.retention?.amountCents)
+        assertEquals(917, preview.totals.totalCents)
+
+        val withoutRetention = InvoicePreviewBuilder.build(
+            state = baseState(),
+            business = business(),
+        )
+
+        assertEquals(null, withoutRetention.retention)
+    }
+
+    @Test
     fun includesDiscountsAndGlobalChargesOnlyWhenPositive() {
         val preview = InvoicePreviewBuilder.build(
             state = baseState(
@@ -249,6 +281,8 @@ class InvoicePreviewBuilderTest {
         globalDiscountFixedCents: Long = 0L,
         bottomNoteSettings: BottomNoteSettings? = null,
         includeBottomNote: Boolean? = null,
+        retentionCodeIndex: Int = 0,
+        retentionAmount: String = "",
     ): PosState {
         return PosState(
             items = items,
@@ -268,6 +302,8 @@ class InvoicePreviewBuilderTest {
             globalDiscountFixedCents = globalDiscountFixedCents,
             bottomNoteSettings = bottomNoteSettings,
             includeBottomNote = includeBottomNote,
+            retentionCodeIndex = retentionCodeIndex,
+            retentionAmount = retentionAmount,
         )
     }
 
