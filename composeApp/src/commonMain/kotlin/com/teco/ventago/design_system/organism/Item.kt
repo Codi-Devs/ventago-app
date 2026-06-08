@@ -145,7 +145,7 @@ fun ItemScreenContent(
 ) {
     val analytics = koinInject<AnalyticsService>()
     var showHelpDialog by remember { mutableStateOf(false) }
-    val loadingSheetState = rememberModalBottomSheetState(confirmValueChange = { false })
+    val loadingSheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     val scope = rememberCoroutineScope()
 
     val uiState by viewModel.uiState.collectAsState()

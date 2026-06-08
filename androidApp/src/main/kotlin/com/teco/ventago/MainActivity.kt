@@ -24,7 +24,7 @@ import com.teco.ventago.utils.AutocompleteLauncher
 import org.koin.mp.KoinPlatform.getKoin
 
 
-class MainActivity : ComponentActivity() {
+class MainActivity : ComponentActivity(), NotificationPermissionRequester {
 
     private val requestPermissionLauncher = registerForActivityResult(
         ActivityResultContracts.RequestPermission(),
@@ -81,7 +81,7 @@ class MainActivity : ComponentActivity() {
         }
     }
 
-    fun askNotificationPermission() {
+    override fun askNotificationPermission() {
         // This is only necessary for API level >= 33 (TIRAMISU)
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
             if (ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS) ==

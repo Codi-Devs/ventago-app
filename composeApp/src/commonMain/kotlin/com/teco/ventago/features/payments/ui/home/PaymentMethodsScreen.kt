@@ -182,7 +182,7 @@ fun OnboardingPaymentScreen(
     onExitMethodRoute: () -> Unit = {},
 ) {
     val uiState by viewModel.uiState.collectAsState()
-    val loadingSheetState = rememberModalBottomSheetState(confirmValueChange = { false })
+    val loadingSheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     val snackbarService: SnackbarService = koinInject()
 
     LaunchedEffect(isMethodRoute, methodRoute) {

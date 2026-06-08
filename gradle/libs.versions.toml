@@ -1,45 +1,45 @@
 [versions]
-agp = "8.11.2"
-android-compileSdk = "36"
+agp = "9.1.0"
+android-compileSdk = "37"
 android-minSdk = "24"
-android-targetSdk = "36"
-androidx-activity = "1.11.0"
+android-targetSdk = "37"
+androidx-activity = "1.13.0"
 androidx-appcompat = "1.7.1"
-androidx-core = "1.17.0"
+androidx-core = "1.19.0"
 androidx-espresso = "3.7.0"
-androidx-lifecycle = "2.9.4"
+androidx-lifecycle = "2.10.0"
 androidx-testExt = "1.3.0"
-composeMultiplatform = "1.9.0"
-backhandlerCompose = "1.9.0"
-navigationCompose = "2.9.0-beta04"
+composeMultiplatform = "1.11.1"
+backhandlerCompose = "1.11.1"
+navigationCompose = "2.9.2"
 junit = "4.13.2"
-kotlin = "2.2.20"
-firebase = "2.2.0"
-firebase-bom = "33.10.0"
-koinBom = "4.1.0"
-ktorClientCore = "2.3.13"
-androidx-room = "2.7.2"
-ksp = "2.2.0-2.0.2"
-cameraCamera2 = "1.4.2"
-coilCompose = "3.1.0"
-google-play-services = "4.4.2"
-firebase-crashlytics-plugin = "3.0.3"
+kotlin = "2.4.0"
+firebase = "2.4.0"
+firebase-bom = "34.14.1"
+koinBom = "4.2.1"
+ktorClientCore = "3.5.0"
+androidx-room = "2.8.4"
+ksp = "2.3.9"
+cameraCamera2 = "1.6.1"
+coilCompose = "3.4.0"
+google-play-services = "4.4.4"
+firebase-crashlytics-plugin = "3.0.7"
 playServicesMlkitBarcodeScanning = "18.3.1"
 richeditorCompose = "1.0.0-rc13"
-sqlite = "2.5.2"
+sqlite = "2.6.2"
 
-compottie="2.0.0-rc04"
-credentialsPlayServicesAuth = "1.3.0"
+compottie="2.2.1"
+credentialsPlayServicesAuth = "1.6.0"
 fingerprintAndroid = "2.2.0"
-googleid = "1.1.1"
+googleid = "1.2.0"
 imagekitAndroid = "3.0.1"
-googleAndroidPlaces = "4.4.1"
+googleAndroidPlaces = "5.2.0"
 accompanist-permissions = "0.37.3"
 qrGen = "3.0.1"
 
-kotlinxCoroutinesCore = "1.10.1"
-kotlinxDatetime = "0.6.0"
-kotlinxSerializationJson = "1.6.3"
+kotlinxCoroutinesCore = "1.11.0"
+kotlinxDatetime = "0.8.0-0.6.x-compat"
+kotlinxSerializationJson = "1.11.0"
 
 [libraries]
 kotlin-test = { module = "org.jetbrains.kotlin:kotlin-test", version.ref = "kotlin" }
@@ -84,7 +84,7 @@ androidx-camera-camera2 = { module = "androidx.camera:camera-camera2", version.r
 androidx-camera-lifecycle = { module = "androidx.camera:camera-lifecycle", version.ref = "cameraCamera2" }
 androidx-camera-view = { module = "androidx.camera:camera-view", version.ref = "cameraCamera2" }
 coil-compose = { module = "io.coil-kt.coil3:coil-compose", version.ref = "coilCompose" }
-coil-network-ktor2 = { module = "io.coil-kt.coil3:coil-network-ktor2", version.ref = "coilCompose" }
+coil-network-ktor3 = { module = "io.coil-kt.coil3:coil-network-ktor3", version.ref = "coilCompose" }
 play-services-mlkit-barcode-scanning = { module = "com.google.android.gms:play-services-mlkit-barcode-scanning", version.ref = "playServicesMlkitBarcodeScanning" }
 richeditor-compose = { module = "com.mohamedrejeb.richeditor:richeditor-compose", version.ref = "richeditorCompose" }
 sqlite-bundled = { module = "androidx.sqlite:sqlite-bundled", version.ref = "sqlite" }
@@ -106,6 +106,7 @@ kotlinx-serialization-json = { module = "org.jetbrains.kotlinx:kotlinx-serializa
 
 [plugins]
 androidApplication = { id = "com.android.application", version.ref = "agp" }
+androidMultiplatformLibrary = { id = "com.android.kotlin.multiplatform.library", version.ref = "agp" }
 androidLibrary = { id = "com.android.library", version.ref = "agp" }
 composeMultiplatform = { id = "org.jetbrains.compose", version.ref = "composeMultiplatform" }
 composeCompiler = { id = "org.jetbrains.kotlin.plugin.compose", version.ref = "kotlin" }

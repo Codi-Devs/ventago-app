@@ -50,7 +50,7 @@ fun ForgotPasswordScreen(navigate: (PosScreens) -> Unit) {
     val viewModel: LoginViewModel = koinViewModel<LoginViewModel>()
 
     val uiState by viewModel.uiState.collectAsState()
-    val loadingSheetState = rememberModalBottomSheetState(confirmValueChange = { false })
+    val loadingSheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     
     val snackbarHostState = remember { SnackbarHostState() }
     val scrollBehavior = TopAppBarDefaults.pinnedScrollBehavior(rememberTopAppBarState())

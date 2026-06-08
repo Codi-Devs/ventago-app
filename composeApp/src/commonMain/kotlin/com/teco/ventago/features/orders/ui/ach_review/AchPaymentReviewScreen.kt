@@ -96,7 +96,7 @@ fun AchPaymentReviewScreen(
     paymentUid: String
 ) {
     val uiState by viewModel.uiState.collectAsState()
-    val loadingSheetState = rememberModalBottomSheetState(confirmValueChange = { false })
+    val loadingSheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     val detail = uiState.achIntentStates[paymentUid]?.detail
     val resolvedPaymentIntentId = detail?.paymentUid?.takeIf { it.isNotBlank() } ?: paymentUid
     val reviewState = uiState.achReviewState

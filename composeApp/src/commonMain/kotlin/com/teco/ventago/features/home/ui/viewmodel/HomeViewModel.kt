@@ -15,7 +15,7 @@ import com.teco.ventago.features.home.domain.model.HomeSalesChartMapper
 import com.teco.ventago.features.home.domain.model.HomeSalesRange
 import com.teco.ventago.features.notifications.domain.INotificationsService
 import com.teco.ventago.features.product.domain.ProductService
-import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.launchIn
@@ -34,6 +34,7 @@ class HomeViewModel(
     private val homeSummaryService: HomeSummaryService,
     private val betaService: BetaService,
     private val notificationsService: INotificationsService,
+    private val ioDispatcher: CoroutineDispatcher,
 ) : BaseViewModel<HomeState, HomeStateUiEvent>(HomeState()) {
 
     private var summaryBusinessId: Int? = null
@@ -92,17 +93,31 @@ class HomeViewModel(
                         updateState { copy(isLoadingData = false) }
                     }
 
-                    if (summaryBusinessId != business.businessId) {
-                        summaryBusinessId = business.businessId
+                    val businessId = business.businessId
+                    val activeBusinessChanged = summaryBusinessId != businessId
+                    if (activeBusinessChanged) {
+                        summaryBusinessId = businessId
                         updateState { copy(isSummaryLoading = true, summaryError = null) }
-                        runCatching {
-                            homeSummaryService.setBusiness(business.businessId, refresh = true)
-                        }.onFailure { error ->
+                        val summaryResult = runCatching {
+                            withContext(ioDispatcher) {
+                                homeSummaryService.setBusiness(businessId, refresh = true)
+                            }
+                        }
+                        summaryResult.onFailure { error ->
                             updateState {
                                 copy(
                                     isSummaryLoading = false,
                                     summaryError = error.message ?: "Error loading summary"
                                 )
+                            }
+                        }
+                    }
+
+                    val financialProfileBusinessId = financialProfileService.observe().value?.businessId
+                    if (activeBusinessChanged || financialProfileBusinessId != businessId) {
+                        runCatching {
+                            withContext(ioDispatcher) {
+                                financialProfileService.setBusiness(businessId, refresh = true)
                             }
                         }
                     }
@@ -201,7 +216,7 @@ class HomeViewModel(
 
     fun onHomeVisible() {
         viewModelScope.launch {
-            withContext(Dispatchers.IO) {
+            withContext(ioDispatcher) {
                 runCatching { notificationsService.refreshUnreadCount() }
             }
         }

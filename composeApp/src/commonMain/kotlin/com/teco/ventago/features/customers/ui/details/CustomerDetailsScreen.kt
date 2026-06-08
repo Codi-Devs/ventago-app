@@ -134,7 +134,7 @@ fun CustomerDetailsScreen(
     onSeeAllOrders: (Long) -> Unit,
 ) {
     val uiState by viewModel.uiState.collectAsState()
-    val loadingSheetState = rememberModalBottomSheetState(confirmValueChange = { false })
+    val loadingSheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     val addressSheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
 
     var showDeleteDialog by remember { mutableStateOf(false) }

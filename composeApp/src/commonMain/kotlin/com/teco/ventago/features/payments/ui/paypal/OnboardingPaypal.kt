@@ -71,7 +71,7 @@ fun OnboardingPaypalScreen(
 //    navigateBack: () -> Unit,
 ) {
     val uiState by viewModel.uiState.collectAsState()
-    val loadingSheetState = rememberModalBottomSheetState(confirmValueChange = { false })
+    val loadingSheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     val analytics = koinInject<AnalyticsService>()
 
     LaunchedEffect(Unit) {

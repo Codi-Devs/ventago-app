@@ -148,6 +148,7 @@ import io.ktor.client.plugins.plugin
 import io.ktor.client.request.header
 import io.ktor.http.HttpHeaders
 import io.ktor.serialization.kotlinx.json.json
+import kotlinx.coroutines.Dispatchers
 import kotlinx.serialization.json.Json
 import org.koin.core.context.startKoin
 import org.koin.core.logger.Level
@@ -222,7 +223,18 @@ internal val viewModels = module {
     viewModelOf(::RegisterViewModel)
     viewModelOf(::BusinessRegisterViewModel)
     viewModelOf(::AppViewModel)
-    viewModelOf(::HomeViewModel)
+    viewModel {
+        HomeViewModel(
+            authService = get(),
+            businessService = get(),
+            productService = get(),
+            financialProfileService = get(),
+            homeSummaryService = get(),
+            betaService = get(),
+            notificationsService = get(),
+            ioDispatcher = Dispatchers.Default
+        )
+    }
     viewModelOf(::CategoriesManageViewModel)
     viewModelOf(::AddCategoryViewModel)
     viewModelOf(::EditCategoryViewModel)
@@ -255,7 +267,8 @@ internal val viewModels = module {
     viewModelOf(::SearchCustomerViewModel)
     viewModel {
         NotificationsViewModel(
-            notificationsService = get()
+            notificationsService = get(),
+            ioDispatcher = Dispatchers.Default
         )
     }
     viewModelOf(::CustomersListViewModel)

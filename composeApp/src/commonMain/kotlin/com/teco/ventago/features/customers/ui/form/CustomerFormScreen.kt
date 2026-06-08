@@ -78,7 +78,7 @@ fun CustomerFormScreen(
     onValidationError: (String) -> Unit,
 ) {
     val uiState by viewModel.uiState.collectAsState()
-    val loadingSheetState = rememberModalBottomSheetState(confirmValueChange = { false })
+    val loadingSheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
 
     LaunchedEffect(customerId) {
         if (customerId == null) {

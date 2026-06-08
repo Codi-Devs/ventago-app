@@ -98,7 +98,7 @@ fun BillingPointManageScreen(
 
     val uiState by viewModel.uiState.collectAsState()
     val printerService: PrinterService = koinInject()
-    val loadingSheetState = rememberModalBottomSheetState(confirmValueChange = { false })
+    val loadingSheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     val lazyListState = rememberLazyListState()
 
     var showBillingPointEdit by remember { mutableStateOf(false) }

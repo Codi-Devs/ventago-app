@@ -86,7 +86,7 @@ fun PaypalScreenContent(
     viewModel: PaypalViewModel,
 ) {
     val uiState by viewModel.uiState.collectAsState()
-    val loadingSheetState = rememberModalBottomSheetState(confirmValueChange = { false })
+    val loadingSheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     var showUnlinkDialog by remember { mutableStateOf(false) }
     val analytics = koinInject<AnalyticsService>()
 

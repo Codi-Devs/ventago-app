@@ -55,7 +55,7 @@ fun BusinessRegisterScreen(
     val viewModel: BusinessRegisterViewModel = koinViewModel<BusinessRegisterViewModel>()
 
     val uiState by viewModel.uiState.collectAsState()
-    val loadingSheetState = rememberModalBottomSheetState(confirmValueChange = { false })
+    val loadingSheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
 
     Column(
         modifier = Modifier

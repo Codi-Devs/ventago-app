@@ -49,7 +49,7 @@ import ventago.composeapp.generated.resources.set_address
 fun SetBusinessAddressScreen(viewModel: SetAddressViewModel) {
 
     val uiState by viewModel.uiState.collectAsState()
-    val loadingSheetState = rememberModalBottomSheetState(confirmValueChange = { false })
+    val loadingSheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
 
     Column(modifier = Modifier.fillMaxSize().padding(16.dp)) {
 

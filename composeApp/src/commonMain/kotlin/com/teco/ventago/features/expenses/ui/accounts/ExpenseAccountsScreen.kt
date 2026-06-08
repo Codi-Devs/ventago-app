@@ -68,7 +68,7 @@ fun ExpenseAccountsScreen(
     viewModel: ExpenseAccountsViewModel = koinViewModel<ExpenseAccountsViewModel>()
 ) {
     val uiState by viewModel.uiState.collectAsState()
-    val loadingSheetState = rememberModalBottomSheetState(confirmValueChange = { false })
+    val loadingSheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     val formSheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
 
     Column(

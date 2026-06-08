@@ -221,7 +221,7 @@ fun PaymentScreenContent(
         ui.finalCustomer != null &&
         (ui.finalCustomer == true || ui.customer != null)
 
-    val loadingSheetState = rememberModalBottomSheetState(confirmValueChange = { false })
+    val loadingSheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
 
     var showGovernmentWarning by remember { mutableStateOf(false) }
     var governmentInvalidProducts by remember { mutableStateOf<List<String>>(emptyList()) }

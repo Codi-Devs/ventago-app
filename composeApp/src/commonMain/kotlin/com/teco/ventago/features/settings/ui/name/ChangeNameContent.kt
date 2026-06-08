@@ -32,7 +32,7 @@ fun ChangeNameContent(
     viewModel: ChangeNameViewModel
 ) {
     var name by remember { mutableStateOf(viewModel.state.name.value) }
-    val loadingSheetState = rememberModalBottomSheetState(confirmValueChange = { false })
+    val loadingSheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
 
     Column(
         verticalArrangement = Arrangement.SpaceBetween,

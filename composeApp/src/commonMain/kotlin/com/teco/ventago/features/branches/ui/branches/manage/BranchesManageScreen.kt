@@ -60,7 +60,7 @@ fun BranchesManageScreen(
 ) {
 
     val uiState by viewModel.uiState.collectAsState()
-    val loadingSheetState = rememberModalBottomSheetState(confirmValueChange = { false })
+    val loadingSheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     val uploadImageSheetState = rememberModalBottomSheetState()
     val lazyListState = rememberLazyListState()
     val scope = rememberCoroutineScope()

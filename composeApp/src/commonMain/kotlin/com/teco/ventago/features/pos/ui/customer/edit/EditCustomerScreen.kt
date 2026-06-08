@@ -58,7 +58,7 @@ fun ReducedAddCustomerScreen(viewModel: EditCustomerViewModel, navigateBack: () 
     val focusManager = LocalFocusManager.current
 
     val uiState by viewModel.uiState.collectAsState()
-    val loadingSheetState = rememberModalBottomSheetState(confirmValueChange = { false })
+    val loadingSheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
 
     Column(
         modifier = Modifier
@@ -168,7 +168,7 @@ fun FullAddCustomerScreen(viewModel: EditCustomerViewModel, navigateBack: () -> 
     val focusManager = LocalFocusManager.current
 
     val uiState by viewModel.uiState.collectAsState()
-    val loadingSheetState = rememberModalBottomSheetState(confirmValueChange = { false })
+    val loadingSheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
 
     Column(
         modifier = Modifier

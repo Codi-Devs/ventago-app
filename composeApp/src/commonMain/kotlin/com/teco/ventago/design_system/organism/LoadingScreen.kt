@@ -9,13 +9,13 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
+import androidx.compose.material3.ModalBottomSheetProperties
 import androidx.compose.material3.SheetState
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.MutableState
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -66,12 +66,17 @@ fun LoadingBottomSheet(
     onDismissRequest: () -> Unit = {},
 ) {
 
-    val state by remember { loadingState }
+    val state by loadingState
+    val canDismiss = state.state != LoadingState.LOADING
 
     ModalBottomSheet(
         containerColor = cardContainerColor(),
-        onDismissRequest = onDismissRequest,
+        onDismissRequest = {
+            if (canDismiss) onDismissRequest()
+        },
         sheetState = sheetState,
+        sheetGesturesEnabled = canDismiss,
+        properties = loadingSheetProperties(canDismiss),
     ) {
         when(state.state) {
             LoadingState.LOADING -> {
@@ -105,11 +110,16 @@ fun LoadingSheet(
     loadingAnimationFile: String = "files/61209-loading-loop.json",
     onDismissRequest: () -> Unit = {},
 ) {
+    val canDismiss = state.state != LoadingState.LOADING
 
     ModalBottomSheet(
         containerColor = cardContainerColor(),
-        onDismissRequest = onDismissRequest,
+        onDismissRequest = {
+            if (canDismiss) onDismissRequest()
+        },
         sheetState = sheetState,
+        sheetGesturesEnabled = canDismiss,
+        properties = loadingSheetProperties(canDismiss),
     ) {
         when(state.state) {
             LoadingState.LOADING -> {
@@ -134,6 +144,12 @@ fun LoadingSheet(
         }
     }
 }
+
+@OptIn(ExperimentalMaterial3Api::class)
+private fun loadingSheetProperties(canDismiss: Boolean) = ModalBottomSheetProperties(
+    shouldDismissOnBackPress = canDismiss,
+    shouldDismissOnClickOutside = canDismiss,
+)
 
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalResourceApi::class)

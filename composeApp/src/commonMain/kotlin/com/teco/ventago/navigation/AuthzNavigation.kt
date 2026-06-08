@@ -20,7 +20,9 @@ enum class BottomNavKey(
 fun visibleBottomNavKeys(user: User?, betaSnapshot: Set<BetaFeature>): List<BottomNavKey> {
     return buildList {
         if (AuthzEvaluator.canMenu(MenuKey.HOME, user, betaSnapshot)) add(BottomNavKey.HOME)
-        if (AuthzEvaluator.canRoute(RouteKey.HOME_SUMMARY, user, betaSnapshot)) add(BottomNavKey.SUMMARY)
+        if (user?.isOwnerMain == true && AuthzEvaluator.canRoute(RouteKey.HOME_SUMMARY, user, betaSnapshot)) {
+            add(BottomNavKey.SUMMARY)
+        }
         if (AuthzEvaluator.canRoute(RouteKey.ORDERS_LIST, user, betaSnapshot)) add(BottomNavKey.ORDERS)
         if (AuthzEvaluator.canRoute(RouteKey.PRODUCTS_LIST, user, betaSnapshot)) add(BottomNavKey.PRODUCTS)
         if (AuthzEvaluator.canRoute(RouteKey.SETTINGS_PAGE, user, betaSnapshot)) add(BottomNavKey.SETTINGS)

@@ -129,7 +129,7 @@ fun ExpenseDetailsScreen(
 ) {
     val uiState by viewModel.uiState.collectAsState()
     val analyticsService: AnalyticsService = koinInject()
-    val loadingSheetState = rememberModalBottomSheetState(confirmValueChange = { false })
+    val loadingSheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     val conceptSheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     val snackbarHostState = remember { SnackbarHostState() }
     val uriHandler = LocalUriHandler.current

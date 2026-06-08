@@ -10,7 +10,6 @@ import com.teco.ventago.features.notifications.domain.models.NotificationDerived
 import com.teco.ventago.features.notifications.domain.models.derivedState
 import com.teco.ventago.features.notifications.domain.models.isVisibleInList
 import kotlinx.coroutines.CoroutineDispatcher
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.launchIn
 import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.launch
@@ -20,7 +19,7 @@ private const val DEFAULT_PAGE_SIZE = 10
 
 class NotificationsViewModel(
     private val notificationsService: INotificationsService,
-    private val ioDispatcher: CoroutineDispatcher = Dispatchers.IO,
+    private val ioDispatcher: CoroutineDispatcher,
 ) : BaseViewModel<NotificationsState, NotificationsUiEvent>(NotificationsState()) {
 
     init {

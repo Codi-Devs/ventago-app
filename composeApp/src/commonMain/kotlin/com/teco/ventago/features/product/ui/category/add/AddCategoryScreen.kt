@@ -53,7 +53,7 @@ fun AddCategoryScreen(
     navigateBack: () -> Unit,
 ) {
     var showHelpDialog by remember { mutableStateOf(false) }
-    val loadingSheetState = rememberModalBottomSheetState(confirmValueChange = { false })
+    val loadingSheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     val analytics = koinInject<AnalyticsService>()
 
     Column(

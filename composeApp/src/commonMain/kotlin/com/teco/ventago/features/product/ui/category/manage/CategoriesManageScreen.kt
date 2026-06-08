@@ -92,7 +92,7 @@ fun CategoriesManageScreen(
     val snackbarHostState = remember { SnackbarHostState() }
 
     val lazyListState = rememberLazyListState()
-    val sheetState = rememberModalBottomSheetState(confirmValueChange = { false })
+    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     var showCategoryEdit by remember { mutableStateOf(false) }
     val categoryEditSheetState = rememberModalBottomSheetState()
     var selectedCategory by remember { mutableStateOf<Category?>(null) }

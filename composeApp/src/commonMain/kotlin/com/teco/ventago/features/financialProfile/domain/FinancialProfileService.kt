@@ -53,11 +53,18 @@ class FinancialProfileService(
 
     /** Call when you know/confirm the business (login/registration/switch). Idempotent. */
     suspend fun setBusiness(businessId: Int, refresh: Boolean = true) {
-        if (currentBusinessId == businessId && state.value != null) return
+        val changedBusiness = currentBusinessId != businessId
         currentBusinessId = businessId
 
         // 1) Per-business cache fast-path
-        cacheGet()?.let { state.value = it }
+        if (changedBusiness || state.value == null) {
+            val cachedProfile = cacheGet()
+            if (cachedProfile?.businessId == businessId) {
+                state.value = cachedProfile
+            } else if (state.value?.businessId != businessId) {
+                state.value = null
+            }
+        }
         // 2) Restart RT sync for this business
         startRealtimeSync()
         // 3) Refresh if requested

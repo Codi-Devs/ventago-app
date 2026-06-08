@@ -133,7 +133,7 @@ fun NotificationsScreen(
     navigateAny: (Any) -> Unit,
 ) {
     val uiState by viewModel.uiState.collectAsState()
-    val loadingSheetState = rememberModalBottomSheetState(confirmValueChange = { false })
+    val loadingSheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     val snackbarHostState = remember { SnackbarHostState() }
     val actionUnavailableMessage = stringResource(Res.string.notifications_action_unavailable)
     val pullRefreshState = rememberPullRefreshState(

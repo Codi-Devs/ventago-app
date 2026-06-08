@@ -261,7 +261,7 @@ fun OrdersScreen(
         }
     }
 
-    val loadingSheetState = rememberModalBottomSheetState(confirmValueChange = { false })
+    val loadingSheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     val pullRefreshState = rememberPullRefreshState(uiState.refreshingOrder, { viewModel.refreshOrders() })
     LaunchedEffect(Unit) {
         viewModel.events.collect { event ->

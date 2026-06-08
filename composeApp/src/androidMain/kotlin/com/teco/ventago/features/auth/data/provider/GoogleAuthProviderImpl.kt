@@ -1,6 +1,6 @@
 package com.teco.ventago.features.auth.data.provider
 
-import com.teco.ventago.R
+import com.teco.ventago.shared.R
 import android.content.Context
 import androidx.activity.ComponentActivity
 import androidx.credentials.ClearCredentialStateRequest

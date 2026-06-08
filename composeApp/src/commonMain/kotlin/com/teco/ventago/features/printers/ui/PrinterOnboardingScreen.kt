@@ -151,7 +151,7 @@ private fun PrinterFlowContent(
     val snackbarService: SnackbarService = koinInject()
     val analyticsService: AnalyticsService = koinInject()
     val uiState by viewModel.uiState.collectAsState()
-    val loadingSheetState = rememberModalBottomSheetState(confirmValueChange = { false })
+    val loadingSheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     val coroutineScope = rememberCoroutineScope()
     var completedEventSent by rememberSaveable { mutableStateOf(false) }
     val analyticsSource = remember(uiState.entryContext, fromQr) {

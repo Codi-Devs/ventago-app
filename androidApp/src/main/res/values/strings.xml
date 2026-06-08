@@ -1,0 +1,8 @@
+<resources>
+    <string name="app_name">VentaGo</string>
+
+    <string name="imagekit_public_key" translatable="false">public_i4bxjVh9GxZC//ga/g1aEMXobu0=</string>
+    <string name="imagekit_end_point" translatable="false">https://ik.imagekit.io/iv0dsjjgmgk/</string>
+    <string name="imagekit_auth" translatable="false">https://admin.menucodi.com/server/web/index.php?r=site/image-kit-auth</string>
+    <string name="default_web_client_ids" translatable="false">794972415695-rfndlpvov5940ht0r313l1o83ecv6hfd.apps.googleusercontent.com</string>
+</resources>

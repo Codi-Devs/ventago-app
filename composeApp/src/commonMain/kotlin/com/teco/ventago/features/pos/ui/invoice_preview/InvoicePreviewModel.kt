@@ -244,7 +244,8 @@ object InvoicePreviewBuilder {
     private fun buildItbmsBreakdown(items: List<InvoicePreviewItem>): List<InvoicePreviewTaxBreakdown> {
         return items
             .groupBy { it.taxRatePercent }
-            .toSortedMap()
+            .entries
+            .sortedBy { it.key }
             .map { (rate, groupItems) ->
                 InvoicePreviewTaxBreakdown(
                     baseCents = groupItems.sumOf { it.taxableBaseCents },
@@ -256,7 +257,8 @@ object InvoicePreviewBuilder {
 
     private fun buildPayments(state: PosState): List<InvoicePreviewPayment> {
         val manualPayments = state.charged
-            .toSortedMap()
+            .entries
+            .sortedBy { it.key }
             .map { (code, amount) ->
                 InvoicePreviewPayment(
                     label = paymentMethodLabel(code),

@@ -80,7 +80,7 @@ fun ChangeBusinessImageContent(
     navigateBack: () -> Unit
 ) {
     val showAlertDialog = remember { mutableStateOf(false) }
-    val loadingSheetState = rememberModalBottomSheetState(confirmValueChange = { false })
+    val loadingSheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     val scope = rememberCoroutineScope()
 
     val uploadImageSheetState = rememberModalBottomSheetState()

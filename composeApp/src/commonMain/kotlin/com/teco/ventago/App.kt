@@ -59,7 +59,7 @@ import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import coil3.ImageLoader
 import coil3.compose.setSingletonImageLoaderFactory
-import coil3.network.ktor2.KtorNetworkFetcherFactory
+import coil3.network.ktor3.KtorNetworkFetcherFactory
 import com.teco.ventago.core.SnackbarService
 import com.teco.ventago.core.LocalStorage
 import com.teco.ventago.core.authz.AuthzEvaluator
@@ -91,7 +91,6 @@ import com.teco.ventago.navigation.fallbackScreenFor
 import com.teco.ventago.navigation.routeKeyForScreen
 import com.teco.ventago.navigation.toPosScreenOrNull
 import com.teco.ventago.navigation.visibleBottomNavKeys
-import io.ktor.util.reflect.instanceOf
 import org.jetbrains.compose.resources.stringResource
 import org.jetbrains.compose.ui.tooling.preview.Preview
 import org.koin.compose.KoinContext

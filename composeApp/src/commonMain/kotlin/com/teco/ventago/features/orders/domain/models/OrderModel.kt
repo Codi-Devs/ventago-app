@@ -91,7 +91,7 @@ data class Order(
             it.isNullOrEmpty() || it == customer?.id?.toString() || it == "0000"
         }
         val normalizedReceiverPhone = receiverPhone?.trim().takeUnless {
-            it.isNullOrEmpty() || it == "00000"
+            it.isNullOrEmpty() || it == "0000"
         }
         return customerPhone ?: normalizedReceiverPhone
     }

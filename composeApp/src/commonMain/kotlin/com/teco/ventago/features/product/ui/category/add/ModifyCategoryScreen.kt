@@ -38,7 +38,7 @@ fun ModifyCategoryScreen(
     viewModel: ModifyCategoryViewModel = koinViewModel<ModifyCategoryViewModel>(),
     navigateBack: () -> Unit) {
 
-    val loadingSheetState = rememberModalBottomSheetState(confirmValueChange = { false })
+    val loadingSheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
 
     Column(
         modifier = Modifier

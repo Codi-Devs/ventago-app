@@ -1,3 +1,183 @@
+# iOS Xcode 16 Linker Compatibility TODO
+
+## Plan
+- [x] Check selected Xcode/iOS SDK used by the local build.
+- [ ] Reproduce the iOS framework link failure outside Xcode.
+- [ ] Apply the smallest dependency/toolchain compatibility fix.
+- [ ] Verify iOS framework link and Android compile still pass.
+
+## Verification Gates
+- [ ] `./gradlew --no-build-cache --no-configuration-cache :composeApp:linkDebugFrameworkIosArm64`
+- [ ] `./gradlew --no-build-cache --no-configuration-cache :composeApp:linkDebugFrameworkIosSimulatorArm64`
+- [ ] `./gradlew --no-build-cache --no-configuration-cache :androidApp:compileDebugKotlin`
+
+## Review Notes
+- Local selected Xcode is `16.4` with iOS SDK `18.5`.
+- The linker error references `UIViewLayoutRegion` from Compose `CMPLayoutRegion.o`; this symbol requires the iOS 26 SDK.
+- With Compose Multiplatform `1.11.x`, the toolchain fix is to select Xcode/iOS SDK 26. For local Xcode 16.4 builds, the dependency fallback is Compose Multiplatform `1.10.x`.
+
+# iOS Compile Recovery TODO
+
+## Plan
+- [x] Reproduce/analyze reported iOS compile errors for `HomeViewModel`, `NotificationsViewModel`, and `InvoicePreviewModel`.
+- [x] Replace iOS-incompatible `Dispatchers.IO` call sites in the reported ViewModels with injected KMP-safe dispatchers.
+- [x] Replace JVM-only `toSortedMap()` usage in common invoice preview code with common-safe sorted entries.
+- [x] Run iOS simulator compile verification and record result.
+- [x] Run iOS arm64 compile verification and Android compile regression check.
+
+## Verification Gates
+- [x] `./gradlew --no-build-cache --no-configuration-cache :composeApp:compileKotlinIosSimulatorArm64`
+- [x] `./gradlew --no-build-cache --no-configuration-cache :composeApp:compileKotlinIosArm64`
+- [x] `./gradlew --no-build-cache --no-configuration-cache :androidApp:compileDebugKotlin`
+
+## Review Notes
+- Kotlin/Native reported `Dispatchers.IO` as internal at the new Home summary/financial profile refresh call sites and at the default parameter in `NotificationsViewModel`.
+- `HomeViewModel` and `NotificationsViewModel` now receive a `CoroutineDispatcher` from Koin instead of resolving `Dispatchers.IO` directly in those failing common call sites.
+- Koin uses `Dispatchers.Default` for those ViewModels because it is available across KMP targets.
+- `InvoicePreviewModel` now sorts grouped tax rows and manual payments with `entries.sortedBy { it.key }`, avoiding JVM-only `toSortedMap()`.
+- iOS simulator, iOS arm64, and Android debug Kotlin compile gates all pass with existing unrelated warnings.
+
+# Loading Bottom Sheet Dismiss Guard TODO
+
+## Plan
+- [x] Review loading component behavior and current Material3 modal dismissal API.
+- [x] Patch `LoadingScreen.kt` so loading sheets cannot dismiss from outside click/back press while `LOADING`.
+- [x] Preserve success/error auto-dismiss and user dismissal semantics.
+- [x] Run compile verification and record result.
+
+## Verification Gates
+- [x] `./gradlew --no-build-cache --no-configuration-cache :composeApp:compileKotlinMetadata :androidApp:compileDebugKotlin`
+
+## Review Notes
+- Material3 scrim clicks can invoke a hide path before `onDismissRequest` returns, so a no-op `onDismissRequest` is not enough to make the sheet non-dismissible.
+- `LoadingSheet` and `LoadingBottomSheet` now pass `ModalBottomSheetProperties(shouldDismissOnClickOutside = false, shouldDismissOnBackPress = false)` while the state is `LOADING`.
+- `sheetGesturesEnabled = false` is still kept for the loading state to block drag dismissal.
+- `SUCCESS` and `ERROR` remain dismissible so existing completion animations and `hideLoading()` callbacks keep working.
+- Compile verification passed with existing unrelated warnings about cinterop commonization, compile SDK 37 support in AGP 9.1.0, expect/actual beta, and existing deprecations.
+
+# Financial Profile Home Config Summary TODO
+
+## Plan
+- [x] Trace `FinancialProfileService` usages from app bootstrap, Home, and POS payment flow.
+- [x] Identify why Home does not reliably trigger `config-summary`.
+- [x] Patch Home/business initialization and financial profile refresh semantics.
+- [x] Add focused service coverage and run verification.
+
+## Verification Gates
+- [x] `./gradlew --no-build-cache --no-configuration-cache :composeApp:testAndroidHostTest --tests com.teco.ventago.features.financialProfile.FinancialProfileServiceTest :composeApp:compileKotlinMetadata :androidApp:compileDebugKotlin`
+
+## Review Notes
+- POS loads `config-summary` later because `PosViewModel.onPaymentScreenVisible()` explicitly calls `financialProfileService.refresh(businessId)` when the profile has not loaded.
+- Home observed `FinancialProfileService` but only initialized `HomeSummaryService`; it did not establish the financial profile business context when the active business became available.
+- `FinancialProfileService.setBusiness(refresh = true)` returned early when `currentBusinessId` and `state` were already populated, so an explicit refresh could be skipped if cache/state existed.
+- Home now calls `financialProfileService.setBusiness(businessId, refresh = true)` when the active business changes, alongside `HomeSummaryService`.
+- `FinancialProfileService` now only publishes cached profiles matching the requested business id and honors explicit refresh requests even when state already exists.
+- Focused service tests and Android compile verification passed.
+
+# Loading Bottom Sheet Visibility TODO
+
+## Plan
+- [x] Review loading component usage and the category activation flow.
+- [x] Identify why `LoadingBottomSheetState` does not render.
+- [x] Patch loading sheet state creation and dismissal behavior.
+- [x] Run compile verification and record result.
+
+## Verification Gates
+- [x] `./gradlew --no-build-cache --no-configuration-cache :composeApp:compileKotlinMetadata :androidApp:compileDebugKotlin`
+
+## Review Notes
+- Root cause: loading sheets were using `rememberModalBottomSheetState(confirmValueChange = { false })`; with current Material3 this blocks the hidden-to-visible transition, so the bottom sheet never opens.
+- `CategoriesManageScreen` is one affected example during category activation.
+- Replaced the broken state factory with `rememberModalBottomSheetState(skipPartiallyExpanded = true)` for loading sheet instances.
+- `LoadingSheet` and `LoadingBottomSheet` now ignore dismiss requests and disable gestures while the state is `LOADING`, but allow dismissal after `SUCCESS` or `ERROR` so completion animations can hide the sheet.
+- Compile verification passed with existing unrelated warnings about cinterop commonization, AGP compile SDK 37 support, expect/actual beta, and existing deprecations.
+
+# AGP 9.1.0 KMP Module Split TODO
+
+## Plan
+- [x] Review AGP 9/KMP migration requirements and current single-module Android application layout.
+- [x] Update the Gradle wrapper to an AGP 9.1-compatible version.
+- [x] Add a dedicated Android application module and move app-owned Android files into it.
+- [x] Convert `composeApp` from an Android application target to an Android-KMP shared library target.
+- [x] Run Gradle verification gates and fix migration breakages.
+- [x] Record final verification result and lessons.
+
+## Verification Gates
+- [x] `./gradlew --no-build-cache --no-configuration-cache :androidApp:compileDebugKotlin`
+- [x] `./gradlew --no-build-cache --no-configuration-cache :androidApp:assembleDebug`
+- [x] `./gradlew --no-build-cache --no-configuration-cache :composeApp:compileKotlinMetadata :composeApp:testAndroidHostTest :androidApp:testDebugUnitTest`
+- [x] `./gradlew --no-build-cache --no-configuration-cache :androidApp:validateReleaseOrdersBasePath`
+- [x] `./gradlew --no-build-cache --no-configuration-cache :androidApp:bundleRelease --dry-run`
+
+## Review Notes
+- AGP 9 requires KMP projects to use the Android-KMP library plugin for shared Android targets instead of applying the Android application plugin in the KMP module.
+- `androidApp` now owns the Android application plugin, app manifest, app resources, `google-services.json`, Firebase/Crashlytics plugins, and release AAB URL guard.
+- `composeApp` remains the shared KMP module and keeps Room/KSP, shared Android actuals, Epson native libraries, and common/iOS targets.
+- `:composeApp:testAndroidHostTest` replaces the old Android unit-test gate for the shared Android-KMP target; `:androidApp:testDebugUnitTest` currently has no sources.
+- `:androidApp:assembleDebug` passed, including manifest merge, Google services, dexing, and native library packaging.
+- `:androidApp:bundleRelease --dry-run` shows the release URL guard is wired before release bundle work, and direct validation passed with the production URL.
+- Remaining non-blocking warnings: cinterop commonization is disabled, AGP 9.1.0 is only tested up to compile SDK 36.1 while this project uses SDK 37, Compose dependency accessors are deprecated, and existing Kotlin/Compose API deprecations remain.
+
+# Android Gradle Plugin 8.13.2 TODO
+
+## Plan
+- [x] Verify the highest AGP upgrade that fits the current KMP/application module structure.
+- [x] Update AGP from 8.11.2 to 8.13.2.
+- [x] Run Android compile verification.
+- [x] Record the AGP 9 migration constraint.
+
+## Verification Gates
+- [x] `./gradlew --no-build-cache --no-configuration-cache :composeApp:compileDebugKotlinAndroid`
+- [x] `./gradlew --no-build-cache --no-configuration-cache :composeApp:testDebugUnitTest`
+
+## Review Notes
+- Kotlin Multiplatform 2.4.0 supports AGP 8.5.2 through 9.1.0, but AGP 9.0+ is not an in-place version bump for this repo because `composeApp` applies both `org.jetbrains.kotlin.multiplatform` and `com.android.application`.
+- Kotlin/Android docs require splitting the Android application into a separate module before using AGP 9.0+ with KMP.
+- AGP 8.13.2 is the latest stable 8.x line available in Google Maven and preserves the current single-module Android application layout.
+- Compile and debug unit-test verification passed.
+- The compile SDK 37 warning remains because AGP 8.13.2 is tested up to API 36.1; AGP 9.1.1+ supports API 37, but that is outside the Kotlin 2.4.0 compatibility range provided and requires the AGP 9 KMP module split.
+
+# Android Target SDK 37 TODO
+
+## Plan
+- [x] Update the Android target SDK catalog value from 36 to 37.
+- [x] Run Android compile verification.
+- [x] Record verification result.
+
+## Verification Gates
+- [x] `./gradlew --no-build-cache --no-configuration-cache :composeApp:compileDebugKotlinAndroid`
+
+## Review Notes
+- This task changed only `android-targetSdk`; the current catalog already has `android-compileSdk = "37"`.
+- Compile verification passed.
+- AGP now uses `8.13.2`; it still warns that SDK 37.0 is newer than the compile SDK level it has been tested with, but no build failure occurred.
+
+# Kotlin 2.4.0 KMP Upgrade TODO
+
+## Plan
+- [x] Review project architecture, code conventions, current version catalog, and baseline worktree state.
+- [x] Verify Kotlin 2.4.0-compatible dependency and plugin versions from primary sources.
+- [x] Update the version catalog/build configuration with a minimal compatible toolchain set.
+- [x] Run Gradle verification gates and fix compile/deprecation breakages caused by the upgrade.
+- [x] Record verification results and any upgrade lessons.
+
+## Verification Gates
+- [x] `./gradlew --no-build-cache --no-configuration-cache :composeApp:compileKotlinMetadata :composeApp:compileDebugKotlinAndroid`
+- [x] `./gradlew --no-build-cache --no-configuration-cache :composeApp:testDebugUnitTest --tests com.teco.ventago.features.orders.CxcOrderDetailsContractTest --tests com.teco.ventago.navigation.AuthzNavigationTest`
+- [x] `./gradlew --no-build-cache --no-configuration-cache :composeApp:testDebugUnitTest`
+
+## Review Notes
+- Baseline worktree was clean before the upgrade.
+- Project docs reviewed: `doc/architecture.md` and `doc/code-conventions.md`.
+- Confirmed Kotlin 2.4.0 is stable; AGP remains inside Kotlin KMP compatibility ranges.
+- Updated Gradle wrapper from 8.14.3 to 8.14.4 to satisfy Kotlin's next-version Gradle recommendation and remove the KGP Gradle-version warning.
+- Updated Ktor to 3.x and switched Coil from `coil-network-ktor2` to `coil-network-ktor3`.
+- Updated compatible catalog entries for Compose Multiplatform, Ktor, Room, KSP, SQLite, GitLive Firebase, Koin, Coil, AndroidX/Google/Firebase plugins, and kotlinx libraries.
+- Fixed Ktor 3/serialization compile breakages by replacing removed `instanceOf<Boolean>()` checks with `jsonPrimitive.booleanOrNull`.
+- Fixed Places SDK 5.x compile breakage by replacing removed `Place.Field.ADDRESS`/`LAT_LNG` with `FORMATTED_ADDRESS`/`LOCATION`.
+- Fixed test-gate regressions by aligning receiver-phone placeholder filtering and keeping the Summary bottom-nav item owner-main only while preserving route authorization separately.
+- Verification passed with remaining non-blocking warnings: disabled cinterop commonization, expect/actual beta warnings, Compose dependency accessor deprecations, Places Autocomplete deprecations, Material/BackHandler/Divider deprecations, and kotlinx-datetime compat deprecations.
+
 # POS Invoice Preview Retention TODO
 
 ## Plan

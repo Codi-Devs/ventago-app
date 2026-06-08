@@ -53,9 +53,8 @@ internal class AndroidPlatformState(
     }
 
     override fun requestNotificationPermission() {
-        val activity = context as? MainActivity
+        val activity = context as? NotificationPermissionRequester
         activity?.askNotificationPermission()
     }
 }
-
 

@@ -14,10 +14,9 @@ import io.ktor.http.ContentType
 import io.ktor.http.HttpHeaders
 import io.ktor.http.contentType
 import io.ktor.http.isSuccess
-import io.ktor.util.reflect.instanceOf
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
-import kotlinx.serialization.json.boolean
+import kotlinx.serialization.json.booleanOrNull
 import kotlinx.serialization.json.jsonPrimitive
 
 class BusinessProvider(private val client: HttpClient, private val authService: IAuthService) :
@@ -159,10 +158,7 @@ class BusinessProvider(private val client: HttpClient, private val authService: 
         }
 
         val body = res.body<JsonObject>()
-        return if (body.containsKey("status") &&
-            body["status"]!!.instanceOf(Boolean::class) &&
-            body["status"]!!.jsonPrimitive.boolean
-        ) {
+        return if (body["status"]?.jsonPrimitive?.booleanOrNull == true) {
             ApiResponse(true, JsonPrimitive(true), ApiError.NO_ERROR)
         } else {
             ApiResponse(false, JsonPrimitive(false), ApiError.NO_ERROR)

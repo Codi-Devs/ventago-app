@@ -78,7 +78,7 @@ fun RegisterScreen(
     val viewModel: RegisterViewModel = koinViewModel<RegisterViewModel>()
 
     val uiState by viewModel.uiState.collectAsState()
-    val loadingSheetState = rememberModalBottomSheetState(confirmValueChange = { false })
+    val loadingSheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
 
     val uriHandler = LocalUriHandler.current
     val snackbarService: SnackbarService = koinInject()

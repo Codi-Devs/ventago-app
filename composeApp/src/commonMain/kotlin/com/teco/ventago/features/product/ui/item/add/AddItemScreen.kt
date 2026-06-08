@@ -166,7 +166,7 @@ fun AddItemScreen(
     navigateBack: () -> Unit
 ) {
     val uiState by viewModel.uiState.collectAsState()
-    val loadingSheetState = rememberModalBottomSheetState(confirmValueChange = { false })
+    val loadingSheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
 
     // Check if this is a personalized product from savedStateHandle
     LaunchedEffect(backStackEntry) {

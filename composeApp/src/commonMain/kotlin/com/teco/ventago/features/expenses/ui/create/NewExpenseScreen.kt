@@ -94,7 +94,7 @@ fun NewExpenseScreen(
     onBack: () -> Unit
 ) {
     val uiState by viewModel.uiState.collectAsState()
-    val loadingSheetState = rememberModalBottomSheetState(confirmValueChange = { false })
+    val loadingSheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     val today = remember { currentLocalDate() }
     val tomorrow = remember(today) { today.plus(DatePeriod(days = 1)) }
     val isManualRegistration = !uiState.isEditMode && !isDuplicateMode

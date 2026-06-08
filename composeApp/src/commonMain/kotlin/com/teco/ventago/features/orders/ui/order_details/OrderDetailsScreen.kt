@@ -342,7 +342,7 @@ fun OrderDetailsScreen(
     var deleteReason by remember { mutableStateOf("") }
 
     val uiState by viewModel.uiState.collectAsState()
-    val loadingSheetState = rememberModalBottomSheetState(confirmValueChange = { false })
+    val loadingSheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     val linkSheetState = rememberModalBottomSheetState()
     val shareSheetState = rememberModalBottomSheetState()
     val registerPaymentSheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)

@@ -145,7 +145,7 @@ fun SettingsScreen(
 
     val uiState by viewModel.uiState.collectAsState()
     val printers by printerService.observe().collectAsState()
-    val loadingSheetState = rememberModalBottomSheetState(confirmValueChange = { false })
+    val loadingSheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     val noAddressSelectedString = stringResource(Res.string.no_address_selected)
 
     // Start of State for the upload image bottom sheet

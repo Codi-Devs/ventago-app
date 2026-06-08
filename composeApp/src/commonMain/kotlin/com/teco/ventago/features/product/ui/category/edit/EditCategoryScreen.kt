@@ -98,7 +98,7 @@ fun EditCategoryScreen(
 
     val lazyListState = rememberLazyListState()
     
-    val loadingSheetState = rememberModalBottomSheetState(confirmValueChange = { false })
+    val loadingSheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
 
     var showItemEdit by remember { mutableStateOf(false) }
     val itemEditSheetState = rememberModalBottomSheetState()

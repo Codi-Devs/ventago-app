@@ -3,7 +3,7 @@ package com.teco.ventago.core.camera
 import android.content.Context
 import android.net.Uri
 import androidx.core.content.FileProvider
-import com.teco.ventago.R
+import com.teco.ventago.shared.R
 import java.io.File
 import java.util.Objects
 

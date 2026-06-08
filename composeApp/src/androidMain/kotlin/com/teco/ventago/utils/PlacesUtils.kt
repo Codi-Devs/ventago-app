@@ -31,7 +31,7 @@ actual fun launchAutocompleteWidget(
     }
 
     val fields: List<Place.Field> =
-        listOf(Place.Field.ID, Place.Field.ADDRESS, Place.Field.LAT_LNG)
+        listOf(Place.Field.ID, Place.Field.FORMATTED_ADDRESS, Place.Field.LOCATION)
     val intent = Autocomplete.IntentBuilder(AutocompleteActivityMode.FULLSCREEN, fields)
         .build(context)
 
