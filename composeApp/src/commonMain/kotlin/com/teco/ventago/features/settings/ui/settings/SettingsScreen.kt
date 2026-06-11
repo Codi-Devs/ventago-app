@@ -91,9 +91,8 @@ import com.teco.ventago.features.invoicing.ui.settings.BottomNoteSettingsSheet
 import com.teco.ventago.features.settings.ui.settings.viewmodel.SettingsState
 import com.teco.ventago.features.settings.ui.settings.viewmodel.SettingsStateUiEvent
 import com.teco.ventago.features.settings.ui.settings.viewmodel.SettingsViewModel
+import com.teco.ventago.isIOS
 import com.teco.ventago.navigation.PosScreens
-import com.teco.ventago.rememberPlatformState
-import com.teco.ventago.utils.launchAutocompleteWidget
 import com.teco.ventago.features.quotes.ui.settings.QuoteSettingsSection
 import com.teco.ventago.features.printers.domain.PrinterService
 import com.teco.ventago.features.printers.ui.viewmodel.PrinterEntryContext
@@ -111,7 +110,6 @@ import ventago.composeapp.generated.resources.business_address
 import ventago.composeapp.generated.resources.business_address_notdot
 import ventago.composeapp.generated.resources.business_info
 import ventago.composeapp.generated.resources.cancel
-import ventago.composeapp.generated.resources.change_business_address
 import ventago.composeapp.generated.resources.change_business_logo
 import ventago.composeapp.generated.resources.change_business_name
 import ventago.composeapp.generated.resources.delete_account
@@ -126,7 +124,6 @@ import ventago.composeapp.generated.resources.request_camera_permission
 import ventago.composeapp.generated.resources.save
 import ventago.composeapp.generated.resources.select_photo_from_camera
 import ventago.composeapp.generated.resources.select_photo_from_gallery
-import ventago.composeapp.generated.resources.set_address
 import ventago.composeapp.generated.resources.sign_out
 import ventago.composeapp.generated.resources.terms_and_conditions
 import kotlin.compareTo
@@ -140,7 +137,6 @@ fun SettingsScreen(
     val snackbarService: SnackbarService = koinInject()
     val printerService: PrinterService = koinInject()
     val uriHandler = LocalUriHandler.current
-    val platformState = rememberPlatformState()
     val scope = rememberCoroutineScope()
 
     val uiState by viewModel.uiState.collectAsState()
@@ -321,7 +317,7 @@ fun SettingsScreen(
                 Row (
                     modifier = Modifier
                         .height(IntrinsicSize.Max)
-                        .padding(top = 8.dp, start = 16.dp, end = 16.dp, bottom = 8.dp),
+                        .padding(top = 8.dp, start = 16.dp, end = 16.dp, bottom = 16.dp),
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.SpaceBetween
                 ) {
@@ -362,37 +358,6 @@ fun SettingsScreen(
                             style = bodyMedium(color = MaterialTheme.colorScheme.onBackground),
                         )
 
-                    }
-                }
-                if (uiState.canModifySettings) {
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(bottom = 16.dp),
-                        horizontalArrangement = Arrangement.Center,
-                    ) {
-                        TextButtonS(
-                            modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp),
-                            label = if (!uiState.isAddressFilled) {
-                                stringResource(Res.string.set_address)
-                            } else {
-                                stringResource(Res.string.change_business_address)
-                            }
-
-                        ) {
-                            try {
-                                launchAutocompleteWidget(
-                                    onAddressSelected = { selected ->
-                                        viewModel.setAddress(selected)
-                                    },
-                                    onCancelled = {
-                                        viewModel.noAddressSelected()
-                                    }
-                                )
-                            } catch (e: Exception) {
-                                e.printStackTrace()
-                            }
-                        }
                     }
                 }
             }
@@ -458,7 +423,7 @@ fun SettingsScreen(
                 shape = RoundedCornerShape(10.dp),
                 onClick = {})
             {
-                if (uiState.hasPaymentsAccess) {
+                if (uiState.hasPaymentsAccess && !isIOS()) {
                     SettingsTextButton(
                         label = "Pagos y cobros",
                         badgeText = "Nuevo",

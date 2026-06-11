@@ -138,6 +138,7 @@ import com.teco.ventago.features.invoicing.domain.models.InvoiceStatus
 import com.teco.ventago.features.orders.domain.PaymentLinkResolver
 import com.teco.ventago.features.orders.domain.models.ManualPaymentMethodOption
 import com.teco.ventago.features.orders.domain.models.Order
+import com.teco.ventago.features.orders.domain.models.OrderPaymentDto
 import com.teco.ventago.features.orders.domain.models.OrderStatus
 import com.teco.ventago.features.orders.domain.models.PaymentStatus
 import com.teco.ventago.features.orders.domain.models.ReceivableTermDto
@@ -1621,6 +1622,9 @@ private fun RegisteredPaymentsCard(
                 val paymentDate = formatRfc3339DateOnly(payment.paymentDate)
                 val isVoided = !payment.voidedAt.isNullOrBlank()
                 val isAchAutomatic = viewModel.isAutomaticAchPayment(payment) && payment.paymentIntentId.isNotBlank()
+                val yappyPaymentId = payment.paymentIntentId.takeIf {
+                    it.isNotBlank() && payment.isYappyPayment()
+                }
                 val achIntentId = payment.paymentIntentId
                 val achState = if (isAchAutomatic) viewModel.achDetailState(achIntentId) else null
                 val achDetail = achState?.detail
@@ -1676,6 +1680,13 @@ private fun RegisteredPaymentsCard(
                         text = paymentDate,
                         style = labelSmall(color = MaterialTheme.colorScheme.onSurfaceVariant)
                     )
+                    yappyPaymentId?.let { paymentId ->
+                        Spacer(modifier = Modifier.height(2.dp))
+                        Text(
+                            text = "ID de pago: $paymentId",
+                            style = labelSmall(color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        )
+                    }
                     if (isAchAutomatic) {
                         Spacer(modifier = Modifier.height(4.dp))
                         if (achState?.isLoading == true && achDetail == null) {
@@ -1792,6 +1803,14 @@ private fun RegisteredPaymentsCard(
             }
         }
     }
+}
+
+private fun OrderPaymentDto.isYappyPayment(): Boolean {
+    val methodName = paymentMethod.name.lowercase()
+    val methodDescription = paymentMethod.description.lowercase()
+    return methodName.contains("yappy") ||
+        methodDescription.contains("yappy") ||
+        paymentMethod.id == 12
 }
 
 private fun normalizeStatusToken(raw: String?): String {

@@ -341,7 +341,7 @@ class BottomNoteSettingsServiceTest {
     }
 
     private class FakeAuthService : IAuthService {
-        override suspend fun refreshToken(client: HttpClient) = Unit
+        override suspend fun refreshToken(client: HttpClient, failedAccessToken: String?) = Unit
         override suspend fun googleLogin(googleToken: String): AuthResponse = error("unused")
         override suspend fun emailLogin(request: EmailLoginRequest): AuthResponse = error("unused")
         override suspend fun emailRegister(request: CreateUserRequest): AuthResponse = error("unused")

@@ -63,6 +63,21 @@ class AuthzEvaluatorTest {
     }
 
     @Test
+    fun reportsRouteAndExecuteActionRequireRealTimeReportsBeta() {
+        val viewer = subUser(setOf(ScopeKey.REPORTS_VIEW))
+        val executor = subUser(setOf(ScopeKey.REPORTS_EXECUTE))
+
+        assertFalse(AuthzEvaluator.canRoute(RouteKey.REPORTS_PAGE, viewer, emptySet()))
+        assertFalse(AuthzEvaluator.canMenu(MenuKey.REPORTS, viewer, emptySet()))
+        assertFalse(AuthzEvaluator.canAction(ActionKey.REPORTS_EXECUTE, executor, emptySet()))
+
+        val beta = setOf(BetaFeature.REAL_TIME_REPORTS)
+        assertTrue(AuthzEvaluator.canRoute(RouteKey.REPORTS_PAGE, viewer, beta))
+        assertTrue(AuthzEvaluator.canMenu(MenuKey.REPORTS, viewer, beta))
+        assertTrue(AuthzEvaluator.canAction(ActionKey.REPORTS_EXECUTE, executor, beta))
+    }
+
+    @Test
     fun fallbackRouteUsesConfiguredPriorityOrder() {
         val expensesUser = subUser(setOf(ScopeKey.EXPENSES_CREATE))
 

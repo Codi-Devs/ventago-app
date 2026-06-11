@@ -56,6 +56,7 @@ class HomeViewModel(
                         canCreateExpense = AuthzEvaluator.canAction(ActionKey.EXPENSES_CREATE, user, betaSnapshot),
                         canAccessCustomers = AuthzEvaluator.canRoute(RouteKey.CUSTOMERS_LIST, user, betaSnapshot),
                         canAccessExpenses = AuthzEvaluator.canRoute(RouteKey.EXPENSES_LIST, user, betaSnapshot),
+                        canAccessReports = AuthzEvaluator.canRoute(RouteKey.REPORTS_PAGE, user, betaSnapshot),
                         showSupportCard = user?.isOwnerMain == true,
                         showFolioPurchase = user?.isOwnerMain == true
                     )
@@ -68,6 +69,7 @@ class HomeViewModel(
                             canCreateExpense = authz.canCreateExpense,
                             canAccessCustomers = authz.canAccessCustomers,
                             canAccessExpenses = authz.canAccessExpenses,
+                            canAccessReports = authz.canAccessReports,
                             showSupportCard = authz.showSupportCard,
                             showFolioPurchase = authz.showFolioPurchase
                         )
@@ -170,6 +172,7 @@ class HomeViewModel(
         val canCreateExpense: Boolean,
         val canAccessCustomers: Boolean,
         val canAccessExpenses: Boolean,
+        val canAccessReports: Boolean,
         val showSupportCard: Boolean,
         val showFolioPurchase: Boolean,
     )

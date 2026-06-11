@@ -34,23 +34,21 @@ import platform.posix.memcpy
 //import cocoapods.MLKitBarcodeScanning.MLKBarcodeScannerOptions
 //import cocoapods.MLKitVision.MLKVisionImage
 //import objcnames.protocols.MLKCompatibleImageProtocol
-import platform.CoreMedia.CMSampleBufferRef
 import platform.darwin.NSObject
 import platform.darwin.dispatch_async
 import platform.darwin.dispatch_get_main_queue
 import platform.darwin.dispatch_queue_create
 import platform.darwin.dispatch_queue_t
-import platform.CoreVideo.kCVPixelFormatType_32BGRA
-import platform.CoreVideo.kCVPixelBufferPixelFormatTypeKey
 
-@OptIn(ExperimentalForeignApi::class)
+@OptIn(ExperimentalForeignApi::class, BetaInteropApi::class)
 actual fun generateQR(width: Int, height: Int, url: String): SharedImage {
-    val data = url.encodeToByteArray()
+    val message = NSString.create(string = url).dataUsingEncoding(NSUTF8StringEncoding)
+        ?: error("Unable to encode QR input")
 
     val filter = CIFilter.filterWithName("CIQRCodeGenerator")
         ?: error("Unable to create CIQRCodeGenerator filter")
     filter.setDefaults()
-    filter.setValue(data, forKey = "inputMessage")
+    filter.setValue(message, forKey = "inputMessage")
     filter.setValue("H", forKey = "inputCorrectionLevel") // L, M, Q, H
 
     val ciImage = filter.outputImage
@@ -119,14 +117,14 @@ private fun uiImageToImageBitmap(uiImage: UIImage): ImageBitmap {
     return skiaImage.toComposeImageBitmap()
 }
 
-@OptIn(ExperimentalForeignApi::class)
+@OptIn(ExperimentalForeignApi::class, BetaInteropApi::class)
 private fun makeCIImage_CODE128(
     data: String,
     width: Int,
     height: Int,
     margin: Int
 ): CIImage? {
-    val message = (data as NSString).dataUsingEncoding(NSASCIIStringEncoding) ?: return null
+    val message = NSString.create(string = data).dataUsingEncoding(NSASCIIStringEncoding) ?: return null
     val filter = CIFilter.filterWithName("CICode128BarcodeGenerator") as? CIFilter ?: return null
     filter.setValue(message, forKey = "inputMessage")
     // Quiet zone; Core Image uses points;  default ~7. Adjust if desired:
@@ -141,14 +139,14 @@ private fun makeCIImage_CODE128(
     return ci.imageByApplyingTransform(CGAffineTransformMakeScale(sx, sy))
 }
 
-@OptIn(ExperimentalForeignApi::class)
+@OptIn(ExperimentalForeignApi::class, BetaInteropApi::class)
 private fun makeCIImage_QR(
     data: String,
     width: Int,
     height: Int,
     margin: Int
 ): CIImage? {
-    val message = (data as NSString).dataUsingEncoding(NSUTF8StringEncoding) ?: return null
+    val message = NSString.create(string = data).dataUsingEncoding(NSUTF8StringEncoding) ?: return null
     val filter = CIFilter.filterWithName("CIQRCodeGenerator") as? CIFilter ?: return null
     filter.setValue(message, forKey = "inputMessage")
     filter.setValue("M", forKey = "inputCorrectionLevel") // L/M/Q/H
@@ -184,6 +182,7 @@ actual fun CameraPreview(
 }
 
 /** Simple UIView that owns the preview layer */
+@OptIn(ExperimentalForeignApi::class)
 private class PreviewHostView @OptIn(ExperimentalForeignApi::class) constructor(
     frame: CValue<CGRect>
 ) : UIView(frame) {
@@ -191,10 +190,10 @@ private class PreviewHostView @OptIn(ExperimentalForeignApi::class) constructor(
 
     fun attach(c: CameraCoordinator) {
         coordinator = c
+        c.previewLayer.frame = bounds
         layer.addSublayer(c.previewLayer)
         c.start()
         setNeedsLayout()
-        layoutIfNeeded()
     }
     fun detach() {
         coordinator?.stop()
@@ -208,116 +207,118 @@ private class PreviewHostView @OptIn(ExperimentalForeignApi::class) constructor(
     }
 }
 
-/** Manages AVCaptureSession + MLKit scanning */
+/** Manages AVCaptureSession + native iOS metadata scanning. */
 @OptIn(ExperimentalForeignApi::class)
 private class CameraCoordinator(
     private val hostView: UIView,
     private val onBarcode: (String) -> Unit,
     private val singleShot: Boolean = true
-) : NSObject(), AVCaptureVideoDataOutputSampleBufferDelegateProtocol {
+) : NSObject(), AVCaptureMetadataOutputObjectsDelegateProtocol {
 
     private val session = AVCaptureSession().apply {
         sessionPreset = AVCaptureSessionPreset1280x720
     }
     private val device: AVCaptureDevice? = AVCaptureDevice.defaultDeviceWithMediaType(AVMediaTypeVideo)
     private var input: AVCaptureDeviceInput? = null
-    private val output = AVCaptureVideoDataOutput().apply { alwaysDiscardsLateVideoFrames = true }
-    private val queue: dispatch_queue_t = dispatch_queue_create("mlkit.barcode.queue", null)
+    private val metadataOutput = AVCaptureMetadataOutput()
+    private val sessionQueue: dispatch_queue_t = dispatch_queue_create("com.teco.ventago.qr.session", null)
+    private val metadataQueue: dispatch_queue_t = dispatch_queue_create("com.teco.ventago.qr.metadata", null)
 
     val previewLayer = AVCaptureVideoPreviewLayer(session = session).apply {
         videoGravity = AVLayerVideoGravityResizeAspectFill
     }
 
-    // MLKit (CODE_128 only; OR more formats if you need)
-//    private val scanner: MLKBarcodeScanner = run {
-//        val options = MLKBarcodeScannerOptions(formats = MLKBarcodeFormatCode128)
-//        MLKBarcodeScanner.barcodeScannerWithOptions(options)
-//    }
-
-    private var isProcessing = false
+    private var isConfigured = false
+    private var isStarted = false
     private var hasDelivered = false
 
     fun start() {
-        if (session.running) return
+        dispatch_async(sessionQueue) {
+            if (isStarted) return@dispatch_async
+            if (!configureSessionIfNeeded()) return@dispatch_async
 
-        device?.let { dev ->
-            val created = runCatching { AVCaptureDeviceInput(device = dev, error = null) }.getOrNull()
-            input = created
-            if (created != null && session.canAddInput(created)) session.addInput(created)
+            isStarted = true
+            if (!session.running) {
+                session.startRunning()
+            }
         }
-
-        if (session.canAddOutput(output)) session.addOutput(output)
-
-        // BGRA pixel format (NSDictionary<CFString, Any>)
-        output.videoSettings = mapOf(
-            kCVPixelBufferPixelFormatTypeKey to NSNumber(unsignedInt = kCVPixelFormatType_32BGRA)
-        )
-
-        output.setSampleBufferDelegate(this, queue)
-
-        session.startRunning()
     }
 
     fun stop() {
-        if (session.running) session.stopRunning()
+        dispatch_async(sessionQueue) {
+            isStarted = false
+            if (session.running) {
+                session.stopRunning()
+            }
+        }
     }
 
-    // NOTE: buffer is nullable in the protocol signature
+    private fun configureSessionIfNeeded(): Boolean {
+        if (isConfigured) return true
+
+        val dev = device ?: return false
+        val created = runCatching { AVCaptureDeviceInput(device = dev, error = null) }.getOrNull()
+            ?: return false
+
+        if (!session.canAddInput(created) || !session.canAddOutput(metadataOutput)) {
+            return false
+        }
+
+        session.beginConfiguration()
+        session.addInput(created)
+        session.addOutput(metadataOutput)
+
+        val selectedTypes = supportedMetadataTypes(metadataOutput.availableMetadataObjectTypes)
+        if (selectedTypes.isNotEmpty()) {
+            metadataOutput.metadataObjectTypes = selectedTypes
+            metadataOutput.setMetadataObjectsDelegate(this, queue = metadataQueue)
+            input = created
+            isConfigured = true
+        }
+
+        session.commitConfiguration()
+        return isConfigured
+    }
+
+    private fun supportedMetadataTypes(availableTypes: List<*>): List<String> {
+        val requestedTypes = listOfNotNull(
+            AVMetadataObjectTypeQRCode,
+            AVMetadataObjectTypeCode128Code,
+            AVMetadataObjectTypeEAN13Code,
+            AVMetadataObjectTypeEAN8Code,
+            AVMetadataObjectTypeUPCECode,
+            AVMetadataObjectTypeCode39Code,
+            AVMetadataObjectTypeCode93Code,
+            AVMetadataObjectTypePDF417Code,
+            AVMetadataObjectTypeAztecCode,
+            AVMetadataObjectTypeDataMatrixCode,
+            AVMetadataObjectTypeITF14Code,
+            AVMetadataObjectTypeInterleaved2of5Code
+        )
+
+        return requestedTypes.filter { availableTypes.contains(it) }
+    }
+
     override fun captureOutput(
         output: AVCaptureOutput,
-        didOutputSampleBuffer: CMSampleBufferRef?,
+        didOutputMetadataObjects: List<*>,
         fromConnection: AVCaptureConnection
     ) {
-        if (didOutputSampleBuffer == null) return
-        if (isProcessing) return
         if (singleShot && hasDelivered) return
 
-        isProcessing = true
-//        val image = MLKVisionImage(buffer = didOutputSampleBuffer).apply {
-//            orientation = currentImageOrientation()
-//        } as MLKCompatibleImageProtocol
+        val value = didOutputMetadataObjects
+            .asSequence()
+            .mapNotNull { (it as? AVMetadataMachineReadableCodeObject)?.stringValue }
+            .firstOrNull { it.isNotBlank() }
+            ?: return
 
-        // Use async API for widest compatibility
-//        scanner.processImage(image) { barcodes, error ->
-//            try {
-//                if (error != null) return@processImage
-//                val list = (barcodes as? List<*>) ?: return@processImage
-//                val first = list.firstOrNull() as? MLKBarcode ?: return@processImage
-//                val value = first.rawValue ?: return@processImage
-//                if (value.isNotEmpty()) {
-//                    if (singleShot) {
-//                        hasDelivered = true
-//                        runOnMain { stop() }
-//                    }
-//                    runOnMain { onBarcode(value) }
-//                }
-//            } finally {
-//                isProcessing = false
-//            }
-//        }
-    }
+        if (singleShot) {
+            hasDelivered = true
+        }
 
-    private fun currentImageOrientation(): UIImageOrientation {
-        val deviceOrientation = UIDevice.currentDevice.orientation
-        val cameraPosition = device?.position ?: AVCaptureDevicePositionBack
-        return when (deviceOrientation) {
-            UIDeviceOrientation.UIDeviceOrientationPortrait ->
-                if (cameraPosition == AVCaptureDevicePositionFront)
-                    UIImageOrientation.UIImageOrientationLeftMirrored
-                else UIImageOrientation.UIImageOrientationRight
-            UIDeviceOrientation.UIDeviceOrientationLandscapeLeft ->
-                if (cameraPosition == AVCaptureDevicePositionFront)
-                    UIImageOrientation.UIImageOrientationDownMirrored
-                else UIImageOrientation.UIImageOrientationUp
-            UIDeviceOrientation.UIDeviceOrientationPortraitUpsideDown ->
-                if (cameraPosition == AVCaptureDevicePositionFront)
-                    UIImageOrientation.UIImageOrientationRightMirrored
-                else UIImageOrientation.UIImageOrientationLeft
-            UIDeviceOrientation.UIDeviceOrientationLandscapeRight ->
-                if (cameraPosition == AVCaptureDevicePositionFront)
-                    UIImageOrientation.UIImageOrientationUpMirrored
-                else UIImageOrientation.UIImageOrientationDown
-            else -> UIImageOrientation.UIImageOrientationUp
+        runOnMain {
+            if (singleShot) stop()
+            onBarcode(value)
         }
     }
 }

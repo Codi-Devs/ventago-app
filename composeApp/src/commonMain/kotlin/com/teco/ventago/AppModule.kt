@@ -14,6 +14,8 @@ import com.teco.ventago.core.firebase.AnalyticsService
 import com.teco.ventago.core.logger.ILoggerService
 import com.teco.ventago.core.logger.LoggerService
 import com.teco.ventago.core.logger.printLog
+import com.teco.ventago.core.FingerPrintService
+import com.teco.ventago.core.network.FINGERPRINT_HEADER_NAME
 import com.teco.ventago.core.session.ISessionIdService
 import com.teco.ventago.core.session.SecureStorageSessionIdStore
 import com.teco.ventago.core.session.SessionIdBackendUrlMatcher
@@ -88,6 +90,12 @@ import com.teco.ventago.features.printers.domain.PrinterEngine
 import com.teco.ventago.features.printers.domain.PrinterService
 import com.teco.ventago.features.printers.ui.viewmodel.PrinterOnboardingViewModel
 import com.teco.ventago.features.printers.ui.viewmodel.PrintersViewModel
+import com.teco.ventago.features.reports.data.provider.IRealTimeReportsProvider
+import com.teco.ventago.features.reports.data.provider.RealTimeReportsProvider
+import com.teco.ventago.features.reports.data.repository.IRealTimeReportsRepository
+import com.teco.ventago.features.reports.data.repository.RealTimeReportsRepository
+import com.teco.ventago.features.reports.domain.RealTimeReportsService
+import com.teco.ventago.features.reports.ui.viewmodel.ReportDefinitionViewModel
 import com.teco.ventago.features.payments.data.provider.PaymentsProvider
 import com.teco.ventago.features.payments.data.provider.PaypalProvider
 import com.teco.ventago.features.payments.data.provider.YappyProvider
@@ -271,6 +279,14 @@ internal val viewModels = module {
             ioDispatcher = Dispatchers.Default
         )
     }
+    viewModel { (reportKey: String) ->
+        ReportDefinitionViewModel(
+            reportKey = reportKey,
+            reportsService = get(),
+            pdfSharer = get(),
+            ioDispatcher = Dispatchers.Default
+        )
+    }
     viewModelOf(::CustomersListViewModel)
     viewModelOf(::CustomerDetailsViewModel)
     viewModelOf(::CustomerFormViewModel)
@@ -351,6 +367,7 @@ internal fun appModule() = module {
 
     single<HttpClient> {
         val sessionIdService = get<ISessionIdService>()
+        val fingerPrintService = get<FingerPrintService>()
         client.plugin(HttpSend).intercept { request ->
             val originalUA = request.headers[HttpHeaders.UserAgent] ?: ""
             val customUA = "App ver ${AppInfo.VERSION}"
@@ -362,6 +379,10 @@ internal fun appModule() = module {
                     SessionIdConstants.HEADER_NAME,
                     sessionIdService.sessionIdForBackendRequest()
                 )
+            }
+            if (SessionIdBackendUrlMatcher.isInvoiceBackendUrl(request.url.toString())) {
+                request.headers.remove(FINGERPRINT_HEADER_NAME)
+                request.headers.append(FINGERPRINT_HEADER_NAME, fingerPrintService.getFingerPrint())
             }
             execute(request)
         }
@@ -399,6 +420,27 @@ internal fun appModule() = module {
             storage = get(),
             logger = get(),
             json = json
+        )
+    }
+
+    single<IRealTimeReportsProvider> {
+        RealTimeReportsProvider(
+            client = get(),
+            authService = get()
+        )
+    }
+
+    single<IRealTimeReportsRepository> {
+        RealTimeReportsRepository(
+            provider = get(),
+            logger = get()
+        )
+    }
+
+    single {
+        RealTimeReportsService(
+            repository = get(),
+            businessService = get()
         )
     }
 

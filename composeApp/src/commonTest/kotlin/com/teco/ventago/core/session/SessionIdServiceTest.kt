@@ -128,6 +128,14 @@ class SessionIdServiceTest {
         assertFalse(SessionIdBackendUrlMatcher.isVentaGoBackendUrl(Configs.ordersBasePath + ".example.com/api/v1/orders/create"))
     }
 
+    @Test
+    fun invoiceUrlMatcherIncludesInvoiceBackendOnly() {
+        assertTrue(SessionIdBackendUrlMatcher.isInvoiceBackendUrl(Configs.ordersBasePath + "/api/v1/orders/create"))
+        assertFalse(SessionIdBackendUrlMatcher.isInvoiceBackendUrl(Configs.serverBasePath + "auth/email-login"))
+        assertFalse(SessionIdBackendUrlMatcher.isInvoiceBackendUrl("https://la.storage.bunnycdn.com/ventago/products/image.jpg"))
+        assertFalse(SessionIdBackendUrlMatcher.isInvoiceBackendUrl(Configs.ordersBasePath + ".example.com/api/v1/orders/create"))
+    }
+
     private class FakeSessionIdStore : SessionIdStore {
         private val values = mutableMapOf<String, Any>()
 

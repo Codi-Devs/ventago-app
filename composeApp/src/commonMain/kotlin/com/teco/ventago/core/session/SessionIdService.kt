@@ -104,6 +104,12 @@ object SessionIdBackendUrlMatcher {
         }.getOrDefault(false)
     }
 
+    fun isInvoiceBackendUrl(url: String): Boolean {
+        return runCatching {
+            Url(url).sameOriginAs(Url(Configs.ordersBasePath))
+        }.getOrDefault(false)
+    }
+
     private fun Url.sameOriginAs(other: Url): Boolean {
         return protocol == other.protocol && host == other.host && port == other.port
     }

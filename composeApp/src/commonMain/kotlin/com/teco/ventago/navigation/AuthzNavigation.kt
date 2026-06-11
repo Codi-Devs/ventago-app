@@ -68,6 +68,9 @@ fun routeKeyForScreen(screen: PosScreens): RouteKey? {
         PosScreens.AddBillingPointScreen,
         PosScreens.EditBillingPointScreen -> RouteKey.SETTINGS_BRANCHES_OWNER
         PosScreens.ExpenseAccountsSettingsScreen -> RouteKey.SETTINGS_EXPENSE_ACCOUNTS_OWNER
+        PosScreens.Reports,
+        PosScreens.ReportsScreen,
+        PosScreens.ReportDefinitionScreen -> RouteKey.REPORTS_PAGE
         else -> null
     }
 }

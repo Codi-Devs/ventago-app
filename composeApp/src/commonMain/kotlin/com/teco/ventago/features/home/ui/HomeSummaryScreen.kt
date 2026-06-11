@@ -17,6 +17,8 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Assessment
+import androidx.compose.material.icons.rounded.ChevronRight
 import androidx.compose.material.icons.rounded.TrendingDown
 import androidx.compose.material.icons.rounded.TrendingUp
 import androidx.compose.material3.Card
@@ -52,6 +54,8 @@ import com.teco.ventago.features.home.domain.model.HomeSalesRange
 import com.teco.ventago.features.home.domain.model.HomeSummary
 import com.teco.ventago.features.home.domain.model.TopCustomer
 import com.teco.ventago.features.home.ui.viewmodel.HomeViewModel
+import com.teco.ventago.features.reports.domain.model.RealTimeReportCatalog
+import com.teco.ventago.isIOS
 import com.teco.ventago.isTablet
 import com.teco.ventago.navigation.ExpensesListScreenRoute
 import com.teco.ventago.navigation.LocalNavController
@@ -103,6 +107,7 @@ fun HomeSummaryScreen(
     val navController = LocalNavController.current
     val uiState by viewModel.uiState.collectAsState()
     val isTabletDevice = isTablet()
+    val isIosDevice = isIOS()
 
     if (uiState.isLoadingData) {
         HomeLoadingScreen()
@@ -132,16 +137,26 @@ fun HomeSummaryScreen(
             }
         }
 
+        if (uiState.canAccessReports) {
+            ReportsEntryCard(
+                onClick = { navigate(PosScreens.Reports) },
+                modifier = Modifier.padding(horizontal = 16.dp)
+            )
+        }
+
         if (uiState.invoicingEnabled && uiState.invoicingPlanState != null && uiState.showFolioPurchase) {
+            val buyStampsAction: (() -> Unit)? = if (isIosDevice) {
+                null
+            } else {
+                { openWhatsappMessage("50763879477", "Hola, quiero renovar mi plan de folios.") }
+            }
             InvoicingPlanCard(
                 initialQuota = uiState.invoicingPlanState?.totalDtes ?: 0,
                 remainingQuota = uiState.invoicingPlanState?.availableDtes ?: 0,
                 activationDate = uiState.invoicingPlanState?.activationDate ?: "-",
                 expirationDate = uiState.invoicingPlanState?.expirationDate ?: "-",
                 onSeeInvoices = { navigate(PosScreens.Orders) },
-                onBuyStamps = {
-                    openWhatsappMessage("50763879477", "Hola, quiero renovar mi plan de folios.")
-                }
+                onBuyStamps = buyStampsAction
             )
         }
 
@@ -197,6 +212,75 @@ fun HomeSummaryScreen(
             TopCustomersCard(
                 customers = summary.topCustomers,
                 modifier = Modifier.padding(horizontal = 16.dp)
+            )
+        }
+    }
+}
+
+@Composable
+private fun ReportsEntryCard(
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    val reportCount = RealTimeReportCatalog.reports.size
+    val categoryCount = RealTimeReportCatalog.categories.size
+    val gradient = Brush.linearGradient(
+        colors = listOf(
+            MaterialTheme.colorScheme.primary.copy(alpha = 0.92f),
+            MaterialTheme.colorScheme.secondary.copy(alpha = 0.92f)
+        )
+    )
+
+    Card(
+        modifier = modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(18.dp),
+        elevation = CardDefaults.cardElevation(2.dp),
+        colors = CardDefaults.cardColors(containerColor = Color.Transparent),
+        onClick = onClick
+    ) {
+        Row(
+            modifier = Modifier
+                .background(gradient)
+                .fillMaxWidth()
+                .padding(16.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Box(
+                modifier = Modifier
+                    .size(44.dp)
+                    .clip(RoundedCornerShape(14.dp))
+                    .background(MaterialTheme.colorScheme.onPrimary.copy(alpha = 0.16f)),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    imageVector = Icons.Filled.Assessment,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.onPrimary,
+                    modifier = Modifier.size(26.dp)
+                )
+            }
+            Spacer(Modifier.size(12.dp))
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = "Reportes en tiempo real",
+                    style = bodyMediumBold(color = MaterialTheme.colorScheme.onPrimary)
+                )
+                Spacer(Modifier.height(4.dp))
+                Text(
+                    text = "$categoryCount categorias web - $reportCount reportes",
+                    style = labelSmall(color = MaterialTheme.colorScheme.onPrimary.copy(alpha = 0.86f))
+                )
+                Spacer(Modifier.height(8.dp))
+                Text(
+                    text = "Ver categorias y definiciones",
+                    style = bodyMediumBold(color = MaterialTheme.colorScheme.onPrimary)
+                )
+            }
+            Icon(
+                imageVector = Icons.Rounded.ChevronRight,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.onPrimary,
+                modifier = Modifier.size(24.dp)
             )
         }
     }

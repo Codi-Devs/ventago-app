@@ -9,7 +9,7 @@ import io.ktor.client.HttpClient
 import kotlinx.coroutines.flow.Flow
 
 interface IAuthService {
-    suspend fun refreshToken(client: HttpClient)
+    suspend fun refreshToken(client: HttpClient, failedAccessToken: String? = null)
     suspend fun googleLogin(googleToken: String): AuthResponse
     suspend fun emailLogin(request: EmailLoginRequest): AuthResponse
     suspend fun emailRegister(request: CreateUserRequest): AuthResponse

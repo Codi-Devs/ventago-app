@@ -12,6 +12,7 @@ import io.ktor.client.request.post
 import io.ktor.client.request.setBody
 import io.ktor.http.ContentType
 import io.ktor.http.HttpHeaders
+import io.ktor.http.HttpStatusCode
 import io.ktor.http.contentType
 import io.ktor.http.isSuccess
 import kotlinx.serialization.json.JsonObject
@@ -167,10 +168,15 @@ class BusinessProvider(private val client: HttpClient, private val authService: 
 
 
     override suspend fun getBusinessById(businessId: Int): ApiResponse {
+        return requestBusinessById(businessId, allowRetry = true)
+    }
+
+    private suspend fun requestBusinessById(businessId: Int, allowRetry: Boolean): ApiResponse {
+        val accessToken = authService.getJwtToken()
         val res = client.post(Configs.serverBasePath + "business/get-business-by-id") {
             headers {
                 append(HttpHeaders.Accept, "*/*")
-                append(HttpHeaders.Authorization, "Bearer ${authService.getJwtToken()}")
+                append(HttpHeaders.Authorization, "Bearer $accessToken")
                 append(HttpHeaders.ContentType, "application/json")
             }
             contentType(ContentType.Application.Json)
@@ -182,12 +188,12 @@ class BusinessProvider(private val client: HttpClient, private val authService: 
         }
 
         val body = res.body<JsonObject>()
-        println("ASDASD: $body")
         val response = ApiResponse.fromJson(body)
-        if (response.error == ApiError.AUTH_001) {
+        val shouldRefreshToken = response.error == ApiError.AUTH_001 || res.status == HttpStatusCode.Unauthorized
+        if (allowRetry && shouldRefreshToken) {
             return try {
-                authService.refreshToken(client)
-                getBusinessById(businessId)
+                authService.refreshToken(client, failedAccessToken = accessToken)
+                requestBusinessById(businessId, allowRetry = false)
             } catch (e: Exception) {
                 response
             }

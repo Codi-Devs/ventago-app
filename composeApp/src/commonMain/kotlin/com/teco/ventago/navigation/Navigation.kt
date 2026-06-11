@@ -79,6 +79,8 @@ import com.teco.ventago.features.printers.domain.PrinterQrEntry
 import com.teco.ventago.features.printers.ui.PrinterConfigScreen as PrinterConfigContent
 import com.teco.ventago.features.printers.ui.PrinterOnboardingScreen as PrinterOnboardingContent
 import com.teco.ventago.features.printers.ui.PrintersScreen as PrintersContent
+import com.teco.ventago.features.reports.ui.ReportDefinitionScreen
+import com.teco.ventago.features.reports.ui.ReportsScreen
 import com.teco.ventago.features.payments.ui.home.OnboardingPaymentScreen
 import com.teco.ventago.features.payments.ui.home.viewmodel.PaymentMethodType
 import com.teco.ventago.features.payments.ui.home.viewmodel.PaymentMethodsViewModel
@@ -171,6 +173,7 @@ import ventago.composeapp.generated.resources.cufe_import
 import ventago.composeapp.generated.resources.register
 import ventago.composeapp.generated.resources.register_business
 import ventago.composeapp.generated.resources.reset_password
+import ventago.composeapp.generated.resources.reports
 import ventago.composeapp.generated.resources.search
 import ventago.composeapp.generated.resources.yappy
 
@@ -209,6 +212,9 @@ enum class PosScreens(
     HomeScreen(Res.string.home, false, showBackButton = false),
     NotificationsScreen(Res.string.notifications),
     SummaryScreen(Res.string.home_summary_tab, true, showBackButton = false),
+    Reports(Res.string.reports),
+    ReportsScreen(Res.string.reports, true, showBackButton = true),
+    ReportDefinitionScreen(Res.string.reports, true, showBackButton = true),
 
     //    Products Screens
     ProductsManage(Res.string.categories, false), CategoriesManageScreen(
@@ -427,6 +433,8 @@ fun Navigation(
 
         addPaymentsNavigation(navController, appViewModel, analyticsService)
 
+        addReportsNavigation(navController, analyticsService)
+
         addOrdersNavigation(navController, analyticsService)
         addCustomersNavigation(navController, analyticsService)
 
@@ -486,6 +494,37 @@ private fun NavGraphBuilder.addLoginNavigation(
             ForgotPasswordResultScreen { route ->
                 navController.navigate(route.name)
             }
+        }
+    }
+}
+
+private fun NavGraphBuilder.addReportsNavigation(
+    navController: NavHostController,
+    analyticsService: AnalyticsService
+) {
+    navigation(
+        route = PosScreens.Reports.name,
+        startDestination = PosScreens.ReportsScreen.name
+    ) {
+        composable(route = PosScreens.ReportsScreen.name) {
+            analyticsService.logScreenView("ReportsScreen")
+            ReportsScreen(
+                onReportSelected = { reportKey ->
+                    navController.navigate(ReportDefinitionRoute(reportKey = reportKey))
+                }
+            )
+        }
+
+        composable<ReportDefinitionRoute> { backStackEntry ->
+            val args = backStackEntry.toRoute<ReportDefinitionRoute>()
+            analyticsService.logScreenView("ReportDefinitionScreen:${args.reportKey}")
+            ReportDefinitionScreen(
+                reportKey = args.reportKey,
+                onBack = { navController.navigateUp() },
+                onOpenOrders = {
+                    navController.navigate(PosScreens.Orders.name)
+                }
+            )
         }
     }
 }
@@ -1541,6 +1580,7 @@ fun String.toPosScreenOrNull(): PosScreens? {
     if (this.contains("BillingPointManageRoute")) return PosScreens.BillingPointManageScreen
     if (this.contains("AddBillingPointRoute")) return PosScreens.AddBillingPointScreen
     if (this.contains("EditBillingPointRoute")) return PosScreens.EditBillingPointScreen
+    if (this.contains("ReportDefinitionRoute")) return PosScreens.ReportDefinitionScreen
     if (this.contains("PrinterOnboardingRoute")) return PosScreens.PrinterOnboardingScreen
     if (this.contains("PrinterConfigRoute")) return PosScreens.PrinterConfigScreen
     val base = this.substringBefore("?")     // strip query params
@@ -1614,6 +1654,9 @@ data class OrderDetailsRoute(val orderJson: String? = null)
 
 @Serializable
 data class AchPaymentDetailsRoute(val paymentUid: String)
+
+@Serializable
+data class ReportDefinitionRoute(val reportKey: String)
 
 @Serializable
 data class BillingPointManageRoute(val branchCode: String)

@@ -49,7 +49,8 @@ object AuthzEvaluator {
             requiredAny = setOf(ScopeKey.EXPENSES_VIEW, ScopeKey.EXPENSES_CREATE, ScopeKey.EXPENSES_DELETE)
         ),
         MenuKey.REPORTS to AuthzPolicy(
-            requiredAny = setOf(ScopeKey.REPORTS_VIEW, ScopeKey.REPORTS_EXECUTE)
+            requiredAny = setOf(ScopeKey.REPORTS_VIEW, ScopeKey.REPORTS_EXECUTE),
+            betaFeature = BetaFeature.REAL_TIME_REPORTS
         ),
         MenuKey.SETTINGS to AuthzPolicy(allowAll = true),
     )
@@ -129,7 +130,10 @@ object AuthzEvaluator {
             requiredAny = setOf(ScopeKey.RECURRING_CREATE),
             betaFeature = BetaFeature.RECURRING_INVOICING
         ),
-        RouteKey.REPORTS_PAGE to AuthzPolicy(requiredAny = setOf(ScopeKey.REPORTS_VIEW)),
+        RouteKey.REPORTS_PAGE to AuthzPolicy(
+            requiredAny = setOf(ScopeKey.REPORTS_VIEW),
+            betaFeature = BetaFeature.REAL_TIME_REPORTS
+        ),
         RouteKey.MY_ACCOUNT to AuthzPolicy(allowAll = true),
     )
 
@@ -178,7 +182,10 @@ object AuthzEvaluator {
         ActionKey.EXPENSES_CREATE to AuthzPolicy(requiredAny = setOf(ScopeKey.EXPENSES_CREATE)),
         ActionKey.EXPENSES_UPDATE to AuthzPolicy(requiredAny = setOf(ScopeKey.EXPENSES_CREATE)),
         ActionKey.EXPENSES_DELETE to AuthzPolicy(requiredAny = setOf(ScopeKey.EXPENSES_DELETE)),
-        ActionKey.REPORTS_EXECUTE to AuthzPolicy(requiredAny = setOf(ScopeKey.REPORTS_EXECUTE)),
+        ActionKey.REPORTS_EXECUTE to AuthzPolicy(
+            requiredAny = setOf(ScopeKey.REPORTS_EXECUTE),
+            betaFeature = BetaFeature.REAL_TIME_REPORTS
+        ),
         ActionKey.SETTINGS_MODIFY to AuthzPolicy(ownerOnly = true),
         ActionKey.RECURRING_CREATE to AuthzPolicy(
             requiredAny = setOf(ScopeKey.RECURRING_CREATE),

@@ -96,6 +96,7 @@ import com.teco.ventago.features.home.domain.model.HomeSalesRange
 import com.teco.ventago.features.home.domain.model.HomeSummary
 import com.teco.ventago.core.LocalStorage
 import com.teco.ventago.features.quotes.domain.QuotesOnboarding
+import com.teco.ventago.isIOS
 import com.teco.ventago.navigation.PosScreens
 import com.teco.ventago.rememberPlatformState
 import com.teco.ventago.utils.formatNumberToMoney
@@ -1032,6 +1033,7 @@ fun InvoicingPlanCard(
 ) {
     val used = (initialQuota - remainingQuota).coerceAtLeast(0)
     val progress = if (initialQuota > 0) used.toFloat() / initialQuota.toFloat() else 0f
+    val buyStampsAction = if (isIOS()) null else onBuyStamps
 
     val isExpired = remainingQuota <= 0
     // Consider “expiring soon” if < 15% remaining but > 0
@@ -1172,7 +1174,7 @@ fun InvoicingPlanCard(
             }
 
             // Optional actions
-            if (onSeeInvoices != null || onBuyStamps != null) {
+            if (onSeeInvoices != null || buyStampsAction != null) {
                 Spacer(Modifier.height(12.dp))
                 Row(
                     modifier = Modifier.fillMaxWidth(),
@@ -1188,10 +1190,10 @@ fun InvoicingPlanCard(
                             Text("Ver facturas")
                         }
                     }
-                    if (onBuyStamps != null) {
+                    if (buyStampsAction != null) {
                         Spacer(Modifier.width(8.dp))
                         Button(
-                            onClick = onBuyStamps,
+                            onClick = buyStampsAction,
                             shape = RoundedCornerShape(10.dp),
                             enabled = true
                         ) {

@@ -22,6 +22,7 @@ actual object DateFormat {
     private const val ORDERS: String = "yyyy-MM-dd'T'HH:mm:ss"
     private const val ORDERS_TIME_EN: String = "dd MMMM yyyy, 'at' hh:mm aaa"
     private const val ORDERS_TIME_ES: String = "dd MMMM yyyy, 'a las' hh:mm aaa"
+    private const val FALLBACK_DATE: String = "00-00-0000 00:00"
 
 
     /**
@@ -48,17 +49,45 @@ actual object DateFormat {
      * Converts a date string from one format to another.
      */
     actual fun getFormattedDate(date: String, inputFormat: String, outputFormat: String): String {
-        val dateFormatter = NSDateFormatter()
-        dateFormatter.dateFormat = inputFormat
-        dateFormatter.timeZone = NSTimeZone.Companion.timeZoneWithName("UTC")!!
-
-        val parsedDate = dateFormatter.dateFromString(date) ?: return "00-00-0000 00:00"
+        val parsedDate = parseDate(date, inputFormat) ?: return FALLBACK_DATE
 
         val outputFormatter = NSDateFormatter()
         outputFormatter.dateFormat = outputFormat
         outputFormatter.timeZone = NSTimeZone.systemTimeZone()
 
         return outputFormatter.stringFromDate(parsedDate)
+    }
+
+    private fun parseDate(date: String, inputFormat: String): NSDate? {
+        val normalizedDate = date.trim()
+        if (normalizedDate.isEmpty()) return null
+
+        for (format in candidateInputFormats(inputFormat)) {
+            val dateFormatter = NSDateFormatter()
+            dateFormatter.locale = NSLocale(localeIdentifier = "en_US_POSIX")
+            dateFormatter.dateFormat = format
+            dateFormatter.timeZone = NSTimeZone.Companion.timeZoneWithName("UTC")!!
+
+            dateFormatter.dateFromString(normalizedDate)?.let { return it }
+        }
+
+        return null
+    }
+
+    private fun candidateInputFormats(inputFormat: String): List<String> {
+        if (inputFormat != ORDERS) return listOf(inputFormat)
+
+        return listOf(
+            ORDERS,
+            "$ORDERS.SSS",
+            "$ORDERS.SSSSSS",
+            "${ORDERS}XXXXX",
+            "$ORDERS.SSSXXXXX",
+            "$ORDERS.SSSSSSXXXXX",
+            "${ORDERS}ZZZZZ",
+            "$ORDERS.SSSZZZZZ",
+            "$ORDERS.SSSSSSZZZZZ"
+        )
     }
 
 }

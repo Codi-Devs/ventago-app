@@ -43,6 +43,7 @@ import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.decodeFromJsonElement
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
@@ -61,6 +62,7 @@ class AuthService(
 ) : IAuthService {
     var user = MutableStateFlow<User?>(null)
     private var userChangesJob: Job? = null
+    private val refreshSingleFlight = RefreshTokenSingleFlight()
 
     init {
         CoroutineScope(Dispatchers.IO+ SupervisorJob()).launch {
@@ -136,7 +138,18 @@ class AuthService(
         return store.string(forKey = if (!refresh) SecureConstants.JWT_TOKEN else SecureConstants.REFRESH_JWT_TOKEN)
     }
 
-    override suspend fun refreshToken(client: HttpClient) {
+    override suspend fun refreshToken(client: HttpClient, failedAccessToken: String?) {
+        val tokenAtFailure = failedAccessToken ?: getJwtToken()
+        refreshSingleFlight.refresh(
+            failedAccessToken = tokenAtFailure,
+            currentAccessToken = { getJwtToken() },
+            refreshTokenAvailable = { !getJwtToken(refresh = true).isNullOrBlank() },
+            performRefresh = { performRefreshToken(client) },
+            onRefreshFailure = { signOut() },
+        )
+    }
+
+    private suspend fun performRefreshToken(client: HttpClient) {
         val refresh = getJwtToken(true)
         val res = client.get(Configs.serverBasePath + "site/refresh-token") {
             headers {
@@ -149,20 +162,21 @@ class AuthService(
 
         val body = res.body<JsonObject>()
         val response = ApiResponse.fromJson(body)
-        val map : Map<String, JsonElement>?
-        try {
-            map = response.data?.let { Json.decodeFromJsonElement<Map<String, JsonElement>>(it) }
-        } catch (_: Exception) {
-            return
-        }
+        val map = try {
+            response.data?.let { Json.decodeFromJsonElement<Map<String, JsonElement>>(it) }
+        } catch (e: Exception) {
+            throw IllegalStateException("Invalid refresh token response", e)
+        } ?: throw IllegalStateException("No data in refresh token response")
 
-        map?.let {
-            val accessToken = it["access_token"]!!.jsonPrimitive.content
-            val refreshToken = it["refresh_token"]!!.jsonPrimitive.content
+        val accessToken = map["access_token"]?.jsonPrimitive?.contentOrNull
+        val refreshToken = map["refresh_token"]?.jsonPrimitive?.contentOrNull
+        if (!accessToken.isNullOrBlank() && !refreshToken.isNullOrBlank()) {
             saveJwt(accessToken)
             saveJwt(refreshToken, true)
             updateCurrentUserAuthz(accessToken)
-        } ?: throw Exception("No data in response")
+        } else {
+            throw IllegalStateException("Refresh token response is missing tokens")
+        }
     }
 
     override suspend fun googleLogin(googleToken: String): AuthResponse {
@@ -358,6 +372,9 @@ class AuthService(
             if (!refresh) SecureConstants.JWT_TOKEN else SecureConstants.REFRESH_JWT_TOKEN,
             token
         )
+        if (refresh) {
+            refreshSingleFlight.resetFailureState()
+        }
     }
 
     private fun enrichUserWithCurrentToken(userModel: User, accessToken: String? = getJwtToken()): User {

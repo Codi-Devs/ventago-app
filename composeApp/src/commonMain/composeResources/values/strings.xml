@@ -372,6 +372,7 @@
     <string name="home_summary_no_top_clients">No recurring clients yet</string>
     <string name="home_summary_orders_word">orders</string>
     <string name="home_summary_records_word">records</string>
+    <string name="reports">Reportes</string>
     <string name="notifications">Notifications</string>
     <string name="notifications_empty">No notifications available</string>
     <string name="notifications_load_more">Load more</string>

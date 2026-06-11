@@ -1,6 +1,7 @@
 package com.teco.ventago
 
 import com.teco.ventago.core.IosPdfSharer
+import com.teco.ventago.core.FingerPrintService
 import com.teco.ventago.core.LocalStorage
 import com.teco.ventago.core.PdfSharer
 import com.teco.ventago.core.SecureStorage
@@ -34,6 +35,7 @@ actual fun httpClient(config: HttpClientConfig<*>.() -> Unit) = HttpClient(Darwi
 actual val platformModule: Module = module {
     single { LocalStorage() }
     single { SecureStorage() }
+    single { FingerPrintService() }
     single<CacheDatabase> {
         val builder = getDatabaseBuilder()
         getCacheDatabase(builder)

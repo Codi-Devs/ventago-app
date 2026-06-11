@@ -28,6 +28,7 @@ data class HomeState(
     val canCreateExpense: Boolean = false,
     val canAccessCustomers: Boolean = false,
     val canAccessExpenses: Boolean = false,
+    val canAccessReports: Boolean = false,
     val showSupportCard: Boolean = false,
     val showFolioPurchase: Boolean = false,
 

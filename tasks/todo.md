@@ -1,3 +1,297 @@
+# Order Details Yappy Payment ID TODO
+
+## Plan
+- [x] Inspect order payment model parsing and the Order Details payment card rendering.
+- [x] Show the payment id for Yappy payments when a payment id is present.
+- [x] Run focused compile verification and record results.
+
+## Verification Gates
+- [x] `./gradlew --no-build-cache --no-configuration-cache :composeApp:compileKotlinMetadata`
+- [x] `./gradlew --no-build-cache --no-configuration-cache :androidApp:compileDebugKotlin`
+
+## Review Notes
+- `OrderPaymentDto` already parses `payment_intent_id`, so no API/model change was needed.
+- `Pagos registrados` now shows `ID de pago: <payment_intent_id>` for Yappy payments with a nonblank payment id.
+- Yappy detection uses method name/description and method id `12` from the provided payload, while ACH-specific loading/actions remain unchanged.
+
+# Financial and Operative Reports UI TODO
+
+## Plan
+- [x] Add curated KPIs, trend/breakdown charts, and details for Estado de Resultados.
+- [x] Add curated KPIs, current-vs-previous charts, and details for Comparativo Financiero.
+- [x] Add curated KPIs, margin trend, income/expense donut, and details for Margen Operativo.
+- [x] Add curated KPIs, indicator/customer charts, and details for Resumen Ejecutivo.
+- [x] Add curated KPIs, cash-flow combo chart, and payable/receivable details for Flujo de Caja.
+- [x] Run focused report tests plus Android/metadata compile verification.
+
+## Verification Gates
+- [x] `./gradlew --no-build-cache --no-configuration-cache :composeApp:testAndroidHostTest --tests 'com.teco.ventago.features.reports.*'`
+- [x] `./gradlew --no-build-cache --no-configuration-cache :composeApp:compileKotlinMetadata :androidApp:compileDebugKotlin`
+
+## Review Notes
+- Estado de Resultados now shows requested KPIs, multi-series trend lines, financial composition donut, and margin rows rendered as percent.
+- Comparativo Financiero now shows current/previous/variation KPIs, grouped Actual vs Anterior chart, variation chart, and comparison detail rows.
+- Margen Operativo now shows revenue/expense/profit/margin KPIs, margin line chart, income/expense/profit donut, and percent margin detail rows.
+- Resumen Ejecutivo now maps `business_overview` to requested KPIs, excludes count-only rows from the indicator chart, and renders count-only rows as quantities rather than money.
+- Flujo de Caja now shows receivable/payable/net/cobertura KPIs, grouped cash-flow period chart, and detail rows with Cobro/Pago labels plus business-facing action text.
+
+# Expense Reports UI TODO
+
+## Plan
+- [x] Add curated KPIs, charts, and detail columns for Resumen de gastos.
+- [x] Add curated KPIs, aging chart, and payable detail columns for Antiguedad de CxP.
+- [x] Add curated KPIs, account/category charts, and detail columns for Gastos por cuenta.
+- [x] Add curated KPIs, supplier charts, and detail columns for Gastos por proveedor.
+- [x] Add curated KPIs and paginated detail-only table for Detalle de gastos.
+- [x] Add curated KPIs, frequency/supplier/category charts, and detail columns for Gastos recurrentes.
+- [x] Run focused report tests plus Android/metadata compile verification.
+
+## Verification Gates
+- [x] `./gradlew --no-build-cache --no-configuration-cache :composeApp:testAndroidHostTest --tests 'com.teco.ventago.features.reports.*'`
+- [x] `./gradlew --no-build-cache --no-configuration-cache :composeApp:compileKotlinMetadata :androidApp:compileDebugKotlin`
+
+## Review Notes
+- Resumen de gastos now shows the requested four KPIs, grouped period bars for subtotal/ITBMS/total, a trend combo chart for total/documents, and period detail rows.
+- Antiguedad de CxP now shows payable/overdue/not-due/partial-paid KPIs, grouped aging bars for balance/documents, and document-level payable rows.
+- Gastos por cuenta now shows categorized/uncategorized/count/top-account KPIs, category and classification charts, and account rows with code/classification/items/expenses/totals.
+- Gastos por proveedor now shows spend/supplier/top-supplier/concentration KPIs, supplier and concentration charts, and supplier rows with RUC, invoices, subtotal, ITBMS, total, and spend percent.
+- Detalle de gastos now remains KPI plus paginated detail table only, matching the web UI with no graph fallback.
+- Gastos recurrentes now shows monthly estimate/count/top supplier/top category KPIs, frequency/supplier/category charts, and recurring pattern rows with supplier RUC, frequency count, last expense, next due date, status, and actions.
+
+# Tax Reports UI TODO
+
+## Plan
+- [x] Add curated KPIs for ITBMS en Ventas with row-derived fallbacks for ITBMS bruto, retenciones, credit notes, and net ITBMS.
+- [x] Add curated charts for ITBMS en Ventas: net ITBMS by period and fiscal composition.
+- [x] Add curated detail columns for ITBMS en Ventas with business labels and negative display for retentions.
+- [x] Add curated KPIs, charts, and detail columns for ITBMS en Gastos.
+- [x] Run focused report tests plus Android/metadata compile verification.
+
+## Verification Gates
+- [x] `./gradlew --no-build-cache --no-configuration-cache :composeApp:testAndroidHostTest --tests 'com.teco.ventago.features.reports.*'`
+- [x] `./gradlew --no-build-cache --no-configuration-cache :composeApp:compileKotlinMetadata :androidApp:compileDebugKotlin`
+
+## Review Notes
+- ITBMS en Ventas now shows the requested fiscal KPIs, including negative display for retentions and credit-note ITBMS, and derives gross/net values from rows when summary fields are missing.
+- ITBMS en Ventas renders `ITBMS neto por periodo` as vertical bars and `Composicion fiscal del ITBMS` as a horizontal composition bar chart.
+- ITBMS en Ventas detail rows are business-facing: document, type, date, client, taxable subtotal, gross ITBMS, retention, net ITBMS, exempt, non-taxed, and total.
+- ITBMS en Gastos now shows the requested KPIs, a monthly total/ITBMS combo chart, top suppliers by ITBMS, fiscal breakdown donut, and period/supplier/document/subtotal/ITBMS/total details.
+- Increased the desktop detail-column cap to preserve the full tax sales table.
+
+# Customer Statement Search Fix TODO
+
+## Plan
+- [x] Change customer report RUC detail columns so customer ids are never used as RUC fallback.
+- [x] Add a lightweight customer search option model for report filters.
+- [x] Add customer search API flow through reports provider/repository/service using `/api/v1/customers/?page=0&size=8&name=...`.
+- [x] Add debounced customer search and selection state to `ReportDefinitionViewModel`.
+- [x] Replace the `customer_id` free-text field in Estado de Cuenta with a dynamic name/RUC dropdown that sets `customer_id`.
+- [x] Run focused report tests plus Android/metadata compile verification.
+
+## Verification Gates
+- [x] `./gradlew --no-build-cache --no-configuration-cache :composeApp:testAndroidHostTest --tests 'com.teco.ventago.features.reports.*'`
+- [x] `./gradlew --no-build-cache --no-configuration-cache :composeApp:compileKotlinMetadata :androidApp:compileDebugKotlin`
+
+## Review Notes
+- User correction: Estado de Cuenta must search customers by business-facing name/RUC, not ask the owner to type a technical customer id.
+- Customer report RUC columns now only read RUC/tax fields and render empty when no RUC exists; they no longer fall back to customer id.
+- Added `ReportCustomerOption` parsing for `/api/v1/customers/` search results and a focused parser test using the provided response shape.
+- Reports provider/repository/service now expose customer search with page `0`, size `8`, name query, bearer auth, and `X-Business-ID`.
+- Estado de Cuenta filter now debounces customer name search, shows a dropdown of customer name and RUC, and writes the selected customer id to the report request before applying filters.
+
+# Customer Reports UI TODO
+
+## Plan
+- [x] Add raw-summary KPI extraction for all six customer reports, including note suffixes where requested.
+- [x] Add customer-report chart rules using preferred chart payloads, row fallbacks, and donut breakdown fallbacks.
+- [x] Add curated details for Ventas por Cliente.
+- [x] Add curated details for Estado de Cuenta.
+- [x] Add curated details for Clientes con Saldo Pendiente.
+- [x] Add curated details for Clientes Nuevos, Clientes Inactivos, and Ranking de Clientes.
+- [x] Run focused report tests plus Android/metadata compile verification.
+
+## Verification Gates
+- [x] `./gradlew --no-build-cache --no-configuration-cache :composeApp:testAndroidHostTest --tests 'com.teco.ventago.features.reports.*'`
+- [x] `./gradlew --no-build-cache --no-configuration-cache :composeApp:compileKotlinMetadata :androidApp:compileDebugKotlin`
+
+## Review Notes
+- User correction: customer reports need exact KPI/chart/detail mappings from web API response keys rather than generic summary and row rendering.
+- Customer KPIs now read from raw `summary` keys, including nested `top_by_amount` and note suffixes like document count or top-customer total.
+- Customer charts now prefer requested `charts.*` keys and fall back to rows, summary totals, aging buckets, or pending-balance rows depending on report.
+- Ventas por Cliente, Estado de Cuenta, Clientes con Saldo Pendiente, Clientes Nuevos, Clientes Inactivos, and Ranking de Clientes now use curated business columns with defaults like `Consumidor Final`, `Cliente sin nombre`, `-`, and `Sin compra`.
+- First verification caught a private helper reuse (`containsAny`) from the parser; replaced it with local list checks and reran successfully.
+
+# Sales Reports Batch UI TODO
+
+## Plan
+- [x] Add curated indicators and detail rows for Sales by Payment Method.
+- [x] Add curated indicators and detail rows for Sales by Salesman.
+- [x] Add curated indicators, amount-based bars, and detail rows for Sales by Branch.
+- [x] Add curated indicators, remove aging charts, and owner-facing detail rows for Cancellations and Credit Notes.
+- [x] Add curated indicators, aging labels, and owner-facing document rows for Sales Pending to Charge.
+- [x] Run focused report tests plus Android/metadata compile verification.
+
+## Verification Gates
+- [x] `./gradlew --no-build-cache --no-configuration-cache :composeApp:testAndroidHostTest --tests 'com.teco.ventago.features.reports.*'`
+- [x] `./gradlew --no-build-cache --no-configuration-cache :composeApp:compileKotlinMetadata :androidApp:compileDebugKotlin`
+
+## Review Notes
+- User correction: continue report-by-report refinement for the remaining real-time sales reports, removing technical labels and preserving business-facing language.
+- Sales by Payment Method now shows only total sold, total charged, main method, and digital-payment percent, with detail rows limited to method, transactions, sold, charged, pending, average ticket, and usage percent.
+- Sales by Salesman now shows total sold, total charged, average ticket, and lead salesman, with user-level document/subtotal/ITBMS/sold/ticket rows.
+- Sales by Branch now uses amount-based bars and shows total sold, lead branch code, total charged, and average ticket, with branch rows focused on branch, code, ITBMS, sold, and average ticket.
+- Cancellations and Credit Notes now filters out aging charts, uses adjustment/canceled/credit-note/user/type indicators, and shows client, order, amount, reason, type, and executing user.
+- Sales Pending to Charge now shows pending/overdue/partial/client/days indicators, friendly aging bucket labels, and document rows with client, issue date, due date, total, paid, and unpaid amount.
+
+# Product Sales Report UI TODO
+
+## Plan
+- [x] Remove the report-detail `Volver a reportes` button because the app bar already owns back navigation.
+- [x] Use green chart colors for both bar and donut chart rendering.
+- [x] Add Product Sales metric rules for total sold, items sold, top item by sales amount, and top item by quantity.
+- [x] Rename the Product Sales bar chart to `Top productos por ventas`.
+- [x] Add Product Sales detail-column rules that hide technical IDs/category/type/duplicate labels and show product/service, sales percent, ITBMS, and total sales including ITBMS.
+- [x] Run focused report tests plus Android/metadata compile verification.
+
+## Verification Gates
+- [x] `./gradlew --no-build-cache --no-configuration-cache :composeApp:testAndroidHostTest --tests 'com.teco.ventago.features.reports.*'`
+- [x] `./gradlew --no-build-cache --no-configuration-cache :composeApp:compileKotlinMetadata :androidApp:compileDebugKotlin`
+
+## Review Notes
+- User correction: refine Product Sales report specifically and apply general chart/back-button cleanup to all reports where relevant.
+- Removed the duplicate in-content back button from report detail; navigation stays in the app bar.
+- All report bar charts now use the shared green chart color, and donut charts use green variants.
+- Product Sales now curates four KPI cards and can derive row-based totals/top products if the summary payload omits them.
+- Product Sales chart is titled `Top productos por ventas` and uses product names with total sales including ITBMS.
+- Product Sales detail rows hide key/product id/category/type fields and show only product/service, items sold, % ventas, ITBMS, and total con ITBMS.
+
+# Sales Summary Report UI TODO
+
+## Plan
+- [x] Remove real-time/export badges from report list cards and detail header.
+- [x] Shift report buttons, chips, icons, and section titles to secondary theme colors.
+- [x] Add Sales Summary display rules for KPI selection/order, ITBMS currency display, recent-first bars, Cobrado vs pendiente pie chart, and detail columns.
+- [x] Add a Sales Summary action button that opens the existing Orders screen.
+- [x] Replace visible `Anio` copy with `Año`.
+- [x] Run focused report tests plus Android/metadata compile verification.
+
+## Verification Gates
+- [x] `./gradlew --no-build-cache --no-configuration-cache :composeApp:testAndroidHostTest --tests 'com.teco.ventago.features.reports.*'`
+- [x] `./gradlew --no-build-cache --no-configuration-cache :composeApp:compileKotlinMetadata :androidApp:compileDebugKotlin`
+
+## Review Notes
+- User correction: refine reports report-by-report; Sales Summary needs curated KPIs, chart behavior, business detail fields, Orders navigation, and secondary color emphasis.
+- Removed the `Tiempo real` and `Excel/PDF` badges from report cards and the report detail header.
+- Report buttons, category chips, report icons, report titles, section titles, and pagination/export actions now use the secondary color family.
+- Sales Summary now shows the requested six KPI cards only, formats generated ITBMS as money, uses green recent-first bars, replaces the previous pie chart with `Cobrado vs pendiente`, and limits detail rows to the business fields requested.
+- Sales Summary detail includes `Ver órdenes`, wired to the existing Orders screen route.
+- Replaced visible `Anio` labels with `Año`.
+
+# Real-Time Reports Business UI TODO
+
+## Plan
+- [x] Remove developer-facing API/key/source metadata from report detail UI.
+- [x] Render visible chart cards from backend chart datasets instead of textual chart metadata.
+- [x] Show skeleton content during both first load and report refresh.
+- [x] Add report-specific filter inputs from the web report contracts using business-facing labels and calendar pickers for dates.
+- [x] Run focused report tests and Android/metadata compile verification.
+
+## Verification Gates
+- [x] `./gradlew --no-build-cache --no-configuration-cache :composeApp:testAndroidHostTest --tests 'com.teco.ventago.features.reports.*'`
+- [x] `./gradlew --no-build-cache --no-configuration-cache :composeApp:compileKotlinMetadata :androidApp:compileDebugKotlin`
+
+## Review Notes
+- User correction: report detail still exposed technical metadata and did not render visible charts or full business filters.
+- Removed endpoint/report-key/source metadata from the report detail UI and replaced technical fallback copy with owner-facing language.
+- Chart cards now render explicit API chart points first, then derive visible charts from report rows or KPI values when the API response does not include a chart-ready payload.
+- Report detail shows shimmer skeleton cards during initial load and refresh.
+- Report-specific filter inputs are generated from the real-time report contract map using business labels, select/boolean pills, numeric/text fields, and the existing date picker.
+
+# Real-Time Reports API Integration TODO
+
+## Plan
+- [x] Review the updated report guide API contracts and existing provider/repository/UI loading patterns.
+- [x] Add real-time reports provider, repository, service, request/response models, and DI wiring.
+- [x] Replace static report-definition detail rendering with live query state, filter application, pagination, skeleton loading, and export actions.
+- [x] Add focused tests for request/query construction and response parsing.
+- [x] Run focused and broad compile/test verification gates.
+
+## Verification Gates
+- [x] `./gradlew --no-build-cache --no-configuration-cache :composeApp:testAndroidHostTest --tests 'com.teco.ventago.features.reports.*'`
+- [x] `./gradlew --no-build-cache --no-configuration-cache :composeApp:compileKotlinMetadata :androidApp:compileDebugKotlin`
+
+## Review Notes
+- User correction: the first reports pass only exposed static definitions. The detail screen must call `/api/v1/reports/real-time/<report_key>` and use backend `data` to render KPIs/rows/pagination.
+- Keep async reports excluded from this scope; only the guide's real-time endpoints are implemented.
+- Preserve Spanish visible copy, compact filter band semantics, skeletons on initial load, KPIs before charts/table, export button states, and paginated range controls.
+- Added a generic real-time reports API layer for `/api/v1/reports/real-time/<report_key>` and export/download endpoints using the app's existing orders-host auth headers and token refresh path.
+- Report detail now fetches live `summary`, `rows/items/timeline`, `charts`, and `pagination` data. First load uses skeletons; Apply/pagination/export use `LoadingSheet` feedback.
+- Customer Statement intentionally waits for `customer_id` before calling the endpoint because the web contract marks it required.
+- Custom date ranges are not exposed as free-text fields; date-range UI should use the existing calendar picker component in a follow-up.
+
+# Real-Time Reports Home Section TODO
+
+## Plan
+- [x] Review architecture, code conventions, required skills, and the web report replication guide.
+- [x] Add a real-time report catalog with the six web categories and only real-time report definitions.
+- [x] Add report category and report definition UI screens using existing Compose/design-system patterns.
+- [x] Add a Home Summary report card and navigation/authz wiring behind `reports:view` plus `real_time_reports` beta access.
+- [x] Add focused catalog/authz tests and run compile/test verification.
+
+## Verification Gates
+- [x] `./gradlew --no-build-cache --no-configuration-cache :composeApp:testAndroidHostTest --tests com.teco.ventago.features.reports.RealTimeReportCatalogTest --tests com.teco.ventago.core.authz.AuthzEvaluatorTest`
+- [x] `./gradlew --no-build-cache --no-configuration-cache :composeApp:compileKotlinMetadata :androidApp:compileDebugKotlin`
+
+## Review Notes
+- Existing worktree already has unrelated modified auth/network/iOS/task files, including `HomeSummaryScreen.kt`; preserve those changes and keep this patch scoped to reports.
+- The shared guide requires Spanish visible copy, six report categories, real-time-only inclusion, no invented charts, compact filter-band semantics, and export metadata aligned to web exceptions.
+- Added `RealTimeReportCatalog` with 26 real-time reports across Ventas, Clientes, Impuestos, Gastos, Finanzas, and Operativos. Async reports from the guide (`1027`, `taxes`, `expense_auxiliary`, `dgi_anexos_72_94`) stay excluded.
+- `HomeSummaryScreen` now renders a gated "Reportes en tiempo real" card when `AuthzEvaluator.canRoute(REPORTS_PAGE)` passes.
+- Reports access now requires both `reports:view` and beta feature `real_time_reports`; `reports:execute` is also beta-gated for future execution/export wiring.
+- Added `Reports` navigation graph with category browsing and report definition detail route. The current UI intentionally shows definitions, filters, KPIs, chart parity notes, table/actions, endpoint, and export metadata without inventing missing charts.
+- Focused Android host tests and Android/metadata compile gates passed. The first test run caught a Compose padding overload issue, which was fixed before rerunning.
+
+
+# iOS QR Scanner Crash TODO
+
+## Plan
+- [x] Review project architecture, code conventions, and existing scanner implementation.
+- [x] Identify why opening the iOS scanner crashes Compose/Metal.
+- [x] Patch the iOS camera session lifecycle with minimal UI impact.
+- [x] Run focused iOS compile verification and record result.
+
+## Verification Gates
+- [x] `./gradlew --no-build-cache --no-configuration-cache :composeApp:compileKotlinIosSimulatorArm64`
+- [x] `./gradlew --no-build-cache --no-configuration-cache :composeApp:compileKotlinMetadata`
+
+## Review Notes
+- Crash stack shows `AVCaptureSession.startRunning()` called from `PreviewHostView.attach()` during `UIKitView` insertion, while Compose is applying/drawing changes.
+- Starting the capture session synchronously on the main thread can spin AVFoundation's runloop and re-enter Compose rendering, producing `Attempt to call MetalRedrawer.draw() recursively`.
+- The current iOS scanner had the MLKit result path commented out, so the focused fix should avoid frame-processing startup and use native metadata scanning where possible.
+- iOS `CameraCoordinator` now configures, starts, and stops `AVCaptureSession` on a private serial queue instead of the main Compose draw path.
+- The iOS scanner now uses `AVCaptureMetadataOutput` for QR and common barcode formats, delivering results on the main queue and stopping after the first result.
+- `PreviewHostView.attach()` no longer forces `layoutIfNeeded()` during interop insertion; it assigns the preview frame and lets UIKit layout normally.
+- iOS simulator compile passed after correcting AVFoundation interop opt-in/nullability; metadata compile was successful but Gradle skipped the compile task as up-to-date.
+
+# iOS Temporary UI Hide TODO
+
+## Plan
+- [x] Review relevant UI files and platform helper conventions.
+- [x] Hide the Home invoicing folio purchase CTA on iOS without changing Android.
+- [x] Hide the Home Summary invoicing folio purchase CTA on iOS without changing Android.
+- [x] Hide the Settings "Pagos y cobros" link on iOS without changing Android.
+- [x] Run focused compile verification and record result.
+
+## Verification Gates
+- [x] `./gradlew --no-build-cache --no-configuration-cache :composeApp:compileKotlinMetadata`
+- [x] `./gradlew --no-build-cache --no-configuration-cache :composeApp:compileKotlinIosSimulatorArm64`
+
+## Review Notes
+- Use the existing common `isIOS()` expect/actual helper for platform gating instead of adding a new abstraction.
+- The folio purchase action is suppressed inside `InvoicingPlanCard`, so callers from both Home UI variants cannot leak the CTA on iOS.
+- `HomeSummaryScreen` also passes `null` for `onBuyStamps` on iOS so the caller explicitly matches the temporary product requirement.
+- Metadata and iOS simulator compile verification passed with existing unrelated commonization, Skiko version, expect/actual beta, and deprecation warnings; the iOS simulator compile was rerun after the explicit `HomeSummaryScreen` caller guard.
+
 # iOS Xcode 16 Linker Compatibility TODO
 
 ## Plan
@@ -552,6 +846,42 @@
 - Login/register flows rotate the session before their backend request; logout and successful account deletion clear it, including finally-style cleanup paths.
 - Focused session tests cover id format, reuse, TTL refresh, expiry replacement, forced rotation, clearing, and backend URL matching.
 - Verification passed with existing project warnings (`ksp` version, cinterop commonization, expect/actual beta, deprecations).
+
+# Fingerprint / Session Header Audit
+
+## Plan
+- [x] Inspect shared Ktor client configuration and DI wiring.
+- [x] Verify URL matching rules for adding the request header.
+- [x] Search for request paths that bypass or override the shared client behavior.
+- [x] Report whether fingerprint/session id is sent on all backend requests and call out exceptions.
+
+## Verification Gates
+- [x] `rg` audit for `FingerPrintService`, `X-SESSION-ID`, `HttpClient`, backend `Configs.*BasePath`, and direct top-level `client` imports.
+- [x] `./gradlew --no-build-cache --no-configuration-cache :composeApp:testAndroid`
+
+## Review Notes
+- Backend requests through the Koin-injected `HttpClient` get `X-SESSION-ID` appended by the shared `HttpSend` interceptor when the request URL origin matches `Configs.serverBasePath` or `Configs.ordersBasePath`.
+- The actual platform `FingerPrintService.getFingerPrint()` value is not used in request headers; the active backend identifier is the generated session id.
+- Direct top-level `client` usage was found only in `BunnyCDNUtils`, targeting BunnyCDN storage, which is intentionally excluded by the backend URL matcher.
+
+# Invoice Fingerprint Header TODO
+
+## Plan
+- [x] Add shared `fingerprint` header constant.
+- [x] Bind `FingerPrintService` on iOS so the shared client interceptor can resolve it on both platforms.
+- [x] Append the fingerprint header to every invoice backend request through the shared Ktor client interceptor.
+- [x] Add focused matcher coverage and run verification gates.
+
+## Verification Gates
+- [x] `./gradlew --no-build-cache --no-configuration-cache :composeApp:testAndroid`
+- [x] `./gradlew --no-build-cache --no-configuration-cache :composeApp:compileKotlinMetadata :composeApp:compileKotlinIosSimulatorArm64`
+
+## Review Notes
+- Added `FINGERPRINT_HEADER_NAME = "fingerprint"` in shared network constants.
+- The shared Ktor `HttpSend` interceptor now appends `fingerprint: FingerPrintService.getFingerPrint()` for invoice backend requests matched by `Configs.ordersBasePath`.
+- iOS now binds `FingerPrintService` in `platformModule`, matching the existing Android binding so the shared interceptor resolves on both platforms.
+- Added matcher regression coverage to avoid sending the fingerprint header to business-vg, BunnyCDN, or lookalike invoice hosts.
+- Verification passed with existing project warnings only (cinterop commonization, Skiko version, expect/actual beta, deprecations).
 
 # Orders Yesterday Filter Payload TODO
 
@@ -3313,3 +3643,115 @@
 - The shared Panama cédula validator now accepts the reported prefixed short formats `E-8-9856` and `N-8-9856` without broadening the prefix rules to previously invalid mid-length variants like `E-123-12345` or `N-123-1234`.
 - Regression coverage now includes both new valid examples and nearby invalid shapes (`E-12345-1234`, `N-123456-1234`, `N-8-985`) so future regex edits keep the prefix branches narrow.
 - The focused validator gate passed with the existing workspace warnings only (`ksp` version mismatch, disabled cinterop commonization, manifest replacement, expect/actual beta, and unrelated deprecations).
+
+# iOS Order Details Formatting TODO
+
+## Plan
+- [x] Review architecture/code conventions and local task instructions.
+- [x] Identify why Order Details header amounts/date are blank or fallback-only on iOS.
+- [x] Patch iOS actual formatting utilities with minimal platform-specific changes.
+- [x] Verify iOS compile and Android/common regression gates.
+
+## Verification Gates
+- [x] `./gradlew --no-build-cache --no-configuration-cache :composeApp:compileKotlinIosSimulatorArm64`
+- [x] `./gradlew --no-build-cache --no-configuration-cache :composeApp:compileKotlinIosArm64`
+- [x] `./gradlew --no-build-cache --no-configuration-cache :composeApp:compileKotlinMetadata :androidApp:compileDebugKotlin`
+- [x] `xcrun swift /tmp/ventago_date_formatter_check.swift`
+
+## Review Notes
+- Root cause found: iOS `formatNumberToMoney` returns an empty string, so all UI paths using it render blank amounts.
+- Root cause found: iOS `DateFormat.getFormattedDate` only accepts `yyyy-MM-dd'T'HH:mm:ss`, while backend order dates can include fractional seconds and timezone suffixes such as `Z` or `-05:00`.
+- iOS `formatNumberToMoney` now uses `NSNumberFormatter` with currency style and two fraction digits, matching Android's platform formatter instead of returning blank.
+- iOS `DateFormat.getFormattedDate` now tries the base order timestamp format plus fractional-second and timezone variants, using `en_US_POSIX` for input parsing and system timezone for output.
+- Foundation runtime check matched `2026-03-27T12:00:00`, `2026-06-05T20:45:10Z`, `2026-06-05T16:41:30.212815-05:00`, and `2026-01-27T01:56:04.304173Z`; currency check returned `$18.19`.
+- iOS simulator, iOS device, metadata, and Android compile gates passed with existing unrelated warnings only.
+
+# iOS POS QR Crash TODO
+
+## Plan
+- [x] Review architecture/code conventions and local task instructions.
+- [x] Locate the POS/payment-link QR generation path and platform actual implementation.
+- [x] Patch iOS `generateQR` so Core Image receives `NSData` for `inputMessage`.
+- [x] Run focused iOS compile verification.
+- [x] Record outcome and lesson.
+
+## Verification Gates
+- [x] `./gradlew --no-build-cache --no-configuration-cache :composeApp:compileKotlinIosSimulatorArm64`
+
+## Review Notes
+- Root cause found: iOS `generateQR` passes Kotlin `ByteArray` to `CIQRCodeGenerator.inputMessage`; Core Image requires `NSData` and throws `NSException` at runtime.
+- iOS QR generation now creates `NSData` via `NSString.create(string = ...).dataUsingEncoding(NSUTF8StringEncoding)` before calling `filter.setValue(..., forKey = "inputMessage")`.
+- The sibling iOS Core Image barcode helpers were updated from unsafe `String as NSString` casts to the same `NSString.create(...)` bridge.
+- Focused iOS simulator compile passed with existing unrelated warnings only (`cinterop` commonization, Skiko mismatch, expect/actual beta, deprecations, and existing iOS cast/redundant-conversion warnings outside this fix).
+
+# JWT Refresh Single-Flight TODO
+
+## Plan
+- [x] Review architecture and code conventions before changing auth/network code.
+- [x] Trace provider-level 401 refresh calls for `config-summary` and business-by-id bootstrap flows.
+- [x] Implement a single-flight refresh gate so concurrent 401 handlers share one refresh request.
+- [x] Ensure refresh failure triggers only one sign-out while all waiting requests fail consistently.
+- [x] Add focused concurrency coverage for the refresh gate.
+- [x] Run metadata/test verification and record result.
+
+## Verification Gates
+- [x] `./gradlew --no-build-cache --no-configuration-cache :composeApp:testAndroidHostTest --tests com.teco.ventago.features.auth.domain.RefreshTokenSingleFlightTest :composeApp:compileKotlinMetadata`
+- [x] `./gradlew --no-build-cache --no-configuration-cache :composeApp:compileKotlinIosSimulatorArm64`
+
+## Review Notes
+- Existing worktree already had unrelated modified UI/iOS/task files before this auth fix.
+- Root cause identified: each provider that received `AUTH_001`/401 called `authService.refreshToken(client)` independently, so concurrent protected requests could create a refresh storm.
+- Minimal-impact approach: guard `AuthService.refreshToken(...)` centrally and add retry-once token capture to the two reported endpoints.
+- `AuthService.refreshToken(...)` now uses a shared single-flight gate; concurrent callers that saw the same failed access token wait for the active refresh and skip their own network refresh after a new token is stored.
+- Refresh parse failures, missing refresh tokens, and refresh HTTP/API failures now throw through the gate and trigger `signOut()` only once for the failure burst.
+- `FinancialProfileProvider.getFinancialProfile` (`config-summary`) and `BusinessProvider.getBusinessById` now capture the token used for the failed request and retry only once.
+- Focused Android host test passed after updating an existing fake `IAuthService` signature; iOS simulator compile also passed. `compileKotlinMetadata` was requested in the focused gate but Gradle skipped it.
+
+# iOS App Icon Asset TODO
+
+## Plan
+- [x] Confirm the existing iOS asset catalog app icon location.
+- [x] Generate a 1024x1024 opaque PNG from the provided logo image.
+- [x] Replace the catalog's `app-icon-1024.png` without changing project wiring.
+- [x] Verify generated icon dimensions, alpha channel, and changed-file scope.
+
+## Verification Gates
+- [x] `sips -g pixelWidth -g pixelHeight -g hasAlpha iosApp/iosApp/Assets.xcassets/AppIcon.appiconset/app-icon-1024.png`
+- [x] `git status --short -- iosApp/iosApp/Assets.xcassets/AppIcon.appiconset tasks/todo.md tasks/lessons.md`
+
+## Review Notes
+- Existing catalog uses a single universal iOS `1024x1024` app icon at `iosApp/iosApp/Assets.xcassets/AppIcon.appiconset/app-icon-1024.png`.
+- Source logo is a square PNG but reports an alpha channel, so the replacement should be flattened to an opaque RGB PNG.
+
+# iOS App Icon Replacement TODO
+
+## Plan
+- [x] Inspect the new 1024x1024 icon attachment.
+- [x] Replace the existing iOS app icon asset with the new artwork.
+- [x] Flatten the PNG alpha channel for iOS/App Store compatibility.
+- [x] Verify icon dimensions, alpha channel, JSON validity, and changed-file scope.
+
+## Verification Gates
+- [x] `sips -g pixelWidth -g pixelHeight -g hasAlpha iosApp/iosApp/Assets.xcassets/AppIcon.appiconset/app-icon-1024.png`
+- [x] `jq empty iosApp/iosApp/Assets.xcassets/AppIcon.appiconset/Contents.json`
+- [x] `git status --short -- iosApp/iosApp/Assets.xcassets/AppIcon.appiconset tasks/todo.md tasks/lessons.md`
+
+## Review Notes
+- New source icon is already 1024x1024 but reports `hasAlpha: yes`.
+- Existing iOS catalog still points to `app-icon-1024.png`, so only the PNG asset needs replacement.
+
+# Settings Address Configure Button Hide TODO
+
+## Plan
+- [x] Review project architecture, code conventions, and Settings address UI.
+- [x] Hide the nonworking address configuration button without changing the address display.
+- [x] Run focused compile verification and record result.
+
+## Verification Gates
+- [x] `./gradlew --no-build-cache --no-configuration-cache :composeApp:compileKotlinMetadata`
+
+## Review Notes
+- Local `$disciplined-execution` and `$frontend-design` skill files were missing, so the written AGENTS policy is being applied directly.
+- Existing worktree had unrelated modified files before this change; keep this patch limited to Settings address UI and task tracking.
+- Removed the Settings business address `TextButtonS` that launched the nonworking autocomplete widget; the read-only address summary still renders.
+- Metadata verification completed successfully; Gradle reported `:composeApp:compileKotlinMetadata` as skipped/up-to-date.

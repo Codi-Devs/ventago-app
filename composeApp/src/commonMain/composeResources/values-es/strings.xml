@@ -387,6 +387,7 @@
     <string name="home_summary_no_top_clients">Sin clientes frecuentes</string>
     <string name="home_summary_orders_word">órdenes</string>
     <string name="home_summary_records_word">registros</string>
+    <string name="reports">Reportes</string>
 
 <!--    Invoicing Strings -->
     <string name="invoicing">Facturación</string>
