@@ -40,6 +40,7 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.FilterChipDefaults
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -68,6 +69,7 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.navigation.NavBackStackEntry
@@ -87,7 +89,10 @@ import com.teco.ventago.design_system.molecules.orders.OrderListItem
 import com.teco.ventago.design_system.organism.LoadingSheet
 import com.teco.ventago.design_system.textfields.DMOutlinedTextField
 import com.teco.ventago.design_system.textfields.helpers.DMDropDownField
+import com.teco.ventago.design_system.theme.bodyMediumBold
+import com.teco.ventago.design_system.theme.labelSmall
 import com.teco.ventago.design_system.theme.latoFontFamily
+import com.teco.ventago.features.customers.domain.models.CustomerListItem
 import com.teco.ventago.features.invoicing.domain.models.FEDocumentType
 import com.teco.ventago.features.orders.domain.models.PaymentStatus
 import com.teco.ventago.features.quotes.ui.list.QuotesListScreen
@@ -107,7 +112,7 @@ import ventago.composeapp.generated.resources.all_invoice_types
 import ventago.composeapp.generated.resources.apply_filters
 import ventago.composeapp.generated.resources.cancelled
 import ventago.composeapp.generated.resources.clear_filters
-import ventago.composeapp.generated.resources.customer_ruc
+import ventago.composeapp.generated.resources.customer_name_label
 import ventago.composeapp.generated.resources.emission_date
 import ventago.composeapp.generated.resources.emission_end_date
 import ventago.composeapp.generated.resources.emission_start_date
@@ -640,11 +645,14 @@ private fun OrdersFilterSheet(
                 )
             }
             item {
-                DMOutlinedTextField(
-                    label = stringResource(Res.string.customer_ruc),
-                    modifier = Modifier.fillMaxWidth(),
-                    text = uiState.customerRucFilter,
-                    onChange = { viewModel.setCustomerRucFilter(it) }
+                OrdersCustomerSearchField(
+                    customerName = uiState.customerNameFilter,
+                    selectedCustomerId = uiState.customerIdFilter,
+                    isSearchingCustomers = uiState.isSearchingCustomers,
+                    customers = uiState.customerSearchResults.take(4),
+                    onQueryChanged = viewModel::setCustomerNameFilter,
+                    onCustomerSelected = viewModel::selectCustomerFilter,
+                    onClearCustomer = viewModel::clearCustomerFilter
                 )
             }
             item {
@@ -692,6 +700,7 @@ private fun OrdersFilterSheet(
                     }
                     ButtonM(
                         modifier = Modifier.weight(1f),
+                        enabled = uiState.customerNameFilter.isBlank() || uiState.customerIdFilter != null,
                         onClick = {
                             viewModel.applyFilters()
                             onDismiss()
@@ -700,6 +709,91 @@ private fun OrdersFilterSheet(
                         contentColor = MaterialTheme.colorScheme.onSecondary
                     ) {
                         Text(text = stringResource(Res.string.apply_filters))
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun OrdersCustomerSearchField(
+    customerName: String,
+    selectedCustomerId: Long?,
+    isSearchingCustomers: Boolean,
+    customers: List<CustomerListItem>,
+    onQueryChanged: (String) -> Unit,
+    onCustomerSelected: (CustomerListItem) -> Unit,
+    onClearCustomer: () -> Unit,
+) {
+    val displayCustomerName = customerName.ifBlank {
+        selectedCustomerId?.let { "Cliente #$it" }.orEmpty()
+    }
+
+    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        DMOutlinedTextField(
+            text = displayCustomerName,
+            label = stringResource(Res.string.customer_name_label),
+            modifier = Modifier.fillMaxWidth(),
+            onChange = onQueryChanged,
+            trailingIcon = if (displayCustomerName.isNotBlank()) Icons.Rounded.Close else null,
+            trailingIconClick = onClearCustomer,
+            supportingText = when {
+                selectedCustomerId != null -> "Cliente seleccionado"
+                isSearchingCustomers -> "Buscando clientes..."
+                customerName.length == 1 -> "Escribe al menos 2 caracteres"
+                customerName.isNotBlank() -> "Selecciona un cliente para filtrar sus órdenes"
+                else -> "Busca por nombre y selecciona un cliente"
+            }
+        )
+
+        if (isSearchingCustomers) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                CircularProgressIndicator(modifier = Modifier.size(16.dp), strokeWidth = 2.dp)
+                Text(
+                    text = "Buscando coincidencias",
+                    style = labelSmall(color = MaterialTheme.colorScheme.onSurfaceVariant)
+                )
+            }
+        }
+
+        if (customers.isNotEmpty()) {
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                elevation = CardDefaults.cardElevation(2.dp),
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
+            ) {
+                Column(modifier = Modifier.padding(vertical = 4.dp)) {
+                    customers.take(4).forEachIndexed { index, customer ->
+                        Surface(
+                            onClick = { onCustomerSelected(customer) },
+                            color = Color.Transparent,
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Column(
+                                modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
+                                verticalArrangement = Arrangement.spacedBy(2.dp)
+                            ) {
+                                Text(
+                                    text = customer.name,
+                                    style = bodyMediumBold(color = MaterialTheme.colorScheme.secondary),
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
+                                )
+                                Text(
+                                    text = customer.ruc?.ifBlank { null } ?: "Sin RUC",
+                                    style = labelSmall(color = MaterialTheme.colorScheme.onSurfaceVariant),
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
+                                )
+                            }
+                        }
+                        if (index < customers.take(4).lastIndex) {
+                            HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
+                        }
                     }
                 }
             }

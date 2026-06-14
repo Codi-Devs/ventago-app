@@ -3,9 +3,11 @@ package com.teco.ventago.features.product.ui.item.add
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.animateContentSize
 import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -14,17 +16,22 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.imePadding
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.Build
 import androidx.compose.material.icons.outlined.CameraAlt
 import androidx.compose.material.icons.outlined.Delete
 import androidx.compose.material.icons.outlined.Edit
 import androidx.compose.material.icons.outlined.Image
+import androidx.compose.material.icons.outlined.Inventory
 import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material.icons.rounded.ExpandMore
 import androidx.compose.material.icons.rounded.QrCodeScanner
@@ -59,8 +66,11 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ImageBitmap
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.graphics.vector.rememberVectorPainter
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
@@ -167,6 +177,7 @@ fun AddItemScreen(
 ) {
     val uiState by viewModel.uiState.collectAsState()
     val loadingSheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+    val focusManager = LocalFocusManager.current
 
     // Check if this is a personalized product from savedStateHandle
     LaunchedEffect(backStackEntry) {
@@ -334,7 +345,14 @@ fun AddItemScreen(
         modifier = Modifier
             .fillMaxSize()
             .background(MaterialTheme.colorScheme.surfaceContainerLow)
-            .verticalScroll(rememberScrollState()),
+            .navigationBarsPadding()
+            .imePadding()
+            .verticalScroll(rememberScrollState())
+            .pointerInput(focusManager) {
+                detectTapGestures(onTap = {
+                    focusManager.clearFocus()
+                })
+            },
     ) {
         // ═══════════════════════════════════════════════════════
         // Card 1: Información básica (always expanded, not collapsible)
@@ -344,6 +362,12 @@ fun AddItemScreen(
             modifier = Modifier.padding(start = 16.dp, end = 16.dp, top = 16.dp, bottom = 0.dp),
             badge = { StatusBadge(text = "Requerida", color = badgeColorBlue) }
         ) {
+            ProductServiceSelector(
+                selectedProductTypeId = uiState.productTypeId,
+                onProductTypeSelected = viewModel::onProductTypeChange,
+                modifier = Modifier.padding(bottom = 8.dp),
+            )
+
             DMOutlinedTextField(
                 text = uiState.name,
                 label = "Nombre del producto o servicio",
@@ -389,14 +413,16 @@ fun AddItemScreen(
                 isError = false,
             )
 
-            DMDropDownField(
-                label = "Unidad de medida",
-                items = viewModel.uomOptions(),
-                selectedIndex = viewModel.selectedUomIndex(),
-                modifier = Modifier.padding(bottom = 0.dp),
-                onItemSelected = { idx, _ -> viewModel.onUomSelected(UomRegistry.all()[idx].code) },
-                isError = false,
-            )
+            if (uiState.productTypeId == ProductType.GOOD.typeId) {
+                DMDropDownField(
+                    label = "Unidad de medida",
+                    items = viewModel.uomOptions(),
+                    selectedIndex = viewModel.selectedUomIndex(),
+                    modifier = Modifier.padding(bottom = 0.dp),
+                    onItemSelected = { idx, _ -> viewModel.onUomSelected(UomRegistry.all()[idx].code) },
+                    isError = false,
+                )
+            }
         }
 
         // ═══════════════════════════════════════════════════════
@@ -465,15 +491,6 @@ fun AddItemScreen(
                 imeAction = ImeAction.Next,
                 trailingIcon = Icons.Rounded.QrCodeScanner,
                 trailingIconClick = { launchScannerCamera = true }
-            )
-
-            DMDropDownField(
-                label = "Tipo de producto",
-                items = ProductType.toList().map { type -> type.description },
-                selectedIndex = ProductType.toList().indexOfFirst { type -> type.typeId == uiState.productTypeId },
-                modifier = Modifier.padding(bottom = 8.dp),
-                onItemSelected = { index, _ -> viewModel.onProductTypeChange(ProductType.toList()[index].typeId) },
-                isError = false,
             )
 
             DMMoneyOutlinedTextField(
@@ -598,6 +615,8 @@ fun AddItemScreen(
                 )
             }
         }
+
+        Spacer(Modifier.height(24.dp))
     }
 
     if (uiState.loadingBottomSheet.isLoading()) {
@@ -697,6 +716,90 @@ fun AddItemScreen(
 // ═══════════════════════════════════════════════════════
 // Reusable card composables
 // ═══════════════════════════════════════════════════════
+
+@Composable
+private fun ProductServiceSelector(
+    selectedProductTypeId: Int,
+    onProductTypeSelected: (Int) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    Row(
+        modifier = modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
+    ) {
+        ProductTypeOption(
+            text = "Producto",
+            icon = Icons.Outlined.Inventory,
+            selected = selectedProductTypeId == ProductType.GOOD.typeId,
+            onClick = { onProductTypeSelected(ProductType.GOOD.typeId) },
+            modifier = Modifier.weight(1f),
+        )
+        ProductTypeOption(
+            text = "Servicio",
+            icon = Icons.Outlined.Build,
+            selected = selectedProductTypeId == ProductType.SERVICE.typeId,
+            onClick = { onProductTypeSelected(ProductType.SERVICE.typeId) },
+            modifier = Modifier.weight(1f),
+        )
+    }
+}
+
+@Composable
+private fun ProductTypeOption(
+    text: String,
+    icon: ImageVector,
+    selected: Boolean,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val selectedColor = MaterialTheme.colorScheme.secondary
+    val contentColor = if (selected) selectedColor else MaterialTheme.colorScheme.onSurfaceVariant
+
+    Surface(
+        modifier = modifier
+            .height(64.dp)
+            .clickable(onClick = onClick),
+        shape = RoundedCornerShape(8.dp),
+        color = if (selected) selectedColor.copy(alpha = 0.08f) else Color.Transparent,
+        border = BorderStroke(
+            width = if (selected) 2.dp else 1.dp,
+            color = if (selected) selectedColor else Color.Transparent,
+        ),
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(horizontal = 12.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.Center,
+        ) {
+            Box(
+                modifier = Modifier
+                    .size(40.dp)
+                    .background(
+                        color = if (selected) selectedColor.copy(alpha = 0.10f)
+                        else MaterialTheme.colorScheme.surfaceContainerHighest.copy(alpha = 0.55f),
+                        shape = RoundedCornerShape(8.dp),
+                    ),
+                contentAlignment = Alignment.Center,
+            ) {
+                Icon(
+                    imageVector = icon,
+                    contentDescription = null,
+                    modifier = Modifier.size(20.dp),
+                    tint = contentColor,
+                )
+            }
+            Spacer(Modifier.width(10.dp))
+            Text(
+                text = text,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                style = bodyMediumBold(contentColor),
+            )
+        }
+    }
+}
 
 @Composable
 private fun StatusBadge(text: String, color: Color) {

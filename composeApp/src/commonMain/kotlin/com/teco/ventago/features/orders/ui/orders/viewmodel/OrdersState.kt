@@ -2,6 +2,7 @@ package com.teco.ventago.features.orders.ui.orders.viewmodel
 
 import com.teco.ventago.core.LoadableState
 import com.teco.ventago.design_system.organism.LoadingBottomSheetState
+import com.teco.ventago.features.customers.domain.models.CustomerListItem
 import com.teco.ventago.features.orders.domain.models.Order
 
 data class OrdersState(
@@ -16,8 +17,10 @@ data class OrdersState(
     val canCreateOrderEntry: Boolean = false,
     val paymentStatusFilter: Int? = null,
     val customerIdFilter: Long? = null,
+    val customerNameFilter: String = "",
+    val customerSearchResults: List<CustomerListItem> = emptyList(),
+    val isSearchingCustomers: Boolean = false,
     val orderTypeFilter: String? = null,
-    val customerRucFilter: String = "",
     val emissionStartDate: String = "",
     val emissionEndDate: String = "",
     val showScanner: Boolean = false,

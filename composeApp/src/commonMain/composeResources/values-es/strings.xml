@@ -286,7 +286,7 @@
     <string name="pos_clients">Clientes</string>
     <string name="pos_add_client">Agregar cliente</string>
     <string name="pos_cart">Carrito</string>
-    <string name="pos_payment">Pago</string>
+    <string name="pos_payment">Forma de pago</string>
     <string name="pos_delete_client">Eliminar cliente</string>
     <string name="pos_unlink_client">Desvincular cliente</string>
     <string name="pos_invoice">Factura</string>

@@ -1,10 +1,10 @@
 package com.teco.ventago.features.pos.ui.customer.edit
 
-import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
@@ -19,7 +19,6 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
@@ -31,6 +30,7 @@ import com.teco.ventago.design_system.textfields.DMOutlinedTextField
 import com.teco.ventago.design_system.textfields.helpers.DMDropDownField
 import com.teco.ventago.features.invoicing.domain.models.FeCustomerType
 import com.teco.ventago.features.invoicing.domain.models.rucNeeded
+import com.teco.ventago.features.pos.ui.dismissKeyboardOnOutsideTap
 import com.teco.ventago.features.pos.ui.customer.edit.viewmodel.EditCustomerViewModel
 import org.jetbrains.compose.resources.stringResource
 import org.koin.compose.viewmodel.koinViewModel
@@ -65,11 +65,8 @@ fun ReducedAddCustomerScreen(viewModel: EditCustomerViewModel, navigateBack: () 
             .padding(horizontal = 0.dp)
             .fillMaxSize()
             .verticalScroll(rememberScrollState())
-            .pointerInput(Unit) {
-                detectTapGestures(onTap = {
-                    focusManager.clearFocus() // Close keyboard when tapping outside
-                })
-            },
+            .imePadding()
+            .dismissKeyboardOnOutsideTap(focusManager),
     ) {
         DMOutlinedTextField(
             text = uiState.name,
@@ -175,11 +172,8 @@ fun FullAddCustomerScreen(viewModel: EditCustomerViewModel, navigateBack: () -> 
             .padding(horizontal = 0.dp)
             .fillMaxSize()
             .verticalScroll(rememberScrollState())
-            .pointerInput(Unit) {
-                detectTapGestures(onTap = {
-                    focusManager.clearFocus() // Close keyboard when tapping outside
-                })
-            },
+            .imePadding()
+            .dismissKeyboardOnOutsideTap(focusManager),
     ) {
         if (uiState.taxInfoIncomplete) {
             OutlinedCard {

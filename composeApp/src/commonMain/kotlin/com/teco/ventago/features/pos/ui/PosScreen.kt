@@ -4,7 +4,6 @@ import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.animateContentSize
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.BorderStroke
-import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -13,6 +12,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -26,8 +26,8 @@ import androidx.compose.material.icons.outlined.Business
 import androidx.compose.material.icons.outlined.Info
 import androidx.compose.material.icons.outlined.Person
 import androidx.compose.material.icons.rounded.ExpandMore
+import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
-import androidx.compose.material3.ElevatedCard
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedCard
@@ -43,16 +43,18 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.rotate
+import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.teco.ventago.core.LocalStorage
 import com.teco.ventago.core.flags.IFlagsService
 import com.teco.ventago.design_system.buttons.ButtonM
+import com.teco.ventago.design_system.molecules.InstallmentDueDateFieldKmp
 import com.teco.ventago.design_system.molecules.flags.DgiDownAlertBanner
-import com.teco.ventago.design_system.molecules.customer.PosCustomerSelection
 import com.teco.ventago.design_system.textfields.DMOutlinedTextField
 import com.teco.ventago.design_system.textfields.helpers.DMDropDownField
 import com.teco.ventago.design_system.theme.bodyLarge
@@ -60,6 +62,7 @@ import com.teco.ventago.design_system.theme.bodyMedium
 import com.teco.ventago.design_system.theme.bodySmall
 import com.teco.ventago.design_system.theme.labelMedium
 import com.teco.ventago.design_system.theme.vanishedBackgroundColor
+import com.teco.ventago.features.customers.domain.models.CustomerListItem
 import com.teco.ventago.features.customers.ui.form.viewmodel.CustomerCountryOption
 import com.teco.ventago.features.pos.ui.viewmodel.PosState
 import com.teco.ventago.features.pos.ui.viewmodel.PosViewModel
@@ -67,6 +70,12 @@ import com.teco.ventago.features.pos.ui.viewmodel.FlowMode
 import com.teco.ventago.features.quotes.domain.QuoteSelectionStore
 import com.teco.ventago.navigation.PosScreens
 import com.teco.ventago.utils.DateFormat
+import kotlinx.datetime.Clock
+import kotlinx.datetime.DatePeriod
+import kotlinx.datetime.LocalDate
+import kotlinx.datetime.TimeZone
+import kotlinx.datetime.plus
+import kotlinx.datetime.toLocalDateTime
 import org.jetbrains.compose.resources.stringResource
 import org.koin.compose.koinInject
 import ventago.composeapp.generated.resources.Res
@@ -88,6 +97,10 @@ fun PosScreen(
     val flagsService: IFlagsService = koinInject()
     val flagsState by flagsService.flags().collectAsState()
     val isQuoteFlow = uiState.flowMode == FlowMode.QUOTE
+    val focusManager = LocalFocusManager.current
+    val todayPanama = remember { currentPanamaDate() }
+    val minInvoiceDate = remember(todayPanama) { todayPanama.plus(DatePeriod(months = -6)) }
+    var invoiceConfigExpanded by rememberSaveable { mutableStateOf(false) }
 
     LaunchedEffect(Unit) {
         if (QuoteSelectionStore.startOrderFlowFromQuote) {
@@ -114,7 +127,9 @@ fun PosScreen(
         modifier = Modifier
             .padding(horizontal = 0.dp)
             .fillMaxSize()
-            .verticalScroll(rememberScrollState()),
+            .verticalScroll(rememberScrollState())
+            .imePadding()
+            .dismissKeyboardOnOutsideTap(focusManager),
     )
     {
 
@@ -128,52 +143,19 @@ fun PosScreen(
         }
 
         if (!isQuoteFlow) {
-            // === Branch ===
-            if (uiState.branches.isNotEmpty()) {
-                DMDropDownField(
-                    label = "Sucursal",
-                    items = uiState.branches.map { it.name },
-                    selectedIndex = uiState.selectedBranchIndex,
-                    modifier = Modifier.padding(start = 16.dp, end = 16.dp, top = 16.dp, bottom = 8.dp),
-                    onItemSelected = { idx, _ -> viewModel.onBranchSelected(idx) },
-                    isError = false,
-                    enabled = uiState.branches.size > 1,
-                )
-            }
-
-            // === Billing Point (depends on branch) ===
-            if (uiState.billingPoints.isNotEmpty()) {
-                DMDropDownField(
-                    label = "Punto de facturación",
-                    items = uiState.billingPoints.map { it.description },
-                    selectedIndex = uiState.selectedBillingPointIndex,
-                    modifier = Modifier.padding(start = 16.dp, end = 16.dp, top = 8.dp, bottom = 8.dp),
-                    onItemSelected = { idx, _ -> viewModel.onBillingPointSelected(idx) },
-                    isError = false,
-                    enabled = uiState.billingPoints.size > 1,
-                )
-            }
-
-            // === Doc Type ===
-            DMDropDownField(
-                label = "Tipo de factura",
-                items = viewModel.docTypeOptions(),              // e.g., ["01 - Factura de Operación Interna", ...]
-                selectedIndex = uiState.selectedDocTypeIndex,    // default points to "01"
-                modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
-                onItemSelected = { idx, _ -> viewModel.onDocTypeSelected(idx) },
-                isError = false,
-                enabled = uiState.enabledSelectionDocType
-            )
-
-            // === Operation Nature ===
-            DMDropDownField(
-                label = "Naturaleza de la operación",
-                items = viewModel.operationNatureOptions(),           // e.g., ["01 - Venta", "02 - Exportación", ...]
-                selectedIndex = uiState.selectedOperationNatureIndex, // default to "01"
-                modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
-                onItemSelected = { idx, _ -> viewModel.onOperationNatureSelected(idx) },
-                isError = false,
-                enabled = uiState.enabledOperationNature
+            InvoiceConfigurationCard(
+                expanded = invoiceConfigExpanded,
+                onToggle = { invoiceConfigExpanded = !invoiceConfigExpanded },
+                uiState = uiState,
+                docTypeOptions = viewModel.docTypeOptions(),
+                operationNatureOptions = viewModel.operationNatureOptions(),
+                minInvoiceDate = minInvoiceDate,
+                maxInvoiceDate = todayPanama,
+                onBranchSelected = viewModel::onBranchSelected,
+                onBillingPointSelected = viewModel::onBillingPointSelected,
+                onDocTypeSelected = viewModel::onDocTypeSelected,
+                onOperationNatureSelected = viewModel::onOperationNatureSelected,
+                onInvoiceIssueDateSelected = viewModel::onInvoiceIssueDateSelected
             )
         }
 
@@ -239,6 +221,122 @@ fun PosScreen(
     }
 
 }
+
+@Composable
+private fun InvoiceConfigurationCard(
+    expanded: Boolean,
+    onToggle: () -> Unit,
+    uiState: PosState,
+    docTypeOptions: List<String>,
+    operationNatureOptions: List<String>,
+    minInvoiceDate: LocalDate,
+    maxInvoiceDate: LocalDate,
+    onBranchSelected: (Int) -> Unit,
+    onBillingPointSelected: (Int) -> Unit,
+    onDocTypeSelected: (Int) -> Unit,
+    onOperationNatureSelected: (Int) -> Unit,
+    onInvoiceIssueDateSelected: (String) -> Unit,
+) {
+    val rotation by animateFloatAsState(if (expanded) 180f else 0f)
+
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp, vertical = 8.dp)
+            .animateContentSize(),
+        shape = RoundedCornerShape(12.dp),
+        colors = CardDefaults.cardColors(
+            containerColor = vanishedBackgroundColor()
+        ),
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .clickable { onToggle() }
+                .padding(horizontal = 16.dp, vertical = 14.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween
+        ) {
+            Column(Modifier.weight(1f)) {
+                Text("Configuración de factura", style = MaterialTheme.typography.titleMedium)
+                Text(
+                    text = if (expanded) {
+                        "Ocultar sucursal, punto, tipo, naturaleza y fecha"
+                    } else {
+                        "Sucursal, punto de facturación, tipo, naturaleza y fecha"
+                    },
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+            Icon(
+                imageVector = Icons.Rounded.ExpandMore,
+                contentDescription = null,
+                modifier = Modifier.rotate(rotation)
+            )
+        }
+
+        AnimatedVisibility(visible = expanded) {
+            Column(Modifier.padding(start = 16.dp, end = 16.dp, bottom = 16.dp)) {
+                if (uiState.branches.isNotEmpty()) {
+                    DMDropDownField(
+                        label = "Sucursal",
+                        items = uiState.branches.map { it.name },
+                        selectedIndex = uiState.selectedBranchIndex,
+                        modifier = Modifier.padding(vertical = 6.dp),
+                        onItemSelected = { idx, _ -> onBranchSelected(idx) },
+                        isError = false,
+                        enabled = uiState.branches.size > 1,
+                    )
+                }
+
+                if (uiState.billingPoints.isNotEmpty()) {
+                    DMDropDownField(
+                        label = "Punto de facturación",
+                        items = uiState.billingPoints.map { it.description },
+                        selectedIndex = uiState.selectedBillingPointIndex,
+                        modifier = Modifier.padding(vertical = 6.dp),
+                        onItemSelected = { idx, _ -> onBillingPointSelected(idx) },
+                        isError = false,
+                        enabled = uiState.billingPoints.size > 1,
+                    )
+                }
+
+                DMDropDownField(
+                    label = "Tipo de factura",
+                    items = docTypeOptions,
+                    selectedIndex = uiState.selectedDocTypeIndex,
+                    modifier = Modifier.padding(vertical = 6.dp),
+                    onItemSelected = { idx, _ -> onDocTypeSelected(idx) },
+                    isError = false,
+                    enabled = uiState.enabledSelectionDocType
+                )
+
+                DMDropDownField(
+                    label = "Naturaleza de la operación",
+                    items = operationNatureOptions,
+                    selectedIndex = uiState.selectedOperationNatureIndex,
+                    modifier = Modifier.padding(vertical = 6.dp),
+                    onItemSelected = { idx, _ -> onOperationNatureSelected(idx) },
+                    isError = false,
+                    enabled = uiState.enabledOperationNature
+                )
+
+                InstallmentDueDateFieldKmp(
+                    valueIso = uiState.invoiceIssueDateIso,
+                    onDatePickedIso = onInvoiceIssueDateSelected,
+                    modifier = Modifier.padding(vertical = 6.dp),
+                    label = "Fecha de factura",
+                    minSelectableDate = minInvoiceDate,
+                    maxSelectableDate = maxInvoiceDate
+                )
+            }
+        }
+    }
+}
+
+private fun currentPanamaDate(): LocalDate =
+    Clock.System.now().toLocalDateTime(TimeZone.of("America/Panama")).date
 
 @Composable
 private fun ReadOnlyInfoRow(label: String, value: String) {
@@ -330,7 +428,12 @@ private fun CustomerSelectorCard(
                 icon = Icons.Outlined.Business,
                 title = stringResource(Res.string.pos_customer_type_registered_title),
                 description = stringResource(Res.string.pos_customer_type_registered_desc),
-                onClick = { selectCustomerType(false) }
+                onClick = {
+                    selectCustomerType(false)
+                    if (uiState.enabledSelectionDocType) {
+                        navigate(PosScreens.SearchCustomerScreen)
+                    }
+                }
             )
         }
 
@@ -339,12 +442,8 @@ private fun CustomerSelectorCard(
         when (uiState.finalCustomer) {
             null -> Unit
             false -> {
-                PosCustomerSelection(
-                    customer = uiState.customer
-                ) { screen ->
-                    if (uiState.enabledSelectionDocType) {
-                        navigate(screen)
-                    }
+                uiState.customer?.let { customer ->
+                    SelectedRegisteredCustomerSummary(customer = customer)
                 }
             }
             true -> {
@@ -377,6 +476,7 @@ private fun CustomerSelectorCard(
                     onToggle = { extraOpen = !extraOpen },
                     finalName = uiState.finalName,
                     finalEmail = uiState.finalEmail,
+                    finalEmailError = uiState.finalEmailError,
                     finalPhone = uiState.finalPhone,
                     finalIdTypeIndex = uiState.finalIdTypeIndex,
                     finalIdType = uiState.finalIdType,
@@ -391,6 +491,42 @@ private fun CustomerSelectorCard(
                     onIdType = onIdType,
                     onIdNumber = onIdNumber,
                     onCountrySelected = onCountrySelected
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun SelectedRegisteredCustomerSummary(customer: CustomerListItem) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(12.dp),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.secondary
+        ),
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp, vertical = 12.dp),
+            verticalArrangement = Arrangement.Center
+        ) {
+            Text(
+                text = customer.name,
+                style = bodyMedium(color = MaterialTheme.colorScheme.onSecondary),
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+            if (!customer.ruc.isNullOrBlank()) {
+                Spacer(Modifier.height(2.dp))
+                Text(
+                    text = customer.ruc!!,
+                    style = bodySmall(
+                        color = MaterialTheme.colorScheme.onSecondary.copy(alpha = 0.9f)
+                    ),
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
                 )
             }
         }
@@ -495,6 +631,7 @@ private fun AdditionalInfoCollapsibleCard(
     // state + handlers
     finalName: String?,
     finalEmail: String?,
+    finalEmailError: String?,
     finalPhone: String?,
     finalIdTypeIndex: Int,
     finalIdType: String,             // "cedula" | "passport" | "foreing_taxid"
@@ -513,12 +650,13 @@ private fun AdditionalInfoCollapsibleCard(
     val rotation by animateFloatAsState(if (expanded) 180f else 0f)
     val shouldShowCountrySelector = finalIdType == "passport" || finalIdType == "foreing_taxid"
 
-    ElevatedCard(
+    Card(
         modifier = Modifier
             .fillMaxWidth()
-            .background(color = vanishedBackgroundColor())
+            .padding(4.dp)
             .animateContentSize(),
-        colors = CardDefaults.elevatedCardColors(
+        shape = RoundedCornerShape(12.dp),
+        colors = CardDefaults.cardColors(
             containerColor = vanishedBackgroundColor()
         ),
     ) {
@@ -564,7 +702,9 @@ private fun AdditionalInfoCollapsibleCard(
                     onChange = onFinalEmail,
                     maxLines = 1,
                     imeAction = ImeAction.Next,
-                    keyboardType = KeyboardType.Email
+                    keyboardType = KeyboardType.Email,
+                    isError = finalEmailError != null,
+                    supportingText = finalEmailError ?: ""
                 )
                 DMOutlinedTextField(
                     text = finalPhone ?: "",

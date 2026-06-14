@@ -132,7 +132,7 @@ private fun HeaderCard(preview: InvoicePreview) {
             ) {
                 Text("DGI", style = titleMediumBold(), textAlign = TextAlign.Center)
                 Text(
-                    "Comprobante auxiliar de factura electronica",
+                    "Comprobante auxiliar de factura electrónica",
                     style = bodyMediumBold(),
                     textAlign = TextAlign.Center,
                 )
@@ -148,7 +148,7 @@ private fun HeaderCard(preview: InvoicePreview) {
         SectionTitle("Emisor", Icons.Outlined.Business)
         InfoRow("Emisor", preview.issuer.name.ifBlank { "N/A" })
         InfoRow("RUC", preview.issuer.ruc.ifBlank { "N/A" })
-        InfoRow("Direccion", preview.issuer.address, maxLines = 2)
+        InfoRow("Dirección", preview.issuer.address, maxLines = 2)
         preview.branch?.let { branch ->
             Divider(Modifier.padding(vertical = 8.dp))
             InfoRow("Sucursal", "${branch.code} - ${branch.name}", maxLines = 2)
@@ -156,10 +156,10 @@ private fun HeaderCard(preview: InvoicePreview) {
                 ?.takeIf { it.isNotBlank() && !it.equals("null", ignoreCase = true) }
                 ?.let { InfoRow("Nombre comercial", it, maxLines = 2) }
             if (branch.addressLine.isNotBlank() && !branch.addressLine.equals("null", ignoreCase = true)) {
-                InfoRow("Direccion sucursal", branch.addressLine, maxLines = 2)
+                InfoRow("Dirección sucursal", branch.addressLine, maxLines = 2)
             }
             if (branch.billingPoint.isNotBlank()) {
-                InfoRow("Punto de Facturacion", branch.billingPoint)
+                InfoRow("Punto de Facturación", branch.billingPoint)
             }
         }
     }
@@ -201,7 +201,7 @@ private fun QrPlaceholder() {
         contentAlignment = Alignment.Center,
     ) {
         Text(
-            "Vista previa\nSin codigo QR",
+            "Vista previa\nSin código QR",
             style = labelSmall(MaterialTheme.colorScheme.onSurfaceVariant),
             textAlign = TextAlign.Center,
         )
@@ -214,13 +214,13 @@ private fun ReceptorAndMetaCard(preview: InvoicePreview) {
         SectionTitle("Receptor", Icons.Outlined.Person)
         InfoRow("Tipo de Receptor", preview.receptor.type)
         InfoRow("Cliente", preview.receptor.name.ifBlank { "N/A" }, maxLines = 2)
-        InfoRow("Identificacion", preview.receptor.identification.ifBlank { "N/A" })
+        InfoRow("Identificación", preview.receptor.identification.ifBlank { "N/A" })
 
         Divider(Modifier.padding(vertical = 12.dp))
         SectionTitle("Datos fiscales", Icons.Outlined.Info)
-        InfoRow("Numero", preview.meta.number)
-        InfoRow("Fecha de emision", preview.meta.issuedAt)
-        InfoRow("Punto de Facturacion", preview.meta.billingPoint.ifBlank { "N/A" })
+        InfoRow("Número", preview.meta.number)
+        InfoRow("Fecha de emisión", preview.meta.issuedAt)
+        InfoRow("Punto de Facturación", preview.meta.billingPoint.ifBlank { "N/A" })
         InfoRow("Consulta", preview.meta.consultationUrl, maxLines = 2)
         InfoRow("CUFE", preview.meta.cufe, maxLines = 2, italicValue = true)
     }
@@ -229,7 +229,7 @@ private fun ReceptorAndMetaCard(preview: InvoicePreview) {
 @Composable
 private fun ItemsCard(items: List<InvoicePreviewItem>) {
     PreviewCard {
-        SectionTitle("Items", Icons.Outlined.Info)
+        SectionTitle("Ítems", Icons.Outlined.Info)
         if (items.isEmpty()) {
             EmptyText("Sin productos")
             return@PreviewCard

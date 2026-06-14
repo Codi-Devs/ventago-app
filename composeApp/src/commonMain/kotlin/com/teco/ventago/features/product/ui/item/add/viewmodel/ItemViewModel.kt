@@ -13,6 +13,7 @@ import com.teco.ventago.features.product.domain.model.AdditionalInfoKey
 import com.teco.ventago.features.product.domain.model.AdditionalValueType
 import com.teco.ventago.features.product.domain.model.GoodsFamily
 import com.teco.ventago.features.product.domain.model.GoodsSegment
+import com.teco.ventago.features.product.domain.model.ProductType
 import com.teco.ventago.features.product.domain.model.UomRegistry
 import com.teco.ventago.features.settings.ui.settings.viewmodel.SettingsState
 import com.teco.ventago.features.settings.ui.settings.viewmodel.SettingsStateUiEvent
@@ -79,9 +80,22 @@ abstract class ItemViewModel(private val productService: ProductService) :
     }
 
     fun onProductTypeChange(productTypeId: Int) {
+        val isService = productTypeId == ProductType.SERVICE.typeId
         updateState {
             copy(
-                productTypeId = productTypeId
+                productTypeId = productTypeId,
+                unitMeasureCode = if (isService) "und" else unitMeasureCode,
+                additionalInfo = if (isService) {
+                    additionalInfo.map { entry ->
+                        if (entry.keyName == AdditionalInfoKey.PANAMA_GOODS_SERVICES_UNIT_CODE.keyName) {
+                            entry.copy(title = "Unidad: und", rawValue = "und")
+                        } else {
+                            entry
+                        }
+                    }
+                } else {
+                    additionalInfo
+                }
             )
         }
     }

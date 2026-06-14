@@ -6,6 +6,7 @@ import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -34,6 +35,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.Divider
 import androidx.compose.material.icons.Icons
@@ -64,6 +66,8 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Switch
 import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
@@ -84,7 +88,9 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.painter.BitmapPainter
 import androidx.compose.ui.graphics.vector.rememberVectorPainter
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
@@ -801,9 +807,17 @@ fun PosListOrganism(
 ) {
     val uiState by viewModel.uiState.collectAsState()
     val productControlsHeight = 56.dp
+    val focusManager = LocalFocusManager.current
 
     Column(
-        modifier = modifier.padding(horizontal = 0.dp).fillMaxSize()
+        modifier = modifier
+            .padding(horizontal = 0.dp)
+            .fillMaxSize()
+            .pointerInput(focusManager) {
+                detectTapGestures(onTap = {
+                    focusManager.clearFocus()
+                })
+            }
     ) {
         Spacer(modifier = Modifier.height(16.dp))
 
@@ -820,18 +834,47 @@ fun PosListOrganism(
             horizontalArrangement = Arrangement.spacedBy(8.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            DMOutlinedTextField(
-                text = uiState.query,
-                label = stringResource(Res.string.search),
+            OutlinedTextField(
+                value = uiState.query,
+                onValueChange = viewModel::onSearchChange,
                 modifier = Modifier
                     .weight(1f)
                     .height(productControlsHeight),
-                onChange = {
-                    viewModel.onSearchChange(it)
+                textStyle = bodyMedium().copy(color = MaterialTheme.colorScheme.onSurface),
+                placeholder = {
+                    Text(
+                        text = stringResource(Res.string.search),
+                        style = bodyMedium(),
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
                 },
-                leadingIcon = Icons.Rounded.Search,
-                maxLines = 1,
-                imeAction = ImeAction.Done,
+                leadingIcon = {
+                    Icon(
+                        imageVector = Icons.Rounded.Search,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                },
+                singleLine = true,
+                keyboardOptions = KeyboardOptions(
+                    keyboardType = KeyboardType.Text,
+                    imeAction = ImeAction.Done
+                ),
+                shape = RoundedCornerShape(6.dp),
+                colors = OutlinedTextFieldDefaults.colors(
+                    focusedTextColor = MaterialTheme.colorScheme.onSurface,
+                    unfocusedTextColor = MaterialTheme.colorScheme.onSurface,
+                    cursorColor = MaterialTheme.colorScheme.primary,
+                    focusedContainerColor = Color.Transparent,
+                    unfocusedContainerColor = Color.Transparent,
+                    disabledContainerColor = Color.Transparent,
+                    focusedBorderColor = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.65f),
+                    unfocusedBorderColor = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.45f),
+                    focusedPlaceholderColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                    unfocusedPlaceholderColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                    focusedLeadingIconColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                    unfocusedLeadingIconColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
             )
 
             ProductViewModeSelector(
@@ -966,57 +1009,36 @@ private fun ProductViewModeSelector(
 ) {
     val shape = RoundedCornerShape(6.dp)
     val borderColor = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.45f)
-    val selectedContainer = MaterialTheme.colorScheme.onSurfaceVariant
-    val selectedContent = MaterialTheme.colorScheme.surface
-    val unselectedContent = MaterialTheme.colorScheme.onSurfaceVariant
+    val nextMode = if (selectedMode == ProductViewMode.LIST) {
+        ProductViewMode.GRID
+    } else {
+        ProductViewMode.LIST
+    }
+    val icon = if (nextMode == ProductViewMode.GRID) {
+        Icons.Filled.Apps
+    } else {
+        Icons.Filled.FormatListBulleted
+    }
+    val description = if (nextMode == ProductViewMode.GRID) {
+        stringResource(Res.string.pos_view_grid)
+    } else {
+        stringResource(Res.string.pos_view_list)
+    }
 
-    Row(
+    Box(
         modifier = Modifier
-            .padding(top = 4.dp)
             .height(selectorHeight)
+            .width(selectorHeight)
             .clip(shape)
             .border(width = 1.dp, color = borderColor, shape = shape)
+            .clickable { onSelect(nextMode) },
+        contentAlignment = Alignment.Center
     ) {
-        val isGridSelected = selectedMode == ProductViewMode.GRID
-        Box(
-            modifier = Modifier
-                .fillMaxHeight()
-                .width(selectorHeight)
-                .background(if (isGridSelected) selectedContainer else Color.Transparent)
-                .clickable { onSelect(ProductViewMode.GRID) }
-                .padding(horizontal = 10.dp),
-            contentAlignment = Alignment.Center
-        ) {
-            Icon(
-                imageVector = Icons.Filled.Apps,
-                contentDescription = stringResource(Res.string.pos_view_grid),
-                tint = if (isGridSelected) selectedContent else unselectedContent
-            )
-        }
-
-        Box(
-            modifier = Modifier
-                .width(1.dp)
-                .fillMaxHeight()
-                .background(borderColor)
+        Icon(
+            imageVector = icon,
+            contentDescription = description,
+            tint = MaterialTheme.colorScheme.onSurfaceVariant
         )
-
-        val isListSelected = selectedMode == ProductViewMode.LIST
-        Box(
-            modifier = Modifier
-                .fillMaxHeight()
-                .width(selectorHeight)
-                .background(if (isListSelected) selectedContainer else Color.Transparent)
-                .clickable { onSelect(ProductViewMode.LIST) }
-                .padding(horizontal = 10.dp),
-            contentAlignment = Alignment.Center
-        ) {
-            Icon(
-                imageVector = Icons.Filled.FormatListBulleted,
-                contentDescription = stringResource(Res.string.pos_view_list),
-                tint = if (isListSelected) selectedContent else unselectedContent
-            )
-        }
     }
 }
 
@@ -1075,7 +1097,7 @@ private fun PosPersonalizedProductCard(
                 contentAlignment = Alignment.CenterStart
             ) {
                 Text(
-                    text = "Producto Personalizado",
+                    text = "Agregar Nuevo",
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                     style = bodyMediumBold(color = MaterialTheme.colorScheme.secondary)
@@ -1105,21 +1127,15 @@ private fun PosPersonalizedProductGridCard(
         shape = RoundedCornerShape(10.dp),
         onClick = onClick
     ) {
-        Column(
+        Box(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(horizontal = 12.dp, vertical = 8.dp),
-            verticalArrangement = Arrangement.SpaceBetween
+            contentAlignment = Alignment.Center
         ) {
-            Text(
-                text = "Producto Personalizado",
-                maxLines = 2,
-                overflow = TextOverflow.Ellipsis,
-                style = bodyMediumBold()
-            )
             Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(6.dp)
+                horizontalArrangement = Arrangement.spacedBy(6.dp),
+                verticalAlignment = Alignment.CenterVertically
             ) {
                 Icon(
                     imageVector = Icons.Outlined.Add,
@@ -1128,8 +1144,9 @@ private fun PosPersonalizedProductGridCard(
                     modifier = Modifier.size(18.dp)
                 )
                 Text(
-                    text = stringResource(Res.string.add_products),
+                    text = "Agregar Nuevo",
                     maxLines = 1,
+                    textAlign = TextAlign.Center,
                     overflow = TextOverflow.Ellipsis,
                     style = bodyMediumBold(color = MaterialTheme.colorScheme.secondary)
                 )

@@ -77,6 +77,7 @@ import com.teco.ventago.navigation.PosNoteRoute
 import com.teco.ventago.features.orders.domain.models.OrderLineDto
 import kotlinx.serialization.json.Json as KotlinJson
 import com.teco.ventago.utils.dbFormat
+import com.teco.ventago.utils.emailRegex
 import com.teco.ventago.utils.isValidPanamaCedula
 import com.teco.ventago.utils.normalizePanamaCedula
 import com.teco.ventago.utils.normalizeQuantity
@@ -94,13 +95,11 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import kotlinx.datetime.Clock
-import kotlinx.datetime.DateTimeUnit
 import kotlinx.datetime.Instant
 import kotlinx.datetime.LocalDate
 import kotlinx.datetime.LocalDateTime
 import kotlinx.datetime.LocalTime
 import kotlinx.datetime.TimeZone
-import kotlinx.datetime.plus
 import kotlinx.datetime.toInstant
 import kotlinx.datetime.toLocalDateTime
 import kotlinx.serialization.Serializable
@@ -119,6 +118,7 @@ import kotlin.time.ExperimentalTime
 
 internal const val INVALID_FINAL_CUSTOMER_CEDULA_MESSAGE =
     "Cedula invalida. Revise el formato (ej: 1-1234-12345, 8-88-8456, PE-123-12345, E-1234-12345, N-12345-1234, 1AV1234-12345, 1PI-1234-1234)."
+internal const val INVALID_FINAL_CUSTOMER_EMAIL_MESSAGE = "Correo inválido"
 
 class PosViewModel(
     private val authService: IAuthService,
@@ -192,6 +192,7 @@ class PosViewModel(
         val canCreateInvoice: Boolean,
         val canCreateDraft: Boolean,
         val canCreatePaymentLink: Boolean,
+        val hasPaymentsBeta: Boolean,
         val canCreateQuote: Boolean,
         val canUpdateQuote: Boolean,
         val canUseCustomProduct: Boolean,
@@ -209,6 +210,7 @@ class PosViewModel(
                         canCreateInvoice = AuthzEvaluator.canAction(ActionKey.ORDERS_CREATE, user, betaSnapshot),
                         canCreateDraft = AuthzEvaluator.canAction(ActionKey.ORDERS_CREATE_DRAFT, user, betaSnapshot),
                         canCreatePaymentLink = AuthzEvaluator.canAction(ActionKey.ORDERS_PAYMENT_LINK, user, betaSnapshot),
+                        hasPaymentsBeta = BetaFeature.PAYMENTS in betaSnapshot,
                         canCreateQuote = AuthzEvaluator.canAction(ActionKey.QUOTES_CREATE, user, betaSnapshot),
                         canUpdateQuote = AuthzEvaluator.canAction(ActionKey.QUOTES_UPDATE, user, betaSnapshot),
                         canUseCustomProduct = AuthzEvaluator.canAction(ActionKey.ORDERS_CUSTOM_PRODUCT, user, betaSnapshot),
@@ -221,6 +223,7 @@ class PosViewModel(
                             canCreateInvoice = authz.canCreateInvoice,
                             canCreateDraft = authz.canCreateDraft,
                             canCreatePaymentLink = authz.canCreatePaymentLink,
+                            hasPaymentsBeta = authz.hasPaymentsBeta,
                             canCreateQuote = authz.canCreateQuote,
                             canUpdateQuote = authz.canUpdateQuote,
                             canUseCustomProduct = authz.canUseCustomProduct,
@@ -772,6 +775,7 @@ class PosViewModel(
         updateState {
         val priceCents = customUnitPrice
         val baseCents = item.price.toLongCents()
+        val shouldShowProductAddedSnackbar = deltaQty > 0
 
         // For personalized items (itemId < 0), always create a new line since each is unique
         // For saved items, try to merge with existing line if same item, price, tax, and no discount
@@ -797,7 +801,14 @@ class PosViewModel(
                 copy(cart = newCart)
             } else {
                 newCart[idx] = cur.copy(quantity = normalizeQuantity(newQty, minValue = 0.0001))
-                copy(cart = newCart)
+                copy(
+                    cart = newCart,
+                    productAddedSnackbarToken = if (shouldShowProductAddedSnackbar) {
+                        productAddedSnackbarToken + 1
+                    } else {
+                        productAddedSnackbarToken
+                    }
+                )
             }
         } else {
             // New line (different variant: price/tax/discount, or personalized item)
@@ -819,7 +830,15 @@ class PosViewModel(
             } else {
                 personalizedItems
             }
-            copy(cart = cart + newLine, personalizedItems = newPersonalizedItems)
+            copy(
+                cart = cart + newLine,
+                personalizedItems = newPersonalizedItems,
+                productAddedSnackbarToken = if (shouldShowProductAddedSnackbar) {
+                    productAddedSnackbarToken + 1
+                } else {
+                    productAddedSnackbarToken
+                }
+            )
         }
     }
     }
@@ -936,6 +955,7 @@ class PosViewModel(
                 selectedOperationNatureIndex = 0,
                 selectedOperationNature = "01",
                 enabledOperationNature = true,
+                invoiceIssueDateIso = currentPanamaDateIsoString(),
                 finalCustomer = null,
                 finalName = null,
                 finalEmail = null,
@@ -1063,6 +1083,13 @@ class PosViewModel(
             showError()
             return
         }
+        val stateBeforeSubmit = uiState.value
+        if (!saveAsDraft && !effectiveCreatePaymentLink && stateBeforeSubmit.installments.any { it.dueDateIso.isBlank() }) {
+            viewModelScope.launch {
+                snackbarService.show("Selecciona fecha de vencimiento para cada pago a crédito.")
+            }
+            return
+        }
         showLoading()
         viewModelScope.launch {
             withContext(Dispatchers.IO) {
@@ -1150,16 +1177,13 @@ class PosViewModel(
         val operationDestination = if (state.selectedDocType == "03" || state.selectedDocType == "10") "2" else "1"
 
 
-        val panamaZone = TimeZone.of("America/Panama")
-        val localDateTime = Clock.System.now().toLocalDateTime(panamaZone)
-
         val invoice = Invoice(
             type = state.selectedDocType,
             deliveryDate = null,
             operationNature = state.selectedOperationNature,
             operationDestination = operationDestination,
             issuerFeAdditionalInfo = "",
-            issuedDatetime = localDateTime.toString() // 2025-11-08T09:23:00
+            issuedDatetime = resolveInvoiceIssuedDatetime(state.invoiceIssueDateIso)
         )
 
         val branch = Branch(
@@ -1465,10 +1489,11 @@ class PosViewModel(
             )
         } else if (!saveAsDraft) {
             for ((key, value) in state.charged) {
+                val methodLabel = manualMethodOptions().firstOrNull { it.first == key }?.second ?: "Método $key"
                 // For type 99 (OTHER), use custom description and ensure it's bigger than 10 characters
                 val description = if (key == 99) {
                     val customDesc = state.otherPaymentDescription.ifBlank { 
-                        manualMethodOptions()[key].second 
+                        methodLabel
                     }
                     // Add meaningful text instead of padding with spaces (server trims spaces)
                     if (customDesc.length <= 10) {
@@ -1477,7 +1502,7 @@ class PosViewModel(
                         customDesc
                     }
                 } else {
-                    manualMethodOptions()[key].second
+                    methodLabel
                 }
                 
                 payments.add(
@@ -1849,6 +1874,10 @@ class PosViewModel(
         updateState {
             copy(selectedOperationNatureIndex = index, selectedOperationNature = key)
         }
+    }
+
+    fun onInvoiceIssueDateSelected(isoDate: String) {
+        updateState { copy(invoiceIssueDateIso = isoDate) }
     }
 
     // === Customer ===
@@ -2249,6 +2278,7 @@ class PosViewModel(
                 customerAddresses = if (isFinal) emptyList() else customerAddresses,
                 selectedCustomerAddressId = if (isFinal) null else selectedCustomerAddressId,
                 customerAddressesLoading = false,
+                finalEmailError = if (isFinal) validateFinalCustomerEmail(finalEmail) else null,
                 finalIdNumberError = if (isFinal) {
                     validateFinalCustomerIdentification(finalIdType, finalIdNumber)
                 } else {
@@ -2265,6 +2295,7 @@ class PosViewModel(
         copy(
             finalName = null,
             finalEmail = null,
+            finalEmailError = null,
             finalPhone = null,
             finalIdTypeIndex = 0,
             finalIdType = "cedula",
@@ -2275,7 +2306,12 @@ class PosViewModel(
     }
 
     fun onFinalNameChanged(v: String) = updateState { copy(finalName = v) }
-    fun onFinalEmailChanged(v: String) = updateState { copy(finalEmail = v) }
+    fun onFinalEmailChanged(v: String) = updateState {
+        copy(
+            finalEmail = v,
+            finalEmailError = validateFinalCustomerEmail(v)
+        )
+    }
     fun onFinalPhoneChanged(v: String) = updateState { copy(finalPhone = v) }
 
     // TODO Convert to proper enum
@@ -2323,15 +2359,30 @@ class PosViewModel(
 
     fun validateFinalCustomerSelection(showFeedback: Boolean = true): Boolean {
         val state = uiState.value
+        val normalizedEmail = state.finalEmail?.trim()?.takeIf { it.isNotEmpty() }
+        val emailError = validateFinalCustomerEmail(normalizedEmail)
         val normalizedIdNumber = normalizeFinalCustomerIdentificationNumber(state.finalIdType, state.finalIdNumber)
         val error = validateFinalCustomerIdentification(state.finalIdType, normalizedIdNumber)
 
-        if (normalizedIdNumber != state.finalIdNumber || error != state.finalIdNumberError) {
+        if (
+            normalizedEmail != state.finalEmail ||
+            emailError != state.finalEmailError ||
+            normalizedIdNumber != state.finalIdNumber ||
+            error != state.finalIdNumberError
+        ) {
             updateState {
                 copy(
+                    finalEmail = normalizedEmail,
+                    finalEmailError = emailError,
                     finalIdNumber = normalizedIdNumber,
                     finalIdNumberError = error
                 )
+            }
+        }
+
+        if (emailError != null && showFeedback) {
+            viewModelScope.launch {
+                snackbarService.show(emailError)
             }
         }
 
@@ -2341,7 +2392,7 @@ class PosViewModel(
             }
         }
 
-        return error == null
+        return emailError == null && error == null
     }
 
 
@@ -2644,16 +2695,15 @@ class PosViewModel(
     fun onPortOfLoading(v: String) = updateState { copy(exportPortOfLoading = v) }
 
 
-    // ---------- Tips sheet ----------
     // ---------- Totals helpers ----------
     /** Legal invoice total (goes to PAC): NO tips. */
     fun legalInvoiceTotal(): Long = CartCalc.summarize(uiState.value).totalBeforeTip
 
-    /** Tips (from state.tipAmount/tipIsPercentage computed over legal base) */
-    fun tipsTotal(): Long = CartCalc.summarize(uiState.value).tip
+    /** Tips are no longer handled by the app. Kept as zero to ignore legacy restored state. */
+    fun tipsTotal(): Long = 0L
 
-    /** Amount to charge = legal + tips */
-    fun amountToCharge(): Long = (legalInvoiceTotal() + tipsTotal()).coerceAtLeast(0L)
+    /** Amount to charge = legal invoice total only. */
+    fun amountToCharge(): Long = legalInvoiceTotal().coerceAtLeast(0L)
 
     // ---------- Payment flow ----------
     fun setPaymentFlow(mode: PaymentFlowMode) {
@@ -2766,13 +2816,13 @@ class PosViewModel(
     // ---------- Manual payments ----------
     /** Label shown to users for DGI codes. */
     fun manualMethodOptions(): List<Pair<Int, String>> = listOf(
-        2 to "Efectivo",
+        8 to "Transferencia bancaria",
         3 to "Tarjeta crédito",
         4 to "Tarjeta débito",
+        2 to "Efectivo",
         5 to "Tarjeta fidelización",
         6 to "Vale",
         7 to "Tarjeta de regalo",
-        8 to "Transferencia bancaria",
         9 to "Cheque",
         10 to "Punto Pago",
         99 to "Otro (especificar)"
@@ -2787,7 +2837,7 @@ class PosViewModel(
     }
 
     fun setManualAmount(code: Int, cents: Long) {
-        val totalToCharge = amountToCharge()     // legal + tips
+        val totalToCharge = amountToCharge()
         val charged = uiState.value.charged.toMutableMap()
         val remaining = totalToCharge - charged.filterKeys { it != code }.values.sum()
 
@@ -2821,15 +2871,19 @@ class PosViewModel(
     fun manualPaidSum(): Long = uiState.value.charged.values.sum()
 
     // ---------- Installments ----------
-    fun addInstallment() = updateState {
-        if (paymentFlowMode == PaymentFlowMode.PAYMENT_LINK) this
-        else {
-            // Calculate default due date: 30 days from now
-            val today = Clock.System.now().toLocalDateTime(TimeZone.currentSystemDefault()).date
-            val defaultDueDate = today.plus(30, DateTimeUnit.DAY)
-            val defaultDueDateIso = "${defaultDueDate.year}-${defaultDueDate.monthNumber.toString().padStart(2, '0')}-${defaultDueDate.dayOfMonth.toString().padStart(2, '0')}"
-            
-            copy(installments = installments + InstallmentUI(dueDateIso = defaultDueDateIso))
+    fun addInstallment(dueDateIso: String = "", amountCents: Long? = null) {
+        val remainingForInstallment = remainingToAllocate()
+        updateState {
+            if (paymentFlowMode == PaymentFlowMode.PAYMENT_LINK) this
+            else {
+                copy(installments = installments + InstallmentUI(
+                    amountCents = (amountCents ?: remainingForInstallment).coerceIn(
+                        0L,
+                        remainingForInstallment.coerceAtLeast(0L)
+                    ),
+                    dueDateIso = dueDateIso
+                ))
+            }
         }
     }
 
@@ -2839,7 +2893,7 @@ class PosViewModel(
     }
 
     fun setInstallmentAmount(index: Int, cents: Long) {
-        val totalToCharge = amountToCharge() // legal + tips
+        val totalToCharge = amountToCharge()
         val state = uiState.value
         
         // Calculate remaining amount: total - manual payments - other installments (excluding current one)
@@ -2982,9 +3036,9 @@ class PosViewModel(
         localStorage.deleteObject(paymentLinkCheckpointKey(businessId))
     }
 
-    /** Remaining (legal+tips) minus manual-minus-installments. */
+    /** Remaining invoice total minus manual payments and installments. */
     fun remainingToAllocate(): Long {
-        val total = amountToCharge() // includes tips
+        val total = amountToCharge()
         val allocated = manualPaidSum() + installmentsSum()
         return (total - allocated).coerceAtLeast(0L)
     }
@@ -3018,6 +3072,49 @@ class PosViewModel(
             // Return original timestamp if parsing fails
             utcTimestamp
         }
+    }
+
+    private fun resolveInvoiceIssuedDatetime(invoiceIssueDateIso: String): String {
+        val panamaNow = Clock.System.now().toLocalDateTime(TimeZone.of("America/Panama"))
+        val selectedDate = parseIsoLocalDate(invoiceIssueDateIso) ?: panamaNow.date
+
+        return if (selectedDate == panamaNow.date) {
+            formatLocalDateTimeSeconds(panamaNow)
+        } else {
+            "${formatLocalDate(selectedDate)}T00:00:00"
+        }
+    }
+
+    private fun currentPanamaDateIsoString(): String {
+        return formatLocalDate(Clock.System.now().toLocalDateTime(TimeZone.of("America/Panama")).date)
+    }
+
+    private fun parseIsoLocalDate(value: String): LocalDate? {
+        return try {
+            if (value.length < 10) return null
+            LocalDate(
+                value.substring(0, 4).toInt(),
+                value.substring(5, 7).toInt(),
+                value.substring(8, 10).toInt()
+            )
+        } catch (_: Throwable) {
+            null
+        }
+    }
+
+    private fun formatLocalDate(date: LocalDate): String {
+        val yearStr = date.year.toString().padStart(4, '0')
+        val monthStr = date.monthNumber.toString().padStart(2, '0')
+        val dayStr = date.dayOfMonth.toString().padStart(2, '0')
+        return "$yearStr-$monthStr-$dayStr"
+    }
+
+    private fun formatLocalDateTimeSeconds(dateTime: LocalDateTime): String {
+        val dateStr = formatLocalDate(dateTime.date)
+        val hourStr = dateTime.hour.toString().padStart(2, '0')
+        val minuteStr = dateTime.minute.toString().padStart(2, '0')
+        val secondStr = dateTime.second.toString().padStart(2, '0')
+        return "${dateStr}T$hourStr:$minuteStr:$secondStr"
     }
 
     /**
@@ -3149,4 +3246,9 @@ internal fun validateFinalCustomerIdentification(finalIdType: String, finalIdNum
     } else {
         INVALID_FINAL_CUSTOMER_CEDULA_MESSAGE
     }
+}
+
+internal fun validateFinalCustomerEmail(finalEmail: String?): String? {
+    val normalizedEmail = finalEmail?.trim()?.takeIf { it.isNotEmpty() } ?: return null
+    return if (emailRegex.matches(normalizedEmail)) null else INVALID_FINAL_CUSTOMER_EMAIL_MESSAGE
 }

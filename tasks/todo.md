@@ -1,3 +1,535 @@
+# POS Cart And Product Total Button TODO
+
+## Plan
+- [x] Change cart-screen invoice CTA from `Nueva factura` plus amount to `Continuar factura` without amount.
+- [x] Remove the amount suffix from cart-screen quote CTAs as well.
+- [x] Change product-selection CTA amount to use the current tax-aware invoice total instead of subtotal-only cart total.
+- [x] Run focused compile verification and record results.
+
+## Verification Gates
+- [x] `./gradlew --no-build-cache --no-configuration-cache :androidApp:compileDebugKotlin`
+
+## Review Notes
+- Cart-screen invoice CTA now displays `Continuar factura` with no amount.
+- Cart-screen quote CTAs keep their existing labels but no longer append an amount.
+- Product-selection bottom bar now formats `viewModel.legalInvoiceTotal()` so the visible amount includes currently known taxes and respects `taxExempt`.
+- Android debug Kotlin compilation passed.
+
+# Invoice Preview Spanish Accents TODO
+
+## Plan
+- [x] Review hardcoded Spanish UI text in `InvoicePreviewScreen.kt`.
+- [x] Fix missing Spanish accents without changing invoice preview layout or behavior.
+- [x] Run focused compile verification and record results.
+
+## Verification Gates
+- [x] `./gradlew --no-build-cache --no-configuration-cache :androidApp:compileDebugKotlin`
+
+## Review Notes
+- Fixed missing accents in invoice preview labels and headings: `electrónica`, `Dirección`, `Facturación`, `código`, `Identificación`, `Número`, `emisión`, and `Ítems`.
+- Re-scanned for the unaccented forms in `InvoicePreviewScreen.kt`; remaining matches are only function names, not user-facing copy.
+- Android debug Kotlin compilation passed.
+
+# POS Grid Add New Product Icon TODO
+
+## Plan
+- [x] Add a plus icon to the left of the grid-mode `Agregar Nuevo` text.
+- [x] Keep the existing grid card size and centered alignment.
+- [x] Run focused compile verification and record results.
+
+## Verification Gates
+- [x] `./gradlew --no-build-cache --no-configuration-cache :androidApp:compileDebugKotlin`
+
+## Review Notes
+- Grid-mode manual product card now centers a plus icon and `Agregar Nuevo` label as one row.
+- Existing card height, dashed border, and centered alignment are unchanged.
+- Android debug Kotlin compilation passed.
+
+# POS Registered Customer Card TODO
+
+## Plan
+- [x] Make the registered-customer option card open the existing customer search screen when selected.
+- [x] Remove the duplicated select-client button from the registered-customer section while keeping selected customer details visible.
+- [x] Run focused compile verification and record results.
+
+## Verification Gates
+- [x] `./gradlew --no-build-cache --no-configuration-cache :androidApp:compileDebugKotlin`
+
+## Review Notes
+- Registered-customer option card now selects registered customer and opens `PosScreens.SearchCustomerScreen` directly.
+- The first POS page no longer renders the separate `Seleccionar cliente` button after registered-customer selection.
+- Selected registered customer details remain visible in a compact secondary-color summary card.
+- Android debug Kotlin compilation passed.
+
+# POS Manual Product Button Label TODO
+
+## Plan
+- [x] Change list-mode manual product button text to `Agregar Nuevo`.
+- [x] Simplify grid-mode manual product card to one centered `Agregar Nuevo` label while preserving size.
+- [x] Run focused compile verification and record results.
+
+## Verification Gates
+- [x] `./gradlew --no-build-cache --no-configuration-cache :androidApp:compileDebugKotlin`
+
+## Review Notes
+- List-mode manual product dotted button now says `Agregar Nuevo`.
+- Grid-mode manual product dotted card keeps the same 104 dp height and now renders only centered `Agregar Nuevo` text.
+- Android debug Kotlin compilation passed.
+
+# POS Payments Beta Link Option TODO
+
+## Plan
+- [x] Make the product-added snackbar action button use secondary as the button content color.
+- [x] Track whether the current business has the `payments` beta in POS state.
+- [x] Hide the payment-link option in `PaymentScreen` when the `payments` beta is not enabled.
+- [x] Keep existing payment-link permission/configuration guards for beta users.
+- [x] Run focused compile verification and record results.
+
+## Verification Gates
+- [x] `./gradlew --no-build-cache --no-configuration-cache :androidApp:compileDebugKotlin`
+
+## Review Notes
+- Product-added snackbar action now sets `TextButton` content color to `MaterialTheme.colorScheme.secondary`.
+- POS state now tracks `hasPaymentsBeta` from the existing beta snapshot.
+- `PaymentScreen` only renders `Crear enlace de pago` when `hasPaymentsBeta` is true.
+- Existing `canCreatePaymentLink` and payment-method configuration checks still control whether beta users can select/create a link.
+- Android debug Kotlin compilation passed.
+
+# Orders Customer Name Filter TODO
+
+## Plan
+- [x] Inspect current order filter request/state and existing customer search APIs.
+- [x] Replace the RUC filter state with customer-name search plus selected customer ID.
+- [x] Update the orders filter sheet to show at most four matching customers and apply the selected customer ID.
+- [x] Run focused compile verification and record results.
+
+## Verification Gates
+- [x] `./gradlew --no-build-cache --no-configuration-cache :composeApp:compileKotlinMetadata`
+- [x] `./gradlew --no-build-cache --no-configuration-cache :androidApp:compileDebugKotlin`
+
+## Review Notes
+- Orders filter sheet now uses `Nombre del cliente` instead of `RUC del cliente`.
+- Typing at least 2 characters debounces a customer search by name through `CustomerService.searchCustomersByName(...)`.
+- Customer results are requested with limit 4 and rendered with an additional `take(4)` cap.
+- Selecting a customer stores `customerIdFilter`, and orders continue using the existing `customer_id` field in `ListOrdersRequest`.
+- Apply is disabled when a name is typed without a selected customer, so free text is never sent as an order filter.
+
+# POS Final Customer Email Validation TODO
+
+## Plan
+- [x] Add final-customer email error state and validate blank vs malformed values.
+- [x] Show inline error on the final-customer email input.
+- [x] Block continue/order creation when the final-customer email is malformed and show feedback.
+- [x] Run focused compile verification and record results.
+
+## Verification Gates
+- [x] `./gradlew --no-build-cache --no-configuration-cache :androidApp:compileDebugKotlin`
+
+## Review Notes
+- Final customer email now reuses the shared `emailRegex`; blank remains valid because the field is optional.
+- Invalid final customer email now shows inline `Correo inválido`.
+- `validateFinalCustomerSelection()` now normalizes email, stores the email error, shows feedback, and blocks navigation/order creation when email is malformed.
+- Android debug Kotlin compilation passed.
+
+# POS Product Added Snackbar TODO
+
+## Plan
+- [x] Confirm saved and personalized product add-to-cart paths.
+- [x] Show a `Producto agregado` snackbar with `Facturar` action after catalog/saved products are added from POS.
+- [x] Show the same snackbar after personalized manual products are returned and added to the cart.
+- [x] Make the snackbar action navigate to the same cart screen as the bottom cart button.
+- [x] Set the product-added snackbar height to `56.dp`.
+- [x] Use secondary color for the snackbar `Facturar` action text.
+- [x] Run focused compile verification and record results.
+
+## Verification Gates
+- [x] `./gradlew --no-build-cache --no-configuration-cache :composeApp:compileKotlinMetadata`
+- [x] `./gradlew --no-build-cache --no-configuration-cache :androidApp:compileDebugKotlin`
+
+## Review Notes
+- `PosViewModel.addItemToCart` now increments a product-added snackbar token after successful positive-quantity additions.
+- Saved/catalog products and personalized manual products both use `addItemToCart`, so both paths trigger the same feedback.
+- `PosProductScreenBottomBar` hosts a `Producto agregado` snackbar over the cart bottom-button area with `Facturar` action.
+- The snackbar action navigates to `PosScreens.CartScreen`, matching the mobile cart button destination.
+- The bottom bar overlay keeps the same 72 dp footprint as the cart button area so the snackbar covers it without resizing the bottom bar.
+- The snackbar content now uses a custom `Snackbar` with `Modifier.height(56.dp)`.
+- The snackbar `Facturar` action text now uses `MaterialTheme.colorScheme.secondary`.
+- The bottom bar tracks the last shown token locally so returning to the product screen does not replay an old snackbar.
+
+# Product Service Selector TODO
+
+## Plan
+- [x] Confirm normal and personalized product entry share the same add-item form.
+- [x] Add a product/service selector in the basic information card with product selected by default and secondary-color selected styling.
+- [x] When service is selected, set product type to service, hide the unit measure input, and force `und` internally.
+- [x] Preserve saved-product and unsaved personalized-product payload behavior.
+- [x] Run focused compile verification and record results.
+
+## Verification Gates
+- [x] `./gradlew --no-build-cache --no-configuration-cache :composeApp:compileKotlinMetadata`
+- [x] `./gradlew --no-build-cache --no-configuration-cache :androidApp:compileDebugKotlin`
+
+## Review Notes
+- Normal product and personalized product creation share `AddItemScreen`; personalized mode is driven by `NavResults.KEY_IS_PERSONALIZED_PRODUCT`.
+- Added a two-option selector in the basic information card with product selected by default and selected styling driven by `MaterialTheme.colorScheme.secondary`.
+- Removed the duplicate optional product-type dropdown from the identification card.
+- When service is selected, the unit measure dropdown is hidden and state is forced to `unitMeasureCode = "und"` for both unsaved personalized items and saved products.
+
+# POS Invoice Configuration Card TODO
+
+## Plan
+- [x] Locate the first invoice creation page dropdowns and the order/invoice payload path.
+- [x] Add a collapsed `Invoice configuration` card that contains branch, billing point, invoice type, invoice nature, and invoice date.
+- [x] Add invoice date state with default Panama current datetime and a date selector limited to six months in the past.
+- [x] Serialize `issued_datetime` as current Panama datetime for today, or selected date at `T00:00:00` for non-today dates.
+- [x] Run focused compile verification and record results.
+
+## Verification Gates
+- [x] `./gradlew --no-build-cache --no-configuration-cache :composeApp:compileKotlinMetadata`
+- [x] `./gradlew --no-build-cache --no-configuration-cache :androidApp:compileDebugKotlin`
+
+## Review Notes
+- The first POS invoice page now shows one collapsed `Configuración de factura` card for branch, billing point, invoice type, operation nature, and invoice date.
+- Invoice date defaults to the current Panama date and uses the existing KMP date selector with a min date six months before today and max date today.
+- `issued_datetime` resolves to the current Panama datetime when the selected invoice date is today, otherwise to the selected date at `T00:00:00`.
+
+# POS Add Product Keyboard TODO
+
+## Plan
+- [x] Confirm whether normal and personalized product entry share the same add-product screen.
+- [x] Make the add-product scroll container react to the keyboard so focused inputs can move above it.
+- [x] Dismiss the keyboard when tapping outside add-product inputs.
+- [x] Preserve existing product form behavior and unrelated worktree changes.
+- [x] Run focused compile verification and record results.
+
+## Verification Gates
+- [x] `./gradlew --no-build-cache --no-configuration-cache :composeApp:compileKotlinMetadata`
+- [x] `./gradlew --no-build-cache --no-configuration-cache :androidApp:compileDebugKotlin`
+
+## Review Notes
+- POS normal-product and personalized-product entry both use `features/product/ui/item/add/AddItemScreen.kt`; personalized mode is selected from `NavResults.KEY_IS_PERSONALIZED_PRODUCT`.
+- The add-product scroll container now applies navigation-bar padding, IME padding, and an extra bottom spacer so lower fields/actions can scroll above the iOS keyboard.
+- Tapping outside inputs in the add-product form now clears focus, dismissing the keyboard.
+
+# POS Product Search Controls TODO
+
+## Plan
+- [x] Make product search typed text visible in iOS dark mode.
+- [x] Match search bar and layout-toggle heights.
+- [x] Replace the two-button view selector with one icon button that toggles list/grid mode.
+- [x] Dismiss the keyboard when tapping outside the product search input.
+- [x] Run focused compile verification and record results.
+
+## Verification Gates
+- [x] `./gradlew --no-build-cache --no-configuration-cache :composeApp:compileKotlinMetadata`
+- [x] `./gradlew --no-build-cache --no-configuration-cache :androidApp:compileDebugKotlin`
+
+## Review Notes
+- Product search now uses explicit `onSurface` text and cursor colors so typed text remains visible in iOS dark mode.
+- Search input and layout toggle share a 56 dp control height.
+- The grid/list selector is now a single square toggle button that switches to the opposite mode and updates the icon.
+- Tapping outside the product search input clears focus, dismissing the keyboard.
+
+# POS Payment Dynamic Action Spacing TODO
+
+## Plan
+- [x] Replace the fixed spacer between the distribution card and invoice actions with measured dynamic space.
+- [x] Keep invoice actions in normal scroll flow so small devices can scroll instead of overlapping the card.
+- [x] Run focused compile verification and record results.
+
+## Verification Gates
+- [x] `./gradlew --no-build-cache --no-configuration-cache :composeApp:compileKotlinMetadata`
+- [x] `./gradlew --no-build-cache --no-configuration-cache :androidApp:compileDebugKotlin`
+
+## Review Notes
+- The manual payment area now measures available viewport height after the payment selector and bottom padding.
+- Distribution card and invoice actions are placed by a measured layout: extra height becomes dynamic space, while small devices keep a minimum gap and scroll normally.
+
+# POS Final Customer Card And Keyboard TODO
+
+## Plan
+- [x] Inspect POS customer, product, and customer-search input layouts for keyboard behavior.
+- [x] Simplify final-customer additional-information card colors so it uses the normal card surface hierarchy in light/dark mode.
+- [x] Make POS form content scrollable above the iOS keyboard and dismiss keyboard on outside taps across the affected POS inputs.
+- [x] Run focused compile verification and record results.
+
+## Verification Gates
+- [x] `./gradlew --no-build-cache --no-configuration-cache :composeApp:compileKotlinMetadata`
+- [x] `./gradlew --no-build-cache --no-configuration-cache :androidApp:compileDebugKotlin`
+
+## Review Notes
+- Final-customer additional information now uses the add-product plain-card pattern: `CardDefaults.cardColors(containerColor = vanishedBackgroundColor())`, 12 dp shape, and a small 4 dp outer inset so no elevated tonal/content overlay appears in dark mode.
+- POS final-customer details, add/edit customer, search customer, and add/edit product form containers now apply IME padding so the content can scroll above the keyboard.
+- POS customer forms and product form containers dismiss the keyboard when tapping outside inputs.
+
+# POS Payment Action Spacing TODO
+
+## Plan
+- [x] Increase the gap between the distribution card and create-invoice actions.
+- [x] Add scroll-content bottom padding so actions have 16 dp breathing room at the bottom.
+- [x] Run focused compile verification and record results.
+
+## Verification Gates
+- [x] `./gradlew --no-build-cache --no-configuration-cache :composeApp:compileKotlinMetadata`
+- [x] `./gradlew --no-build-cache --no-configuration-cache :androidApp:compileDebugKotlin`
+
+## Review Notes
+- Superseded by dynamic spacing: distribution card and invoice actions now use measured remaining viewport space instead of a fixed large spacer.
+- Payment screen content now ends with a 16 dp spacer, keeping the action group from touching the bottom and allowing small screens to scroll naturally.
+
+# POS Payment Link Card And Invoice Actions TODO
+
+## Plan
+- [x] Restyle payment-link section as a card matching the payment distribution card.
+- [x] Make the generate-link CTA use the secondary color.
+- [x] Restyle invoice generation actions to match the provided primary, preview, separator, and draft-button layout.
+- [x] Run focused compile verification and record results.
+
+## Verification Gates
+- [x] `./gradlew --no-build-cache --no-configuration-cache :composeApp:compileKotlinMetadata`
+- [x] `./gradlew --no-build-cache --no-configuration-cache :androidApp:compileDebugKotlin`
+
+## Review Notes
+- Payment-link section now uses the same `Surface` shape, border, and elevation style as the payment distribution card.
+- Generate-link and create-invoice primary CTAs use `MaterialTheme.colorScheme.secondary` with leading icons.
+- Invoice actions now follow the mock structure: filled create button, outlined preview button, centered `o` divider, and centered save-draft text with helper copy.
+
+# POS Payment Option Card Icons TODO
+
+## Plan
+- [x] Replace manual/payment-link option text markers with Material icons.
+- [x] Use cash-style icon for manual payment and link icon for payment link.
+- [x] Run focused compile verification and record results.
+
+## Verification Gates
+- [x] `./gradlew --no-build-cache --no-configuration-cache :composeApp:compileKotlinMetadata`
+- [x] `./gradlew --no-build-cache --no-configuration-cache :androidApp:compileDebugKotlin`
+
+## Review Notes
+- Manual payment now uses the cash-style Material `Payments` icon because this Compose icon set does not expose a direct `Cash` icon.
+- Payment link now uses the Material `Link` icon because this Compose icon set does not expose `Link2`.
+
+# POS Payment Dashed CTA Secondary Accent TODO
+
+## Plan
+- [x] Update dashed select-payment-method CTA to use secondary color.
+- [x] Run focused compile verification and record results.
+
+## Verification Gates
+- [x] `./gradlew --no-build-cache --no-configuration-cache :composeApp:compileKotlinMetadata`
+- [x] `./gradlew --no-build-cache --no-configuration-cache :androidApp:compileDebugKotlin`
+
+## Review Notes
+- Dashed `Seleccionar método de pago` CTA now uses `MaterialTheme.colorScheme.secondary` for the dashed border, add icon, and label.
+
+# POS Payment Selector Secondary Accent TODO
+
+## Plan
+- [x] Update selected manual/link payment option styling to use secondary color.
+- [x] Run focused compile verification and record results.
+
+## Verification Gates
+- [x] `./gradlew --no-build-cache --no-configuration-cache :composeApp:compileKotlinMetadata`
+- [x] `./gradlew --no-build-cache --no-configuration-cache :androidApp:compileDebugKotlin`
+
+## Review Notes
+- Selected `Pago manual` / `Crear enlace de pago` option cards now use `MaterialTheme.colorScheme.secondary` for selected border and background accents.
+
+# POS Payment Distribution Row Subtitles TODO
+
+## Plan
+- [x] Hide distribution-row subtitles for regular payment methods.
+- [x] Keep subtitles visible for credit and other payment rows.
+- [x] Run focused compile verification and record results.
+
+## Verification Gates
+- [x] `./gradlew --no-build-cache --no-configuration-cache :composeApp:compileKotlinMetadata`
+- [x] `./gradlew --no-build-cache --no-configuration-cache :androidApp:compileDebugKotlin`
+
+## Review Notes
+- Distribution rows now omit subtitles for regular payment methods.
+- Credit rows keep due-date status subtitles.
+- Other rows show the entered custom payment-method description as their subtitle.
+
+# POS Payment Method Icons And Other Draft TODO
+
+## Plan
+- [x] Replace payment method string badges with Material icons.
+- [x] Map each manual payment code to the requested icon.
+- [x] Add an `Other` draft bottom sheet with amount and payment-method description before adding it.
+- [x] Require at least 15 characters for the `Other` method description and do not add it on dismiss.
+- [x] Run focused compile verification and record results.
+
+## Verification Gates
+- [x] `./gradlew --no-build-cache --no-configuration-cache :composeApp:compileKotlinMetadata`
+- [x] `./gradlew --no-build-cache --no-configuration-cache :androidApp:compileDebugKotlin`
+
+## Review Notes
+- Replaced `paymentMethodIconLabel` with an `ImageVector` mapper and rendered icons in selected payment rows and method-picker rows.
+- Mapped transfer, card, cash/Punto Pago, credit, loyalty/vale, gift card, and other to Material icons; cheque uses `FactCheck` because this Compose icon set does not expose `Checkbook`.
+- Added an `Other` draft bottom sheet that asks for amount and the customer-used payment method before adding code `99`.
+- Dismissing the `Other` sheet does not mutate selected methods; `Listo` is disabled until amount is positive and the description has at least 15 characters.
+
+# POS Payment App Bar Title TODO
+
+## Plan
+- [x] Remove the duplicate payment section title/subtitle from `PaymentScreen`.
+- [x] Update the payment route app bar title to `Forma de pago`.
+- [x] Apply the requested shared app bar title typography.
+- [x] Run focused compile verification and record results.
+
+## Verification Gates
+- [x] `./gradlew --no-build-cache --no-configuration-cache :composeApp:compileKotlinMetadata`
+- [x] `./gradlew --no-build-cache --no-configuration-cache :androidApp:compileDebugKotlin`
+
+## Review Notes
+- Removed the local `Forma de pago` and `Acepta uno o varios` header row from the POS payment selector.
+- Updated `pos_payment` so the payment screen app bar shows `Forma de pago` in Spanish and `Payment method` in English.
+- Updated `DMTopAppBar` title rendering to use `MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.W800)` for all app bar titles.
+
+# Date Picker Month Labels TODO
+
+## Plan
+- [x] Update the shared KMP date picker month dropdown to display month names instead of month numbers.
+- [x] Keep year/day dropdowns numeric and preserve ISO date output.
+- [x] Run focused compile verification and record results.
+
+## Verification Gates
+- [x] `./gradlew --no-build-cache --no-configuration-cache :composeApp:compileKotlinMetadata`
+- [x] `./gradlew --no-build-cache --no-configuration-cache :androidApp:compileDebugKotlin`
+
+## Review Notes
+- Updated the shared `InstallmentDueDateFieldKmp` date picker dropdown helper to accept a display label formatter.
+- Month dropdown now displays Spanish month names (`Enero`, `Febrero`, ..., `Diciembre`) while still storing numeric month values internally.
+- Year and day dropdowns remain numeric, and accepted dates continue to emit ISO `YYYY-MM-DD`.
+
+# POS Payment Method Sheet Refinement TODO
+
+## Plan
+- [x] Restyle method-selection rows as icon + method name with the right action text and no generic subtitle.
+- [x] Remove the pending-assignment subtitle under the sheet title.
+- [x] Reorder selectable methods: bank transfer, credit card, debit card, cash, credit, then remaining methods.
+- [x] Show credit as a normal row with a due-date-required subtitle.
+- [x] Stop auto-opening amount edit for non-credit methods after selection.
+- [x] For credit, open a draft due-date/amount sheet and only add it on `Listo`.
+- [x] Run focused compile verification and record results.
+
+## Verification Gates
+- [x] `./gradlew --no-build-cache --no-configuration-cache :composeApp:compileKotlinMetadata`
+- [x] `./gradlew --no-build-cache --no-configuration-cache :androidApp:compileDebugKotlin`
+
+## Review Notes
+- Method-selection sheet now shows only the `Seleccionar método de pago` title and compact icon/name rows with the right-side action text.
+- Selection order is `Transferencia bancaria`, `Tarjeta crédito`, `Tarjeta débito`, `Efectivo`, `Crédito`, then the remaining manual methods.
+- Regular methods add immediately with the pending amount assigned and no amount editor popup; the amount editor still opens from the amount chip in the distribution card.
+- Credit appears as a normal selectable row, then opens a draft amount/due-date sheet; dismissing that sheet does not add a credit payment.
+- Credit creation uses the selected amount and due date only after tapping `Listo`, capped to the pending amount.
+
+# POS Payment Distribution Card TODO
+
+## Plan
+- [x] Replace the empty-state icon/text with a dashed "Seleccionar metodo de pago" button that opens method selection.
+- [x] Keep that dashed add button visible under selected methods only while there is pending amount to assign.
+- [x] Remove the top-right add/edit method button from the distribution card.
+- [x] Add a trailing remove icon for each selected payment method row.
+- [x] Open an amount-edit bottom sheet when tapping a selected method amount.
+- [x] Require credit due date before adding credit payments to the distribution.
+- [x] Run focused compile verification and record results.
+
+## Verification Gates
+- [x] `./gradlew --no-build-cache --no-configuration-cache :composeApp:compileKotlinMetadata`
+- [x] `./gradlew --no-build-cache --no-configuration-cache :androidApp:compileDebugKotlin`
+
+## Review Notes
+- Replaced the empty distribution state with a dashed `Seleccionar método de pago` CTA that opens method selection.
+- Kept the dashed CTA below selected methods only while there is still a pending amount to assign.
+- Removed the distribution card top-right add/edit button; selected rows now expose a trailing X for removal.
+- Tapping a selected amount opens a focused amount editor bottom sheet, including `Otro` description and credit due-date editing when relevant.
+- Credit payments now require selecting a due date in the method-selection sheet before the installment is created.
+
+# iOS Associated Domains Provisioning TODO
+
+## Plan
+- [x] Extract the real failure from the attached device-build log.
+- [x] Check the app entitlements and Xcode signing style for capability/profile mismatch.
+- [x] Change signing configuration with minimal project impact.
+- [ ] Re-run the device-oriented Xcode build command and record the result.
+
+## Verification Gates
+- [ ] `xcodebuild -workspace iosApp/iosApp.xcodeproj/project.xcworkspace -allowProvisioningUpdates -allowProvisioningDeviceRegistration -scheme iosApp -configuration Debug -IDECustomDerivedDataLocation=/Users/oscar/Library/Caches/Google/AndroidStudio2026.1.1/DerivedData SYMROOT=/Users/oscar/Library/Caches/Google/AndroidStudio2026.1.1/DerivedData/iosApp-bwcvwyzsqfleafbxrlgnsqqioczp/Build/Products OBJROOT=/Users/oscar/Library/Caches/Google/AndroidStudio2026.1.1/DerivedData/iosApp-bwcvwyzsqfleafbxrlgnsqqioczp/Build/Intermediates.noindex COCOAPODS_SKIP_KOTLIN_BUILD=YES OVERRIDE_KOTLIN_BUILD_IDE_SUPPORTED=YES -destination id=00008020-000331E602D9002E -destination-timeout 15 TEST_AFTER_BUILD=NO build`
+
+# iOS Bundle Identifier Configuration TODO
+
+## Plan
+- [x] Confirm where the Compose iOS framework and Xcode app identifiers are configured.
+- [x] Add the explicit Kotlin/Native framework bundle ID and align the iOS app bundle/team settings.
+- [x] Run focused Gradle/Xcode verification and record results.
+
+## Verification Gates
+- [x] `./gradlew --no-build-cache --no-configuration-cache :composeApp:linkDebugFrameworkIosSimulatorArm64`
+- [x] `xcodebuild -project iosApp/iosApp.xcodeproj -scheme iosApp -configuration Debug -destination 'generic/platform=iOS Simulator' build`
+
+## Review Notes
+- Added Kotlin/Native `binaryOption("bundleId", "com.tecodigi.ventago.app")` to the generated `ComposeApp` iOS framework to remove the inferred bundle ID warning.
+- Updated the iOS Xcode config to use `PRODUCT_BUNDLE_IDENTIFIER=com.tecodigi.ventago.app` and `TEAM_ID=2Q56QR79M2`, and set the target Debug/Release `DEVELOPMENT_TEAM` to `2Q56QR79M2`.
+- Verified `composeApp/build/bin/iosSimulatorArm64/debugFramework/ComposeApp.framework/Info.plist` reports `CFBundleIdentifier=com.tecodigi.ventago.app`.
+- Verified the built simulator app Info.plist reports `CFBundleIdentifier=com.tecodigi.ventago.app`.
+
+# POS Payment Selection Simplification TODO
+
+## Plan
+- [x] Remove the duplicated amount summary card from the payment step.
+- [x] Remove the segmented mode switch and use only payment option cards to select manual vs payment link.
+- [x] Remove the unavailable on-site payment option from the selector.
+- [x] Run focused compile verification and record results.
+
+## Verification Gates
+- [x] `./gradlew --no-build-cache --no-configuration-cache :composeApp:compileKotlinMetadata`
+- [x] `./gradlew --no-build-cache --no-configuration-cache :androidApp:compileDebugKotlin`
+
+## Review Notes
+- Removed the top total/subtotal summary card from the POS payment step; allocation totals remain in the distribution card below.
+- Removed the segmented Manual/Enlace/En sitio switch so the payment option cards are the only payment-form selector.
+- Removed the unavailable on-site payment option card; only manual and payment link remain visible.
+- Preserved the existing manual, payment-link, draft, preview, and credit due-date behavior.
+
+# POS Payment Mockup Alignment TODO
+
+## Plan
+- [x] Replace the default TabRow with a rounded segmented control matching Manual/Enlace/En sitio.
+- [x] Add the `Forma de pago` method-card selector with selected/unselected card styling from the mockup.
+- [x] Restyle the distribution card rows and add-method CTA to better match the mockup.
+- [x] Run focused compile verification and record results.
+
+## Verification Gates
+- [x] `./gradlew --no-build-cache --no-configuration-cache :composeApp:compileKotlinMetadata`
+- [x] `./gradlew --no-build-cache --no-configuration-cache :androidApp:compileDebugKotlin`
+
+## Review Notes
+- Replaced the Material TabRow with a rounded segmented control for `Manual`, `Enlace`, and disabled `En sitio`.
+- Added mockup-style `Forma de pago` cards for manual, payment link, and on-device payment while keeping the existing payment-link permission/configuration flow.
+- Restyled `Distribución del cobro` as a standalone rounded card with a pill `Método` CTA, divider-separated rows, icon badges, and amount pills.
+- Existing charge allocation, credit due-date validation, draft, preview, and payment-link creation behavior remained on the same ViewModel state paths.
+
+# POS Payment Selection UI TODO
+
+## Plan
+- [x] Inspect current POS payment step state, validation, due-date handling, and order creation payload.
+- [x] Replace tip UI with a total-only charge summary.
+- [x] Change manual payment selection into an added-charge card plus bottom sheet for choosing method and amount.
+- [x] Preserve multi-payment payload behavior and require due date for credit payments.
+- [x] Run focused compile verification and record results.
+
+## Verification Gates
+- [x] `./gradlew --no-build-cache --no-configuration-cache :composeApp:compileKotlinMetadata`
+- [x] `./gradlew --no-build-cache --no-configuration-cache :androidApp:compileDebugKotlin`
+
+## Review Notes
+- Removed the visible tips row/button/editor from the POS payment step and made the charge amount resolve to the legal invoice total only, ignoring legacy restored tip state.
+- Replaced always-visible payment method chips/inputs with a compact `Distribución del cobro` card and a scrollable bottom sheet for adding/editing manual methods and credit charges.
+- Credit charges now start without an automatic due date, show inline required-date feedback, disable confirmation until all credit due dates are selected, and the ViewModel blocks programmatic submit without due dates.
+- Preserved the existing `charged` and `installments` state/payload path, including cash overpayment/change behavior and multi-method payment creation.
+
 # Order Details Yappy Payment ID TODO
 
 ## Plan

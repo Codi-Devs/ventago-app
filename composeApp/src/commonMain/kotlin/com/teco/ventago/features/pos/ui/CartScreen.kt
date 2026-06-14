@@ -10,16 +10,12 @@ import androidx.compose.ui.unit.dp
 import androidx.navigation.NavBackStackEntry
 import com.teco.ventago.design_system.buttons.ButtonM
 import com.teco.ventago.design_system.organism.CartOrganism
-import com.teco.ventago.features.pos.ui.viewmodel.CartCalc
 import com.teco.ventago.features.pos.ui.viewmodel.FlowMode
 import com.teco.ventago.features.pos.ui.viewmodel.PosViewModel
 import com.teco.ventago.navigation.PosScreens
-import com.teco.ventago.utils.formatNumberToMoney
-import com.teco.ventago.utils.toDecimalString
 import org.jetbrains.compose.resources.stringResource
 import org.koin.compose.viewmodel.koinViewModel
 import ventago.composeapp.generated.resources.Res
-import ventago.composeapp.generated.resources.pos_new_invoice
 import ventago.composeapp.generated.resources.pos_new_quote
 import ventago.composeapp.generated.resources.pos_update_quote
 
@@ -37,13 +33,11 @@ fun CartScreenBottomBar(backStackEntry: NavBackStackEntry?, navigate: (PosScreen
 
     val uiState by viewModel.uiState.collectAsState()
     val isQuoteFlow = uiState.flowMode == FlowMode.QUOTE
-    
-    // Calculate total amount directly from collected state to ensure recomposition
-    val totalAmount = CartCalc.summarize(uiState).grandTotal
+
     val actionLabel = when {
         isQuoteFlow && uiState.quoteId != null -> stringResource(Res.string.pos_update_quote)
         isQuoteFlow -> stringResource(Res.string.pos_new_quote)
-        else -> stringResource(Res.string.pos_new_invoice)
+        else -> "Continuar factura"
     }
 
     ButtonM(
@@ -59,6 +53,6 @@ fun CartScreenBottomBar(backStackEntry: NavBackStackEntry?, navigate: (PosScreen
         },
         modifier = Modifier.padding(start = 16.dp, end = 16.dp, bottom = 16.dp)
     ) {
-        Text("$actionLabel ${formatNumberToMoney(totalAmount.toDecimalString())}")
+        Text(actionLabel)
     }
 }

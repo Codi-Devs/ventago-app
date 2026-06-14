@@ -10,6 +10,8 @@ import com.teco.ventago.core.beta.BetaService
 import com.teco.ventago.features.auth.domain.IAuthService
 import com.teco.ventago.features.business.domain.BusinessService
 import com.teco.ventago.features.business.domain.model.Business
+import com.teco.ventago.features.customers.domain.CustomerService
+import com.teco.ventago.features.customers.domain.models.CustomerListItem
 import com.teco.ventago.features.orders.domain.OrderService
 import com.teco.ventago.features.orders.domain.models.Order
 import com.teco.ventago.features.orders.domain.models.OrderStatus
@@ -17,6 +19,7 @@ import com.teco.ventago.features.orders.domain.models.requests.orderEmissionEndD
 import com.teco.ventago.features.orders.domain.models.requests.orderEmissionStartDate
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.IO
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.flow.combine
@@ -31,15 +34,24 @@ import ventago.composeapp.generated.resources.*
 class OrdersViewModel(
     private val authService: IAuthService,
     private val orderService: OrderService,
+    private val customerService: CustomerService,
     private val businessService: BusinessService,
     private val betaService: BetaService,
 ) : BaseViewModel<OrdersState, OrdersUiEvent>(OrdersState()) {
 
+    private companion object {
+        const val CUSTOMER_SEARCH_LIMIT = 4
+        const val MIN_CUSTOMER_SEARCH_LENGTH = 2
+        const val CUSTOMER_SEARCH_DEBOUNCE_MS = 300L
+    }
+
     var businessId: Int = businessService.business.value?.businessId ?: -1
     var business: Business? = null
     private var hasLoadedInitialOrders = false
+    private var customerSearchJob: Job? = null
 
     override fun onCleared() {
+        customerSearchJob?.cancel()
         orderService.clear()
         super.onCleared()
     }
@@ -117,7 +129,6 @@ class OrdersViewModel(
                         emissionStartDate = orderEmissionStartDate(uiState.value.emissionStartDate),
                         emissionEndDate = orderEmissionEndDate(uiState.value.emissionEndDate),
                         orderType = uiState.value.orderTypeFilter,
-                        customerRuc = uiState.value.customerRucFilter.ifBlank { null },
                     )
                     withContext(Dispatchers.Main) {
                         if (aux.isEmpty()) {
@@ -159,7 +170,6 @@ class OrdersViewModel(
                         emissionStartDate = orderEmissionStartDate(uiState.value.emissionStartDate),
                         emissionEndDate = orderEmissionEndDate(uiState.value.emissionEndDate),
                         orderType = uiState.value.orderTypeFilter,
-                        customerRuc = uiState.value.customerRucFilter.ifBlank { null },
                     )
                     withContext(Dispatchers.Main) {
                         filterOrders(uiState.value.filterSelected)
@@ -338,8 +348,77 @@ class OrdersViewModel(
         updateState { copy(orderTypeFilter = orderType) }
     }
 
-    fun setCustomerRucFilter(customerRuc: String) {
-        updateState { copy(customerRucFilter = customerRuc) }
+    fun setCustomerNameFilter(customerName: String) {
+        customerSearchJob?.cancel()
+        val query = customerName.trim()
+
+        updateState {
+            copy(
+                customerNameFilter = customerName,
+                customerIdFilter = null,
+                customerSearchResults = if (query.length < MIN_CUSTOMER_SEARCH_LENGTH) emptyList() else customerSearchResults,
+                isSearchingCustomers = query.length >= MIN_CUSTOMER_SEARCH_LENGTH
+            )
+        }
+
+        if (query.length < MIN_CUSTOMER_SEARCH_LENGTH || businessId <= 0) {
+            updateState { copy(isSearchingCustomers = false) }
+            return
+        }
+
+        customerSearchJob = viewModelScope.launch {
+            delay(CUSTOMER_SEARCH_DEBOUNCE_MS)
+            try {
+                val customers = withContext(Dispatchers.IO) {
+                    customerService.searchCustomersByName(
+                        businessId = businessId,
+                        name = query,
+                        limit = CUSTOMER_SEARCH_LIMIT
+                    )
+                }
+                if (uiState.value.customerNameFilter == customerName) {
+                    updateState {
+                        copy(
+                            customerSearchResults = customers.take(CUSTOMER_SEARCH_LIMIT),
+                            isSearchingCustomers = false
+                        )
+                    }
+                }
+            } catch (_: Exception) {
+                if (uiState.value.customerNameFilter == customerName) {
+                    updateState {
+                        copy(
+                            customerSearchResults = emptyList(),
+                            isSearchingCustomers = false
+                        )
+                    }
+                }
+            }
+        }
+    }
+
+    fun selectCustomerFilter(customer: CustomerListItem) {
+        customerSearchJob?.cancel()
+        updateState {
+            copy(
+                customerIdFilter = customer.id,
+                customerNameFilter = customer.name,
+                customerSearchResults = emptyList(),
+                isSearchingCustomers = false
+            )
+        }
+    }
+
+    fun clearCustomerFilter() {
+        customerSearchJob?.cancel()
+        updateState {
+            copy(
+                customerIdFilter = null,
+                customerNameFilter = "",
+                customerSearchResults = emptyList(),
+                isSearchingCustomers = false
+            )
+        }
     }
 
     fun setEmissionStartDate(value: String) {
@@ -364,8 +443,10 @@ class OrdersViewModel(
             copy(
                 paymentStatusFilter = null,
                 customerIdFilter = null,
+                customerNameFilter = "",
+                customerSearchResults = emptyList(),
+                isSearchingCustomers = false,
                 orderTypeFilter = null,
-                customerRucFilter = "",
                 emissionStartDate = startDate,
                 emissionEndDate = endDate,
                 orders = emptyList(),
@@ -394,8 +475,10 @@ class OrdersViewModel(
             copy(
                 paymentStatusFilter = null,
                 customerIdFilter = null,
+                customerNameFilter = "",
+                customerSearchResults = emptyList(),
+                isSearchingCustomers = false,
                 orderTypeFilter = null,
-                customerRucFilter = "",
                 emissionStartDate = "",
                 emissionEndDate = "",
                 orders = emptyList(),
@@ -413,17 +496,21 @@ class OrdersViewModel(
             state.paymentStatusFilter != null,
             state.customerIdFilter != null,
             state.orderTypeFilter != null,
-            state.customerRucFilter.isNotBlank(),
             state.emissionStartDate.isNotBlank() || state.emissionEndDate.isNotBlank()
         ).count { it }
     }
 
     fun applyCustomerFilter(customerId: Long?) {
-        if (uiState.value.customerIdFilter == customerId) return
+        val currentState = uiState.value
+        if (currentState.customerIdFilter == customerId && currentState.customerNameFilter.isBlank()) return
 
+        customerSearchJob?.cancel()
         updateState {
             copy(
                 customerIdFilter = customerId,
+                customerNameFilter = "",
+                customerSearchResults = emptyList(),
+                isSearchingCustomers = false,
                 orders = emptyList(),
                 noMoreOrders = false
             )

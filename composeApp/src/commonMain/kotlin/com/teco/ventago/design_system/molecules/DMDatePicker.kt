@@ -45,6 +45,24 @@ private fun daysInMonth(year: Int, month: Int): Int {
     }
 }
 
+private fun monthName(month: Int): String {
+    return when (month) {
+        1 -> "Enero"
+        2 -> "Febrero"
+        3 -> "Marzo"
+        4 -> "Abril"
+        5 -> "Mayo"
+        6 -> "Junio"
+        7 -> "Julio"
+        8 -> "Agosto"
+        9 -> "Septiembre"
+        10 -> "Octubre"
+        11 -> "Noviembre"
+        12 -> "Diciembre"
+        else -> month.toString()
+    }
+}
+
 // Lightweight dropdown that works everywhere
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -53,13 +71,14 @@ private fun IntDropDown(
     options: List<Int>,
     selected: Int,
     onSelected: (Int) -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    optionLabel: (Int) -> String = { it.toString() },
 ) {
     var expanded by remember { mutableStateOf(false) }
     ExposedDropdownMenuBox(expanded = expanded, onExpandedChange = { expanded = it }, modifier) {
         OutlinedTextField(
             readOnly = true,
-            value = selected.toString(),
+            value = optionLabel(selected),
             onValueChange = {},
             label = { Text(label) },
             modifier = Modifier
@@ -70,7 +89,7 @@ private fun IntDropDown(
         ExposedDropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
             options.forEach { opt ->
                 DropdownMenuItem(
-                    text = { Text(opt.toString()) },
+                    text = { Text(optionLabel(opt)) },
                     onClick = { onSelected(opt); expanded = false }
                 )
             }
@@ -212,7 +231,8 @@ fun InstallmentDueDateFieldKmp(
                     label = "Mes",
                     options = monthOptions,
                     selected = month,
-                    onSelected = { month = it }
+                    onSelected = { month = it },
+                    optionLabel = ::monthName
                 )
                 Spacer(Modifier.height(8.dp))
                 IntDropDown(

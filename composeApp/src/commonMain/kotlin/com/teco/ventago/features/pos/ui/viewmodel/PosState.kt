@@ -19,10 +19,18 @@ import com.teco.ventago.features.pos.domain.models.Money
 import com.teco.ventago.features.product.domain.model.Item
 import com.teco.ventago.features.quotes.domain.models.QuoteSettings
 import com.teco.ventago.utils.ViewState
+import kotlinx.datetime.Clock
+import kotlinx.datetime.TimeZone
+import kotlinx.datetime.toLocalDateTime
 import kotlin.math.roundToLong
 
 enum class PaymentFlowMode { MANUAL_OR_INSTALLMENTS, PAYMENT_LINK }
 enum class ProductViewMode { LIST, GRID }
+
+private fun currentPanamaDateIso(): String {
+    val date = Clock.System.now().toLocalDateTime(TimeZone.of("America/Panama")).date
+    return "${date.year.toString().padStart(4, '0')}-${date.monthNumber.toString().padStart(2, '0')}-${date.dayOfMonth.toString().padStart(2, '0')}"
+}
 
 data class PosCartCustomerDisplay(
     val name: String,
@@ -53,6 +61,7 @@ data class PosState(
     val itemCategoryById: Map<Int, Int> = mapOf(),
     val cart: List<CartLine> = listOf(),
     val personalizedItems: Map<String, Item> = mapOf(), // Stores personalized products keyed by lineId (since all have itemId = -1)
+    val productAddedSnackbarToken: Long = 0L,
     val taxExempt: Boolean = false,
     val currency: String = "USD",
     val currencySymbol: String = "$",
@@ -66,6 +75,7 @@ data class PosState(
     val customer: CustomerListItem? = null,
     val customerQuery: String = "",
     val paymentsConfigured: Boolean = false,
+    val hasPaymentsBeta: Boolean = false,
     val invoicingEnabled: Boolean = false,
     val canCreateInvoice: Boolean = false,
     val canCreateDraft: Boolean = false,
@@ -90,6 +100,7 @@ data class PosState(
     val selectedOperationNatureIndex: Int = 0,
     val selectedOperationNature: String = "01", // Default: Venta
     val enabledOperationNature: Boolean = true,
+    val invoiceIssueDateIso: String = currentPanamaDateIso(),
 
     // === Customer ===
     val finalCustomer: Boolean? = null, // null = not selected, false = registered customer, true = consumidor final
@@ -97,6 +108,7 @@ data class PosState(
     // Fields for final consumer (not saved in DB)
     val finalName: String? = null,
     val finalEmail: String? = null,
+    val finalEmailError: String? = null,
     val finalPhone: String? = null,
     val finalIdTypeIndex: Int = 0,
     val finalIdType: String = "cedula",

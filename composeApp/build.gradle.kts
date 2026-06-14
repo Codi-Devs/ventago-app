@@ -42,6 +42,7 @@ kotlin {
 
         iosTarget.binaries.framework {
             baseName = "ComposeApp"
+            binaryOption("bundleId", "com.tecodigi.ventago.app")
             isStatic = true
             val epsonSliceDir = when (iosTarget.name) {
                 "iosArm64" -> epsonIosArm64Dir

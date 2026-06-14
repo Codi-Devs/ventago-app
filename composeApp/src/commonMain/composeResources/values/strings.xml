@@ -271,7 +271,7 @@
     <string name="pos_clients">Clients</string>
     <string name="pos_add_client">Add Client</string>
     <string name="pos_cart">Cart</string>
-    <string name="pos_payment">Payment</string>
+    <string name="pos_payment">Payment method</string>
     <string name="pos_delete_client">Delete client</string>
     <string name="pos_unlink_client">Unlink client</string>
     <string name="pos_invoice">Invoice</string>

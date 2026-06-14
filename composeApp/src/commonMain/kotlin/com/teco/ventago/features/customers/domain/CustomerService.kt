@@ -118,6 +118,23 @@ class CustomerService(
         return mergedCustomers
     }
 
+    suspend fun searchCustomersByName(
+        businessId: Int,
+        name: String,
+        limit: Int
+    ): List<CustomerListItem> {
+        if (name.isBlank()) return emptyList()
+
+        return repository.listCustomers(
+            businessId = businessId,
+            page = 0,
+            size = limit,
+            ruc = null,
+            email = null,
+            name = name
+        ).items.take(limit)
+    }
+
     suspend fun validateRUC(ruc: String, businessId: Int): ValidateRucResponse {
         return repository.validateRUC(ruc, businessId)
     }

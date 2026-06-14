@@ -5,6 +5,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -20,7 +21,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
@@ -32,6 +33,7 @@ import com.teco.ventago.design_system.theme.cardContainerColor
 import com.teco.ventago.design_system.theme.labelLarge
 import com.teco.ventago.design_system.theme.titleMedium
 import com.teco.ventago.design_system.theme.vanishedBackgroundColor
+import com.teco.ventago.features.pos.ui.dismissKeyboardOnOutsideTap
 import com.teco.ventago.features.pos.ui.customer.search.viewmodel.SearchCustomerStateUiEvent
 import com.teco.ventago.features.pos.ui.customer.search.viewmodel.SearchCustomerViewModel
 import com.teco.ventago.navigation.PosScreens
@@ -50,6 +52,7 @@ fun SearchCustomerView(
 
     val uiState by viewModel.uiState.collectAsState()
     val loadingSheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+    val focusManager = LocalFocusManager.current
 
     LaunchedEffect(Unit) {
         viewModel.events.collect { event ->
@@ -72,6 +75,8 @@ fun SearchCustomerView(
 
     Column(modifier = Modifier
         .verticalScroll(rememberScrollState())
+        .imePadding()
+        .dismissKeyboardOnOutsideTap(focusManager)
         .background(vanishedBackgroundColor())
         .fillMaxWidth()) {
         Card(
