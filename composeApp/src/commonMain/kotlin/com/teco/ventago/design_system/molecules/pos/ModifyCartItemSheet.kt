@@ -3,8 +3,14 @@ package com.teco.ventago.design_system.molecules.pos
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.animateContentSize
 import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
+import androidx.compose.foundation.gestures.waitForUpOrCancellation
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -14,25 +20,35 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Add
+import androidx.compose.material.icons.rounded.AttachMoney
 import androidx.compose.material.icons.rounded.Close
+import androidx.compose.material.icons.rounded.Description
+import androidx.compose.material.icons.rounded.Edit
 import androidx.compose.material.icons.rounded.ExpandMore
 import androidx.compose.material.icons.rounded.Remove
 import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Divider
-import androidx.compose.material3.ElevatedCard
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
+import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.OutlinedTextFieldDefaults
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.rememberModalBottomSheetState
@@ -40,6 +56,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.Stable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -47,6 +64,17 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.rotate
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Rect
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.input.pointer.PointerEventPass
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.layout.boundsInRoot
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.platform.LocalSoftwareKeyboardController
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
@@ -58,6 +86,7 @@ import com.teco.ventago.design_system.theme.cardContainerColor
 import com.teco.ventago.design_system.theme.headlineMediumBold
 import com.teco.ventago.design_system.theme.labelMedium
 import com.teco.ventago.design_system.theme.labelMediumBold
+import com.teco.ventago.design_system.theme.titleMediumBold
 import com.teco.ventago.design_system.theme.titleLarge
 import com.teco.ventago.design_system.theme.titleMedium
 import com.teco.ventago.features.pos.domain.models.CartLine
@@ -69,7 +98,6 @@ import com.teco.ventago.utils.formatNumberToMoney
 import com.teco.ventago.utils.multiplyCentsByQuantity
 import com.teco.ventago.utils.normalizeQuantity
 import com.teco.ventago.utils.sanitizeQuantityInput
-import com.teco.ventago.utils.toLongCents
 import com.teco.ventago.utils.toNormalizedQuantityOrNull
 import com.teco.ventago.utils.toQuantityUiString
 import kotlin.math.roundToInt
@@ -86,6 +114,7 @@ fun ModifyCartItemSheet(
     invoiceHasGlobalInsurance: Boolean,  // NEW: disables per-item insurance when true
     onDismiss: () -> Unit,
     onApply: (
+        productName: String,
         newUnitPriceCents: Long,    // BEFORE discount
         qty: Double,
         discountMode: DiscountMode,
@@ -103,6 +132,7 @@ fun ModifyCartItemSheet(
     fun rawTextToCents(raw: String): Long = raw.filter(Char::isDigit).toLongOrNull() ?: 0L
 
     // --- initial values from line ---
+    var productName by rememberSaveable(itemToModify.lineId) { mutableStateOf(itemToModify.name) }
     var qty by remember { mutableStateOf(normalizeQuantity(itemToModify.quantity, minValue = 0.0001)) }
     var qtyText by rememberSaveable { mutableStateOf(normalizeQuantity(itemToModify.quantity, minValue = 0.0001).toQuantityUiString()) }
     val initialUnitPriceCents = itemToModify.overrideUnitPrice ?: itemToModify.baseUnitPrice
@@ -205,9 +235,39 @@ fun ModifyCartItemSheet(
     }
     // Line total = discounted unit price × quantity
     val lineTotalCents = multiplyCentsByQuantity(discountedUnitCents, qty)
+    val focusManager = LocalFocusManager.current
+    val keyboardController = LocalSoftwareKeyboardController.current
+    val secondary = MaterialTheme.colorScheme.secondary
+    val inputBounds = remember { mutableStateMapOf<String, Rect>() }
+    var sheetBounds by remember { mutableStateOf<Rect?>(null) }
+    var contentBounds by remember { mutableStateOf<Rect?>(null) }
+
+    fun Modifier.trackInputBounds(key: String): Modifier = onGloballyPositioned {
+        inputBounds[key] = it.boundsInRoot()
+    }
+
+    fun Modifier.clearKeyboardOnOutsideTap(containerBounds: Rect?): Modifier = pointerInput(
+        containerBounds,
+        inputBounds.size
+    ) {
+        awaitEachGesture {
+            val down = awaitFirstDown(requireUnconsumed = false, pass = PointerEventPass.Initial)
+            val bounds = containerBounds ?: return@awaitEachGesture
+            val rootTapPosition = Offset(
+                x = bounds.left + down.position.x,
+                y = bounds.top + down.position.y
+            )
+            val tappedInput = inputBounds.values.any { it.contains(rootTapPosition) }
+            val up = waitForUpOrCancellation(pass = PointerEventPass.Initial)
+            if (up != null && !tappedInput) {
+                focusManager.clearFocus()
+                keyboardController?.hide()
+            }
+        }
+    }
 
     ModalBottomSheet(
-        containerColor = cardContainerColor(),
+        containerColor = MaterialTheme.colorScheme.surface,
         onDismissRequest = onDismiss,
         sheetState = sheetState,
         dragHandle = null
@@ -215,93 +275,168 @@ fun ModifyCartItemSheet(
         Column(
             modifier = Modifier
                 .fillMaxSize()
-                .verticalScroll(rememberScrollState())
+                .onGloballyPositioned { sheetBounds = it.boundsInRoot() }
+                .background(MaterialTheme.colorScheme.surface)
+                .clearKeyboardOnOutsideTap(sheetBounds)
                 .imePadding()
                 .navigationBarsPadding()
         ) {
-            // Header with close button
-            Row(
+            Box(
                 modifier = Modifier
                     .fillMaxWidth()
                     .statusBarsPadding()
-                    .padding(horizontal = 16.dp, vertical = 12.dp),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
+                    .padding(top = 10.dp)
             ) {
-                Text(itemToModify.name, style = titleLarge())
-                IconButton(onClick = onDismiss) {
+                Box(
+                    modifier = Modifier
+                        .align(Alignment.Center)
+                        .size(width = 72.dp, height = 5.dp)
+                        .background(secondary.copy(alpha = 0.18f), RoundedCornerShape(50))
+                )
+            }
+
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 24.dp, vertical = 18.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.Top
+            ) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        productName.ifBlank { itemToModify.name },
+                        style = titleLarge(),
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+                    Text(
+                        "Editar producto",
+                        style = titleMedium().copy(color = secondary.copy(alpha = 0.78f)),
+                        modifier = Modifier.padding(top = 4.dp)
+                    )
+                }
+                Surface(
+                    onClick = onDismiss,
+                    shape = CircleShape,
+                    color = secondary.copy(alpha = 0.08f),
+                    modifier = Modifier.size(48.dp)
+                ) {
                     Icon(
                         imageVector = Icons.Rounded.Close,
                         contentDescription = "Cerrar",
-                        tint = MaterialTheme.colorScheme.onSurface
+                        tint = MaterialTheme.colorScheme.onSurface,
+                        modifier = Modifier.padding(12.dp)
                     )
                 }
             }
 
-            Divider()
-
-            // Scrollable content
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(horizontal = 16.dp, vertical = 12.dp)
+                    .weight(1f)
+                    .onGloballyPositioned { contentBounds = it.boundsInRoot() }
+                    .clearKeyboardOnOutsideTap(contentBounds)
+                    .verticalScroll(rememberScrollState())
+                    .padding(horizontal = 24.dp),
+                verticalArrangement = Arrangement.spacedBy(14.dp)
             ) {
-
-                // Unit price (raw cents digits)
-                DMMoneyOutlinedTextField(
-                    text = unitPriceRaw,
-                    label = "Precio unitario ($currencySymbol)",
-                    onChange = { unitPriceRaw = it.filter(Char::isDigit) },
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(bottom = if (showMargin) 4.dp else 12.dp),
-                    imeAction = ImeAction.Done,
-                    maxLines = 1,
-                    leadingIcon = null
-                )
-
-                // Margin indicator
-                if (showMargin) {
-                    val costDisplay = formatNumberToMoney((itemToModify.costCents!! / 100.0).toString())
-                    Text(
-                        text = "Margen: ${marginPercent.roundToInt()}% (costo: $currencySymbol$costDisplay)",
-                        style = labelMedium(),
-                        color = marginColor,
-                        modifier = Modifier.padding(bottom = 12.dp)
+                EditSheetSectionCard(
+                    icon = Icons.Rounded.Edit,
+                    title = "Nombre del producto"
+                ) {
+                    DMOutlinedTextField(
+                        text = productName,
+                        label = "Nombre",
+                        onChange = { productName = it },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .trackInputBounds("name"),
+                        imeAction = ImeAction.Done,
+                        maxLines = 1
                     )
+                    if (productName.trim() != itemToModify.name.trim()) {
+                        Text(
+                            text = "Se aplicará como producto personalizado.",
+                            style = labelMedium(),
+                            color = secondary,
+                            modifier = Modifier.padding(top = 6.dp)
+                        )
+                    }
                 }
 
-                // Quantity
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(bottom = 12.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                EditSheetSectionCard(
+                    icon = Icons.Rounded.AttachMoney,
+                    title = "Precio unitario ($currencySymbol)"
                 ) {
-                    Text("Cantidad", style = labelMedium(), modifier = Modifier.weight(1f))
-                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                        IconButton(onClick = {
+                    DMMoneyOutlinedTextField(
+                        text = unitPriceRaw,
+                        label = "",
+                        onChange = { unitPriceRaw = it.filter(Char::isDigit) },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .trackInputBounds("unitPrice"),
+                        imeAction = ImeAction.Done,
+                        maxLines = 1,
+                        leadingIcon = null
+                    )
+                    if (showMargin) {
+                        val costDisplay = formatNumberToMoney((itemToModify.costCents!! / 100.0).toString())
+                        Text(
+                            text = "Margen: ${marginPercent.roundToInt()}% (costo: $currencySymbol$costDisplay)",
+                            style = labelMedium(),
+                            color = marginColor,
+                            modifier = Modifier.padding(top = 6.dp)
+                        )
+                    }
+                }
+
+                EditSheetSectionCard(
+                    title = "Cantidad",
+                    iconContent = {
+                        Icon(
+                            imageVector = Icons.Rounded.Add,
+                            contentDescription = null,
+                            tint = secondary
+                        )
+                    }
+                ) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.End
+                    ) {
+                        QuantityButton(onClick = {
                             val newQty = normalizeQuantity(qty - 1.0, minValue = 0.0001)
                             qty = newQty
                             qtyText = newQty.toQuantityUiString()
                         }) {
                             Icon(Icons.Rounded.Remove, contentDescription = "Disminuir")
                         }
-                        DMOutlinedTextField(
-                            text = qtyText,
-                            label = "",
-                            onChange = {
+                        OutlinedTextField(
+                            value = qtyText,
+                            onValueChange = {
                                 val sanitized = sanitizeQuantityInput(it)
                                 qtyText = sanitized
                                 qty = sanitized.toNormalizedQuantityOrNull(minValue = 0.0001) ?: qty
                             },
-                            keyboardType = KeyboardType.Decimal,
-                            imeAction = ImeAction.Done,
-                            modifier = Modifier.width(80.dp),
-                            maxLines = 1
+                            modifier = Modifier
+                                .width(128.dp)
+                                .padding(horizontal = 8.dp)
+                                .trackInputBounds("quantity"),
+                            textStyle = TextStyle(
+                                textAlign = TextAlign.Center,
+                                color = MaterialTheme.colorScheme.onSurface
+                            ),
+                            singleLine = true,
+                            keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(
+                                keyboardType = KeyboardType.Decimal,
+                                imeAction = ImeAction.Done
+                            ),
+                            colors = OutlinedTextFieldDefaults.colors(
+                                focusedBorderColor = secondary,
+                                cursorColor = secondary
+                            )
                         )
-                        IconButton(onClick = {
+                        QuantityButton(onClick = {
                             val newQty = normalizeQuantity(qty + 1.0, minValue = 0.0001)
                             qty = newQty
                             qtyText = newQty.toQuantityUiString()
@@ -311,86 +446,75 @@ fun ModifyCartItemSheet(
                     }
                 }
 
-                // Discount selector
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(bottom = 8.dp),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                EditSheetSectionCard(
+                    title = "Tipo de descuento",
+                    subtitle = "Descuento por ítem",
+                    iconContent = {
+                        Text(
+                            text = "%",
+                            style = titleMediumBold(color = secondary)
+                        )
+                    }
                 ) {
-                    FilterChip(
-                        modifier = Modifier.weight(1f),
-                        selected = mode == DiscountMode.NONE,
-                        onClick = { mode = DiscountMode.NONE },
-                        label = {
-                            Text(
-                                "Sin desc.",
-                                textAlign = TextAlign.Center,
-                                modifier = Modifier.fillMaxWidth()
-                            )
-                        }
-                    )
-                    FilterChip(
-                        modifier = Modifier.weight(1f),
-                        selected = mode == DiscountMode.PERCENT,
-                        onClick = { mode = DiscountMode.PERCENT },
-                        label = {
-                            Text(
-                                "%",
-                                textAlign = TextAlign.Center,
-                                modifier = Modifier.fillMaxWidth()
-                            )
-                        }
-                    )
-                    FilterChip(
-                        modifier = Modifier.weight(1f),
-                        selected = mode == DiscountMode.FIXED,
-                        onClick = { mode = DiscountMode.FIXED },
-                        label = {
-                            Text(
-                                "Fijo",
-                                textAlign = TextAlign.Center,
-                                modifier = Modifier.fillMaxWidth()
-                            )
-                        }
-                    )
-                }
-
-                when (mode) {
-                    DiscountMode.PERCENT -> {
-                        DMOutlinedTextField(
-                            text = percentText,
-                            label = "Descuento (%)",
-                            onChange = { percentText = it.filter(Char::isDigit).take(3) },
-                            keyboardType = KeyboardType.Number,
-                            imeAction = ImeAction.Done,
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(bottom = 12.dp),
-                            maxLines = 1
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        DiscountChip(
+                            selected = mode == DiscountMode.NONE,
+                            label = "Sin desc.",
+                            onClick = { mode = DiscountMode.NONE },
+                            modifier = Modifier.weight(1f)
+                        )
+                        DiscountChip(
+                            selected = mode == DiscountMode.PERCENT,
+                            label = "%",
+                            onClick = { mode = DiscountMode.PERCENT },
+                            modifier = Modifier.weight(1f)
+                        )
+                        DiscountChip(
+                            selected = mode == DiscountMode.FIXED,
+                            label = "Fijo",
+                            onClick = { mode = DiscountMode.FIXED },
+                            modifier = Modifier.weight(1f)
                         )
                     }
 
-                    DiscountMode.FIXED -> {
-                        DMMoneyOutlinedTextField(
-                            text = fixedRaw,
-                            label = "Descuento fijo ($currencySymbol)",
-                            onChange = { fixedRaw = it.filter(Char::isDigit) },
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(bottom = 12.dp),
-                            imeAction = ImeAction.Done,
-                            maxLines = 1,
-                            leadingIcon = null
-                        )
-                    }
+                    when (mode) {
+                        DiscountMode.PERCENT -> {
+                            DMOutlinedTextField(
+                                text = percentText,
+                                label = "Descuento por ítem (%)",
+                                onChange = { percentText = it.filter(Char::isDigit).take(3) },
+                                keyboardType = KeyboardType.Number,
+                                imeAction = ImeAction.Done,
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(top = 12.dp)
+                                    .trackInputBounds("discountPercent"),
+                                maxLines = 1
+                            )
+                        }
 
-                    else -> Unit
+                        DiscountMode.FIXED -> {
+                            DMMoneyOutlinedTextField(
+                                text = fixedRaw,
+                                label = "Descuento por ítem ($currencySymbol)",
+                                onChange = { fixedRaw = it.filter(Char::isDigit) },
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(top = 12.dp)
+                                    .trackInputBounds("discountFixed"),
+                                imeAction = ImeAction.Done,
+                                maxLines = 1,
+                                leadingIcon = null
+                            )
+                        }
+
+                        else -> Unit
+                    }
                 }
 
-                // =========================
-                // Collapsible: Extra fields
-                // =========================
                 AdditionalItemInfoCard(
                     expanded = extraOpen,
                     onToggle = { extraOpen = !extraOpen },
@@ -410,28 +534,38 @@ fun ModifyCartItemSheet(
                     batchQtyText = batchQtyText,
                     onBatchQtyText = { batchQtyText = it.filter(Char::isDigit) },
                     globalShipping = invoiceHasGlobalShipping,
-                    globalInsurance = invoiceHasGlobalInsurance
+                    globalInsurance = invoiceHasGlobalInsurance,
+                    trackInputModifier = { key, modifier -> modifier.trackInputBounds(key) }
                 )
 
-                // Preview
-                Text(
-                    "Resumen",
-                    style = labelMediumBold(),
-                    modifier = Modifier.padding(top = 4.dp, bottom = 4.dp)
-                )
-                Text(
-                    text = "$currencySymbol${formatNumberToMoney((discountedUnitCents / 100.0).toString())} × ${qty.toQuantityUiString()}",
-                    style = bodyMedium()
-                )
-                Text(
-                    text = "Total: $currencySymbol${formatNumberToMoney((lineTotalCents / 100.0).toString())}",
-                    style = headlineMediumBold(color = MaterialTheme.colorScheme.primary),
-                    modifier = Modifier.padding(top = 4.dp, bottom = 16.dp)
+                SummaryCard(
+                    currencySymbol = currencySymbol,
+                    discountedUnitCents = discountedUnitCents,
+                    quantity = qty,
+                    lineTotalCents = lineTotalCents
                 )
 
-                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
-                    TextButton(onClick = onDismiss) { Text("Cancelar") }
-                    Spacer(Modifier.width(8.dp))
+                Spacer(Modifier.height(8.dp))
+            }
+
+            Surface(
+                tonalElevation = 0.dp,
+                shadowElevation = 0.dp,
+                color = MaterialTheme.colorScheme.surface
+            ) {
+                Row(
+                    Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 24.dp, vertical = 14.dp),
+                    horizontalArrangement = Arrangement.spacedBy(16.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    TextButton(
+                        onClick = onDismiss,
+                        modifier = Modifier.weight(1f)
+                    ) {
+                        Text("Cancelar", color = secondary)
+                    }
                     Button(
                         onClick = {
                             val discountValue = when (mode) {
@@ -453,6 +587,7 @@ fun ModifyCartItemSheet(
                             val quantityOut = qtyText.toNormalizedQuantityOrNull(minValue = 0.0001) ?: qty
 
                             onApply(
+                                productName.trim().ifBlank { itemToModify.name },
                                 unitPriceCents,
                                 quantityOut,
                                 mode,
@@ -463,10 +598,185 @@ fun ModifyCartItemSheet(
                                 batchQtyOut
                             )
                             onDismiss()
-                        }
+                        },
+                        modifier = Modifier
+                            .weight(1.7f)
+                            .height(54.dp),
+                        shape = RoundedCornerShape(16.dp),
+                        colors = ButtonDefaults.buttonColors(containerColor = secondary)
                     ) { Text("Aplicar") }
                 }
             }
+        }
+    }
+}
+
+@Composable
+private fun EditSheetSectionCard(
+    title: String,
+    modifier: Modifier = Modifier,
+    subtitle: String? = null,
+    icon: ImageVector? = null,
+    iconContent: @Composable (() -> Unit)? = null,
+    content: @Composable () -> Unit
+) {
+    Card(
+        modifier = modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(16.dp),
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.secondary.copy(alpha = 0.16f)),
+        colors = CardDefaults.cardColors(
+            containerColor = cardContainerColor()
+        ),
+        elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(16.dp)
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                EditSheetIconBadge(icon = icon, content = iconContent)
+                Spacer(Modifier.width(12.dp))
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(title, style = titleMedium().copy(color = MaterialTheme.colorScheme.onSurface))
+                    if (!subtitle.isNullOrBlank()) {
+                        Text(
+                            subtitle,
+                            style = labelMedium(),
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.padding(top = 2.dp)
+                        )
+                    }
+                }
+            }
+            Spacer(Modifier.height(14.dp))
+            content()
+        }
+    }
+}
+
+@Composable
+private fun EditSheetIconBadge(
+    icon: ImageVector?,
+    content: @Composable (() -> Unit)?
+) {
+    val secondary = MaterialTheme.colorScheme.secondary
+    Surface(
+        shape = RoundedCornerShape(14.dp),
+        color = secondary.copy(alpha = 0.08f),
+        modifier = Modifier.size(38.dp)
+    ) {
+        Box(contentAlignment = Alignment.Center) {
+            when {
+                content != null -> content()
+                icon != null -> Icon(
+                    imageVector = icon,
+                    contentDescription = null,
+                    tint = secondary
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun QuantityButton(
+    onClick: () -> Unit,
+    content: @Composable () -> Unit
+) {
+    Surface(
+        onClick = onClick,
+        shape = RoundedCornerShape(12.dp),
+        color = MaterialTheme.colorScheme.surface,
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.secondary.copy(alpha = 0.45f)),
+        modifier = Modifier.size(48.dp)
+    ) {
+        Box(
+            contentAlignment = Alignment.Center,
+            modifier = Modifier.fillMaxSize()
+        ) {
+            content()
+        }
+    }
+}
+
+@Composable
+private fun DiscountChip(
+    selected: Boolean,
+    label: String,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    val secondary = MaterialTheme.colorScheme.secondary
+    FilterChip(
+        modifier = modifier.height(46.dp),
+        selected = selected,
+        onClick = onClick,
+        label = {
+            Text(
+                label,
+                textAlign = TextAlign.Center,
+                modifier = Modifier.fillMaxWidth()
+            )
+        },
+        border = FilterChipDefaults.filterChipBorder(
+            enabled = true,
+            selected = selected,
+            borderColor = secondary.copy(alpha = 0.22f),
+            selectedBorderColor = secondary
+        ),
+        colors = FilterChipDefaults.filterChipColors(
+            selectedContainerColor = secondary,
+            selectedLabelColor = MaterialTheme.colorScheme.onSecondary,
+            containerColor = Color.Transparent,
+            labelColor = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+    )
+}
+
+@Composable
+private fun SummaryCard(
+    currencySymbol: String,
+    discountedUnitCents: Long,
+    quantity: Double,
+    lineTotalCents: Long
+) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(16.dp),
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.secondary.copy(alpha = 0.16f)),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.secondary.copy(alpha = 0.05f)
+        ),
+        elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
+    ) {
+        Column(Modifier.padding(16.dp)) {
+            Text(
+                "Resumen",
+                style = labelMediumBold().copy(color = MaterialTheme.colorScheme.secondary)
+            )
+            Text(
+                text = "$currencySymbol${formatNumberToMoney((discountedUnitCents / 100.0).toString())} x ${quantity.toQuantityUiString()}",
+                style = bodyMedium(),
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(top = 8.dp)
+            )
+            Divider(
+                modifier = Modifier.padding(vertical = 12.dp),
+                color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.6f)
+            )
+            Text(
+                text = "Total",
+                style = titleMediumBold(color = MaterialTheme.colorScheme.onSurface)
+            )
+            Text(
+                text = "$currencySymbol${formatNumberToMoney((lineTotalCents / 100.0).toString())}",
+                style = headlineMediumBold(color = MaterialTheme.colorScheme.secondary),
+                modifier = Modifier.padding(top = 2.dp)
+            )
         }
     }
 }
@@ -492,30 +802,45 @@ private fun AdditionalItemInfoCard(
     onBatchQtyText: (String) -> Unit,
     // Global flags (for helper notes)
     globalShipping: Boolean,
-    globalInsurance: Boolean
+    globalInsurance: Boolean,
+    trackInputModifier: (String, Modifier) -> Modifier = { _, modifier -> modifier }
 ) {
     val rotation by animateFloatAsState(if (expanded) 180f else 0f)
 
-    ElevatedCard(
+    Card(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(top = 4.dp, bottom = 12.dp)
-            .animateContentSize()
+            .animateContentSize(),
+        shape = RoundedCornerShape(16.dp),
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.secondary.copy(alpha = 0.16f)),
+        colors = CardDefaults.cardColors(containerColor = cardContainerColor()),
+        elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
     ) {
         // Header
         Row(
             modifier = Modifier
                 .fillMaxWidth()
                 .clickable { onToggle() }
-                .padding(horizontal = 16.dp, vertical = 14.dp),
+                .padding(16.dp),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.SpaceBetween
         ) {
-            Text("Información adicional", style = MaterialTheme.typography.titleMedium)
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier.weight(1f)
+            ) {
+                EditSheetIconBadge(
+                    icon = Icons.Rounded.Description,
+                    content = null
+                )
+                Spacer(Modifier.width(12.dp))
+                Text("Información adicional", style = titleMedium())
+            }
             Icon(
                 imageVector = Icons.Rounded.ExpandMore,
                 contentDescription = null,
-                modifier = Modifier.rotate(rotation)
+                modifier = Modifier.rotate(rotation),
+                tint = MaterialTheme.colorScheme.secondary
             )
         }
 
@@ -527,9 +852,12 @@ private fun AdditionalItemInfoCard(
                     label = "Acarreo del ítem ($currencySymbol)",
                     onChange = onShippingRaw,
                     enabled = shippingEnabled,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(vertical = 6.dp),
+                    modifier = trackInputModifier(
+                        "shipping",
+                        Modifier
+                            .fillMaxWidth()
+                            .padding(vertical = 6.dp)
+                    ),
                     imeAction = ImeAction.Next,
                     maxLines = 1,
                     leadingIcon = null,
@@ -546,9 +874,12 @@ private fun AdditionalItemInfoCard(
                     label = "Seguro del ítem ($currencySymbol)",
                     onChange = onInsuranceRaw,
                     enabled = insuranceEnabled,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(vertical = 6.dp),
+                    modifier = trackInputModifier(
+                        "insurance",
+                        Modifier
+                            .fillMaxWidth()
+                            .padding(vertical = 6.dp)
+                    ),
                     imeAction = ImeAction.Next,
                     maxLines = 1,
                     leadingIcon = null,
@@ -566,9 +897,12 @@ private fun AdditionalItemInfoCard(
                     DMOutlinedTextField(
                         text = batchNumber,
                         label = "Lote (batch number)",
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(vertical = 6.dp),
+                        modifier = trackInputModifier(
+                            "batchNumber",
+                            Modifier
+                                .fillMaxWidth()
+                                .padding(vertical = 6.dp)
+                        ),
                         onChange = onBatchNumber,
                         maxLines = 1,
                         imeAction = ImeAction.Next
@@ -576,9 +910,12 @@ private fun AdditionalItemInfoCard(
                     DMOutlinedTextField(
                         text = batchQtyText,
                         label = "Cantidad del lote",
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(vertical = 6.dp),
+                        modifier = trackInputModifier(
+                            "batchQty",
+                            Modifier
+                                .fillMaxWidth()
+                                .padding(vertical = 6.dp)
+                        ),
                         onChange = onBatchQtyText,
                         maxLines = 1,
                         keyboardType = KeyboardType.Number,

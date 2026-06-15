@@ -845,6 +845,7 @@ class PosViewModel(
 
     fun updateCartLine(
         lineId: String,
+        productName: String,
         unitPriceCents: Long,         // manual unit price before discount (cents)
         quantity: Double,
         discountMode: DiscountMode,
@@ -858,6 +859,7 @@ class PosViewModel(
             showError()
             return
         }
+        setLineProductName(lineId, productName)
         setLineQty(lineId, quantity)
         setLineOverridePrice(lineId, unitPriceCents)
         when (discountMode) {
@@ -875,6 +877,56 @@ class PosViewModel(
         setLineShipping(lineId, itemShippingCents)
         setLineInsurance(lineId, itemInsuranceCents)
         setLinePharma(lineId, pharmaBatchNumber, pharmaBatchQty)
+    }
+
+    private fun setLineProductName(lineId: String, productName: String) = updateState {
+        val line = cart.firstOrNull { it.lineId == lineId } ?: return@updateState this
+        val cleanName = productName.trim().ifBlank { line.name }
+        val renamed = cleanName != line.name
+        val shouldPersonalize = renamed || line.itemId < 0
+
+        if (!shouldPersonalize) {
+            return@updateState this
+        }
+
+        val sourceProduct = resolveProductForLine(this, line)
+        val personalizedItemId = if (line.itemId < 0) line.itemId else -1
+        val personalizedItem = sourceProduct?.copy(
+            itemId = personalizedItemId,
+            name = cleanName,
+            description = sourceProduct.description.ifBlank { cleanName },
+            price = line.unitPrice() / 100.0,
+            cost = null
+        ) ?: Item(
+            itemId = personalizedItemId,
+            barcode = null,
+            sku = null,
+            name = cleanName,
+            description = cleanName,
+            img = "",
+            price = line.unitPrice() / 100.0,
+            cost = null,
+            active = true,
+            order = 0,
+            taxPercent = line.tax?.rateBps?.let { it / 100 },
+            productType = ProductType.GOOD,
+            unitMeasureCode = "und",
+            iscRate = null,
+            otiTaxes = null,
+            isPharma = false,
+            additionalInfo = null
+        )
+
+        copy(
+            cart = cart.map {
+                if (it.lineId == lineId) {
+                    it.copy(itemId = personalizedItemId, name = cleanName, costCents = null)
+                } else {
+                    it
+                }
+            },
+            personalizedItems = personalizedItems + (lineId to personalizedItem)
+        )
     }
 
     fun setLineQty(lineId: String, qty: Double) = updateState {

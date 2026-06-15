@@ -1,3 +1,73 @@
+# POS Cart Item Edit Sheet TODO
+
+## Follow-up Plan
+- [x] Make `Cancelar` / `Aplicar` a flush fixed footer instead of an elevated floating bar.
+- [x] Remove the summary card elevation that creates the odd shadow.
+- [x] Improve outside-tap keyboard dismissal for taps inside the scrollable sheet content.
+- [x] Rerun focused compile verification and record results.
+
+## Plan
+- [x] Update `ModifyCartItemSheet` to match the provided full-screen secondary-accent card style.
+- [x] Add editable product name and pass it through the cart update flow.
+- [x] Convert renamed saved-product lines into personalized cart lines with no catalog item ID.
+- [x] Fix quantity input width so multi-digit quantities remain visible.
+- [x] Clear focus/keyboard when tapping outside inputs and clarify discount copy as per-item.
+- [x] Run focused compile verification and record results.
+
+## Verification Gates
+- [x] `./gradlew --no-build-cache --no-configuration-cache :composeApp:compileKotlinMetadata`
+- [x] `./gradlew --no-build-cache --no-configuration-cache :androidApp:compileDebugKotlin`
+
+## Review Notes
+- `ModifyCartItemSheet` now uses a full-screen sheet with a drag handle, large title/subtitle header, circular close action, secondary-accent cards, pill discount controls, a summary card, and a fixed bottom action row.
+- Added a product-name input. When a saved cart line is renamed, `PosViewModel` converts only that line to a personalized item (`itemId = -1`) keyed by the existing line ID, preserving source tax/unit/additional metadata where available.
+- Quantity editing now uses a wider centered `OutlinedTextField`, so multi-digit quantities remain visible.
+- The sheet clears focus and hides the keyboard on outside taps.
+- Discount labels now explicitly say `Descuento por ítem`.
+- Final metadata compile succeeded but Gradle skipped `:composeApp:compileKotlinMetadata` as up-to-date. Final Android debug Kotlin compilation passed after adjusting typography helper usage.
+- Follow-up: removed footer elevation/shadow while keeping it fixed outside the scrollable content, flattened the summary card elevation to avoid the odd shadow, and changed keyboard dismissal to track input bounds so outside taps in the sheet content clear focus without immediately clearing taps on inputs.
+- Follow-up verification passed: `:androidApp:compileDebugKotlin`; metadata compile succeeded with `:composeApp:compileKotlinMetadata` skipped as up-to-date.
+
+# Edit Product Collapsible Layout TODO
+
+## Plan
+- [x] Compare add-product card layout against current edit-product `ItemScreenContent`.
+- [x] Move edit-product fields into the same basic/image/identification/fiscal/additional collapsible-card layout.
+- [x] Preserve existing edit image-picker, barcode scanner, permission, loading, and save behavior.
+- [x] Run focused KMP/Android compile verification.
+- [x] Record review notes and lessons.
+
+## Verification Gates
+- [x] `./gradlew --no-build-cache --no-configuration-cache :composeApp:compileKotlinMetadata`
+- [x] `./gradlew --no-build-cache --no-configuration-cache :androidApp:compileDebugKotlin`
+
+## Review Notes
+- Edit-product `ItemScreenContent` now uses the same card layout pattern as add-product: basic info card plus collapsible cards for additional taxes, identification/control, and DGI fiscal info.
+- Removed the edit-product Básico/Avanzado tab from the layout so optional groups are accessed through the same collapsible cards as add-product.
+- Reused the add-product card/content helpers as module-internal composables to avoid duplicating the section layout.
+- Added an edit-specific image picker wrapper so existing remote product images still render until a new local image is selected.
+- Kotlin metadata and Android debug Kotlin compilation passed.
+
+
+# Edit Product Image Picker TODO
+
+## Plan
+- [x] Compare add-product, edit-product, and logo image picker wiring to identify the broken callback path.
+- [x] Apply the minimal fix so edit-product camera/gallery options launch the shared picker managers.
+- [x] Run focused KMP/Android compile verification.
+- [x] Record review notes and any prevention lesson.
+
+## Verification Gates
+- [x] `./gradlew --no-build-cache --no-configuration-cache :composeApp:compileKotlinMetadata`
+- [x] `./gradlew --no-build-cache --no-configuration-cache :androidApp:compileDebugKotlin`
+
+## Review Notes
+- Edit-product image selection is rendered by `ItemScreenContent`, not `AddItemScreen`.
+- The bottom sheet buttons were only hiding the sheet; they did not set `launchCamera` or `launchGallery`, so no platform picker was launched.
+- Added the missing launch triggers and reset camera/gallery/settings flags after consumption to match the working add-product/logo pattern.
+- Kotlin metadata and Android debug Kotlin compilation passed.
+
+
 # POS Cart And Product Total Button TODO
 
 ## Plan
@@ -4287,3 +4357,59 @@
 - Existing worktree had unrelated modified files before this change; keep this patch limited to Settings address UI and task tracking.
 - Removed the Settings business address `TextButtonS` that launched the nonworking autocomplete widget; the read-only address summary still renders.
 - Metadata verification completed successfully; Gradle reported `:composeApp:compileKotlinMetadata` as skipped/up-to-date.
+
+# Real-Time Reports Keyboard And Category State TODO
+
+## Plan
+- [x] Review real-time reports list/detail UI and navigation state handling.
+- [x] Make report filters content IME-aware and dismiss keyboard on outside taps.
+- [x] Preserve selected report category when returning from a report detail.
+- [x] Run focused compile verification.
+- [x] Record review notes and any prevention lesson.
+
+## Verification Gates
+- [x] `./gradlew --no-build-cache --no-configuration-cache :composeApp:compileKotlinMetadata`
+- [x] `./gradlew --no-build-cache --no-configuration-cache :androidApp:compileDebugKotlin`
+
+## Review Notes
+- `ReportsScreen` now stores the selected category name with `rememberSaveable`, so returning from a report detail restores the selected category instead of falling back to Ventas.
+- `ReportDefinitionScreen` now fills the viewport, applies `imePadding()`, remains vertically scrollable while the keyboard is open, and clears focus when tapping outside filter inputs.
+- Metadata verification succeeded but Gradle skipped `:composeApp:compileKotlinMetadata` as up-to-date; Android debug Kotlin compilation passed and exercised the common reports UI change.
+
+# Real-Time Reports Labels And Cash Flow Tabs TODO
+
+## Plan
+- [x] Fix requested report titles, accents, filter labels, and detail column labels.
+- [x] Add shared friendly labels for backend enum/concept keys used by CxP aging and financial reports.
+- [x] Split cash-flow detail into summary/detail/charges/payments/aging tabs.
+- [x] Add per-document cash-flow detail actions that route through `OrdersScreenRoute(orderNumber)`.
+- [x] Run focused compile verification and record results.
+
+## Verification Gates
+- [x] `./gradlew --no-build-cache --no-configuration-cache :composeApp:compileKotlinMetadata`
+- [x] `./gradlew --no-build-cache --no-configuration-cache :androidApp:compileDebugKotlin`
+
+## Review Notes
+- `Antiguedad de CxP` is now `Antigüedad de CxP`; related aging filter/detail labels use accents.
+- Added friendly report labels for backend keys/statuses such as `revenue`, `costs`, `gross_profit`, `operating_expenses`, `operating_profit`, `operating_margin`, `uncategorized`, `sales`, `expenses`, `profit`, `net_cash_flow`, `no_due_date`, `not_paid`, and `paid`.
+- Cash-flow detail now has tabs for Resumen, Detalle, Cobros, Pagos, and Antigüedad. The user requested “4 tabs” but listed 5 sections, so the listed sections were implemented.
+- Cash-flow document rows render `Ver detalles`; when a document/order number is present, the action routes through `OrdersScreenRoute(orderNumber)` so the existing orders flow opens the detail screen.
+- Metadata compile succeeded but Gradle skipped `:composeApp:compileKotlinMetadata` as up-to-date. Android debug Kotlin compilation passed after adding a local `containsAny` helper.
+
+# iOS Push Permission Timing TODO
+
+## Plan
+- [x] Confirm the startup notification permission trigger and the post-order success trigger.
+- [x] Remove the bootstrap permission request so iOS does not prompt on app open.
+- [x] Preserve the existing successful order creation permission request path.
+- [x] Run focused compile verification and record results.
+
+## Verification Gates
+- [x] `./gradlew --no-build-cache --no-configuration-cache :composeApp:compileKotlinMetadata`
+- [x] `./gradlew --no-build-cache --no-configuration-cache :composeApp:compileKotlinIosSimulatorArm64`
+
+## Review Notes
+- Startup root cause was `AppViewModel.init -> getToken()`, where the iOS `actual fun getToken()` requested `UNUserNotificationCenter` authorization.
+- `getToken()` on iOS now only reads existing notification settings and registers for remote notifications when authorization is already granted/provisional, so app open no longer shows the permission prompt.
+- The successful-order path remains `SuccessScreen -> platformState.requestNotificationPermission()`, preserving the intended permission request timing after order creation.
+- Metadata compile passed; iOS simulator ARM64 Kotlin compile passed after fixing nullable `UNNotificationSettings` handling.

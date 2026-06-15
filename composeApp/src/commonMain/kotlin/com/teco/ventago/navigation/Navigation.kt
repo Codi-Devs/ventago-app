@@ -523,6 +523,9 @@ private fun NavGraphBuilder.addReportsNavigation(
                 onBack = { navController.navigateUp() },
                 onOpenOrders = {
                     navController.navigate(PosScreens.Orders.name)
+                },
+                onOpenOrderDetails = { orderNumber ->
+                    navController.navigate(OrdersScreenRoute(orderNumber = orderNumber))
                 }
             )
         }

@@ -718,7 +718,7 @@ fun AddItemScreen(
 // ═══════════════════════════════════════════════════════
 
 @Composable
-private fun ProductServiceSelector(
+internal fun ProductServiceSelector(
     selectedProductTypeId: Int,
     onProductTypeSelected: (Int) -> Unit,
     modifier: Modifier = Modifier,
@@ -802,7 +802,7 @@ private fun ProductTypeOption(
 }
 
 @Composable
-private fun StatusBadge(text: String, color: Color) {
+internal fun StatusBadge(text: String, color: Color) {
     Surface(
         shape = CircleShape,
         color = color.copy(alpha = 0.15f),
@@ -872,7 +872,7 @@ private fun ProductImagePicker(
 }
 
 @Composable
-private fun SectionCard(
+internal fun SectionCard(
     title: String,
     modifier: Modifier = Modifier,
     badge: @Composable () -> Unit = {},
@@ -904,7 +904,7 @@ private fun SectionCard(
 }
 
 @Composable
-private fun CollapsibleSectionCard(
+internal fun CollapsibleSectionCard(
     title: String,
     expanded: Boolean,
     onToggle: () -> Unit,
@@ -959,7 +959,7 @@ private fun CollapsibleSectionCard(
 // ═══════════════════════════════════════════════════════
 
 @Composable
-private fun OTITaxesContent(
+internal fun OTITaxesContent(
     otiTaxes: List<OTITaxUI>,
     selectedOtiIndex: Int,
     otiRateInput: String,

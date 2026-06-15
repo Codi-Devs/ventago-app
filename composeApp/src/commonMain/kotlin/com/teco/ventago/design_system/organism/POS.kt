@@ -781,9 +781,10 @@ fun CartOrganism(
                 itemToModify = null
                 showModifyItemDialog = false
             },
-            onApply = { newUnitPriceCents, qty, mode, discountValue, itemShippingCents, itemInsuranceCents, pharmaBatchNumber, pharmaBatchQty ->
+            onApply = { productName, newUnitPriceCents, qty, mode, discountValue, itemShippingCents, itemInsuranceCents, pharmaBatchNumber, pharmaBatchQty ->
                 viewModel.updateCartLine(
                     lineId = itemToModify!!.lineId,
+                    productName = productName,
                     unitPriceCents = newUnitPriceCents,
                     quantity = qty,
                     discountMode = mode,          // map to your domain type if different

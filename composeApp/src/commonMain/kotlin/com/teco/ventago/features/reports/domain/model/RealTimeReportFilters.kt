@@ -48,11 +48,11 @@ object RealTimeReportFilterCatalog {
                         label = "Tipo de ajuste",
                         "all" to "Todos",
                         "canceled" to "Anulaciones",
-                        "credit_note" to "Notas de credito"
+                        "credit_note" to "Notas de crédito"
                     )
                 )
                 "sales_pending_collection" -> listOf(
-                    select("date_field", "Fecha a evaluar", "due" to "Vencimiento", "issue" to "Emision"),
+                    select("date_field", "Fecha a evaluar", "due" to "Vencimiento", "issue" to "Emisión"),
                     balanceStatus(),
                     boolean("only_partial", "Solo parciales"),
                     boolean("only_overdue", "Solo vencidos")
@@ -60,13 +60,13 @@ object RealTimeReportFilterCatalog {
                 "customer_statement" -> listOf(
                     text("customer_id", "Cliente"),
                     boolean("include_paid", "Incluir pagados"),
-                    boolean("include_credit_notes", "Incluir notas de credito")
+                    boolean("include_credit_notes", "Incluir notas de crédito")
                 )
                 "customers_with_balance" -> listOf(balanceStatus(), number("min_amount", "Monto minimo"))
                 "new_customers" -> listOf(boolean("has_first_purchase", "Con primera compra"))
                 "inactive_customers" -> listOf(dateFilter("inactive_since", "Inactivo desde"), number("min_amount", "Monto minimo"))
                 "customer_ranking" -> listOf(documentStatus(), number("min_amount", "Monto minimo"))
-                "sales_tax_summary" -> listOf(boolean("include_credit_notes", "Incluir notas de credito"))
+                "sales_tax_summary" -> listOf(boolean("include_credit_notes", "Incluir notas de crédito"))
                 "expense_tax_summary" -> listOf(
                     expenseGroupBy(),
                     select("tax_filter", "Filtro fiscal", "all" to "Todos", "with_tax" to "Con ITBMS", "without_tax" to "Sin ITBMS"),
@@ -78,13 +78,13 @@ object RealTimeReportFilterCatalog {
                 "expense_aging" -> listOf(
                     select(
                         "aging_bucket",
-                        "Antiguedad",
+                        "Antigüedad",
                         "all" to "Todas",
                         "current" to "Actual",
-                        "1_30" to "1-30 dias",
-                        "31_60" to "31-60 dias",
-                        "61_90" to "61-90 dias",
-                        "90_plus" to "Mas de 90 dias"
+                        "1_30" to "1-30 días",
+                        "31_60" to "31-60 días",
+                        "61_90" to "61-90 días",
+                        "90_plus" to "Más de 90 días"
                     ),
                     paymentStatus(),
                     boolean("only_overdue", "Solo vencidos"),
@@ -96,8 +96,8 @@ object RealTimeReportFilterCatalog {
                         "group_by",
                         "Agrupar por",
                         "account" to "Cuenta",
-                        "category" to "Categoria",
-                        "classification" to "Clasificacion",
+                        "category" to "Categoría",
+                        "classification" to "Clasificación",
                         "supplier" to "Proveedor"
                     ),
                     source(),
@@ -116,18 +116,18 @@ object RealTimeReportFilterCatalog {
                 "expense_detail" -> listOf(
                     text("merchant_id", "Comercio"),
                     text("supplier_ruc", "RUC proveedor"),
-                    text("category_id", "Categoria"),
+                    text("category_id", "Categoría"),
                     text("branch_id", "Sucursal"),
                     paymentStatus(),
                     categorizationStatus(),
                     source(),
                     select(
                         "payment_method",
-                        "Metodo de pago",
+                        "Método de pago",
                         "cash" to "Efectivo",
                         "card" to "Tarjeta",
                         "transfer" to "Transferencia",
-                        "credit" to "Credito"
+                        "credit" to "Crédito"
                     ),
                     currency(),
                     number("min_amount", "Monto minimo"),
@@ -135,7 +135,7 @@ object RealTimeReportFilterCatalog {
                 )
                 "recurring_expense_report" -> listOf(
                     text("supplier_id", "Proveedor"),
-                    text("category_id", "Categoria"),
+                    text("category_id", "Categoría"),
                     text("branch_id", "Sucursal"),
                     select("frequency", "Frecuencia", "monthly" to "Mensual", "weekly" to "Semanal", "quarterly" to "Trimestral", "annual" to "Anual"),
                     paymentStatus(),
@@ -146,7 +146,7 @@ object RealTimeReportFilterCatalog {
                 "operating_margin" -> listOf(select("group_by", "Agrupar por", "month" to "Mes", "quarter" to "Trimestre", "year" to "Año"), base())
                 "business_overview" -> listOf(base(), currency())
                 "cash_flow" -> listOf(
-                    select("group_by", "Agrupar por", "week" to "Semana", "day" to "Dia", "month" to "Mes"),
+                    select("group_by", "Agrupar por", "week" to "Semana", "day" to "Día", "month" to "Mes"),
                     boolean("include_overdue", "Incluir vencidos"),
                     select("type", "Tipo", "all" to "Todos", "receivable" to "Cobros", "payable" to "Pagos"),
                     select("status", "Estado", "all" to "Todos", "overdue" to "Vencidos", "due_soon" to "Por vencer", "current" to "Actuales"),
@@ -172,13 +172,13 @@ object RealTimeReportFilterCatalog {
             options = options.map { (value, optionLabel) -> RealTimeReportFilterOption(value, optionLabel) }
         )
 
-    private fun documentStatus() = select("document_status", "Estado de documentos", "all" to "Todos", "valid" to "Validos", "canceled" to "Anulados")
+    private fun documentStatus() = select("document_status", "Estado de documentos", "all" to "Todos", "valid" to "Válidos", "canceled" to "Anulados")
     private fun balanceStatus() = select("balance_status", "Estado de saldo", "all" to "Todos", "open" to "Abiertos", "overdue" to "Vencidos", "current" to "Al dia")
-    private fun periodGroupBy() = select("group_by", "Agrupar por", "month" to "Mes", "week" to "Semana", "day" to "Dia")
-    private fun expenseGroupBy() = select("group_by", "Agrupar por", "month" to "Mes", "supplier" to "Proveedor", "category" to "Categoria", "source" to "Fuente")
-    private fun source() = select("source", "Origen", "manual" to "Manual", "ocr" to "Escaneado", "import" to "Importado", "crawled" to "Automatico")
+    private fun periodGroupBy() = select("group_by", "Agrupar por", "month" to "Mes", "week" to "Semana", "day" to "Día")
+    private fun expenseGroupBy() = select("group_by", "Agrupar por", "month" to "Mes", "supplier" to "Proveedor", "category" to "Categoría", "source" to "Fuente")
+    private fun source() = select("source", "Origen", "manual" to "Manual", "ocr" to "Escaneado", "import" to "Importado", "crawled" to "Automático")
     private fun paymentStatus() = select("payment_status", "Estado de pago", "all" to "Todos", "paid" to "Pagado", "pending" to "Pendiente", "partial" to "Parcial")
-    private fun categorizationStatus() = select("categorization_status", "Categorizacion", "all" to "Todas", "categorized" to "Categorizado", "uncategorized" to "Sin categorizar")
+    private fun categorizationStatus() = select("categorization_status", "Categorización", "all" to "Todas", "categorized" to "Categorizado", "uncategorized" to "Sin categorizar")
     private fun currency() = select("currency_code", "Moneda", "USD" to "USD", "PAB" to "PAB")
     private fun base() = select("base", "Base", "issued" to "Emitido", "collected" to "Cobrado")
 }

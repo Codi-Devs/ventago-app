@@ -3,6 +3,7 @@ package com.teco.ventago.features.reports.ui
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -11,8 +12,10 @@ import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -41,6 +44,8 @@ import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
+import androidx.compose.material3.Tab
+import androidx.compose.material3.TabRow
 import androidx.compose.material3.Text
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
@@ -48,6 +53,7 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -57,6 +63,8 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -103,7 +111,11 @@ import org.koin.core.parameter.parametersOf
 fun ReportsScreen(
     onReportSelected: (String) -> Unit,
 ) {
-    var selectedCategory by remember { mutableStateOf(RealTimeReportCategory.SALES) }
+    var selectedCategoryName by rememberSaveable { mutableStateOf(RealTimeReportCategory.SALES.name) }
+    val selectedCategory = remember(selectedCategoryName) {
+        RealTimeReportCategory.entries.firstOrNull { it.name == selectedCategoryName }
+            ?: RealTimeReportCategory.SALES
+    }
     val reports = remember(selectedCategory) {
         RealTimeReportCatalog.reportsFor(selectedCategory)
     }
@@ -120,7 +132,7 @@ fun ReportsScreen(
         )
         CategorySelector(
             selectedCategory = selectedCategory,
-            onCategorySelected = { selectedCategory = it },
+            onCategorySelected = { selectedCategoryName = it.name },
             modifier = Modifier.padding(horizontal = 16.dp)
         )
         CategoryIntro(
@@ -142,6 +154,7 @@ fun ReportDefinitionScreen(
     reportKey: String,
     onBack: () -> Unit,
     onOpenOrders: () -> Unit,
+    onOpenOrderDetails: (String) -> Unit,
 ) {
     val viewModel: ReportDefinitionViewModel = koinViewModel(
         parameters = { parametersOf(reportKey) }
@@ -149,10 +162,18 @@ fun ReportDefinitionScreen(
     val uiState by viewModel.uiState.collectAsState()
     val report = uiState.definition
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+    val focusManager = LocalFocusManager.current
 
     Column(
         modifier = Modifier
+            .fillMaxSize()
+            .imePadding()
             .verticalScroll(rememberScrollState())
+            .pointerInput(focusManager) {
+                detectTapGestures(onTap = {
+                    focusManager.clearFocus()
+                })
+            }
             .padding(horizontal = 16.dp, vertical = 16.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
@@ -180,7 +201,8 @@ fun ReportDefinitionScreen(
                 onPreviousPage = viewModel::previousPage,
                 onNextPage = viewModel::nextPage,
                 onExport = viewModel::export,
-                onOpenOrders = onOpenOrders
+                onOpenOrders = onOpenOrders,
+                onOpenOrderDetails = onOpenOrderDetails
             )
             else -> ReportEmptyState(
                 title = "Sin datos para mostrar",
@@ -581,6 +603,7 @@ private fun ReportDataContent(
     onNextPage: () -> Unit,
     onExport: (ReportExportFormat) -> Unit,
     onOpenOrders: () -> Unit,
+    onOpenOrderDetails: (String) -> Unit,
 ) {
     Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
         if (!state.errorMessage.isNullOrBlank()) {
@@ -591,7 +614,10 @@ private fun ReportDataContent(
         }
         ReportMetricsSection(metrics = metricsFor(data))
         ReportChartsSection(sections = chartSectionsFor(data))
-        ReportRowsSection(data = data)
+        ReportRowsSection(
+            data = data,
+            onOpenOrderDetails = onOpenOrderDetails
+        )
         ReportRelatedActions(data = data, onOpenOrders = onOpenOrders)
         ReportPaginationSection(
             data = data,
@@ -747,7 +773,7 @@ private fun ReportFilterInput(
                 Text(text = filter.label, style = labelSmall(color = MaterialTheme.colorScheme.onSurfaceVariant))
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     SelectablePill(text = "Sin filtro", selected = value.isBlank(), onClick = { onChange("") })
-                    SelectablePill(text = "Si", selected = value == "true", onClick = { onChange("true") })
+                    SelectablePill(text = "Sí", selected = value == "true", onClick = { onChange("true") })
                     SelectablePill(text = "No", selected = value == "false", onClick = { onChange("false") })
                 }
             }
@@ -1019,7 +1045,7 @@ private fun LineChart(section: RealTimeReportChartSection, lineColor: Color) {
 private fun ComboBarLineChart(section: RealTimeReportChartSection, barColor: Color) {
     val bars = section.points.take(MAX_REPORT_CHART_POINTS)
     val linePoints = section.lines.mapNotNull(::comboLinePoint).take(MAX_REPORT_CHART_POINTS)
-    val lineLabel = linePoints.firstOrNull()?.seriesLabel ?: "Linea"
+    val lineLabel = linePoints.firstOrNull()?.seriesLabel ?: "Línea"
     val maxValue = (bars.map { kotlin.math.abs(it.value) } + linePoints.map { kotlin.math.abs(it.value) })
         .maxOrNull()
         ?.takeIf { it > 0.0 }
@@ -1284,7 +1310,18 @@ private fun DonutChart(points: List<RealTimeReportChartPoint>) {
 }
 
 @Composable
-private fun ReportRowsSection(data: RealTimeReportData) {
+private fun ReportRowsSection(
+    data: RealTimeReportData,
+    onOpenOrderDetails: (String) -> Unit,
+) {
+    if (data.definition.isCashFlow()) {
+        CashFlowRowsSection(
+            data = data,
+            onOpenOrderDetails = onOpenOrderDetails
+        )
+        return
+    }
+
     val rows = rowsFor(data)
     val showAllRows = data.definition.isSalesAdjustments() || data.definition.isSalesPendingCollection()
     Card(
@@ -1328,7 +1365,91 @@ private fun ReportRowsSection(data: RealTimeReportData) {
 }
 
 @Composable
-private fun ReportDesktopRows(rows: List<RealTimeReportRow>, showAllRows: Boolean) {
+private fun CashFlowRowsSection(
+    data: RealTimeReportData,
+    onOpenOrderDetails: (String) -> Unit,
+) {
+    val tabs = remember(data) { cashFlowTabs(data) }
+    var selectedTabKey by rememberSaveable(data.definition.key) { mutableStateOf(CASH_FLOW_SUMMARY_TAB_KEY) }
+    val selectedTab = tabs.firstOrNull { it.key == selectedTabKey } ?: tabs.first()
+
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        elevation = CardDefaults.cardElevation(2.dp),
+        colors = CardDefaults.cardColors(containerColor = cardContainerColor())
+    ) {
+        Column(
+            modifier = Modifier.padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            SectionTitle(
+                icon = Icons.Rounded.TableChart,
+                title = "Detalle"
+            )
+
+            TabRow(
+                selectedTabIndex = tabs.indexOfFirst { it.key == selectedTab.key }.coerceAtLeast(0),
+                containerColor = Color.Transparent,
+                contentColor = MaterialTheme.colorScheme.secondary
+            ) {
+                tabs.forEach { tab ->
+                    Tab(
+                        selected = selectedTab.key == tab.key,
+                        onClick = { selectedTabKey = tab.key },
+                        text = {
+                            Text(
+                                text = tab.title,
+                                style = labelSmall(
+                                    color = if (selectedTab.key == tab.key) {
+                                        MaterialTheme.colorScheme.secondary
+                                    } else {
+                                        MaterialTheme.colorScheme.onSurfaceVariant
+                                    }
+                                ),
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                        }
+                    )
+                }
+            }
+
+            if (selectedTab.rows.isEmpty()) {
+                Text(
+                    text = "No hay registros para esta sección.",
+                    style = bodyMedium(color = MaterialTheme.colorScheme.onSurfaceVariant)
+                )
+            } else if (isTablet()) {
+                ReportDesktopRows(
+                    rows = selectedTab.rows,
+                    showAllRows = true,
+                    onOpenOrderDetails = if (selectedTab.canOpenOrderDetails) onOpenOrderDetails else null
+                )
+            } else {
+                selectedTab.rows.forEachIndexed { index, row ->
+                    ReportMobileRow(
+                        index = index + 1,
+                        cells = row.cells,
+                        onOpenOrderDetails = if (selectedTab.canOpenOrderDetails) {
+                            row.orderNumberForDetails()?.let { orderNumber ->
+                                { onOpenOrderDetails(orderNumber) }
+                            }
+                        } else {
+                            null
+                        }
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun ReportDesktopRows(
+    rows: List<RealTimeReportRow>,
+    showAllRows: Boolean,
+    onOpenOrderDetails: ((String) -> Unit)? = null,
+) {
     val visibleCells = rows.firstOrNull()?.cells.orEmpty().take(MAX_DETAIL_COLUMNS)
     val visibleRows = if (showAllRows) rows else rows.take(MAX_VISIBLE_DETAIL_ROWS)
     Column(
@@ -1352,14 +1473,27 @@ private fun ReportDesktopRows(rows: List<RealTimeReportRow>, showAllRows: Boolea
         visibleRows.forEach { row ->
             Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                 row.cells.take(MAX_DETAIL_COLUMNS).forEach { cell ->
-                    Text(
-                        text = cell.value,
-                        style = bodyMedium(),
-                        modifier = Modifier.width(142.dp),
-                        textAlign = if (cell.alignEnd) TextAlign.End else TextAlign.Start,
-                        maxLines = 2,
-                        overflow = TextOverflow.Ellipsis
-                    )
+                    if (cell.label == "Acciones" && onOpenOrderDetails != null) {
+                        val orderNumber = row.orderNumberForDetails()
+                        OutlinedButtonM(
+                            onClick = { orderNumber?.let(onOpenOrderDetails) },
+                            enabled = !orderNumber.isNullOrBlank(),
+                            modifier = Modifier.width(142.dp),
+                            contentColor = MaterialTheme.colorScheme.secondary,
+                            border = BorderStroke(1.dp, MaterialTheme.colorScheme.secondary)
+                        ) {
+                            Text(text = "Ver", style = labelSmall(color = MaterialTheme.colorScheme.secondary))
+                        }
+                    } else {
+                        Text(
+                            text = cell.value,
+                            style = bodyMedium(),
+                            modifier = Modifier.width(142.dp),
+                            textAlign = if (cell.alignEnd) TextAlign.End else TextAlign.Start,
+                            maxLines = 2,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                    }
                 }
             }
         }
@@ -1373,7 +1507,11 @@ private fun ReportDesktopRows(rows: List<RealTimeReportRow>, showAllRows: Boolea
 }
 
 @Composable
-private fun ReportMobileRow(index: Int, cells: List<RealTimeReportCell>) {
+private fun ReportMobileRow(
+    index: Int,
+    cells: List<RealTimeReportCell>,
+    onOpenOrderDetails: (() -> Unit)? = null,
+) {
     Surface(
         modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(10.dp),
@@ -1387,7 +1525,7 @@ private fun ReportMobileRow(index: Int, cells: List<RealTimeReportCell>) {
                 text = "Registro $index",
                 style = labelSmall(color = MaterialTheme.colorScheme.secondary)
             )
-            cells.take(MAX_DETAIL_COLUMNS).forEach { cell ->
+            cells.take(MAX_DETAIL_COLUMNS).filterNot { it.label == "Acciones" }.forEach { cell ->
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.SpaceBetween,
@@ -1406,6 +1544,16 @@ private fun ReportMobileRow(index: Int, cells: List<RealTimeReportCell>) {
                         maxLines = 2,
                         overflow = TextOverflow.Ellipsis
                     )
+                }
+            }
+            if (onOpenOrderDetails != null) {
+                OutlinedButtonM(
+                    onClick = onOpenOrderDetails,
+                    modifier = Modifier.fillMaxWidth(),
+                    contentColor = MaterialTheme.colorScheme.secondary,
+                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.secondary)
+                ) {
+                    Text(text = "Ver detalles", style = bodyMediumBold(color = MaterialTheme.colorScheme.secondary))
                 }
             }
         }
@@ -2058,7 +2206,7 @@ private fun customerReportMetrics(data: RealTimeReportData): List<RealTimeReport
             summaryMetric(data, "total_overdue", "Total vencido", listOf("total_overdue", "overdue")),
             summaryMetric(data, "top_customer", "Cliente con mayor saldo", listOf("top_customer", "main_customer")),
             summaryMetric(data, "average_pending_per_customer", "Promedio por cliente", listOf("average_pending_per_customer")),
-            summaryMetric(data, "average_days_overdue", "Dias promedio vencido", AVERAGE_DAYS_OVERDUE_ALIASES)
+            summaryMetric(data, "average_days_overdue", "Días promedio vencido", AVERAGE_DAYS_OVERDUE_ALIASES)
         )
         data.definition.isNewCustomers() -> listOfNotNull(
             summaryMetric(data, "new_customer_count", "Clientes nuevos", listOf("new_customer_count")),
@@ -2070,7 +2218,7 @@ private fun customerReportMetrics(data: RealTimeReportData): List<RealTimeReport
         data.definition.isInactiveCustomers() -> listOfNotNull(
             summaryMetric(data, "inactive_customer_count", "Clientes inactivos", listOf("inactive_customer_count")),
             summaryMetric(data, "inactive_historical_sales", "Ventas historicas", listOf("inactive_historical_sales", "historical_sales")),
-            summaryMetric(data, "average_inactive_days", "Dias sin compra", listOf("average_inactive_days", "avg_inactive_days")),
+            summaryMetric(data, "average_inactive_days", "Días sin compra", listOf("average_inactive_days", "avg_inactive_days")),
             summaryMetric(data, "inactive_with_balance", "Con saldo pendiente", listOf("inactive_with_balance")),
             summaryMetric(data, "top_customer", "Mayor valor inactivo", listOf("top_customer", "main_customer"))
         )
@@ -2092,8 +2240,8 @@ private fun customerReportChartSections(data: RealTimeReportData): List<RealTime
         data.definition.isSalesByCustomer() -> listOfNotNull(
             chartByKeys(data, listOf("top_by_amount", "bars"), "Top clientes por ventas")
                 ?: rowChart(data, "sales_by_customer_top", "Top clientes por ventas", CUSTOMER_NAME_ALIASES, TOTAL_SALES_ALIASES),
-            chartByKeys(data, listOf("breakdown"), "Concentracion de ingresos")
-                ?: totalsDonut(data, "sales_by_customer_concentration_donut", "Concentracion de ingresos")
+            chartByKeys(data, listOf("breakdown"), "Concentración de ingresos")
+                ?: totalsDonut(data, "sales_by_customer_concentration_donut", "Concentración de ingresos")
         )
         data.definition.isCustomerStatement() -> listOfNotNull(
             chartByKeys(data, listOf("trend", "timeline"), "Movimientos del cliente")
@@ -2142,7 +2290,7 @@ private fun salesTaxMetrics(data: RealTimeReportData): List<RealTimeReportMetric
         summaryMetric(data, "taxable_subtotal", "Subtotal gravado", listOf("taxable_subtotal")),
         grossItbms?.let { RealTimeReportMetric("gross_itbms_generated", "ITBMS bruto", formatMoneyValue(it)) },
         retained?.let { RealTimeReportMetric("tax_retained", "Retenciones", formatNegativeMoneyValue(it)) },
-        creditNoteItbms?.let { RealTimeReportMetric("credit_note_itbms", "Notas de credito", formatNegativeMoneyValue(it)) },
+        creditNoteItbms?.let { RealTimeReportMetric("credit_note_itbms", "Notas de crédito", formatNegativeMoneyValue(it)) },
         netItbms?.let { RealTimeReportMetric("net_itbms_payable", "ITBMS neto", formatMoneyValue(it)) },
         summaryMetric(data, "total_invoiced", "Total facturado", listOf("total_invoiced"), "document_count"),
         summaryMetric(data, "exempt_sales", "Ventas exentas", listOf("exempt_sales")),
@@ -2211,14 +2359,14 @@ private fun salesTaxCompositionChart(data: RealTimeReportData): RealTimeReportCh
     val points = listOfNotNull(
         grossItbms?.let { RealTimeReportChartPoint("ITBMS bruto", it, formatMoneyValue(it)) },
         retained?.let { RealTimeReportChartPoint("Retenciones", -kotlin.math.abs(it), formatNegativeMoneyValue(it)) },
-        creditNoteItbms?.let { RealTimeReportChartPoint("Notas de credito", -kotlin.math.abs(it), formatNegativeMoneyValue(it)) },
+        creditNoteItbms?.let { RealTimeReportChartPoint("Notas de crédito", -kotlin.math.abs(it), formatNegativeMoneyValue(it)) },
         netItbms?.let { RealTimeReportChartPoint("ITBMS neto", it, formatMoneyValue(it)) }
     )
 
     return points.takeIf { it.isNotEmpty() }?.let {
         RealTimeReportChartSection(
             key = "sales_tax_itbms_composition",
-            title = "Composicion fiscal del ITBMS",
+            title = "Composición fiscal del ITBMS",
             points = it,
             lines = emptyList()
         )
@@ -2326,7 +2474,7 @@ private fun expenseReportMetrics(data: RealTimeReportData): List<RealTimeReportM
             summaryMetric(data, "estimated_monthly_recurring_total", "Gasto mensual estimado", listOf("estimated_monthly_recurring_total")),
             summaryMetric(data, "recurring_expense_count", "Gastos recurrentes", listOf("recurring_expense_count")),
             nestedSummaryMetric(data, "top_recurring_supplier", "Proveedor principal", "supplier_name"),
-            nestedSummaryMetric(data, "top_recurring_category", "Categoria principal", "category_name")
+            nestedSummaryMetric(data, "top_recurring_category", "Categoría principal", "category_name")
         )
         else -> data.metrics
     }
@@ -2384,7 +2532,7 @@ private fun expenseBySupplierMetrics(data: RealTimeReportData): List<RealTimeRep
                 value = appendNote(it, topSupplierNote)
             )
         },
-        summaryMetric(data, "top_5_concentration_percent", "Concentracion top 5", listOf("top_5_concentration_percent", "top5_concentration_percent"))
+        summaryMetric(data, "top_5_concentration_percent", "Concentración top 5", listOf("top_5_concentration_percent", "top5_concentration_percent"))
     )
 }
 
@@ -2408,8 +2556,8 @@ private fun expenseReportChartSections(data: RealTimeReportData): List<RealTimeR
             recurringFrequencyChart(data),
             chartByArrayRows(data, "suppliers", "recurring_expense_suppliers", "Proveedores", listOf("supplier_name", "label", "supplier_ruc"), TOTAL_SALES_ALIASES)
                 ?: rowChart(data, "recurring_expense_suppliers", "Proveedores", listOf("supplier_name", "label", "supplier_ruc"), TOTAL_SALES_ALIASES),
-            chartByArrayRows(data, "categories", "recurring_expense_categories", "Categorias", listOf("category_name", "label"), TOTAL_SALES_ALIASES)
-                ?: rowChart(data, "recurring_expense_categories", "Categorias", listOf("category_name", "label"), TOTAL_SALES_ALIASES)
+            chartByArrayRows(data, "categories", "recurring_expense_categories", "Categorías", listOf("category_name", "label"), TOTAL_SALES_ALIASES)
+                ?: rowChart(data, "recurring_expense_categories", "Categorías", listOf("category_name", "label"), TOTAL_SALES_ALIASES)
         )
         else -> emptyList()
     }
@@ -2510,7 +2658,7 @@ private fun expenseSupplierConcentrationChart(data: RealTimeReportData): RealTim
     }.take(MAX_REPORT_CHART_POINTS)
 
     return points.takeIf { it.isNotEmpty() && lines.isNotEmpty() }?.let {
-        RealTimeReportChartSection("expense_supplier_concentration_grouped", "Concentracion", it, lines)
+        RealTimeReportChartSection("expense_supplier_concentration_grouped", "Concentración", it, lines)
     }
 }
 
@@ -2546,11 +2694,11 @@ private fun financialOperativeMetrics(data: RealTimeReportData): List<RealTimeRe
         )
         data.definition.isFinancialComparison() -> listOfNotNull(
             summaryMetric(data, "current_revenue", "Ingresos actuales", listOf("current_revenue"), "previous_revenue"),
-            summaryPercentMetric(data, "revenue_variation", "Variacion de ingresos", listOf("revenue_variation"), "revenue_difference"),
+            summaryPercentMetric(data, "revenue_variation", "Variación de ingresos", listOf("revenue_variation"), "revenue_difference"),
             summaryMetric(data, "current_expenses", "Gastos actuales", listOf("current_expenses"), "previous_expenses"),
-            summaryPercentMetric(data, "expenses_variation", "Variacion de gastos", listOf("expenses_variation")),
+            summaryPercentMetric(data, "expenses_variation", "Variación de gastos", listOf("expenses_variation")),
             summaryMetric(data, "current_profit", "Utilidad actual", listOf("current_profit"), "previous_profit"),
-            summaryPercentMetric(data, "profit_variation", "Variacion de utilidad", listOf("profit_variation"))
+            summaryPercentMetric(data, "profit_variation", "Variación de utilidad", listOf("profit_variation"))
         )
         data.definition.isOperatingMargin() -> listOfNotNull(
             summaryMetric(data, "revenue", "Ingresos", listOf("revenue")),
@@ -2586,12 +2734,12 @@ private fun financialOperativeChartSections(data: RealTimeReportData): List<Real
     return when {
         data.definition.isProfitAndLoss() -> listOfNotNull(
             financialTrendChart(data, "profit_and_loss_trend_line", "Tendencia de resultados", listOf("revenue", "expenses", "profit")),
-            chartByKeys(data, listOf("breakdown"), "Composicion financiera")
-                ?: chartByKeys(data, listOf("top_expenses"), "Composicion financiera")
+            chartByKeys(data, listOf("breakdown"), "Composición financiera")
+                ?: chartByKeys(data, listOf("top_expenses"), "Composición financiera")
         )
         data.definition.isFinancialComparison() -> listOfNotNull(
             financialComparisonActualPreviousChart(data),
-            rowChart(data, "financial_comparison_variation", "Variacion porcentual", FINANCIAL_LABEL_ALIASES, VARIATION_PERCENT_ALIASES)
+            rowChart(data, "financial_comparison_variation", "Variación porcentual", FINANCIAL_LABEL_ALIASES, VARIATION_PERCENT_ALIASES)
         )
         data.definition.isOperatingMargin() -> listOfNotNull(
             operatingMarginTrendChart(data),
@@ -2634,7 +2782,7 @@ private fun financialTrendChart(
 
 private fun financialComparisonActualPreviousChart(data: RealTimeReportData): RealTimeReportChartSection? {
     val lines = data.rows.flatMap { row ->
-        val label = row.cells.firstByKeys(FINANCIAL_LABEL_ALIASES)?.value ?: "Sin metrica"
+        val label = row.cells.firstByKeys(FINANCIAL_LABEL_ALIASES)?.value?.let(::friendlyReportLabel) ?: "Sin métrica"
         listOfNotNull(
             row.cells.firstByKeys(CURRENT_VALUE_ALIASES)?.value?.let(::numberFromDisplay)
                 ?.let { groupedChartPayload(label, "Actual", it, formatMoneyValue(it)) },
@@ -2643,7 +2791,7 @@ private fun financialComparisonActualPreviousChart(data: RealTimeReportData): Re
         )
     }.take(MAX_REPORT_CHART_POINTS * 2)
     val points = data.rows.mapNotNull { row ->
-        val label = row.cells.firstByKeys(FINANCIAL_LABEL_ALIASES)?.value ?: "Sin metrica"
+        val label = row.cells.firstByKeys(FINANCIAL_LABEL_ALIASES)?.value?.let(::friendlyReportLabel) ?: "Sin métrica"
         val value = row.cells.firstByKeys(CURRENT_VALUE_ALIASES)?.value?.let(::numberFromDisplay) ?: return@mapNotNull null
         RealTimeReportChartPoint(label, value, formatMoneyValue(value))
     }.take(MAX_REPORT_CHART_POINTS)
@@ -2682,7 +2830,7 @@ private fun businessOverviewIndicatorsChart(data: RealTimeReportData): RealTimeR
         val key = row.cells.firstByKeys(listOf("key"))?.value.orEmpty()
         if (isCountOnlyBusinessOverviewKey(key)) return@mapNotNull null
         val value = row.cells.firstByKeys(CURRENT_VALUE_ALIASES)?.value?.let(::numberFromDisplay) ?: return@mapNotNull null
-        val label = row.cells.firstByKeys(FINANCIAL_LABEL_ALIASES)?.value ?: key.ifBlank { "Indicador" }
+        val label = row.cells.firstByKeys(FINANCIAL_LABEL_ALIASES)?.value?.let(::friendlyReportLabel) ?: key.ifBlank { "Indicador" }
         RealTimeReportChartPoint(label, value, formatMoneyValue(value))
     }.take(MAX_REPORT_CHART_POINTS)
     return points.takeIf { it.isNotEmpty() }?.let {
@@ -2710,6 +2858,151 @@ private fun cashFlowTimelineChart(data: RealTimeReportData): RealTimeReportChart
     }
 }
 
+private fun cashFlowTabs(data: RealTimeReportData): List<CashFlowDetailTab> {
+    return listOf(
+        CashFlowDetailTab(
+            key = CASH_FLOW_SUMMARY_TAB_KEY,
+            title = "Resumen",
+            rows = cashFlowSummaryRows(data),
+            canOpenOrderDetails = false
+        ),
+        CashFlowDetailTab(
+            key = "detail",
+            title = "Detalle",
+            rows = data.rows.map { row -> cashFlowDetailRow(row) }.filter { it.cells.isNotEmpty() },
+            canOpenOrderDetails = true
+        ),
+        CashFlowDetailTab(
+            key = "charges",
+            title = "Cobros",
+            rows = cashFlowRowsFromArrays(data, listOf("charges", "receivables", "collections", "accounts_receivable", "receivable_documents")),
+            canOpenOrderDetails = true
+        ),
+        CashFlowDetailTab(
+            key = "payments",
+            title = "Pagos",
+            rows = cashFlowRowsFromArrays(data, listOf("payments", "payables", "accounts_payable", "payable_documents")),
+            canOpenOrderDetails = true
+        ),
+        CashFlowDetailTab(
+            key = "aging",
+            title = "Antigüedad",
+            rows = cashFlowAgingRows(data),
+            canOpenOrderDetails = false
+        )
+    )
+}
+
+private fun cashFlowSummaryRows(data: RealTimeReportData): List<RealTimeReportRow> {
+    val summaryRows = data.rawData.objectValue("summary")?.entries
+        ?.map { (key, value) ->
+            RealTimeReportRow(
+                listOf(
+                    RealTimeReportCell("label", "Métrica", friendlyReportLabel(key), false),
+                    RealTimeReportCell(key, "Valor", friendlyReportValue(key, value), shouldAlignReportValue(key, value))
+                )
+            )
+        }
+        .orEmpty()
+
+    return summaryRows.ifEmpty {
+        metricsFor(data).map { metric ->
+            RealTimeReportRow(
+                listOf(
+                    RealTimeReportCell(metric.key, "Métrica", friendlyReportLabel(metric.label), false),
+                    RealTimeReportCell(metric.key, "Valor", friendlyReportValue(metric.key, metric.value), true)
+                )
+            )
+        }
+    }
+}
+
+private fun cashFlowRowsFromArrays(
+    data: RealTimeReportData,
+    keys: List<String>,
+): List<RealTimeReportRow> {
+    return keys.firstNotNullOfOrNull { key ->
+        data.rawData[key].asRowsFromJsonArray()
+            ?.map { row -> cashFlowDetailRow(row) }
+            ?.filter { it.cells.isNotEmpty() }
+            ?.takeIf { it.isNotEmpty() }
+    }.orEmpty()
+}
+
+private fun cashFlowAgingRows(data: RealTimeReportData): List<RealTimeReportRow> {
+    val source = data.rawData["aging"] ?: data.rawData["buckets"] ?: return emptyList()
+    return when (source) {
+        is JsonArray -> source.mapNotNull { element ->
+            val row = element.asReportRowOrNull() ?: return@mapNotNull null
+            row.copy(
+                cells = row.cells.map { cell ->
+                    when (cell.key.lowercase()) {
+                        "bucket", "bucket_label", "aging_bucket", "status" -> cell.copy(value = friendlyReportLabel(cell.value))
+                        else -> cell
+                    }
+                }
+            )
+        }
+        is JsonObject -> source.entries.map { (bucket, value) ->
+            val cells = mutableListOf(
+                RealTimeReportCell(
+                    key = "bucket",
+                    label = "Antigüedad",
+                    value = friendlyReportLabel(bucket),
+                    alignEnd = false
+                )
+            )
+            if (value is JsonObject) {
+                value.entries.forEach { (key, child) ->
+                    cells.add(
+                        RealTimeReportCell(
+                            key = key,
+                            label = friendlyReportLabel(key),
+                            value = friendlyReportValue(key, child),
+                            alignEnd = shouldAlignReportValue(key, child)
+                        )
+                    )
+                }
+            } else {
+                cells.add(
+                    RealTimeReportCell(
+                        key = "total",
+                        label = "Total",
+                        value = friendlyReportValue("total", value),
+                        alignEnd = shouldAlignReportValue("total", value)
+                    )
+                )
+            }
+            RealTimeReportRow(cells)
+        }
+        else -> emptyList()
+    }
+}
+
+private fun JsonElement?.asRowsFromJsonArray(): List<RealTimeReportRow>? {
+    return (this as? JsonArray)?.mapNotNull { element -> element.asReportRowOrNull() }
+}
+
+private fun JsonElement.asReportRowOrNull(): RealTimeReportRow? {
+    val obj = this as? JsonObject ?: return null
+    return RealTimeReportRow(
+        cells = obj.entries.map { (key, value) ->
+            RealTimeReportCell(
+                key = key,
+                label = friendlyReportLabel(key),
+                value = friendlyReportValue(key, value),
+                alignEnd = shouldAlignReportValue(key, value)
+            )
+        }
+    )
+}
+
+private fun RealTimeReportRow.orderNumberForDetails(): String? {
+    return cells.firstByKeys(DOCUMENT_NUMBER_ALIASES + listOf("order_number", "order_no", "document_number", "document_no", "document"))
+        ?.value
+        ?.takeIf { it.isNotBlank() && it != "-" && !it.equals("Sin documento", ignoreCase = true) }
+}
+
 private fun rowsFor(data: RealTimeReportData): List<RealTimeReportRow> {
     return when {
         data.definition.isSalesSummary() -> data.rows
@@ -2722,7 +3015,7 @@ private fun rowsFor(data: RealTimeReportData): List<RealTimeReportRow> {
             .filter { it.cells.isNotEmpty() }
         data.definition.isSalesByPaymentMethod() -> data.rows.map { row ->
             curatedRow(row, PAYMENT_METHOD_DETAIL_COLUMNS) { column, cell ->
-                if (column.label == "Metodo de pago") friendlyPaymentMethod(cell.value) else cell.value
+                if (column.label == "Método de pago") friendlyPaymentMethod(cell.value) else cell.value
             }
         }
             .filter { it.cells.isNotEmpty() }
@@ -2766,7 +3059,7 @@ private fun rowsFor(data: RealTimeReportData): List<RealTimeReportRow> {
             .filter { it.cells.isNotEmpty() }
         data.definition.isExpenseAging() -> data.rows.map { row ->
             curatedRow(row, EXPENSE_AGING_DETAIL_COLUMNS) { column, cell ->
-                if (column.label == "Antiguedad") friendlyAgingLabel(cell.value) else cell.value
+                if (column.label == "Antigüedad") friendlyAgingLabel(cell.value) else if (column.label == "Estado") friendlyPaymentStatus(cell.value) else cell.value
             }
         }
             .filter { it.cells.isNotEmpty() }
@@ -2780,7 +3073,11 @@ private fun rowsFor(data: RealTimeReportData): List<RealTimeReportRow> {
             .filter { it.cells.isNotEmpty() }
         data.definition.isProfitAndLoss() -> data.rows.map { row -> profitAndLossDetailRow(row) }
             .filter { it.cells.isNotEmpty() }
-        data.definition.isFinancialComparison() -> data.rows.map { row -> curatedRow(row, FINANCIAL_COMPARISON_DETAIL_COLUMNS) }
+        data.definition.isFinancialComparison() -> data.rows.map { row ->
+            curatedRow(row, FINANCIAL_COMPARISON_DETAIL_COLUMNS) { column, cell ->
+                if (column.label == "Métrica") friendlyReportLabel(cell.value) else cell.value
+            }
+        }
             .filter { it.cells.isNotEmpty() }
         data.definition.isOperatingMargin() -> data.rows.map { row -> operatingMarginDetailRow(row) }
             .filter { it.cells.isNotEmpty() }
@@ -2822,7 +3119,7 @@ private fun salesTaxDetailRow(row: RealTimeReportRow): RealTimeReportRow {
                 label = column.label,
                 value = when (column.label) {
                     "Tipo" -> friendlyTaxDocumentType(existing.value)
-                    "Retencion" -> negativeMoneyDisplay(existing.value)
+                    "Retención" -> negativeMoneyDisplay(existing.value)
                     else -> existing.value
                 }
             )
@@ -2862,7 +3159,7 @@ private fun expenseDetailRow(row: RealTimeReportRow): RealTimeReportRow {
     return base.copy(
         cells = base.cells.map { cell ->
             when (cell.label) {
-                "Categoria" -> cell.copy(value = appendNote(cell.value, row.cells.firstByKeys(listOf("categorization_status"))?.value))
+                "Categoría" -> cell.copy(value = appendNote(cell.value, row.cells.firstByKeys(listOf("categorization_status"))?.value?.let(::friendlyReportLabel)))
                 "Acciones" -> cell.copy(value = friendlyActions(cell.value))
                 else -> cell
             }
@@ -2890,10 +3187,12 @@ private fun profitAndLossDetailRow(row: RealTimeReportRow): RealTimeReportRow {
     val base = curatedRow(row, PROFIT_AND_LOSS_DETAIL_COLUMNS)
     return base.copy(
         cells = base.cells.map { cell ->
-            if (cell.label == "Actual" && key == "operating_margin") {
-                cell.copy(value = row.cells.firstByKeys(OPERATING_MARGIN_ALIASES)?.value?.let(::percentDisplayFromString) ?: cell.value)
-            } else {
-                cell
+            when {
+                cell.label == "Concepto" -> cell.copy(value = friendlyReportLabel(cell.value))
+                cell.label == "Actual" && key == "operating_margin" -> {
+                    cell.copy(value = row.cells.firstByKeys(OPERATING_MARGIN_ALIASES)?.value?.let(::percentDisplayFromString) ?: cell.value)
+                }
+                else -> cell
             }
         }
     )
@@ -2915,7 +3214,7 @@ private fun operatingMarginDetailRow(row: RealTimeReportRow): RealTimeReportRow 
 private fun businessOverviewDetailRow(row: RealTimeReportRow): RealTimeReportRow {
     val key = row.cells.firstByKeys(listOf("key"))?.value.orEmpty()
     val countOnly = isCountOnlyBusinessOverviewKey(key)
-    val label = row.cells.firstByKeys(FINANCIAL_LABEL_ALIASES)?.value ?: key.ifBlank { "Indicador" }
+    val label = row.cells.firstByKeys(FINANCIAL_LABEL_ALIASES)?.value?.let(::friendlyReportLabel) ?: key.ifBlank { "Indicador" }
     val current = if (countOnly) {
         row.cells.firstByKeys(listOf("count"))?.value ?: row.cells.firstByKeys(CURRENT_VALUE_ALIASES)?.value ?: "-"
     } else {
@@ -2938,6 +3237,7 @@ private fun cashFlowDetailRow(row: RealTimeReportRow): RealTimeReportRow {
             "Cliente/proveedor" -> friendlyPartyName(cell.value)
             "Estado" -> friendlyCashFlowStatus(cell.value)
             "Acciones" -> "Ver detalles"
+            "Documento" -> cell.value
             else -> cell.value
         }
     }
@@ -3338,7 +3638,7 @@ private fun negativeMoneyDisplay(value: String): String {
 }
 
 private fun comboLinePayload(label: String, value: Double, formattedValue: String): String {
-    return comboLinePayload(label, value, formattedValue, "Linea")
+    return comboLinePayload(label, value, formattedValue, "Línea")
 }
 
 private fun comboLinePayload(label: String, value: Double, formattedValue: String, seriesLabel: String): String {
@@ -3363,7 +3663,7 @@ private fun comboLinePoint(payload: String): ComboLinePoint? {
         label = parts[0],
         value = parts[1].toDoubleOrNull() ?: return null,
         formattedValue = parts[2],
-        seriesLabel = parts.getOrNull(3) ?: "Linea"
+        seriesLabel = parts.getOrNull(3) ?: "Línea"
     )
 }
 
@@ -3441,7 +3741,7 @@ private fun jsonDisplay(key: String, value: JsonElement): String {
 }
 
 private fun friendlyChartLabel(value: String): String {
-    return friendlyPaymentMethod(friendlyAdjustmentType(value))
+    return friendlyReportLabel(friendlyPaymentMethod(friendlyAdjustmentType(value)))
 }
 
 private fun friendlyPaymentMethod(value: String): String {
@@ -3452,7 +3752,7 @@ private fun friendlyPaymentMethod(value: String): String {
         "digital_wallet", "wallet", "billetera_digital", "yappy", "nequi" -> "Pago digital"
         "check", "cheque" -> "Cheque"
         "mixed", "mixto" -> "Mixto"
-        "credit", "credito" -> "Credito"
+        "credit", "credito" -> "Crédito"
         "other", "otro", "others" -> "Otro"
         else -> value
     }
@@ -3460,20 +3760,23 @@ private fun friendlyPaymentMethod(value: String): String {
 
 private fun friendlyAdjustmentType(value: String): String {
     return when (value.trim().lowercase().replace("-", "_").replace(" ", "_")) {
-        "cancel", "canceled", "cancelled", "cancellation", "annulment", "anulacion", "anulado" -> "Anulacion"
-        "credit_note", "credit_notes", "nota_credito", "nota_de_credito" -> "Nota de credito"
+        "cancel", "canceled", "cancelled", "cancellation", "annulment", "anulacion", "anulado" -> "Anulación"
+        "credit_note", "credit_notes", "nota_credito", "nota_de_credito" -> "Nota de crédito"
         else -> value
     }
 }
 
 private fun friendlyAgingLabel(value: String): String {
     return when (value.trim().lowercase()) {
-        "days_1_30", "1_30", "1-30" -> "1-30 dias"
-        "days_31_60", "31_60", "31-60" -> "31-60 dias"
-        "days_61_90", "61_90", "61-90" -> "61-90 dias"
-        "days_91_plus", "days_over_90", "over_90", "90_plus", "91+" -> "Mas de 90 dias"
+        "days_1_30", "1_30", "1-30" -> "1-30 días"
+        "days_31_60", "31_60", "31-60" -> "31-60 días"
+        "days_61_90", "61_90", "61-90" -> "61-90 días"
+        "days_91_plus", "days_over_90", "over_90", "90_plus", "91+" -> "Más de 90 días"
         "current", "not_due" -> "Por vencer"
         "overdue" -> "Vencido"
+        "no_due_date" -> "Sin vencimiento"
+        "not_paid" -> "No pagado"
+        "paid" -> "Pagado"
         else -> value
     }
 }
@@ -3482,7 +3785,7 @@ private fun friendlyMovementType(value: String): String {
     return when (value.trim().lowercase().replace("-", "_").replace(" ", "_")) {
         "invoice", "bill", "sale", "order", "factura" -> "Factura"
         "payment", "paid", "pago" -> "Pago"
-        "credit_note", "nota_credito", "nota_de_credito" -> "Nota de credito"
+        "credit_note", "nota_credito", "nota_de_credito" -> "Nota de crédito"
         "adjustment", "ajuste" -> "Ajuste"
         else -> value
     }
@@ -3491,7 +3794,7 @@ private fun friendlyMovementType(value: String): String {
 private fun friendlyTaxDocumentType(value: String): String {
     return when (value.trim().lowercase().replace("-", "_").replace(" ", "_")) {
         "invoice", "bill", "sale", "order", "factura" -> "Factura"
-        "credit_note", "credit_notes", "nota_credito", "nota_de_credito" -> "Nota de credito"
+        "credit_note", "credit_notes", "nota_credito", "nota_de_credito" -> "Nota de crédito"
         else -> value
     }
 }
@@ -3510,9 +3813,101 @@ private fun friendlyFrequency(value: String): String {
 private fun friendlyFinancialSeries(value: String): String {
     return when (value.trim().lowercase()) {
         "revenue" -> "Ingresos"
+        "sales" -> "Ventas"
+        "costs" -> "Costos"
         "expenses" -> "Gastos"
-        "profit", "operating_profit" -> "Utilidad"
+        "gross_profit" -> "Utilidad bruta"
+        "profit" -> "Utilidad"
+        "operating_expenses" -> "Gastos operativos"
+        "operating_profit" -> "Utilidad operativa"
+        "operating_margin" -> "Margen operativo"
+        "net_cash_flow" -> "Flujo neto de caja"
+        "uncategorized", "uncategorized_expenses" -> "Sin categorizar"
         else -> value
+    }
+}
+
+private fun friendlyReportLabel(value: String): String {
+    val normalized = value.trim().lowercase().replace("-", "_").replace(" ", "_")
+    return when (normalized) {
+        "revenue" -> "Ingresos"
+        "sales" -> "Ventas"
+        "costs" -> "Costos"
+        "gross_profit" -> "Utilidad bruta"
+        "operating_expenses" -> "Gastos operativos"
+        "operating_profit" -> "Utilidad operativa"
+        "operating_margin" -> "Margen operativo"
+        "expenses" -> "Gastos"
+        "profit" -> "Utilidad"
+        "net_cash_flow" -> "Flujo neto de caja"
+        "uncategorized", "uncategorized_expenses" -> "Sin categorizar"
+        "summary" -> "Resumen"
+        "detail", "details" -> "Detalle"
+        "charges", "receivables", "collections" -> "Cobros"
+        "payments", "payables" -> "Pagos"
+        "aging", "aging_bucket" -> "Antigüedad"
+        "no_due_date" -> "Sin vencimiento"
+        "not_paid", "unpaid" -> "No pagado"
+        "paid" -> "Pagado"
+        "partially_paid", "partial" -> "Parcial"
+        "pending" -> "Pendiente"
+        "overdue" -> "Vencido"
+        "due_soon" -> "Por vencer"
+        "current", "not_due" -> "Actual"
+        "document", "document_number", "order_number" -> "Documento"
+        "party", "party_name" -> "Cliente/proveedor"
+        "customer_name" -> "Cliente"
+        "supplier_name" -> "Proveedor"
+        "type" -> "Tipo"
+        "status", "payment_status", "due_status" -> "Estado"
+        "due_date" -> "Vencimiento"
+        "total", "total_amount" -> "Total"
+        "paid_amount" -> "Pagado"
+        "pending_amount", "balance" -> "Pendiente"
+        "count", "document_count" -> "Documentos"
+        "metric", "key", "label" -> "Métrica"
+        "value", "current", "actual" -> "Actual"
+        "previous", "previous_value" -> "Anterior"
+        "difference", "diff" -> "Diferencia"
+        "variation", "variation_percent", "percent_change" -> "Variación"
+        else -> value.split("_").filter { it.isNotBlank() }.joinToString(" ") { token ->
+            token.replaceFirstChar { char -> char.uppercase() }
+        }
+    }
+}
+
+private fun friendlyReportValue(key: String, value: JsonElement): String {
+    val display = jsonDisplay(key, value)
+    return if ((value as? JsonPrimitive)?.doubleOrNull == null) {
+        friendlyReportLabel(display)
+    } else {
+        display
+    }
+}
+
+private fun friendlyReportValue(key: String, value: String): String {
+    return if (numberFromDisplay(value) == null) friendlyReportLabel(value) else value
+}
+
+private fun shouldAlignReportValue(key: String, value: JsonElement): Boolean {
+    val lowerKey = key.lowercase()
+    return (value as? JsonPrimitive)?.doubleOrNull != null ||
+        lowerKey.containsAny(CASH_FLOW_TOTAL_ALIASES + CASH_FLOW_PAID_ALIASES + CASH_FLOW_PENDING_ALIASES + listOf("amount", "total", "count", "days", "percent", "margin"))
+}
+
+private fun String.containsAny(tokens: List<String>): Boolean {
+    return tokens.any { contains(it) }
+}
+
+private fun friendlyPaymentStatus(value: String): String {
+    return when (value.trim().lowercase().replace("-", "_").replace(" ", "_")) {
+        "paid", "pagado" -> "Pagado"
+        "not_paid", "unpaid", "no_pagado" -> "No pagado"
+        "partial", "partially_paid", "parcial" -> "Parcial"
+        "pending", "pendiente" -> "Pendiente"
+        "overdue", "vencido" -> "Vencido"
+        "no_due_date", "sin_vencimiento" -> "Sin vencimiento"
+        else -> friendlyReportLabel(value)
     }
 }
 
@@ -3538,8 +3933,10 @@ private fun friendlyCashFlowStatus(value: String): String {
         "due_soon", "por_vencer" -> "Por vencer"
         "current", "not_due", "vigente" -> "Actual"
         "paid", "pagado" -> "Pagado"
+        "not_paid", "unpaid" -> "No pagado"
+        "no_due_date" -> "Sin vencimiento"
         "partial", "partially_paid" -> "Parcial"
-        else -> value
+        else -> friendlyReportLabel(value)
     }
 }
 
@@ -3561,7 +3958,7 @@ private fun friendlyActions(value: String): String {
             "view", "view_expense", "view_expenses", "ver" -> "Ver"
             "edit", "editar" -> "Editar"
             "filter_supplier" -> "Filtrar proveedor"
-            "filter_category" -> "Filtrar categoria"
+            "filter_category" -> "Filtrar categoría"
             else -> token
         }
     }.distinct().joinToString(" · ").ifBlank { value }
@@ -3590,6 +3987,13 @@ private data class ReportColumnRule(
     val defaultValue: String? = null,
 )
 
+private data class CashFlowDetailTab(
+    val key: String,
+    val title: String,
+    val rows: List<RealTimeReportRow>,
+    val canOpenOrderDetails: Boolean,
+)
+
 private const val SALES_SUMMARY_REPORT_KEY = "sales_summary"
 private const val SALES_BY_PRODUCT_REPORT_KEY = "sales_by_product"
 private const val SALES_BY_PAYMENT_METHOD_REPORT_KEY = "sales_by_payment_method"
@@ -3616,6 +4020,7 @@ private const val FINANCIAL_COMPARISON_REPORT_KEY = "financial_comparison"
 private const val OPERATING_MARGIN_REPORT_KEY = "operating_margin"
 private const val BUSINESS_OVERVIEW_REPORT_KEY = "business_overview"
 private const val CASH_FLOW_REPORT_KEY = "cash_flow"
+private const val CASH_FLOW_SUMMARY_TAB_KEY = "summary"
 private const val MAX_REPORT_CHART_POINTS = 8
 private const val MAX_DETAIL_COLUMNS = 13
 private const val MAX_VISIBLE_DETAIL_ROWS = 12
@@ -3831,12 +4236,12 @@ private val PRODUCT_SALES_DETAIL_COLUMNS = listOf(
 private val PAYMENT_METHOD_METRICS = listOf(
     ReportMetricRule("total_sold", "Total vendido", TOTAL_SALES_ALIASES),
     ReportMetricRule("total_charged", "Total cobrado", CHARGED_ALIASES),
-    ReportMetricRule("main_payment_method", "Metodo principal", listOf("main_payment_method", "primary_payment_method", "top_payment_method", "payment_method_label")),
+    ReportMetricRule("main_payment_method", "Método principal", listOf("main_payment_method", "primary_payment_method", "top_payment_method", "payment_method_label")),
     ReportMetricRule("digital_payment_percent", "% pagos digitales", DIGITAL_PAYMENT_PERCENT_ALIASES)
 )
 
 private val PAYMENT_METHOD_DETAIL_COLUMNS = listOf(
-    ReportColumnRule("Metodo de pago", PAYMENT_METHOD_ALIASES),
+    ReportColumnRule("Método de pago", PAYMENT_METHOD_ALIASES),
     ReportColumnRule("# transacciones", TRANSACTION_COUNT_ALIASES),
     ReportColumnRule("Total vendido", TOTAL_SALES_ALIASES),
     ReportColumnRule("Total cobrado", CHARGED_ALIASES),
@@ -3870,7 +4275,7 @@ private val SALES_BY_BRANCH_METRICS = listOf(
 
 private val SALES_BY_BRANCH_DETAIL_COLUMNS = listOf(
     ReportColumnRule("Sucursal", BRANCH_NAME_ALIASES),
-    ReportColumnRule("Codigo", BRANCH_CODE_ALIASES),
+    ReportColumnRule("Código", BRANCH_CODE_ALIASES),
     ReportColumnRule("ITBMS", ITBMS_ALIASES),
     ReportColumnRule("Total vendido", TOTAL_SALES_ALIASES),
     ReportColumnRule("Ticket promedio", MEAN_TICKET_ALIASES)
@@ -3879,7 +4284,7 @@ private val SALES_BY_BRANCH_DETAIL_COLUMNS = listOf(
 private val SALES_ADJUSTMENTS_METRICS = listOf(
     ReportMetricRule("total_adjustment", "Total ajustes", ADJUSTMENT_AMOUNT_ALIASES),
     ReportMetricRule("total_canceled", "Total anulado", CANCELED_AMOUNT_ALIASES),
-    ReportMetricRule("credit_notes_total", "Notas de credito", CREDIT_NOTE_AMOUNT_ALIASES),
+    ReportMetricRule("credit_notes_total", "Notas de crédito", CREDIT_NOTE_AMOUNT_ALIASES),
     ReportMetricRule("adjustment_sales_percent", "% ventas ajustadas", ADJUSTMENT_PERCENT_ALIASES),
     ReportMetricRule("main_user", "Usuario principal", listOf("main_user", "top_user", "primary_user", "user")),
     ReportMetricRule("main_type", "Tipo principal", listOf("main_type", "top_type", "primary_type", "adjustment_type"))
@@ -3899,13 +4304,13 @@ private val SALES_PENDING_COLLECTION_METRICS = listOf(
     ReportMetricRule("overdue_amount", "Monto vencido", OVERDUE_AMOUNT_ALIASES),
     ReportMetricRule("partial_paid_amount", "Monto parcialmente pagado", PARTIAL_PAID_AMOUNT_ALIASES),
     ReportMetricRule("top_pending_client", "Cliente con mayor saldo", listOf("top_pending_client", "client_with_biggest_pending", "main_customer", "top_customer")),
-    ReportMetricRule("average_days_overdue", "Dias vencidos promedio", AVERAGE_DAYS_OVERDUE_ALIASES)
+    ReportMetricRule("average_days_overdue", "Días vencidos promedio", AVERAGE_DAYS_OVERDUE_ALIASES)
 )
 
 private val SALES_PENDING_COLLECTION_DETAIL_COLUMNS = listOf(
     ReportColumnRule("Documento", DOCUMENT_NUMBER_ALIASES),
     ReportColumnRule("Cliente", CLIENT_ALIASES),
-    ReportColumnRule("Emision", listOf("emission_date", "issue_date", "date")),
+    ReportColumnRule("Emisión", listOf("emission_date", "issue_date", "date")),
     ReportColumnRule("Vencimiento", listOf("due_date", "expiration_date", "deadline")),
     ReportColumnRule("Total", TOTAL_SALES_ALIASES),
     ReportColumnRule("Pagado", PAID_ALIASES),
@@ -3928,7 +4333,7 @@ private val CUSTOMER_STATEMENT_DETAIL_COLUMNS = listOf(
     ReportColumnRule("Fecha", DATE_ALIASES),
     ReportColumnRule("Tipo", listOf("type")),
     ReportColumnRule("Documento", DOCUMENT_NUMBER_ALIASES, "-"),
-    ReportColumnRule("Descripcion", listOf("description", "detail", "concept"), "-"),
+    ReportColumnRule("Descripción", listOf("description", "detail", "concept"), "-"),
     ReportColumnRule("Cargo", listOf("charge", "amount_charged", "debit")),
     ReportColumnRule("Pago", listOf("payment", "paid", "credit")),
     ReportColumnRule("Saldo", listOf("balance", "outstanding_balance")),
@@ -3942,7 +4347,7 @@ private val CUSTOMERS_WITH_BALANCE_DETAIL_COLUMNS = listOf(
     ReportColumnRule("Saldo total", PENDING_ALIASES + listOf("total")),
     ReportColumnRule("Saldo vencido", OVERDUE_AMOUNT_ALIASES + listOf("overdue")),
     ReportColumnRule("Ultimo pago", LAST_PAYMENT_DATE_ALIASES),
-    ReportColumnRule("Dias max. vencido", listOf("max_days_overdue", "maximum_days_overdue"))
+    ReportColumnRule("Días max. vencido", listOf("max_days_overdue", "maximum_days_overdue"))
 )
 
 private val NEW_CUSTOMERS_DETAIL_COLUMNS = listOf(
@@ -3959,11 +4364,11 @@ private val NEW_CUSTOMERS_DETAIL_COLUMNS = listOf(
 private val INACTIVE_CUSTOMERS_DETAIL_COLUMNS = listOf(
     ReportColumnRule("Cliente", CUSTOMER_NAME_ALIASES, "Cliente sin nombre"),
     ReportColumnRule("Ultima compra", LAST_PURCHASE_DATE_ALIASES),
-    ReportColumnRule("Dias inactivo", listOf("days_inactive", "inactive_days")),
+    ReportColumnRule("Días inactivo", listOf("days_inactive", "inactive_days")),
     ReportColumnRule("Ventas historicas", listOf("historical_sales", "total", "inactive_historical_sales")),
     ReportColumnRule("Saldo pendiente", PENDING_ALIASES),
     ReportColumnRule("Vendedor", USER_ALIASES + listOf("created_by"), "-"),
-    ReportColumnRule("Accion sugerida", listOf("action_suggestion", "suggested_action"))
+    ReportColumnRule("Acción sugerida", listOf("action_suggestion", "suggested_action"))
 )
 
 private val CUSTOMER_RANKING_DETAIL_COLUMNS = listOf(
@@ -3984,7 +4389,7 @@ private val SALES_TAX_DETAIL_COLUMNS = listOf(
     ReportColumnRule("Cliente", CUSTOMER_NAME_ALIASES, "Consumidor Final"),
     ReportColumnRule("Subtotal gravado", listOf("taxable_subtotal")),
     ReportColumnRule("ITBMS bruto", ITBMS_ALIASES),
-    ReportColumnRule("Retencion", TAX_RETENTION_ALIASES),
+    ReportColumnRule("Retención", TAX_RETENTION_ALIASES),
     ReportColumnRule("ITBMS neto", NET_ITBMS_ALIASES),
     ReportColumnRule("Exento", EXEMPT_ALIASES),
     ReportColumnRule("No gravado", NON_TAXED_ALIASES),
@@ -4012,7 +4417,7 @@ private val EXPENSE_AGING_DETAIL_COLUMNS = listOf(
     ReportColumnRule("Documento", listOf("document_number", "document"), "-"),
     ReportColumnRule("Proveedor", SUPPLIER_NAME_ALIASES),
     ReportColumnRule("Vencimiento", listOf("due_date")),
-    ReportColumnRule("Antiguedad", listOf("bucket_label", "bucket")),
+    ReportColumnRule("Antigüedad", listOf("bucket_label", "bucket")),
     ReportColumnRule("Estado", listOf("status", "payment_status")),
     ReportColumnRule("Total", TOTAL_SALES_ALIASES),
     ReportColumnRule("Pagado", PAID_ALIASES),
@@ -4021,7 +4426,7 @@ private val EXPENSE_AGING_DETAIL_COLUMNS = listOf(
 
 private val EXPENSE_BY_ACCOUNT_DETAIL_COLUMNS = listOf(
     ReportColumnRule("Cuenta", listOf("name", "label", "category_name")),
-    ReportColumnRule("Clasificacion", listOf("classification")),
+    ReportColumnRule("Clasificación", listOf("classification")),
     ReportColumnRule("Items", listOf("item_count")),
     ReportColumnRule("Gastos", listOf("expense_count")),
     ReportColumnRule("Subtotal", listOf("subtotal")),
@@ -4044,7 +4449,7 @@ private val EXPENSE_DETAIL_COLUMNS = listOf(
     ReportColumnRule("Documento", listOf("document_number", "document"), "-"),
     ReportColumnRule("Proveedor", SUPPLIER_NAME_ALIASES),
     ReportColumnRule("RUC", SUPPLIER_RUC_ALIASES),
-    ReportColumnRule("Emision", listOf("emission_date", "issue_date", "date")),
+    ReportColumnRule("Emisión", listOf("emission_date", "issue_date", "date")),
     ReportColumnRule("Vencimiento", listOf("due_date")),
     ReportColumnRule("Subtotal", listOf("subtotal")),
     ReportColumnRule("ITBMS", ITBMS_ALIASES),
@@ -4052,18 +4457,18 @@ private val EXPENSE_DETAIL_COLUMNS = listOf(
     ReportColumnRule("Pagado", PAID_ALIASES),
     ReportColumnRule("Pendiente", PENDING_ALIASES),
     ReportColumnRule("Estado", listOf("payment_status", "status")),
-    ReportColumnRule("Categoria", CATEGORY_NAME_ALIASES),
+    ReportColumnRule("Categoría", CATEGORY_NAME_ALIASES),
     ReportColumnRule("Fuente", listOf("source")),
     ReportColumnRule("Acciones", EXPENSE_ACTION_ALIASES)
 )
 
 private val RECURRING_EXPENSE_DETAIL_COLUMNS = listOf(
     ReportColumnRule("Proveedor", SUPPLIER_NAME_ALIASES),
-    ReportColumnRule("Categoria", CATEGORY_NAME_ALIASES),
+    ReportColumnRule("Categoría", CATEGORY_NAME_ALIASES),
     ReportColumnRule("Frecuencia", listOf("frequency")),
     ReportColumnRule("Ultimo gasto", listOf("last_document_number", "document_number")),
     ReportColumnRule("Monto promedio", listOf("average_amount")),
-    ReportColumnRule("Proximo vencimiento", listOf("next_due_date")),
+    ReportColumnRule("Próximo vencimiento", listOf("next_due_date")),
     ReportColumnRule("Estado", listOf("payment_status", "status")),
     ReportColumnRule("Acciones", EXPENSE_ACTION_ALIASES)
 )
@@ -4074,11 +4479,11 @@ private val PROFIT_AND_LOSS_DETAIL_COLUMNS = listOf(
 )
 
 private val FINANCIAL_COMPARISON_DETAIL_COLUMNS = listOf(
-    ReportColumnRule("Metrica", listOf("label", "key")),
+    ReportColumnRule("Métrica", listOf("label", "key")),
     ReportColumnRule("Actual", CURRENT_VALUE_ALIASES),
     ReportColumnRule("Anterior", PREVIOUS_VALUE_ALIASES),
     ReportColumnRule("Diferencia", DIFFERENCE_ALIASES),
-    ReportColumnRule("Variacion", VARIATION_PERCENT_ALIASES)
+    ReportColumnRule("Variación", VARIATION_PERCENT_ALIASES)
 )
 
 private val OPERATING_MARGIN_DETAIL_COLUMNS = listOf(

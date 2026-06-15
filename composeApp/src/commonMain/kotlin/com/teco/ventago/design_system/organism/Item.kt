@@ -7,17 +7,18 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.imePadding
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.outlined.ArrowOutward
 import androidx.compose.material.icons.outlined.CameraAlt
 import androidx.compose.material.icons.outlined.Edit
 import androidx.compose.material.icons.outlined.Image
@@ -29,7 +30,6 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
-import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.rememberModalBottomSheetState
@@ -40,6 +40,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -77,21 +78,26 @@ import com.teco.ventago.design_system.textfields.helpers.DMDropDownField
 import com.teco.ventago.design_system.theme.bodyMedium
 import com.teco.ventago.design_system.theme.cardContainerColor
 import com.teco.ventago.design_system.theme.headlineSmall
+import com.teco.ventago.design_system.theme.labelMedium
 import com.teco.ventago.design_system.theme.latoFontFamily
-import com.teco.ventago.features.orders.ui.orders.viewmodel.OrdersUiEvent
+import com.teco.ventago.design_system.theme.Online
+import com.teco.ventago.design_system.theme.RedLight
+import com.teco.ventago.design_system.theme.WarningAmber
+import com.teco.ventago.design_system.theme.badgeColorBlue
 import com.teco.ventago.features.product.domain.model.ItemTax
 import com.teco.ventago.features.product.domain.model.ProductType
 import com.teco.ventago.features.product.domain.model.UomRegistry
-import com.teco.ventago.features.product.ui.item.add.EditModeTabs
+import com.teco.ventago.features.product.ui.item.add.CollapsibleSectionCard
 import com.teco.ventago.features.product.ui.item.add.GoodsSelectorDialog
-import com.teco.ventago.features.product.ui.item.add.InformacionAdicionalCard
-import com.teco.ventago.features.product.ui.item.add.OTITaxesCard
+import com.teco.ventago.features.product.ui.item.add.InformacionAdicionalContent
+import com.teco.ventago.features.product.ui.item.add.OTITaxesContent
+import com.teco.ventago.features.product.ui.item.add.ProductServiceSelector
+import com.teco.ventago.features.product.ui.item.add.SectionCard
+import com.teco.ventago.features.product.ui.item.add.StatusBadge
 import com.teco.ventago.features.product.ui.item.add.UnitMeasureSelectorDialog
-import com.teco.ventago.features.product.ui.item.add.viewmodel.ItemEditMode
 import com.teco.ventago.features.product.ui.item.add.viewmodel.ItemStateUiEvent
 import com.teco.ventago.features.product.ui.item.add.viewmodel.ItemViewModel
 import com.teco.ventago.features.product.ui.item.edit.EditItemViewModel
-import com.teco.ventago.navigation.PosScreens
 import com.teco.ventago.utils.BarcodeScannerScreen
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -113,6 +119,7 @@ import ventago.composeapp.generated.resources.price
 import ventago.composeapp.generated.resources.select_photo_from_camera
 import ventago.composeapp.generated.resources.select_photo_from_gallery
 import ventago.composeapp.generated.resources.understood
+import kotlin.math.roundToInt
 
 @Composable
 fun ItemScreenActions(backStackEntry: NavBackStackEntry?) {
@@ -210,6 +217,7 @@ fun ItemScreenContent(
         } else {
             permissionsManager.askPermission(PermissionType.GALLERY)
         }
+        launchGallery = false
     }
     if (launchCamera) {
         if (permissionsManager.isPermissionGranted(PermissionType.CAMERA)) {
@@ -217,9 +225,11 @@ fun ItemScreenContent(
         } else {
             permissionsManager.askPermission(PermissionType.CAMERA)
         }
+        launchCamera = false
     }
     if (launchSetting) {
         permissionsManager.launchSettings()
+        launchSetting = false
     }
     if (launchScannerCamera) {
         if (permissionsManager.isPermissionGranted(PermissionType.CAMERA)) {
@@ -273,242 +283,122 @@ fun ItemScreenContent(
         return
     }
 
+    var taxesExpanded by rememberSaveable { mutableStateOf(false) }
+    var identificationExpanded by rememberSaveable { mutableStateOf(false) }
+    var fiscalExpanded by rememberSaveable { mutableStateOf(false) }
+
+    val marginPercent = remember(uiState.price, uiState.cost) {
+        if (uiState.price > 0 && uiState.cost > 0) {
+            ((uiState.price - uiState.cost).toDouble() / uiState.price) * 100.0
+        } else null
+    }
+    val marginColor = when {
+        marginPercent == null -> MaterialTheme.colorScheme.onSurfaceVariant
+        marginPercent >= 30 -> Online
+        marginPercent >= 15 -> WarningAmber
+        else -> RedLight
+    }
+
     Column(
         modifier = Modifier
-            .padding(horizontal = 0.dp)
             .fillMaxSize()
-            .verticalScroll(rememberScrollState())
+            .background(MaterialTheme.colorScheme.surfaceContainerLow)
+            .navigationBarsPadding()
             .imePadding()
+            .verticalScroll(rememberScrollState())
             .pointerInput(focusManager) {
                 detectTapGestures(onTap = {
                     focusManager.clearFocus()
                 })
             },
     ) {
+        SectionCard(
+            title = "Información básica",
+            modifier = Modifier.padding(start = 16.dp, end = 16.dp, top = 16.dp),
+            badge = { StatusBadge(text = "Requerida", color = badgeColorBlue) }
+        ) {
+            ProductServiceSelector(
+                selectedProductTypeId = uiState.productTypeId,
+                onProductTypeSelected = viewModel::onProductTypeChange,
+                modifier = Modifier.padding(bottom = 8.dp),
+            )
 
-        EditModeTabs(
-            mode = uiState.editMode,
-            onChange = { viewModel.setEditMode(it) },
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 16.dp, vertical = 8.dp)
-        )
+            DMOutlinedTextField(
+                text = uiState.name,
+                label = "Nombre del producto o servicio",
+                modifier = Modifier.padding(bottom = 0.dp),
+                onChange = { viewModel.onNameChange(it.take(100)) },
+                maxLines = 5,
+                imeAction = ImeAction.Next,
+                isError = uiState.wrongName,
+                supportingText = if (uiState.wrongName) stringResource(Res.string.name_not_valid) else "",
+            )
 
-        if (imageBitmap != null || (uiState.imgUrl != null && uiState.imgUrl != "")) {
-            Box(modifier = Modifier) {
-                if (imageBitmap != null) {
-                    Image(
-                        bitmap = imageBitmap!!,
-                        contentDescription = "Product Image",
-                        contentScale = ContentScale.Fit,
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(150.dp)
-                            .padding(0.dp),
-                    )
-                } else {
-                    AsyncImage(
-                        model = uiState.imgUrl!!,
-                        contentDescription = "",
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(150.dp)
-                            .padding(0.dp),
-                        contentScale = ContentScale.Fit,
-                        placeholder = ColorPainter(Color.LightGray),
-                    )
-                }
-
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(start = 16.dp, end = 16.dp, top = 4.dp)
-                        .height(150.dp),
-                    horizontalArrangement = Arrangement.End
-                ) {
-                    IconButton(onClick = {
-                        showUploadImageSheet = true
-                    }) {
-                        Icon(
-                            modifier = Modifier
-                                .background(
-                                    color = MaterialTheme.colorScheme.surface,
-                                    shape = RoundedCornerShape(50)
-                                )
-                                .padding(8.dp)
-                                .height(24.dp)
-                                .width(24.dp),
-                            imageVector = Icons.Outlined.Edit,
-                            contentDescription = "Edit Image",
-                            tint = MaterialTheme.colorScheme.primary
-                        )
+            DMMoneyOutlinedTextField(
+                text = uiState.price.toString(),
+                label = stringResource(Res.string.price),
+                modifier = Modifier.padding(bottom = 0.dp),
+                onChange = {
+                    try {
+                        if (uiState.price == 0L && it.length > 1 && it[1] == '0') {
+                            viewModel.onPriceChange(it.substring(0, 1).toLong())
+                        } else {
+                            viewModel.onPriceChange(it.toLong())
+                        }
+                    } catch (_: Exception) {
+                        viewModel.onPriceChange(0)
                     }
-                }
+                },
+                leadingIcon = null,
+                maxLines = 1,
+                keyboardType = KeyboardType.Number,
+                imeAction = ImeAction.Next,
+                isError = uiState.wrongPrice,
+                supportingText = if (uiState.wrongPrice) stringResource(Res.string.must_select_price) else "",
+            )
 
+            DMDropDownField(
+                label = "Tasa ITBMS",
+                items = ItemTax.defaultTaxes.map { tax -> tax.name },
+                selectedIndex = ItemTax.defaultTaxes.indexOfFirst { tax -> tax.value == uiState.taxPercent },
+                modifier = Modifier.padding(bottom = 8.dp),
+                onItemSelected = { index, _ -> viewModel.onTaxPercentChange(ItemTax.defaultTaxes[index].value) },
+                isError = false,
+            )
 
+            if (uiState.productTypeId == ProductType.GOOD.typeId) {
+                DMDropDownField(
+                    label = "Unidad de medida",
+                    items = viewModel.uomOptions(),
+                    selectedIndex = viewModel.selectedUomIndex(),
+                    modifier = Modifier.padding(bottom = 0.dp),
+                    onItemSelected = { idx, _ -> viewModel.onUomSelected(UomRegistry.all()[idx].code) },
+                    isError = false,
+                )
             }
-        } else {
-            DottedButton(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(start = 16.dp, end = 16.dp, top = 4.dp)
-                    .height(150.dp),
-                onClick = {
-                    showUploadImageSheet = true
-                }
-            )
         }
 
-        DMOutlinedTextField(
-            text = uiState.name,
-            label = stringResource(Res.string.name),
-            modifier = Modifier.padding(start = 16.dp, end = 16.dp, bottom = 0.dp, top = 16.dp),
-            onChange = {
-                // Limit to 100 characters before passing to ViewModel
-                viewModel.onNameChange(it.take(100))
-            },
-            maxLines = 1,
-            imeAction = ImeAction.Next,
-            isError = uiState.wrongName,
-            supportingText = if (uiState.wrongName) stringResource(Res.string.name_not_valid) else "",
-        )
-
-        DMOutlinedTextField(text = uiState.description,
-            label = stringResource(Res.string.description_optional),
-            modifier = Modifier.padding(start = 16.dp, end = 16.dp, bottom = 0.dp),
-            onChange = {
-                viewModel.onDescriptionChange(it)
-            },
-            maxLines = 100,
-            imeAction = ImeAction.Next,
-            trailingIcon = vectorResource(Res.drawable.help),
-            trailingIconClick = {
-                showHelpDialog = true
-            })
-
-        DMMoneyOutlinedTextField(
-            text = uiState.price.toString(),
-            label = stringResource(Res.string.price),
-            modifier = Modifier.padding(start = 16.dp, end = 16.dp, bottom = 0.dp),
-            onChange = {
-                try {
-                    if (uiState.price == 0L && it.length > 1 && it[1] == '0') {
-                        viewModel.onPriceChange(it.substring(0, 1).toLong())
-                    } else {
-                        viewModel.onPriceChange(it.toLong())
-                    }
-                } catch (_: Exception) {
-                    viewModel.onPriceChange(0)
-                }
-            },
-            leadingIcon = null,
-            maxLines = 1,
-            keyboardType = KeyboardType.Number,
-            imeAction = ImeAction.Next,
-            isError = uiState.wrongPrice,
-            supportingText = if (uiState.wrongPrice) stringResource(Res.string.must_select_price) else "",
-        )
-
-        DMMoneyOutlinedTextField(
-            text = uiState.cost.toString(),
-            label = "Costo (Opcional)",
-            modifier = Modifier.padding(start = 16.dp, end = 16.dp, bottom = 0.dp),
-            onChange = {
-                try {
-                    if (uiState.cost == 0L && it.length > 1 && it[1] == '0') {
-                        viewModel.onCostChange(it.substring(0, 1).toLong())
-                    } else {
-                        viewModel.onCostChange(it.toLong())
-                    }
-                } catch (_: Exception) {
-                    viewModel.onCostChange(0)
-                }
-            },
-            leadingIcon = null,
-            maxLines = 1,
-            keyboardType = KeyboardType.Number,
-            imeAction = ImeAction.Next,
-        )
-
-        DMOutlinedTextField(text = uiState.barcode,
-            label = "Código de barras",
-            modifier = Modifier.padding(start = 16.dp, end = 16.dp, bottom = 0.dp),
-            onChange = {
-                viewModel.onBarcodeChange(it)
-            },
-            maxLines = 100,
-            imeAction = ImeAction.Next,
-            trailingIcon = Icons.Rounded.QrCodeScanner,
-            trailingIconClick = {
-                launchScannerCamera = true
-            })
-
-        DMOutlinedTextField(text = uiState.sku,
-            label = "Referencia interna (SKU)",
-            modifier = Modifier.padding(start = 16.dp, end = 16.dp, bottom = 0.dp),
-            onChange = {
-                viewModel.onSkuChange(it)
-            },
-            maxLines = 100,
-            imeAction = ImeAction.Done,
-            trailingIcon = Icons.Outlined.ArrowOutward,
-            trailingIconClick = {
-                showHelpDialog = true
-            })
-
-        // Category dropdown - only show if viewModel supports category editing
-        if (viewModel is EditItemViewModel) {
-            DMDropDownField(
-                label = stringResource(Res.string.category),
-                items = viewModel.categories().map { category -> category.name },
-                selectedIndex = viewModel.selectedCategoryIndex(),
-                modifier = Modifier.padding(start = 16.dp, end = 16.dp, bottom = 16.dp),
-                onItemSelected = { index, _ -> viewModel.onCategoryChanged(index) },
-                isError = false,
-            )
-        }
-
-        DMDropDownField(
-            label = "Tasa ITBMS",
-            items = ItemTax.defaultTaxes.map { tax -> tax.name },
-            selectedIndex = ItemTax.defaultTaxes.indexOfFirst { tax -> tax.value == uiState.taxPercent},
-            modifier = Modifier.padding(start = 16.dp, end = 16.dp, bottom = 16.dp),
-            onItemSelected = { index, _ -> viewModel.onTaxPercentChange(ItemTax.defaultTaxes[index].value) },
-            isError = false,
-        )
-
-        DMDropDownField(
-            label = "Tipo de producto",
-            items = ProductType.toList().map { type -> type.description },
-            selectedIndex = ProductType.toList().indexOfFirst { type -> type.typeId == uiState.productTypeId},
-            modifier = Modifier.padding(start = 16.dp, end = 16.dp, bottom = 16.dp),
-            onItemSelected = { index, _ -> viewModel.onProductTypeChange(ProductType.toList()[index].typeId) },
-            isError = false,
-        )
-
-        if (uiState.editMode == ItemEditMode.ADVANCED) {
-            DMDropDownField(
-                label = "Unidad de medida",
-                items = viewModel.uomOptions(), // e.g., listOf("und","kg","m","l",...) with "und" first
-                selectedIndex = viewModel.selectedUomIndex(), // should map to uiState.unitMeasureCode
-                modifier = Modifier.padding(start = 16.dp, end = 16.dp, bottom = 16.dp),
-                onItemSelected = { idx, _ -> viewModel.onUomSelected(UomRegistry.all()[idx].code) },
-                isError = false,
-            )
-
-            // === Tasas opcionales (ISC / OTI) ===
+        CollapsibleSectionCard(
+            title = "Impuestos adicionales",
+            expanded = taxesExpanded,
+            onToggle = { taxesExpanded = !taxesExpanded },
+            modifier = Modifier.padding(start = 16.dp, end = 16.dp, top = 16.dp),
+            badge = { StatusBadge(text = "Opcional", color = Color(0xFFB0B0B0)) }
+        ) {
             DMOutlinedTextField(
                 text = uiState.iscRate ?: "",
                 label = "Tasa ISC (opcional)",
-                modifier = Modifier.padding(start = 16.dp, end = 16.dp, bottom = 0.dp),
-                onChange = { viewModel.onIscRateChange(it) }, // expects numeric string or ""
+                modifier = Modifier.padding(bottom = 0.dp),
+                onChange = { viewModel.onIscRateChange(it) },
                 maxLines = 1,
                 imeAction = ImeAction.Next,
                 keyboardType = KeyboardType.Number,
             )
 
-            OTITaxesCard(
-                otiTaxes = uiState.otiTaxes, // List<OTITaxUI>
+            Spacer(Modifier.height(8.dp))
+
+            OTITaxesContent(
+                otiTaxes = uiState.otiTaxes,
                 selectedOtiIndex = uiState.selectedOtiIndex,
                 otiRateInput = uiState.otiRateInput,
                 onOtiTypeSelected = { idx -> viewModel.onOtiTypeSelected(idx) },
@@ -516,19 +406,112 @@ fun ItemScreenContent(
                 onAddOti = { viewModel.onAddOtiTax() },
                 onDeleteOti = { idx -> viewModel.onRemoveOtiTax(idx) },
             )
+        }
 
-            InformacionAdicionalCard(
-                entries = uiState.additionalInfo, // List<AdditionalEntryUI>
-                selectedKeyIndex = uiState.additionalSelectedKeyIndex, // Int
-                inputValue = uiState.additionalInputValue,             // String
+        CollapsibleSectionCard(
+            title = "Identificación y control",
+            expanded = identificationExpanded,
+            onToggle = { identificationExpanded = !identificationExpanded },
+            modifier = Modifier.padding(start = 16.dp, end = 16.dp, top = 16.dp),
+            badge = { StatusBadge(text = "Opcional", color = Color(0xFFB0B0B0)) }
+        ) {
+            EditProductImagePicker(
+                imageBitmap = imageBitmap,
+                imageUrl = uiState.imgUrl,
+                onClick = { showUploadImageSheet = true }
+            )
+
+            DMOutlinedTextField(
+                text = uiState.sku,
+                label = "Referencia interna (SKU)",
+                modifier = Modifier.padding(bottom = 0.dp),
+                onChange = { viewModel.onSkuChange(it) },
+                maxLines = 1,
+                imeAction = ImeAction.Next,
+            )
+
+            DMOutlinedTextField(
+                text = uiState.barcode,
+                label = "Código de barras",
+                modifier = Modifier.padding(bottom = 0.dp),
+                onChange = { viewModel.onBarcodeChange(it) },
+                maxLines = 1,
+                imeAction = ImeAction.Next,
+                trailingIcon = Icons.Rounded.QrCodeScanner,
+                trailingIconClick = { launchScannerCamera = true }
+            )
+
+            DMMoneyOutlinedTextField(
+                text = uiState.cost.toString(),
+                label = "Costo (Opcional)",
+                modifier = Modifier.padding(bottom = 0.dp),
+                onChange = {
+                    try {
+                        if (uiState.cost == 0L && it.length > 1 && it[1] == '0') {
+                            viewModel.onCostChange(it.substring(0, 1).toLong())
+                        } else {
+                            viewModel.onCostChange(it.toLong())
+                        }
+                    } catch (_: Exception) {
+                        viewModel.onCostChange(0)
+                    }
+                },
+                leadingIcon = null,
+                maxLines = 1,
+                keyboardType = KeyboardType.Number,
+                imeAction = ImeAction.Next,
+            )
+
+            if (marginPercent != null) {
+                Text(
+                    text = "Margen: ${marginPercent.roundToInt()}%",
+                    style = labelMedium(marginColor),
+                    modifier = Modifier.padding(top = 4.dp, bottom = 8.dp)
+                )
+            }
+
+            DMOutlinedTextField(
+                text = uiState.description,
+                label = stringResource(Res.string.description_optional),
+                modifier = Modifier.padding(bottom = 0.dp),
+                onChange = { viewModel.onDescriptionChange(it) },
+                maxLines = 100,
+                imeAction = ImeAction.Next,
+                trailingIcon = vectorResource(Res.drawable.help),
+                trailingIconClick = { showHelpDialog = true }
+            )
+        }
+
+        CollapsibleSectionCard(
+            title = "Información fiscal DGI",
+            expanded = fiscalExpanded,
+            onToggle = { fiscalExpanded = !fiscalExpanded },
+            modifier = Modifier.padding(start = 16.dp, end = 16.dp, top = 16.dp),
+            badge = { StatusBadge(text = "Opcional", color = Color(0xFFB0B0B0)) }
+        ) {
+            InformacionAdicionalContent(
+                entries = uiState.additionalInfo,
+                selectedKeyIndex = uiState.additionalSelectedKeyIndex,
+                inputValue = uiState.additionalInputValue,
                 onKeySelected = { idx -> viewModel.onAdditionalKeySelected(idx) },
                 onValueChanged = { v -> viewModel.onAdditionalValueChanged(v) },
                 onAdd = { viewModel.onAddAdditionalInfo() },
                 onDelete = { idx -> viewModel.onRemoveAdditionalInfo(idx) },
-                keyOptions = viewModel.additionalInfoOptions(), // List<String> built from AdditionalInfoKey enum titles
-                keyValueTypes = viewModel.additionalInfoValueTypes(), // List<AdditionalValueType> aligned with options
+                keyOptions = viewModel.additionalInfoOptions(),
+                keyValueTypes = viewModel.additionalInfoValueTypes(),
                 onOpenGoodsDialog = { viewModel.onOpenGoodsDialog() },
                 onOpenUnitMeasureDialog = { viewModel.onOpenUnitMeasureDialog() }
+            )
+        }
+
+        if (viewModel is EditItemViewModel) {
+            DMDropDownField(
+                label = stringResource(Res.string.category),
+                items = viewModel.categories().map { category -> category.name },
+                selectedIndex = viewModel.selectedCategoryIndex(),
+                modifier = Modifier.padding(start = 16.dp, end = 16.dp, bottom = 16.dp, top = 16.dp),
+                onItemSelected = { index, _ -> viewModel.onCategoryChanged(index) },
+                isError = false,
             )
         }
 
@@ -552,6 +535,8 @@ fun ItemScreenContent(
                 )
             }
         }
+
+        Spacer(Modifier.height(24.dp))
     }
 
     if (uiState.loadingBottomSheet.isLoading()) {
@@ -578,6 +563,7 @@ fun ItemScreenContent(
                     label = stringResource(Res.string.select_photo_from_camera),
                     prefixIcon = rememberVectorPainter(Icons.Outlined.CameraAlt)
                 ) {
+                    launchCamera = true
                     scope.launch { uploadImageSheetState.hide() }.invokeOnCompletion {
                         showUploadImageSheet = false
                     }
@@ -587,6 +573,7 @@ fun ItemScreenContent(
                     label = stringResource(Res.string.select_photo_from_gallery),
                     prefixIcon = rememberVectorPainter(Icons.Outlined.Image)
                 ) {
+                    launchGallery = true
                     scope.launch { uploadImageSheetState.hide() }.invokeOnCompletion {
                         showUploadImageSheet = false
                     }
@@ -637,4 +624,69 @@ fun ItemScreenContent(
         onConfirm = { viewModel.onConfirmUnitMeasureSelection() },
         onDismiss = { viewModel.onCloseUnitMeasureDialog() }
     )
+}
+
+@Composable
+private fun EditProductImagePicker(
+    imageBitmap: ImageBitmap?,
+    imageUrl: String?,
+    onClick: () -> Unit
+) {
+    val hasRemoteImage = !imageUrl.isNullOrBlank()
+
+    if (imageBitmap != null || hasRemoteImage) {
+        Box(modifier = Modifier.padding(bottom = 8.dp)) {
+            if (imageBitmap != null) {
+                Image(
+                    bitmap = imageBitmap,
+                    contentDescription = "Product Image",
+                    contentScale = ContentScale.Fit,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(150.dp),
+                )
+            } else {
+                AsyncImage(
+                    model = imageUrl,
+                    contentDescription = "Product Image",
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(150.dp),
+                    contentScale = ContentScale.Fit,
+                    placeholder = ColorPainter(Color.LightGray),
+                )
+            }
+
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(150.dp),
+                horizontalArrangement = Arrangement.End
+            ) {
+                IconButton(onClick = onClick) {
+                    Icon(
+                        modifier = Modifier
+                            .background(
+                                color = MaterialTheme.colorScheme.surface,
+                                shape = RoundedCornerShape(50)
+                            )
+                            .padding(8.dp)
+                            .height(24.dp)
+                            .width(24.dp),
+                        imageVector = Icons.Outlined.Edit,
+                        contentDescription = "Edit Image",
+                        tint = MaterialTheme.colorScheme.primary
+                    )
+                }
+            }
+        }
+    } else {
+        DottedButton(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(bottom = 8.dp)
+                .height(150.dp),
+            onClick = onClick
+        )
+    }
 }

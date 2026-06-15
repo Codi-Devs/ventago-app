@@ -1,5 +1,8 @@
 # Lessons Learned
 
+- En bottom sheets Compose con inputs dentro de contenido scrolleable, no confies en un `detectTapGestures` amplio sobre el contenedor para cerrar teclado: los hijos pueden consumir eventos o un tap en input puede limpiar foco inmediatamente. Rastrea bounds de inputs y solo limpia foco cuando el tap cae fuera de esas areas.
+- Cuando se iguala el layout entre alta y edicion de producto, reutiliza la estructura de cards del alta pero conserva estados propios de edicion (por ejemplo `imgUrl` remoto existente) para no perder preview antes de seleccionar una nueva imagen.
+- En sheets de seleccion de imagen, el callback del boton debe activar explicitamente el estado one-shot (`launchCamera`/`launchGallery`) antes de cerrar el sheet; cerrar el modal sin disparar el flag deja la opcion como no-op aunque los managers existan.
 - En CTAs POS que muestran monto despues de seleccionar cliente/productos, no usar subtotal si el contexto fiscal ya esta disponible; usar el total legal/tax-aware para reflejar ITBMS y exoneracion actuales.
 - En pantallas con copy fiscal en español, buscar formas sin tilde comunes (`electronica`, `Direccion`, `Facturacion`, `codigo`, `Identificacion`, `Numero`, `emision`, `Items`) antes de cerrar un ajuste de textos.
 - En CTAs compactos de POS para agregar elementos, conservar el contenido simplificado pedido pero incluir el icono `+` cuando la accion necesita una senal visual inmediata.
@@ -175,3 +178,5 @@
 - En tarjetas de distribucion de cobro, separar seleccion, edicion de monto y eliminacion en controles distintos: CTA punteado para agregar, monto como control editable, y X por fila para remover sin abrir una hoja general de edicion.
 - Cuando una seleccion requiere datos obligatorios adicionales, no mutar el estado principal al abrir el formulario: mantener un draft local y confirmar la adicion solo con `Listo`, para que cerrar la hoja no deje metodos incompletos.
 - En pickers de fecha, mostrar etiquetas legibles para humanos en los dropdowns (por ejemplo nombres de meses) aunque el valor interno siga siendo numerico/ISO.
+- En reportes real-time, cualquier columna/serie/concepto derivado de claves backend (`revenue`, `not_paid`, `no_due_date`, etc.) debe pasar por un mapper UI-friendly antes de renderizar; al agregar reportes nuevos, escanear tambien acentos visibles como `Métrica`, `Método`, `Antigüedad`, `Categoría`, `Código`, `Emisión`, `Variación` y `Línea`.
+- En KMP iOS, no llames `UNUserNotificationCenter.requestAuthorizationWithOptions(...)` desde helpers de token ejecutados en bootstrap (`getToken()`/init). En app open solo consultar settings existentes y registrar APNs si ya hay autorizacion; la solicitud de permiso debe vivir en el momento de negocio esperado, por ejemplo despues de crear una orden exitosamente.

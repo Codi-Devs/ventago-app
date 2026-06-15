@@ -389,15 +389,15 @@ private val PERCENT_KEYS = listOf(
 
 private val FIELD_LABELS = mapOf(
     "adjusted_document_count" to "Documentos ajustados",
-    "average_days_overdue" to "Dias vencidos promedio",
+    "average_days_overdue" to "Días vencidos promedio",
     "average_itbms_per_document" to "Promedio ITBMS",
     "average_pending_per_customer" to "Promedio por cliente",
     "average_ticket" to "Ticket promedio",
     "balance" to "Saldo",
-    "branch_code" to "Codigo",
+    "branch_code" to "Código",
     "branch_name" to "Sucursal",
     "cash_flow" to "Flujo de caja",
-    "charts" to "Graficas",
+    "charts" to "Gráficas",
     "collected" to "Cobrado",
     "customer_name" to "Cliente",
     "customer_ruc" to "RUC",
@@ -405,7 +405,7 @@ private val FIELD_LABELS = mapOf(
     "document" to "Documento",
     "document_count" to "Documentos",
     "due_date" to "Vencimiento",
-    "emission_date" to "Emision",
+    "emission_date" to "Emisión",
     "expense_count" to "Gastos",
     "expenses" to "Gastos",
     "filters" to "Filtros",
@@ -420,8 +420,8 @@ private val FIELD_LABELS = mapOf(
     "pending" to "Pendiente",
     "percent_of_sales" to "% ventas",
     "percent_of_total" to "% total",
-    "product_category" to "Categoria",
-    "product_code" to "Codigo",
+    "product_category" to "Categoría",
+    "product_code" to "Código",
     "product_name" to "Producto",
     "profit" to "Utilidad",
     "revenue" to "Ingresos",
@@ -433,7 +433,7 @@ private val FIELD_LABELS = mapOf(
     "supplier_ruc" to "RUC",
     "tax_retained" to "Retenciones",
     "taxable_subtotal" to "Subtotal gravable",
-    "timeline" to "Linea de tiempo",
+    "timeline" to "Línea de tiempo",
     "total" to "Total",
     "total_adjusted" to "Total ajustado",
     "total_sold" to "Total vendido",
@@ -490,7 +490,7 @@ private fun displayValue(key: String, value: JsonElement): String {
 private fun JsonElement.asDisplayString(): String {
     return when (this) {
         is JsonPrimitive -> {
-            booleanOrNull?.let { if (it) "Si" else "No" }
+            booleanOrNull?.let { if (it) "Sí" else "No" }
                 ?: contentOrNull.orEmpty()
         }
         is JsonArray -> "${size} registros"
