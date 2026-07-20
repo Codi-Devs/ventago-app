@@ -13,6 +13,9 @@ data class CreatePaymentLinkRequest(
 @Serializable
 data class CreatePaymentLinkResponse(
     @SerialName("payment_link_url") val paymentLinkUrl: String? = null,
+    @SerialName("url") val url: String? = null,
+    @SerialName("status") val status: String? = null,
+    @SerialName("expires_at") val expiresAt: String? = null,
 )
 
 @Serializable

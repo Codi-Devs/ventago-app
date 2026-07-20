@@ -54,14 +54,6 @@ class FirebaseService: IFirebaseService {
         }
     }
 
-    override suspend fun deleteAccount() {
-        val auth = Firebase.auth
-        if (auth.currentUser != null) {
-            auth.currentUser!!.delete()
-        }
-    }
-
-
     override suspend fun sendPasswordResetEmail(email: String) {
         val auth = Firebase.auth
         auth.sendPasswordResetEmail(email)

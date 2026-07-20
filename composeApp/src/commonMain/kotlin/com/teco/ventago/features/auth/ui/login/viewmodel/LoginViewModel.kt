@@ -232,7 +232,7 @@ class LoginViewModel(
 
             ApiError.F_AUTH_002 -> {
                 withContext(Dispatchers.Main) {
-                    emitEvent(LoginUiEvent.ShowRegisterDialog)
+                    emitEvent(LoginUiEvent.MakingLoginError)
                 }
             }
 

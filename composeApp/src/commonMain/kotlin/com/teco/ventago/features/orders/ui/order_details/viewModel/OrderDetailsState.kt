@@ -5,6 +5,8 @@ import com.teco.ventago.design_system.organism.LoadingBottomSheetState
 import com.teco.ventago.features.orders.domain.models.AchPaymentDetail
 import com.teco.ventago.features.orders.domain.models.ManualPaymentMethodOption
 import com.teco.ventago.features.orders.domain.models.Order
+import com.teco.ventago.features.orders.domain.models.responses.OnsitePaymentDto
+import com.teco.ventago.features.payments.domain.models.YappyOnsiteTransactionPayload
 import com.teco.ventago.features.printers.domain.model.PrinterSelectionOption
 import com.teco.ventago.features.printers.domain.model.ReprintTicketState
 
@@ -28,6 +30,10 @@ data class OrderDetailsState(
     val canRejectAchPayment: Boolean = false,
     val loadingPaymentLink: Boolean = false,
     val paymentLink: String? = null,
+    val replacementYappyOnsite: OnsitePaymentDto? = null,
+    val replacementYappyOnsitePayload: YappyOnsiteTransactionPayload? = null,
+    val replacementYappyOnsitePolling: Boolean = false,
+    val showReplacementYappyCancelDialog: Boolean = false,
     val errorLoadingPaymentLink: Boolean = false,
     val generatePaymentLinkState: GeneratePaymentLinkState = GeneratePaymentLinkState(),
     val invoiceRetryState: InvoiceRetryState = InvoiceRetryState(),
@@ -229,9 +235,10 @@ data class ManualPaymentState(
     val remaining: Long get() = (totalToChargeCents - allocated).coerceAtLeast(0L)
     val change: Long get() = (allocated - totalToChargeCents).coerceAtLeast(0L)
 
-    val requiresOtherDesc: Boolean get() = charged.containsKey(11)
+    val requiresOtherDesc: Boolean get() = charged.containsKey(ManualPaymentMethodOption.OTHER_SPECIFY.id)
     val isConfirmEnabled: Boolean
-        get() = allocated >= totalToChargeCents && (!requiresOtherDesc || otherPaymentDescription.isNotBlank())
+        get() = allocated >= totalToChargeCents &&
+            (!requiresOtherDesc || otherPaymentDescription.trim().length >= 15)
 }
 
 data class GeneratePaymentLinkState(

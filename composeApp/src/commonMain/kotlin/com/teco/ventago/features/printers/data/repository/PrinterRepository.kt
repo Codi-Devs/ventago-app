@@ -13,6 +13,7 @@ import com.teco.ventago.features.printers.domain.model.UpdatePrinterRequest
 import com.teco.ventago.json
 import com.teco.ventago.utils.BadRequestException
 import com.teco.ventago.utils.isError
+import kotlinx.coroutines.CancellationException
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.decodeFromJsonElement
@@ -91,6 +92,8 @@ class PrinterRepository(
     ): T {
         return try {
             block()
+        } catch (e: CancellationException) {
+            throw e
         } catch (e: Exception) {
             logger.sendLog(
                 Log(
@@ -103,4 +106,3 @@ class PrinterRepository(
         }
     }
 }
-

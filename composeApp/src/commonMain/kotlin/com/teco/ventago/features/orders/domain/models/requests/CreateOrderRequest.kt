@@ -24,6 +24,7 @@ data class CreateOrderRequest(
     @SerialName("additional_address") val additionalAddress: AdditionalAddress? = null,
     @SerialName("commercial_addenda") val commercialAddenda: CommercialAddenda? = null,
     val links: PaymentLinksBlock? = null,              // exclusive with payments
+    @SerialName("payment_flow_type") val paymentFlowType: String? = null,
     val formats: List<String> = emptyList(),
     @SerialName("include_bottom_note") val includeBottomNote: Boolean? = null,
 
@@ -299,7 +300,7 @@ data class AddendaItem(
 @Serializable
 data class PaymentLinksBlock(
     val create: Boolean,
-    @SerialName("expire_in_minutes") val expireInMinutes: Int,
+    @SerialName("expire_in_minutes") val expireInMinutes: Int = 140,
     val note: String? = null,
-    val method: String // "LINK" | "YAPPY QR"
+    val method: String // "LINK" | "YAPPY_ONSITE"
 )

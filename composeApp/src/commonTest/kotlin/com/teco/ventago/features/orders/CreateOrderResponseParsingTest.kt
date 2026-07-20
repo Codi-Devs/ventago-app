@@ -55,6 +55,41 @@ class CreateOrderResponseParsingTest {
     }
 
     @Test
+    fun createOrderResponseParsesOnsitePayment() {
+        val payload = """
+            {
+              "id": 456,
+              "order_number": "ORD-123-0000-001-0000001001",
+              "payment_flow_type": "in_place",
+              "order_date": "2026-07-07T15:00:00Z",
+              "order_amount": "107.00",
+              "tax_amount": "7.00",
+              "payment_status": 0,
+              "invoice_status": 0,
+              "onsite_payment": {
+                "id": "VRDNF-93260766",
+                "transaction_id": "VRDNF-93260766",
+                "order_id": 456,
+                "session_id": "9efe350f-226a-4f60-8527-a170a3317e8b",
+                "qr_hash": "j5AHEj3kY8tI",
+                "qr_type": "DYN",
+                "status": "pending",
+                "provider_status": "PENDING",
+                "amount": "107.00",
+                "currency": "USD",
+                "expires_at": "2026-07-07T15:05:00Z"
+              }
+            }
+        """.trimIndent()
+
+        val response = json.decodeFromString<CreateOrderResponse>(payload)
+
+        assertEquals("in_place", response.paymentFlowType)
+        assertEquals("VRDNF-93260766", response.onsitePayment?.transactionId)
+        assertEquals("j5AHEj3kY8tI", response.onsitePayment?.qrHash)
+    }
+
+    @Test
     fun retryInvoiceResponseParsesSnakeAndCamelInvoiceWarningFields() {
         val snakePayload = """
             {

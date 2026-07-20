@@ -3,6 +3,7 @@ package com.teco.ventago.features.home.ui.viewmodel
 import com.teco.ventago.core.LoadableState
 import com.teco.ventago.design_system.organism.LoadingBottomSheetState
 import com.teco.ventago.features.business.domain.model.Business
+import com.teco.ventago.features.financialProfile.domain.model.FeeBillingSummary
 import com.teco.ventago.features.home.domain.model.HomeSalesRange
 import com.teco.ventago.features.home.domain.model.HomeSummary
 import com.teco.ventago.features.product.domain.model.Products
@@ -23,6 +24,7 @@ data class HomeState(
 
     val invoicingEnabled: Boolean = false,
     val invoicingPlanState: InvoicingPlanState? = null,
+    val feeBillingSummary: FeeBillingSummary = FeeBillingSummary(),
     val hasQuotesAccess: Boolean = false,
     val canCreateOrderEntry: Boolean = false,
     val canCreateExpense: Boolean = false,

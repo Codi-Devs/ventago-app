@@ -32,6 +32,7 @@ import androidx.compose.material.icons.filled.CreditCard
 import androidx.compose.material.icons.filled.Description
 import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.Info
+import androidx.compose.material.icons.filled.Payments
 import androidx.compose.material.icons.filled.Share
 import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material.icons.outlined.Description
@@ -41,6 +42,8 @@ import androidx.compose.material.icons.outlined.Person
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -48,7 +51,9 @@ import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.SnackbarResult
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -69,6 +74,7 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -79,8 +85,11 @@ import coil3.compose.AsyncImage
 import coil3.compose.LocalPlatformContext
 import com.teco.ventago.design_system.buttons.ButtonM
 import com.teco.ventago.design_system.buttons.OutlinedButtonM
+import com.teco.ventago.design_system.molecules.DMAlertDialog
 import com.teco.ventago.design_system.molecules.DMDivider
+import com.teco.ventago.design_system.organism.LoadingSheet
 import com.teco.ventago.design_system.organism.PosSuccessScreen
+import com.teco.ventago.design_system.textfields.DMOutlinedTextField
 import com.teco.ventago.design_system.theme.bodyMedium
 import com.teco.ventago.design_system.theme.bodyMediumBold
 import com.teco.ventago.design_system.theme.cardContainerColor
@@ -90,7 +99,10 @@ import com.teco.ventago.design_system.theme.titleMediumBold
 import com.teco.ventago.design_system.theme.vanishedBackgroundColor
 import com.teco.ventago.core.SnackbarService
 import com.teco.ventago.features.business.domain.model.Business
+import com.teco.ventago.features.invoicing.domain.models.InvoiceStatus
 import com.teco.ventago.features.orders.domain.models.Order
+import com.teco.ventago.features.pos.ui.viewmodel.PendingPaymentChangeExitAction
+import com.teco.ventago.features.pos.ui.viewmodel.PendingPaymentIntentMethod
 import com.teco.ventago.features.pos.ui.viewmodel.PaymentFlowMode
 import com.teco.ventago.features.pos.ui.viewmodel.PosState
 import com.teco.ventago.features.pos.ui.viewmodel.PosViewModel
@@ -169,25 +181,62 @@ fun SuccessScreen(
         }
     }
 
+    fun requestExit(action: PendingPaymentChangeExitAction) {
+        val guarded = viewModel.requestPendingPaymentChangeExit(action)
+        if (!guarded) {
+            when (action) {
+                PendingPaymentChangeExitAction.POS_START -> goToStart()
+                PendingPaymentChangeExitAction.HOME -> goToHome()
+            }
+        }
+    }
+
     BackHandler {
-        goToStart()
+        requestExit(PendingPaymentChangeExitAction.POS_START)
     }
 
     if (isTablet()) {
         FriendlySuccessScreen(viewModel, navController, newSale = {
-            goToStart()
+            requestExit(PendingPaymentChangeExitAction.POS_START)
         }, onHome = {
-            goToHome()
+            requestExit(PendingPaymentChangeExitAction.HOME)
         }, navigate)
     } else {
         FriendlySuccessScreen(viewModel, navController, newSale = {
-            goToStart()
+            requestExit(PendingPaymentChangeExitAction.POS_START)
         }, onHome = {
-            goToHome()
+            requestExit(PendingPaymentChangeExitAction.HOME)
         }, navigate = navigate)
+    }
+
+    if (uiState.pendingPaymentChangeCancelDialogVisible) {
+        val errorMessage = uiState.pendingPaymentChangeCancelErrorMessage?.takeIf { it.isNotBlank() }
+        DMAlertDialog(
+            title = "Cancelar orden",
+            message = buildString {
+                append("Si sales sin seleccionar otro método de pago, la orden será cancelada.")
+                if (errorMessage != null) {
+                    append("\n\n")
+                    append(errorMessage)
+                }
+            },
+            show = true,
+            confirmText = "Cancelar orden",
+            dismissText = "Seguir cobrando",
+            onDismiss = viewModel::dismissPendingPaymentChangeCancelDialog,
+            onConfirm = {
+                viewModel.confirmPendingPaymentChangeOrderCancellation { action ->
+                    when (action) {
+                        PendingPaymentChangeExitAction.POS_START -> goToStart()
+                        PendingPaymentChangeExitAction.HOME -> goToHome()
+                    }
+                }
+            },
+        )
     }
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun FriendlySuccessScreen(
     viewModel: PosViewModel,
@@ -210,11 +259,33 @@ private fun FriendlySuccessScreen(
 
     val isPaymentLink = uiState.paymentLink.isNotBlank() ||
             uiState.paymentFlowMode == PaymentFlowMode.PAYMENT_LINK
+    val isCreditNote = uiState.selectedDocType in setOf("04", "06")
+    val completedDocumentTitle = if (isCreditNote) {
+        "¡Nota de crédito completada!"
+    } else {
+        "¡Factura completada!"
+    }
+    val paymentLinkInvoiceIssued = isPaymentLink && uiState.invoiceStatus == InvoiceStatus.ISSUED
+    val paymentLinkInvoiceFailed = isPaymentLink && uiState.invoiceStatus == InvoiceStatus.FAILED
+    val showReleasedPaymentLinkManualPanel = uiState.paymentLinkManualPanelVisible
+    val paymentMethodChangeOpen = uiState.pendingPaymentChangeOpen
+    val paymentLinkAwaitingInvoice = isPaymentLink &&
+        uiState.paymentLinkPaymentDetected &&
+        !paymentLinkInvoiceIssued &&
+        !paymentLinkInvoiceFailed
+    val showPaymentLinkCard = isPaymentLink &&
+        !paymentMethodChangeOpen &&
+        !showReleasedPaymentLinkManualPanel &&
+        !uiState.paymentLinkPaymentDetected &&
+        !paymentLinkInvoiceIssued &&
+        !paymentLinkInvoiceFailed
     val invoiceWarningState = uiState.postCreateInvoiceWarning
     val showInvoiceWarning = !isPaymentLink && invoiceWarningState.isWarning
     val canOpenInvoiceActions = !isPaymentLink &&
         invoiceWarningState.invoiceActionsEnabled &&
         uiState.pdfDocument.isNotBlank()
+    val paymentLinkInvoiceActionsEnabled = paymentLinkInvoiceIssued && uiState.pdfDocument.isNotBlank()
+    val canShareFinalInvoice = canOpenInvoiceActions || paymentLinkInvoiceActionsEnabled
     val successGreen = Color(0xFF087A16)
     val paidGreen = Color(0xFF0A8F22)
     val warningColor = MaterialTheme.colorScheme.error
@@ -223,12 +294,71 @@ private fun FriendlySuccessScreen(
     val snackbarService: SnackbarService = koinInject()
     val coroutineScope = rememberCoroutineScope()
     val scrollState = rememberScrollState()
+    val loadingSheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+
+    DisposableEffect(isPaymentLink, uiState.createdOrderId, uiState.paymentLink) {
+        if (isPaymentLink) {
+            viewModel.startPaymentLinkStatusPolling()
+        }
+        onDispose {
+            if (isPaymentLink) {
+                viewModel.stopPaymentLinkStatusPolling()
+            }
+        }
+    }
 
     Box(
         modifier = modifier
             .fillMaxSize()
             .background(vanishedBackgroundColor())
     ) {
+        if (paymentMethodChangeOpen) {
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(horizontal = 16.dp)
+                    .padding(top = 72.dp, bottom = 8.dp),
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.Top
+            ) {
+                SuccessHero(
+                    title = "Selecciona el cobro",
+                    subtitle = "Elige cómo completar esta orden.",
+                    color = successGreen,
+                    icon = Icons.Filled.Check,
+                    circleColor = Color(0xFFD7F2D1)
+                )
+
+                Spacer(modifier = Modifier.height(16.dp))
+
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .weight(1f)
+                ) {
+                    PaymentScreenContent(
+                        viewModel = viewModel,
+                        navigate = navigate,
+                        replacementConfig = PendingPaymentReplacementUiConfig(
+                            sourceMethod = uiState.pendingPaymentChangeSourceMethod
+                                ?: PendingPaymentIntentMethod.PAYMENT_LINK,
+                            onConfirmManual = {
+                                viewModel.confirmPendingPaymentChangeManual()
+                            },
+                            onConfirmPaymentLink = {
+                                viewModel.confirmPendingPaymentChangePaymentLink()
+                            },
+                            onConfirmYappyOnsite = {
+                                viewModel.confirmPendingPaymentChangeYappyOnsite {
+                                    navigate(PosScreens.YappyOnsitePaymentScreen, null)
+                                }
+                            },
+                        ),
+                        showLoadingSheet = false,
+                    )
+                }
+            }
+        } else {
         Column(
             modifier = Modifier
                 .fillMaxSize()
@@ -240,18 +370,26 @@ private fun FriendlySuccessScreen(
         ) {
             SuccessHero(
                 title = when {
+                    showReleasedPaymentLinkManualPanel -> "Registra el pago"
+                    paymentLinkInvoiceIssued -> completedDocumentTitle
+                    paymentLinkAwaitingInvoice -> "¡Pago recibido!"
+                    paymentLinkInvoiceFailed -> "Factura requiere atención"
                     isPaymentLink -> "¡Link generado!"
                     showInvoiceWarning -> "Orden creada con advertencia"
-                    else -> "¡Factura completada!"
+                    else -> completedDocumentTitle
                 },
                 subtitle = when {
+                    showReleasedPaymentLinkManualPanel -> "El link fue cancelado. Completa el cobro manual."
+                    paymentLinkInvoiceIssued -> "Tu pago fue procesado correctamente."
+                    paymentLinkAwaitingInvoice -> "Estamos generando la factura."
+                    paymentLinkInvoiceFailed -> "El pago fue recibido, pero la factura requiere atención."
                     isPaymentLink -> "Tu orden fue procesada correctamente."
                     showInvoiceWarning -> "La orden fue creada, pero la factura requiere atención."
                     else -> "Tu orden fue procesada correctamente."
                 },
-                color = if (showInvoiceWarning) warningColor else successGreen,
-                icon = if (showInvoiceWarning) Icons.Filled.Warning else Icons.Filled.Check,
-                circleColor = if (showInvoiceWarning) warningColor.copy(alpha = 0.14f) else Color(0xFFD7F2D1)
+                color = if (showInvoiceWarning || paymentLinkInvoiceFailed) warningColor else successGreen,
+                icon = if (showInvoiceWarning || paymentLinkInvoiceFailed) Icons.Filled.Warning else Icons.Filled.Check,
+                circleColor = if (showInvoiceWarning || paymentLinkInvoiceFailed) warningColor.copy(alpha = 0.14f) else Color(0xFFD7F2D1)
             )
 
             Spacer(modifier = Modifier.height(28.dp))
@@ -259,11 +397,11 @@ private fun FriendlySuccessScreen(
             OrderSummaryCard(
                 uiState = uiState,
                 amount = amount,
-                paymentSummary = if (isPaymentLink) null else SuccessPaymentSummary(
-                    method = resolvePaymentMethodLabel(viewModel, uiState),
+                paymentSummary = if (!isPaymentLink || paymentLinkInvoiceIssued) SuccessPaymentSummary(
+                    method = if (isPaymentLink) "Link de pago" else resolvePaymentMethodLabel(viewModel, uiState),
                     amount = amount,
                     paidColor = paidGreen
-                ),
+                ) else null,
                 onOpenOrder = {
                     if (uiState.orderNumber.isNotBlank()) {
                         navController.navigate(OrdersScreenRoute(orderNumber = uiState.orderNumber))
@@ -280,7 +418,13 @@ private fun FriendlySuccessScreen(
                 Spacer(modifier = Modifier.height(16.dp))
             }
 
-            if (isPaymentLink) {
+            if (paymentLinkAwaitingInvoice) {
+                PaymentLinkInvoiceProcessingCard()
+            } else if (paymentLinkInvoiceFailed) {
+                InvoiceWarningCard(
+                    message = "El pago fue recibido, pero la factura no pudo generarse automáticamente. Revisa la orden para reintentar la facturación."
+                )
+            } else if (showPaymentLinkCard) {
                 PaymentLinkCard(
                     link = uiState.paymentLink,
                     onCopy = {
@@ -298,9 +442,35 @@ private fun FriendlySuccessScreen(
                         }
                     }
                 )
-            } else if (canOpenInvoiceActions) {
+                Spacer(modifier = Modifier.height(16.dp))
+                PaymentMethodChangeEntryCard(
+                    onClick = {
+                        viewModel.confirmOpenPaymentLinkPaymentMethodChange()
+                    }
+                )
+            } else if (showReleasedPaymentLinkManualPanel) {
+                ReleasedPaymentLinkManualPanel(
+                    uiState = uiState,
+                    amount = amount,
+                    totalToChargeCents = viewModel.amountToCharge(),
+                    methodOptions = viewModel.manualMethodOptions(),
+                    onToggleMethod = { code, enabled ->
+                        viewModel.toggleManualMethod(code, enabled)
+                        if (enabled) {
+                            val current = viewModel.uiState.value
+                            val remainingForPrefill = (
+                                viewModel.amountToCharge() -
+                                    current.charged.filterKeys { it != code }.values.sum()
+                                ).coerceAtLeast(0L)
+                            viewModel.setManualAmount(code, remainingForPrefill)
+                        }
+                    },
+                    onOtherDescription = viewModel::setOtherDescription,
+                    onConfirm = viewModel::submitPaymentLinkManualPayments,
+                )
+            } else if (paymentLinkInvoiceIssued || canOpenInvoiceActions) {
                 InvoiceDownloadCard(
-                    enabled = true,
+                    enabled = if (isPaymentLink) paymentLinkInvoiceActionsEnabled else true,
                     onClick = { viewModel.openPdfDocument() }
                 )
             }
@@ -320,29 +490,41 @@ private fun FriendlySuccessScreen(
 
             Spacer(modifier = Modifier.height(12.dp))
 
-            OutlinedButtonM(
-                onClick = {
-                    if (isPaymentLink && uiState.paymentLink.isNotBlank()) {
-                        shareLink(uiState.paymentLink)
-                    } else {
-                        viewModel.sharePdfDocument()
-                    }
-                },
-                enabled = if (isPaymentLink) uiState.paymentLink.isNotBlank() else canOpenInvoiceActions,
-                contentColor = secondary,
-                border = BorderStroke(1.dp, secondary),
-                modifier = Modifier.widthIn(max = 520.dp)
+            if (showPaymentLinkCard || canShareFinalInvoice) {
+                OutlinedButtonM(
+                    onClick = {
+                        if (showPaymentLinkCard && uiState.paymentLink.isNotBlank()) {
+                            shareLink(uiState.paymentLink)
+                        } else {
+                            viewModel.sharePdfDocument()
+                        }
+                    },
+                    enabled = if (showPaymentLinkCard) uiState.paymentLink.isNotBlank() else canShareFinalInvoice,
+                    contentColor = secondary,
+                    border = BorderStroke(1.dp, secondary),
+                    modifier = Modifier.widthIn(max = 520.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Filled.Share,
+                        contentDescription = null,
+                        modifier = Modifier.size(20.dp)
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text(
+                        text = if (showPaymentLinkCard) "Compartir link" else "Compartir factura",
+                        style = bodyMediumBold(color = secondary)
+                    )
+                }
+            }
+        }
+        }
+
+        if (uiState.loadingBottomSheet.isLoading()) {
+            LoadingSheet(
+                state = uiState.loadingBottomSheet,
+                sheetState = loadingSheetState
             ) {
-                Icon(
-                    imageVector = Icons.Filled.Share,
-                    contentDescription = null,
-                    modifier = Modifier.size(20.dp)
-                )
-                Spacer(modifier = Modifier.width(8.dp))
-                Text(
-                    text = if (isPaymentLink) "Compartir link" else "Compartir factura",
-                    style = bodyMediumBold(color = secondary)
-                )
+                viewModel.hideLoading()
             }
         }
 
@@ -426,6 +608,48 @@ private fun InvoiceWarningCard(
                     style = bodyMedium(color = MaterialTheme.colorScheme.onSurfaceVariant)
                 )
             }
+        }
+    }
+}
+
+@Composable
+private fun PaymentLinkInvoiceProcessingCard() {
+    SuccessCard {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Box(
+                modifier = Modifier
+                    .size(44.dp)
+                    .clip(CircleShape)
+                    .background(Color(0xFFD7F2D1)),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    imageVector = Icons.Filled.Check,
+                    contentDescription = null,
+                    tint = Color(0xFF087A16),
+                    modifier = Modifier.size(26.dp)
+                )
+            }
+            Spacer(modifier = Modifier.width(14.dp))
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = "Pago recibido",
+                    style = bodyMediumBold(color = Color(0xFF087A16))
+                )
+                Spacer(modifier = Modifier.height(4.dp))
+                Text(
+                    text = "Generando factura...",
+                    style = bodyMedium(color = MaterialTheme.colorScheme.onSurfaceVariant)
+                )
+            }
+            CircularProgressIndicator(
+                modifier = Modifier.size(24.dp),
+                strokeWidth = 2.5.dp,
+                color = MaterialTheme.colorScheme.secondary
+            )
         }
     }
 }
@@ -638,6 +862,195 @@ private fun PaymentLinkCard(
                 }
             }
         }
+    }
+}
+
+@Composable
+private fun PaymentMethodChangeEntryCard(
+    onClick: () -> Unit,
+) {
+    SuccessCard {
+        Text(text = "Cambiar método de pago", style = bodyMediumBold())
+        Spacer(modifier = Modifier.height(6.dp))
+        Text(
+            text = "Puedes seleccionar otro método para completar esta orden.",
+            style = bodyMedium(color = MaterialTheme.colorScheme.onSurfaceVariant)
+        )
+        Spacer(modifier = Modifier.height(16.dp))
+        CompactOutlinedAction(
+            label = "Seleccionar otro método de pago",
+            icon = Icons.Filled.Payments,
+            color = MaterialTheme.colorScheme.secondary,
+            onClick = onClick
+        )
+    }
+}
+
+@Composable
+private fun PaymentLinkSwitchActionsCard(
+    showYappyOnsite: Boolean,
+    onManual: () -> Unit,
+    onYappyOnsite: () -> Unit
+) {
+    SuccessCard {
+        Text(text = "Cambiar método de pago", style = bodyMediumBold())
+        Spacer(modifier = Modifier.height(6.dp))
+        Text(
+            text = "Cancela el link pendiente antes de cobrar con otro método.",
+            style = bodyMedium(color = MaterialTheme.colorScheme.onSurfaceVariant)
+        )
+        Spacer(modifier = Modifier.height(16.dp))
+        CompactOutlinedAction(
+            label = "Cobro manual",
+            icon = Icons.Filled.Payments,
+            color = MaterialTheme.colorScheme.secondary,
+            onClick = onManual
+        )
+        if (showYappyOnsite) {
+            Spacer(modifier = Modifier.height(10.dp))
+            CompactOutlinedAction(
+                label = "Yappy en caja",
+                icon = Icons.Filled.CreditCard,
+                color = Color(0xFF0A8F22),
+                onClick = onYappyOnsite
+            )
+        }
+    }
+}
+
+@Composable
+private fun ReleasedPaymentLinkManualPanel(
+    uiState: PosState,
+    amount: String,
+    totalToChargeCents: Long,
+    methodOptions: List<Pair<Int, String>>,
+    onToggleMethod: (Int, Boolean) -> Unit,
+    onOtherDescription: (String) -> Unit,
+    onConfirm: () -> Unit,
+) {
+    val selected = uiState.charged.filterValues { it > 0L }
+    val paidCents = selected.values.sum()
+    val remainingCents = (totalToChargeCents - paidCents).coerceAtLeast(0L)
+    val requiresOther = uiState.charged.containsKey(99)
+    val canConfirm = totalToChargeCents > 0L &&
+        paidCents >= totalToChargeCents &&
+        (!requiresOther || uiState.otherPaymentDescription.trim().length >= 15)
+
+    SuccessCard {
+        Text(text = "Cobro manual", style = bodyMediumBold())
+        Spacer(modifier = Modifier.height(6.dp))
+        Text(
+            text = "Total a cobrar: $amount",
+            style = bodyMedium(color = MaterialTheme.colorScheme.onSurfaceVariant)
+        )
+        Spacer(modifier = Modifier.height(16.dp))
+
+        methodOptions.forEach { (code, label) ->
+            val isSelected = uiState.charged.containsKey(code)
+            ManualPaymentMethodRow(
+                label = label,
+                amount = uiState.charged[code]?.takeIf { it > 0L }?.let {
+                    formatNumberToMoney(it.toDecimalString())
+                },
+                selected = isSelected,
+                onClick = { onToggleMethod(code, !isSelected) }
+            )
+            Spacer(modifier = Modifier.height(8.dp))
+        }
+
+        if (requiresOther) {
+            Spacer(modifier = Modifier.height(4.dp))
+            DMOutlinedTextField(
+                text = uiState.otherPaymentDescription,
+                label = "Descripción de otro pago",
+                modifier = Modifier.fillMaxWidth(),
+                onChange = onOtherDescription,
+                maxLines = 2,
+                keyboardType = KeyboardType.Text,
+                supportingText = "Mínimo 15 caracteres",
+                isError = uiState.otherPaymentDescription.trim().length in 1..14
+            )
+            Spacer(modifier = Modifier.height(10.dp))
+        }
+
+        HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+        Spacer(modifier = Modifier.height(12.dp))
+        DetailAmountRow("Registrado", formatNumberToMoney(paidCents.toDecimalString()))
+        DetailAmountRow("Pendiente", formatNumberToMoney(remainingCents.toDecimalString()))
+
+        uiState.paymentLinkManualErrorMessage?.takeIf { it.isNotBlank() }?.let {
+            Spacer(modifier = Modifier.height(10.dp))
+            Text(
+                text = it,
+                style = labelSmall(color = MaterialTheme.colorScheme.error)
+            )
+        }
+
+        Spacer(modifier = Modifier.height(16.dp))
+        ButtonM(
+            onClick = onConfirm,
+            enabled = canConfirm,
+            containerColor = MaterialTheme.colorScheme.secondary
+        ) {
+            Text(
+                text = "Registrar pago",
+                style = bodyMediumBold(color = MaterialTheme.colorScheme.onSecondary)
+            )
+        }
+    }
+}
+
+@Composable
+private fun ManualPaymentMethodRow(
+    label: String,
+    amount: String?,
+    selected: Boolean,
+    onClick: () -> Unit,
+) {
+    val color = if (selected) MaterialTheme.colorScheme.secondary else MaterialTheme.colorScheme.outline
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(48.dp)
+            .clip(RoundedCornerShape(8.dp))
+            .border(1.dp, color, RoundedCornerShape(8.dp))
+            .clickable(onClick = onClick)
+            .padding(horizontal = 12.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Icon(
+            imageVector = if (selected) Icons.Filled.Check else Icons.Filled.Payments,
+            contentDescription = null,
+            tint = color,
+            modifier = Modifier.size(20.dp)
+        )
+        Spacer(modifier = Modifier.width(10.dp))
+        Text(
+            text = label,
+            style = labelSmall(color = if (selected) MaterialTheme.colorScheme.secondary else MaterialTheme.colorScheme.onSurface),
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.weight(1f)
+        )
+        amount?.let {
+            Text(
+                text = it,
+                style = labelSmall(color = MaterialTheme.colorScheme.secondary),
+                textAlign = TextAlign.End
+            )
+        }
+    }
+}
+
+@Composable
+private fun DetailAmountRow(label: String, value: String) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Text(text = label, style = labelSmall(color = MaterialTheme.colorScheme.onSurfaceVariant))
+        Text(text = value, style = bodyMediumBold())
     }
 }
 

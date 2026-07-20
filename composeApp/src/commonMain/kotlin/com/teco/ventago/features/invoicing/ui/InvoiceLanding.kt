@@ -36,12 +36,15 @@ import com.teco.ventago.design_system.buttons.TextButtonS
 import com.teco.ventago.design_system.theme.bodyMedium
 import com.teco.ventago.design_system.theme.headlineSmall
 import com.teco.ventago.design_system.theme.labelLarge
+import com.teco.ventago.isIOS
 import com.teco.ventago.utils.openCustomTab
 import com.teco.ventago.utils.openWhatsappMessage
 
 
 @Composable
 fun InvoicingLandingScreen() {
+    val isIosDevice = isIOS()
+
     Column(
         modifier = Modifier
             .fillMaxSize(),
@@ -101,32 +104,35 @@ fun InvoicingLandingScreen() {
 
                 // Checklist items (short like the sample)
                 Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                    CheckItem("Desde $17.99 anual")
+                    if (!isIosDevice) {
+                        CheckItem("Desde $17.99 anual")
+                    }
                     CheckItem("Firma electrónica")
                     CheckItem("Soporte especializado")
                     CheckItem("Integrado en Ventago")
                     CheckItem("Cumple con la DGI")
                 }
 
-                // CTA row (price note + WhatsApp button style)
-                Spacer(modifier = Modifier.height(6.dp))
-                ButtonM(
-                    onClick = {
-                        openWhatsappMessage("50763879477", "Hola, quiero más información sobre la Facturación Electrónica.")
-                    }
-                ) {
-                    Text(
-                        text = "Contáctanos por WhatsApp",
-                        style = labelLarge().copy(color = MaterialTheme.colorScheme.onPrimary)
-                    )
-                }
-                Row(modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.Center) {
-                    TextButtonS(
-                        label = "Más información sobre Facturación Electrónica",
+                if (!isIosDevice) {
+                    // CTA row (price note + WhatsApp button style)
+                    Spacer(modifier = Modifier.height(6.dp))
+                    ButtonM(
+                        onClick = {
+                            openWhatsappMessage("50763879477", "Hola, quiero más información sobre la Facturación Electrónica.")
+                        }
                     ) {
-                        openCustomTab("https://tecodigi.com/facturacion-electronica-en-panama-firma-digital/")
-
+                        Text(
+                            text = "Contáctanos por WhatsApp",
+                            style = labelLarge().copy(color = MaterialTheme.colorScheme.onPrimary)
+                        )
+                    }
+                    Row(modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.Center) {
+                        TextButtonS(
+                            label = "Más información sobre Facturación Electrónica",
+                        ) {
+                            openCustomTab("https://tecodigi.com/facturacion-electronica-en-panama-firma-digital/")
+                        }
                     }
                 }
 

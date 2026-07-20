@@ -140,7 +140,8 @@ class HomeViewModel(
                     updateState {
                         copy(
                             invoicingEnabled = it.invoicingActive,
-                            invoicingPlanState = invoicingPlanState
+                            invoicingPlanState = invoicingPlanState,
+                            feeBillingSummary = it.paymentSummary.feeBilling
                         )
                     }
                 }

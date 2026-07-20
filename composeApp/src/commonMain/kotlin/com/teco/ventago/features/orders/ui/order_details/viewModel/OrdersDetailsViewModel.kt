@@ -31,12 +31,15 @@ import com.teco.ventago.features.orders.domain.models.PaymentStatus
 import com.teco.ventago.features.orders.domain.models.ReceivableTermDto
 import com.teco.ventago.features.orders.domain.models.OrderStatus
 import com.teco.ventago.features.orders.domain.models.requests.RetryInvoiceResponse
+import com.teco.ventago.features.payments.domain.PaymentService
 import com.teco.ventago.features.printers.domain.PrinterService
 import com.teco.ventago.utils.doubleTryParse
+import com.teco.ventago.utils.toDecimalString
 import com.teco.ventago.utils.toLongCents
 import com.teco.ventago.viewModels
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.IO
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.flow.launchIn
@@ -69,6 +72,7 @@ import kotlin.io.encoding.ExperimentalEncodingApi
 
 class OrdersDetailsViewModel(
     private val orderService: OrderService,
+    private val paymentService: PaymentService,
     private val businessService: BusinessService,
     private val financialProfileService: FinancialProfileService,
     private val authService: IAuthService,
@@ -82,6 +86,8 @@ class OrdersDetailsViewModel(
     var business: Business? = null
     private val achDetailsInFlight = mutableSetOf<String>()
     private val achProofBinaryCache = mutableMapOf<String, AchProofBinary>()
+    private val hydratedOrderDetails = mutableSetOf<Int>()
+    private var replacementYappyPollingJob: Job? = null
 
     private data class AchProofBinary(
         val bytes: ByteArray,
@@ -163,6 +169,25 @@ class OrdersDetailsViewModel(
     fun showShareSheet(show: Boolean) {
         updateState {
             copy(showShareSheet = show)
+        }
+    }
+
+    fun hydrateSelectedOrderDetailsIfNeeded() {
+        val selectedOrder = uiState.value.order ?: return
+        if (selectedOrder.relatedDocuments.isNotEmpty()) return
+        if (!hydratedOrderDetails.add(selectedOrder.id)) return
+
+        viewModelScope.launch {
+            withContext(Dispatchers.IO) {
+                runCatching {
+                    orderService.refreshOrder(
+                        businessId = selectedOrder.businessId,
+                        orderId = selectedOrder.id
+                    )
+                }.onFailure {
+                    hydratedOrderDetails.remove(selectedOrder.id)
+                }
+            }
         }
     }
 
@@ -300,6 +325,7 @@ class OrdersDetailsViewModel(
     fun generatePaymentLink() {
         if (!uiState.value.canCreatePaymentLink) return
         val order = uiState.value.order ?: return
+        if (!order.supportsReceivableActions()) return
         val businessId = business?.businessId ?: return
         val remainingCents = totalOpenReceivableCents(order)
         val state = uiState.value.generatePaymentLinkState
@@ -384,6 +410,225 @@ class OrdersDetailsViewModel(
                 showError()
             }
         }
+    }
+
+    fun createReplacementPaymentLink() {
+        if (!uiState.value.canCreatePaymentLink) return
+        val order = uiState.value.order ?: return
+        if (!order.supportsReceivableActions()) return
+        val businessId = business?.businessId ?: return
+        val amount = totalOpenReceivableCents(order).takeIf { it > 0L }?.toDecimalString() ?: return
+
+        showLoading()
+        viewModelScope.launch {
+            runCatching {
+                withContext(Dispatchers.IO) {
+                    releaseOpenIntentForReplacement(
+                        businessId = businessId,
+                        order = order,
+                        reason = "customer_selected_payment_link",
+                        expectedNextAction = "payment_link_allowed",
+                    )
+                    orderService.createReplacementPaymentLink(
+                        businessId = businessId,
+                        orderId = order.id,
+                        amount = amount,
+                    )
+                }
+            }.onSuccess { replacement ->
+                runCatching {
+                    orderService.refreshOrder(businessId = businessId, orderId = order.id)
+                }.onSuccess { fresh ->
+                    updateState {
+                        copy(
+                            order = fresh,
+                            paymentLink = replacement.resolvedPaymentLinkUrl(),
+                            showPaymentLinkSheet = true,
+                        )
+                    }
+                    showSuccess()
+                }.onFailure {
+                    showError()
+                }
+            }.onFailure { error ->
+                updateState {
+                    copy(
+                        generatePaymentLinkState = generatePaymentLinkState.copy(
+                            errorMessage = mapOrderMutationError(error, "No se pudo crear el nuevo link de pago.")
+                        )
+                    )
+                }
+                showError()
+            }
+        }
+    }
+
+    fun createReplacementYappyOnsite() {
+        if (!uiState.value.canCreatePaymentLink) return
+        val order = uiState.value.order ?: return
+        if (!order.supportsReceivableActions()) return
+        val businessId = business?.businessId ?: return
+        val amount = totalOpenReceivableCents(order).takeIf { it > 0L }?.toDecimalString() ?: return
+
+        showLoading()
+        viewModelScope.launch {
+            runCatching {
+                withContext(Dispatchers.IO) {
+                    releaseOpenIntentForReplacement(
+                        businessId = businessId,
+                        order = order,
+                        reason = "customer_selected_yappy_onsite",
+                        expectedNextAction = "yappy_onsite_allowed",
+                    )
+                    orderService.createReplacementYappyOnsite(
+                        businessId = businessId,
+                        orderId = order.id,
+                        amount = amount,
+                    )
+                }
+            }.onSuccess { replacement ->
+                runCatching {
+                    orderService.refreshOrder(businessId = businessId, orderId = order.id)
+                }.onSuccess { fresh ->
+                    val onsite = replacement.onsitePayment
+                    updateState {
+                        copy(
+                            order = fresh,
+                            replacementYappyOnsite = onsite,
+                            replacementYappyOnsitePayload = null,
+                            replacementYappyOnsitePolling = false,
+                        )
+                    }
+                    onsite?.transactionId
+                        ?.takeIf { it.isNotBlank() }
+                        ?.let { startReplacementYappyOnsitePolling(it) }
+                    showSuccess()
+                }.onFailure {
+                    showError()
+                }
+            }.onFailure { error ->
+                snackbarService.show(mapOrderMutationError(error, "No se pudo crear el nuevo QR de Yappy."))
+                showError()
+            }
+        }
+    }
+
+    fun dismissReplacementYappyOnsite() {
+        replacementYappyPollingJob?.cancel()
+        replacementYappyPollingJob = null
+        updateState {
+            copy(
+                replacementYappyOnsite = null,
+                replacementYappyOnsitePayload = null,
+                replacementYappyOnsitePolling = false,
+                showReplacementYappyCancelDialog = false,
+            )
+        }
+    }
+
+    fun startReplacementYappyOnsitePolling(transactionId: String? = uiState.value.replacementYappyOnsite?.transactionId) {
+        val normalizedTransactionId = transactionId?.trim().orEmpty()
+        val businessId = business?.businessId ?: return
+        if (normalizedTransactionId.isBlank()) return
+
+        replacementYappyPollingJob?.cancel()
+        replacementYappyPollingJob = viewModelScope.launch {
+            updateState { copy(replacementYappyOnsitePolling = true) }
+            while (true) {
+                val result = withContext(Dispatchers.IO) {
+                    runCatching {
+                        paymentService.getYappyOnsiteTransaction(
+                            businessId = businessId,
+                            transactionId = normalizedTransactionId,
+                        )
+                    }
+                }
+
+                val payload = result.getOrElse { error ->
+                    updateState { copy(replacementYappyOnsitePolling = false) }
+                    snackbarService.show(
+                        error.message?.takeIf { it.isNotBlank() }
+                            ?: "No fue posible consultar el estado del QR de Yappy."
+                    )
+                    return@launch
+                }
+
+                updateState { copy(replacementYappyOnsitePayload = payload) }
+                val status = payload.transaction.status
+                val invoiceStatus = payload.invoice.status.takeIf { it != 0 } ?: payload.order.invoiceStatus
+                if (shouldStopReplacementYappyPolling(status, invoiceStatus)) {
+                    val orderId = payload.order.id ?: uiState.value.order?.id
+                    if (orderId != null) {
+                        withContext(Dispatchers.IO) {
+                            runCatching {
+                                orderService.refreshOrder(businessId = businessId, orderId = orderId)
+                            }
+                        }.onSuccess { fresh ->
+                            updateState { copy(order = fresh) }
+                        }
+                    }
+                    updateState { copy(replacementYappyOnsitePolling = false) }
+                    return@launch
+                }
+
+                delay(REPLACEMENT_YAPPY_ONSITE_POLL_MS)
+            }
+        }
+    }
+
+    fun requestCancelReplacementYappyOnsite() {
+        updateState { copy(showReplacementYappyCancelDialog = true) }
+    }
+
+    fun dismissCancelReplacementYappyOnsiteDialog() {
+        updateState { copy(showReplacementYappyCancelDialog = false) }
+    }
+
+    fun cancelReplacementYappyOnsite() {
+        val businessId = business?.businessId ?: return
+        val transactionId = uiState.value.replacementYappyOnsite?.transactionId?.trim().orEmpty()
+        if (transactionId.isBlank()) return
+
+        updateState { copy(showReplacementYappyCancelDialog = false) }
+        showLoading()
+        viewModelScope.launch {
+            withContext(Dispatchers.IO) {
+                runCatching {
+                    paymentService.cancelYappyOnsiteTransaction(
+                        businessId = businessId,
+                        transactionId = transactionId,
+                        reason = "customer_changed_payment_method",
+                    )
+                }
+            }.onSuccess { cancelled ->
+                replacementYappyPollingJob?.cancel()
+                replacementYappyPollingJob = null
+                updateState {
+                    copy(
+                        replacementYappyOnsitePayload = replacementYappyOnsitePayload?.copy(
+                            transaction = cancelled
+                        ),
+                        replacementYappyOnsitePolling = false,
+                    )
+                }
+                uiState.value.order?.id?.let { orderId ->
+                    withContext(Dispatchers.IO) {
+                        runCatching { orderService.refreshOrder(businessId = businessId, orderId = orderId) }
+                    }.onSuccess { fresh -> updateState { copy(order = fresh) } }
+                }
+                showSuccess()
+            }.onFailure {
+                showError()
+                snackbarService.show("No fue posible cancelar el QR de Yappy.")
+            }
+        }
+    }
+
+    private fun shouldStopReplacementYappyPolling(status: String, invoiceStatus: Int): Boolean {
+        val normalized = status.trim().lowercase()
+        return normalized in setOf("cancelled", "canceled", "expired", "returned") ||
+            invoiceStatus == 2 ||
+            invoiceStatus == 3
     }
 
     fun resetManualPaymentFields() {
@@ -571,6 +816,7 @@ class OrdersDetailsViewModel(
         if (!uiState.value.canCreatePaymentLink) return false
         if (!uiState.value.havePaymentsConfigured) return false
         val safeOrder = order ?: return false
+        if (!safeOrder.supportsReceivableActions()) return false
         if (safeOrder.status == OrderStatus.CANCELLED) return false
         if (safeOrder.paymentStatus == PaymentStatus.PAID.id) return false
         if (totalOpenReceivableCents(safeOrder) <= 0L) return false
@@ -580,12 +826,14 @@ class OrdersDetailsViewModel(
 
     fun canCopyOrSharePaymentLink(order: Order? = uiState.value.order): Boolean {
         val safeOrder = order ?: return false
+        if (!safeOrder.supportsReceivableActions()) return false
         if (safeOrder.paymentStatus == PaymentStatus.PAID.id) return false
         return PaymentLinkResolver.hasOpenLink(safeOrder)
     }
 
     fun canInvoiceDraftOrder(order: Order? = uiState.value.order): Boolean {
         val safeOrder = order ?: return false
+        if (!safeOrder.supportsReceivableActions()) return false
         val invoiceStatus = safeOrder.invoiceStatus ?: InvoiceStatus.NONE.id
         val isNotInvoiced = invoiceStatus == InvoiceStatus.NONE.id ||
                 invoiceStatus == InvoiceStatus.PENDING.id
@@ -1343,6 +1591,7 @@ class OrdersDetailsViewModel(
     fun openRegisterPaymentSheet() {
         if (!uiState.value.canMarkPaid) return
         val order = uiState.value.order ?: return
+        if (!order.supportsReceivableActions()) return
         if (order.status == OrderStatus.CANCELLED || order.invoiceStatus != InvoiceStatus.ISSUED.id) return
         if (totalOpenReceivableCents(order) <= 0L) return
 
@@ -1566,6 +1815,7 @@ class OrdersDetailsViewModel(
     fun submitRegisterPayments() {
         val state = uiState.value
         val order = state.order ?: return
+        if (!order.supportsReceivableActions()) return
         val registerState = state.registerPaymentState
         val totalOpen = totalOpenReceivableCents(order)
         val openByTerm = openReceivableTerms(order).associate { it.id to it.openAmount.toLongCents() }
@@ -1639,6 +1889,7 @@ class OrdersDetailsViewModel(
 
     fun openRescheduleSheet() {
         val order = uiState.value.order ?: return
+        if (!order.supportsReceivableActions()) return
         if (totalOpenReceivableCents(order) <= 0L) return
         analyticsService.logOrderPaymentActionOpened(mode = "reschedule")
         updateState {
@@ -1717,6 +1968,7 @@ class OrdersDetailsViewModel(
 
     fun requestRescheduleConfirmation() {
         val order = uiState.value.order ?: return
+        if (!order.supportsReceivableActions()) return
         val state = uiState.value.rescheduleState
         val validation = OrderCxcValidators.validateReschedule(
             terms = state.terms,
@@ -1736,6 +1988,7 @@ class OrdersDetailsViewModel(
     fun confirmReschedule() {
         val state = uiState.value
         val order = state.order ?: return
+        if (!order.supportsReceivableActions()) return
         val rescheduleState = state.rescheduleState
         val businessId = business?.businessId ?: return
 
@@ -2189,7 +2442,14 @@ class OrdersDetailsViewModel(
         val mp = s.manualPayment
         if (!mp.charged.containsKey(code)) return
 
-        val clamped = amountCents.coerceAtLeast(0L)
+        val nonNegative = amountCents.coerceAtLeast(0L)
+        val currentAmount = mp.charged[code] ?: 0L
+        val otherAllocated = (mp.allocated - currentAmount).coerceAtLeast(0L)
+        val clamped = if (code == ManualPaymentMethodOption.CASH.id) {
+            nonNegative
+        } else {
+            nonNegative.coerceAtMost((mp.totalToChargeCents - otherAllocated).coerceAtLeast(0L))
+        }
         updateState {
             copy(
                 manualPayment = mp.copy(
@@ -2218,7 +2478,7 @@ class OrdersDetailsViewModel(
         if (!mp.isConfirmEnabled) {
             updateState {
                 copy(
-                    manualPayment = mp.copy(errorMessage = "Verifica montos y descripción.")
+                    manualPayment = mp.copy(errorMessage = "Verifica montos y usa una descripción de al menos 15 caracteres si seleccionas Otro.")
                 )
             }
             return
@@ -2247,6 +2507,12 @@ class OrdersDetailsViewModel(
             val issueInvoice = state.invoicingEnabled
 
             val result = runCatching {
+                releaseOpenIntentForReplacement(
+                    businessId = businessId,
+                    order = order,
+                    reason = "customer_selected_cash",
+                    expectedNextAction = "manual_payment_allowed",
+                )
                 orderService.registerManualPayment(
                     businessId = businessId,
                     orderId = order.id,
@@ -2267,6 +2533,39 @@ class OrdersDetailsViewModel(
                 )
                 showError()
             }
+        }
+    }
+
+    private suspend fun releaseOpenIntentForReplacement(
+        businessId: Int,
+        order: Order,
+        reason: String,
+        expectedNextAction: String,
+    ) {
+        val sourceMethod = if (order.paymentFlowType.equals("yappy_onsite", ignoreCase = true) ||
+            order.paymentFlowType.equals("in_place", ignoreCase = true)
+        ) {
+            "yappy_onsite"
+        } else {
+            "payment_link"
+        }
+        val hasOpenExternalIntent = PaymentLinkResolver.hasOpenLink(order) ||
+            (
+                sourceMethod == "yappy_onsite" &&
+                    order.status != OrderStatus.CANCELLED &&
+                    order.paymentStatus != PaymentStatus.PAID.id &&
+                    order.paymentStatus != PaymentStatus.CANCELLED.id
+                )
+        if (!hasOpenExternalIntent) return
+
+        val released = orderService.releasePendingPaymentIntent(
+            businessId = businessId,
+            orderId = order.id,
+            paymentMethod = sourceMethod,
+            reason = reason,
+        )
+        if (!released.released || !released.allowsNextAction(expectedNextAction)) {
+            error("No se pudo liberar el cobro pendiente para cambiar el método de pago.")
         }
     }
 
@@ -2302,6 +2601,7 @@ class OrdersDetailsViewModel(
 
 internal const val RETRY_INVOICE_PENDING_VERIFICATION_MESSAGE: String =
     "La facturación se está verificando. Revisa el estado de la orden en unos minutos."
+private const val REPLACEMENT_YAPPY_ONSITE_POLL_MS: Long = 1_500L
 
 internal sealed interface RetryInvoiceFeedback {
     data object Success : RetryInvoiceFeedback
@@ -2331,7 +2631,8 @@ internal fun shouldShowRetryInvoiceButton(order: Order?): Boolean {
     val isPaid = safeOrder.paymentStatus == PaymentStatus.PAID.id
     val invoiceStatus = safeOrder.invoiceStatus ?: InvoiceStatus.NONE.id
     val isNotYetInvoiced = invoiceStatus == InvoiceStatus.NONE.id ||
-        invoiceStatus == InvoiceStatus.PENDING.id
+        invoiceStatus == InvoiceStatus.PENDING.id ||
+        invoiceStatus == InvoiceStatus.FAILED.id
 
     return isPaid && isNotYetInvoiced
 }

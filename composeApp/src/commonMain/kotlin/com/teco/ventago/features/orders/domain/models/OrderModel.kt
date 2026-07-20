@@ -2,6 +2,7 @@ package com.teco.ventago.features.orders.domain.models
 
 import com.teco.ventago.features.invoicing.domain.models.InvoiceStatus
 import com.teco.ventago.features.invoicing.domain.models.FeCustomerType
+import com.teco.ventago.utils.toLongCents
 import kotlinx.serialization.ExperimentalSerializationApi
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.KSerializer
@@ -53,9 +54,10 @@ data class Order(
     @SerialName("order_histories") val orderHistories: List<OrderHistoryDto> = emptyList(),
     @SerialName("order_payments")  val orderPayments:  List<OrderPaymentDto> = emptyList(),
     @SerialName("receivable_terms") val receivableTerms: List<ReceivableTermDto> = emptyList(),
+    @SerialName("related_documents") val relatedDocuments: List<RelatedDocument> = emptyList(),
 
-    @SerialName("payment_link") val paymentLink: String? = null,
-    @SerialName("payment_links") val paymentLinks: List<OrderPaymentLinkDto> = emptyList(),
+    @JsonNames("paymentLink") @SerialName("payment_link") val paymentLink: String? = null,
+    @JsonNames("paymentLinks") @SerialName("payment_links") val paymentLinks: List<OrderPaymentLinkDto> = emptyList(),
     @SerialName("links") val links: List<OrderPaymentLinkDto> = emptyList(),
     @JsonNames("invoiceWarningCode") @SerialName("invoice_warning_code") val invoiceWarningCode: String? = null,
     @JsonNames("invoiceWarningMessage") @SerialName("invoice_warning_message") val invoiceWarningMessage: String? = null,
@@ -116,7 +118,73 @@ data class Order(
             )
         }
     }
+
+    fun activeCreditNoteTotalCents(): Long {
+        return relatedDocuments
+            .filter { it.isCreditNote() && it.isActiveForCreditLimit() }
+            .sumOf { it.totalAmount.toLongCents() }
+    }
+
+    fun remainingCreditNoteCapacityCents(): Long {
+        return (totalAmount.toLongCents() - activeCreditNoteTotalCents()).coerceAtLeast(0L)
+    }
+
+    fun isCreditNoteDocument(): Boolean {
+        return orderType in CREDIT_NOTE_DOCUMENT_TYPES
+    }
+
+    fun supportsReceivableActions(): Boolean {
+        return !isCreditNoteDocument()
+    }
 }
+
+@Serializable
+data class RelatedDocument(
+    @SerialName("order_id") val orderId: Long,
+    @SerialName("order_number") val orderNumber: String,
+    @SerialName("document_type") val documentType: String,
+    @SerialName("relation_type") val relationType: String,
+    @SerialName("total_amount") val totalAmount: String,
+    @SerialName("invoice_status") val invoiceStatus: Int,
+    @SerialName("external_invoice_number") val externalInvoiceNumber: String? = null,
+    @SerialName("emission_date") val emissionDate: String? = null,
+) {
+    fun isCreditNote(): Boolean {
+        return relationType == RELATED_DOCUMENT_CREDIT_NOTE ||
+            documentType in CREDIT_NOTE_DOCUMENT_TYPES
+    }
+
+    fun isDebitNote(): Boolean {
+        return relationType == RELATED_DOCUMENT_DEBIT_NOTE ||
+            documentType in DEBIT_NOTE_DOCUMENT_TYPES
+    }
+
+    fun isActiveForCreditLimit(): Boolean {
+        return invoiceStatus == InvoiceStatus.PENDING.id ||
+            invoiceStatus == InvoiceStatus.ISSUED.id
+    }
+
+    fun displayType(): String {
+        return when {
+            isCreditNote() -> "Nota de crédito"
+            isDebitNote() -> "Nota de débito"
+            else -> "Documento"
+        }
+    }
+
+    fun displayOrderType(): String {
+        return if (documentType.isBlank()) {
+            displayType()
+        } else {
+            "$documentType - ${displayType()}"
+        }
+    }
+}
+
+private const val RELATED_DOCUMENT_CREDIT_NOTE = "credit_note"
+private const val RELATED_DOCUMENT_DEBIT_NOTE = "debit_note"
+private val CREDIT_NOTE_DOCUMENT_TYPES = setOf("04", "06")
+private val DEBIT_NOTE_DOCUMENT_TYPES = setOf("05", "07")
 
 @Serializable
 data class ReceivableTermDto(
@@ -158,10 +226,11 @@ data class OrderHistoryDto(
 
 @Serializable
 data class OrderPaymentLinkDto(
-    @SerialName("link") val link: String? = null,
+    @JsonNames("payment_link_url") @SerialName("link") val link: String? = null,
     @SerialName("url") val url: String? = null,
     val status: String? = null,
     @SerialName("created_at") val createdAt: String? = null,
+    @SerialName("expires_at") val expiresAt: String? = null,
 )
 
 @Serializable

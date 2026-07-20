@@ -284,8 +284,9 @@ fun App(
                         currentScreen == PosScreens.POSProductScreen ||
                         currentScreen == PosScreens.CartScreen
                     val isQuoteSummaryScreen = currentScreen == PosScreens.QuoteSummaryScreen
+                    val isYappyOnsitePaymentScreen = currentScreen == PosScreens.YappyOnsitePaymentScreen
                     val posBackStackEntry = remember(currentScreen) {
-                        if (isPosTitleScreen || isQuoteSummaryScreen) {
+                        if (isPosTitleScreen || isQuoteSummaryScreen || isYappyOnsitePaymentScreen) {
                             runCatching { navController.getBackStackEntry(PosScreens.POS.name) }.getOrNull()
                         } else {
                             null
@@ -324,7 +325,15 @@ fun App(
                         DMTopAppBar(
                             title = appBarTitle,
                             showBackButton = currentScreen.showBackButton && navController.previousBackStackEntry != null,
-                            navigateBack = { if (navController.previousBackStackEntry != null) navController.navigateUp() },
+                            navigateBack = {
+                                if (navController.previousBackStackEntry != null) {
+                                    val handled = isYappyOnsitePaymentScreen &&
+                                        posViewModel?.requestYappyOnsiteQrExit() == true
+                                    if (!handled) {
+                                        navController.navigateUp()
+                                    }
+                                }
+                            },
                             // make sure your DMTopAppBar uses containerColor = Color.Transparent inside
                             actions = {
                                 // keep your existing actions routing logic
@@ -348,9 +357,12 @@ fun App(
                         )
                     } else {
                         val isPaymentMethodScreen = currentScreen == PosScreens.PaymentsYappyScreen ||
+                            currentScreen == PosScreens.PaymentsYappyOnsiteScreen ||
                             currentScreen == PosScreens.PaymentsTransferenceScreen ||
                             currentScreen == PosScreens.PaymentsPaypalScreen ||
-                            currentScreen == PosScreens.PaymentsPaypalOnboardingScreen
+                            currentScreen == PosScreens.PaymentsPaypalOnboardingScreen ||
+                            currentScreen == PosScreens.PaymentsTiloPayScreen ||
+                            currentScreen == PosScreens.PaymentsFeesScreen
                         val paymentsBackStackEntry = remember(currentScreen) {
                             if (isPaymentMethodScreen) {
                                 runCatching { navController.getBackStackEntry(PosScreens.Payments.name) }.getOrNull()
@@ -369,7 +381,11 @@ fun App(
                                     if (isPaymentMethodScreen) {
                                         paymentMethodsViewModel?.onEnterHomeRoute()
                                     }
-                                    navController.navigateUp()
+                                    val handled = isYappyOnsitePaymentScreen &&
+                                        posViewModel?.requestYappyOnsiteQrExit() == true
+                                    if (!handled) {
+                                        navController.navigateUp()
+                                    }
                                 }
                             },
                             actions = {

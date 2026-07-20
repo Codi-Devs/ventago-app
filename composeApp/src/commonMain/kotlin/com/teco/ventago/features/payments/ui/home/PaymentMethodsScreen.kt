@@ -8,6 +8,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
@@ -27,9 +28,14 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.ArrowForwardIos
 import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.CreditCard
+import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Info
+import androidx.compose.material.icons.filled.Link
 import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.Payment
 import androidx.compose.material.icons.filled.Refresh
@@ -42,6 +48,8 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.ModalBottomSheet
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
 import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
@@ -50,7 +58,9 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -59,15 +69,21 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.graphics.painter.ColorPainter
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.AnnotatedString
+import androidx.compose.ui.text.LinkAnnotation
 import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.TextLinkStyles
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.text.withLink
 import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.platform.LocalFocusManager
 import coil3.compose.AsyncImage
 import coil3.compose.LocalPlatformContext
 import com.teco.ventago.core.SnackbarService
@@ -81,11 +97,15 @@ import com.teco.ventago.design_system.textfields.DMOutlinedTextField
 import com.teco.ventago.design_system.textfields.helpers.DMDropDownField
 import com.teco.ventago.design_system.theme.bodyMedium
 import com.teco.ventago.design_system.theme.bodyMediumBold
+import com.teco.ventago.design_system.theme.bodySmall
 import com.teco.ventago.design_system.theme.cardContainerColor
 import com.teco.ventago.design_system.theme.headlineMediumBold
 import com.teco.ventago.design_system.theme.labelSmall
 import com.teco.ventago.design_system.theme.titleMediumBold
 import com.teco.ventago.design_system.theme.vanishedBackgroundColor
+import com.teco.ventago.features.branches.domain.model.Branch
+import com.teco.ventago.features.payments.domain.models.YappyOnsiteDevice
+import com.teco.ventago.features.payments.domain.models.YappyOnsiteGroup
 import com.teco.ventago.features.payments.ui.home.viewmodel.FeeBatchStatusUi
 import com.teco.ventago.features.payments.ui.home.viewmodel.FeeTransactionStatusUi
 import com.teco.ventago.features.payments.ui.home.viewmodel.PaymentMethodType
@@ -94,6 +114,7 @@ import com.teco.ventago.features.payments.ui.home.viewmodel.PaymentScreenMode
 import com.teco.ventago.features.payments.ui.home.viewmodel.PaymentUiEvent
 import com.teco.ventago.features.payments.ui.home.viewmodel.PaymentUiState
 import com.teco.ventago.features.payments.ui.home.viewmodel.PaymentViewMode
+import com.teco.ventago.features.pos.ui.dismissKeyboardOnOutsideTap
 import com.teco.ventago.utils.DateFormat
 import com.teco.ventago.utils.formatNumberToMoney
 import com.teco.ventago.utils.getImageRequest
@@ -113,8 +134,11 @@ private const val YappyPromoImageUrl = "https://paas.b-cdn.net/assets/yappy-prom
 private const val YappyBusinessGuideUrl = "https://www.bgeneral.com/wp-content/uploads/2021/03/Guia%20de%20Activacion%20de%20Yappy%20Comercial%20.pdf"
 private const val YappyEntrepreneurGuideUrl = "https://www.bgeneral.com/wp-content/uploads/2021/03/Yappy%20emp%20guia%20de%20registro.pdf"
 private const val YappyCredentialsTutorialUrl = "https://www.youtube.com/watch?v=h6Z4_V0QnDY"
+private const val YappyOnsiteTutorialUrl = "https://comercial.yappy.com.pa/auth/login"
+private const val TiloPayAffiliationUrl = "https://web.tilopay.com/start/affiliation-pty"
 private const val AchPromoImageUrl = "https://paas.b-cdn.net/assets/ach-promo.png"
 private const val PaypalPromoImageUrl = "https://paas.b-cdn.net/assets/ppcp-solutions-hero.png"
+private const val PaymentTermsUrl = "https://tecodigi.com/paas-terminos-condiciones/"
 
 private data class AchBankOption(
     val code: String,
@@ -123,6 +147,11 @@ private data class AchBankOption(
 
 private data class AchAccountTypeOption(
     val code: String,
+    val label: String,
+)
+
+private data class FeeFilterOption(
+    val api: String,
     val label: String,
 )
 
@@ -175,6 +204,7 @@ private val AchBankOptions = listOf(
 fun OnboardingPaymentScreen(
     viewModel: PaymentMethodsViewModel,
     onNavigateMethod: (PaymentMethodType) -> Unit,
+    onNavigateFees: () -> Unit = {},
     onNavigateSettingsRoot: () -> Unit,
     onNavigateBusinessAddress: () -> Unit,
     isMethodRoute: Boolean = false,
@@ -183,6 +213,7 @@ fun OnboardingPaymentScreen(
 ) {
     val uiState by viewModel.uiState.collectAsState()
     val loadingSheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+    val yappyOnsiteEditSheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     val snackbarService: SnackbarService = koinInject()
 
     LaunchedEffect(isMethodRoute, methodRoute) {
@@ -200,6 +231,13 @@ fun OnboardingPaymentScreen(
                 is PaymentUiEvent.OpenExternalUrl -> openCustomTab(event.url)
                 is PaymentUiEvent.ShowWarning -> snackbarService.show(event.message)
                 PaymentUiEvent.NavigateToSettingsRoot -> onNavigateSettingsRoot()
+                PaymentUiEvent.NavigateToPaymentMethodsHome -> {
+                    if (isMethodRoute) {
+                        onExitMethodRoute()
+                    } else {
+                        viewModel.onBackToMethods()
+                    }
+                }
             }
         }
     }
@@ -239,12 +277,14 @@ fun OnboardingPaymentScreen(
                         uiState = uiState,
                         viewModel = viewModel,
                         onOpenMethod = onNavigateMethod,
+                        onOpenFees = onNavigateFees,
                     )
                     PaymentScreenMode.MethodDetailOnboarding,
                     PaymentScreenMode.MethodDetailConfigured -> ConfiguredPaymentsSection(
                         uiState = uiState,
                         viewModel = viewModel,
                         onOpenMethod = onNavigateMethod,
+                        onOpenFees = onNavigateFees,
                     )
                 }
             }
@@ -256,6 +296,30 @@ fun OnboardingPaymentScreen(
                 sheetState = loadingSheetState,
             ) {
                 viewModel.hideLoading()
+            }
+        }
+
+        if (uiState.showYappyOnsiteGroupSheet) {
+            ModalBottomSheet(
+                onDismissRequest = viewModel::onCancelYappyOnsiteGroupEdit,
+                sheetState = yappyOnsiteEditSheetState,
+            ) {
+                YappyOnsiteGroupEditSheet(
+                    uiState = uiState,
+                    viewModel = viewModel,
+                )
+            }
+        }
+
+        if (uiState.showYappyOnsiteDeviceSheet) {
+            ModalBottomSheet(
+                onDismissRequest = viewModel::onCancelYappyOnsiteDeviceEdit,
+                sheetState = yappyOnsiteEditSheetState,
+            ) {
+                YappyOnsiteDeviceEditSheet(
+                    uiState = uiState,
+                    viewModel = viewModel,
+                )
             }
         }
     }
@@ -279,7 +343,9 @@ fun OnboardingPaymentScreen(
         val methodName = when (method) {
             PaymentMethodType.Paypal -> "PayPal"
             PaymentMethodType.Yappy -> "Yappy"
+            PaymentMethodType.YappyOnsite -> "Yappy en caja"
             PaymentMethodType.Ach -> "ACH"
+            PaymentMethodType.CardTilopay -> "TiloPay"
         }
         DMAlertDialog(
             title = "Desvincular $methodName",
@@ -302,6 +368,80 @@ fun OnboardingPaymentScreen(
             confirmText = "Desactivar",
             dismissText = "Cancelar"
         )
+    }
+
+    uiState.confirmDeleteYappyOnsiteGroupId?.let { groupId ->
+        DMAlertDialog(
+            title = "Eliminar grupo",
+            message = "Se eliminará el grupo $groupId de Yappy en caja. Revisa que no tengas unidades de cobro activas antes de continuar.",
+            show = true,
+            onDismiss = viewModel::dismissDeleteYappyOnsiteGroupDialog,
+            onConfirm = viewModel::confirmDeleteYappyOnsiteGroup,
+            confirmText = "Eliminar",
+            dismissText = "Cancelar"
+        )
+    }
+
+    uiState.confirmDeleteYappyOnsiteDevice?.let { device ->
+        DMAlertDialog(
+            title = "Eliminar unidad de cobro",
+            message = "Se eliminará ${device.deviceId} del grupo ${device.groupId}.",
+            show = true,
+            onDismiss = viewModel::dismissDeleteYappyOnsiteDeviceDialog,
+            onConfirm = viewModel::confirmDeleteYappyOnsiteDevice,
+            confirmText = "Eliminar",
+            dismissText = "Cancelar"
+        )
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun PaymentFeesScreen(
+    viewModel: PaymentMethodsViewModel,
+) {
+    val uiState by viewModel.uiState.collectAsState()
+    val loadingSheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+    val snackbarService: SnackbarService = koinInject()
+
+    LaunchedEffect(Unit) {
+        viewModel.events.collect { event ->
+            when (event) {
+                is PaymentUiEvent.OpenExternalUrl -> openCustomTab(event.url)
+                is PaymentUiEvent.ShowWarning -> snackbarService.show(event.message)
+                PaymentUiEvent.NavigateToSettingsRoot,
+                PaymentUiEvent.NavigateToPaymentMethodsHome -> Unit
+            }
+        }
+    }
+
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(MaterialTheme.colorScheme.background),
+        contentAlignment = Alignment.TopCenter,
+    ) {
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .widthIn(max = PaymentsMaxWidth)
+                .fillMaxSize()
+        ) {
+            when (uiState.screenMode) {
+                PaymentScreenMode.Loading -> PaymentMethodsShimmerScreen()
+                PaymentScreenMode.BlockedNoPaymentsAccess -> PaymentAccessBlockedScreen()
+                else -> FeesDetailsSection(uiState = uiState, viewModel = viewModel)
+            }
+        }
+
+        if (uiState.loadingBottomSheet.isLoading()) {
+            LoadingSheet(
+                state = uiState.loadingBottomSheet,
+                sheetState = loadingSheetState,
+            ) {
+                viewModel.hideLoading()
+            }
+        }
     }
 }
 
@@ -335,7 +475,7 @@ private fun PaymentAccessBlockedScreen() {
                     color = MaterialTheme.colorScheme.onSurface,
                 )
                 Text(
-                    text = "No tienes permisos o beta habilitada para esta sección.",
+                    text = "No tienes permisos para esta sección.",
                     style = bodyMedium(color = MaterialTheme.colorScheme.onSurfaceVariant),
                     textAlign = TextAlign.Center,
                 )
@@ -388,6 +528,7 @@ private fun GlobalOnboardingSection(
                             )
                             HeroCopyBlock(
                                 modifier = Modifier.weight(0.55f),
+                                canConfigurePayments = uiState.canConfigurePayments,
                                 onStart = onStart,
                                 fullWidthButton = false,
                             )
@@ -395,31 +536,12 @@ private fun GlobalOnboardingSection(
                     } else {
                         HeroCopyBlock(
                             modifier = Modifier.fillMaxWidth(),
+                            canConfigurePayments = uiState.canConfigurePayments,
                             onStart = onStart,
                             fullWidthButton = true,
                         )
                     }
                 }
-            }
-        }
-
-        Card(
-            shape = RoundedCornerShape(18.dp),
-            colors = CardDefaults.cardColors(containerColor = cardContainerColor()),
-            modifier = Modifier.fillMaxWidth(),
-        ) {
-            Column(
-                modifier = Modifier.padding(16.dp),
-                verticalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-                Text(
-                    text = "¿Qué vas a configurar?",
-                    style = bodyMediumBold(),
-                )
-                Text(
-                    text = "Activa Yappy, ACH con comprobante y PayPal, y controla tus comisiones desde un solo lugar.",
-                    style = bodyMedium(color = MaterialTheme.colorScheme.onSurfaceVariant),
-                )
             }
         }
     }
@@ -466,6 +588,7 @@ private fun HeroMediaBlock(modifier: Modifier = Modifier) {
 @Composable
 private fun HeroCopyBlock(
     modifier: Modifier,
+    canConfigurePayments: Boolean,
     onStart: () -> Unit,
     fullWidthButton: Boolean,
 ) {
@@ -479,28 +602,70 @@ private fun HeroCopyBlock(
             fontWeight = FontWeight.SemiBold,
         )
         Text(
-            text = "Recibe pagos como en web",
+            text = "Configura canales de cobro en VentaGo",
             style = headlineMediumBold(color = Color.White),
         )
         Text(
-            text = "Configura métodos de pago y administra comisiones con una experiencia optimizada para móvil.",
+            text = "Prepara tu negocio para cobrar en caja, por QR o con links de pago, y mantener cada venta conectada con su factura electrónica en el mismo sistema.",
             style = bodyMedium(color = Color.White.copy(alpha = 0.92f)),
         )
 
-        BenefitRow("Cobros por enlace, Yappy, ACH y PayPal")
-        BenefitRow("Comisiones y ciclos de cobro en tiempo real")
-        BenefitRow("Facturación automática al recibir pagos")
+        BenefitRow("Cobros en sitio: acepta pagos en caja o punto de venta con QR y confirmación para tu equipo.")
+        BenefitRow("Cobros a distancia: envía links de pago por WhatsApp, correo o redes sociales cuando el cliente no está en el local.")
+        BenefitRow("Estrategia comercial completa: pagos y factura electrónica juntos dan una experiencia más ordenada, confiable y profesional.")
 
-        Spacer(modifier = Modifier.height(8.dp))
-        ButtonM(
-            modifier = if (fullWidthButton) Modifier.fillMaxWidth() else Modifier.widthIn(max = 320.dp),
-            containerColor = Color.White,
-            contentColor = Color(0xFF0A2E66),
-            onClick = onStart,
-        ) {
-            Text(text = "Comenzar configuración", style = bodyMediumBold())
+        Text(
+            text = if (canConfigurePayments) {
+                "Después podrás activar los canales de pago que uses en tu operación diaria."
+            } else {
+                "No tienes permisos para activar canales de pago. Puedes revisar esta sección cuando el negocio ya tenga canales configurados."
+            },
+            style = bodyMediumBold(color = Color.White),
+        )
+
+        if (canConfigurePayments) {
+            Spacer(modifier = Modifier.height(8.dp))
+            ButtonM(
+                modifier = if (fullWidthButton) Modifier.fillMaxWidth() else Modifier.widthIn(max = 320.dp),
+                containerColor = Color.White,
+                contentColor = Color(0xFF0A2E66),
+                onClick = onStart,
+            ) {
+                Text(text = "Comenzar configuración", style = bodyMediumBold())
+            }
+            PaymentTermsText()
         }
     }
+}
+
+@Composable
+private fun PaymentTermsText(
+    textColor: Color = Color.White.copy(alpha = 0.86f),
+    linkColor: Color = Color.White,
+) {
+    Text(
+        text = buildAnnotatedString {
+            append("Al continuar, aceptas los ")
+            withLink(
+                LinkAnnotation.Url(
+                    url = PaymentTermsUrl,
+                    styles = TextLinkStyles(
+                        style = SpanStyle(
+                            color = linkColor,
+                            textDecoration = TextDecoration.Underline,
+                            fontWeight = FontWeight.SemiBold,
+                        )
+                    )
+                )
+            ) {
+                append("términos y condiciones de pagos")
+            }
+            append(" de TecoDigi.")
+        },
+        style = labelSmall(color = textColor),
+        textAlign = TextAlign.Start,
+        modifier = Modifier.widthIn(max = 420.dp),
+    )
 }
 
 @Composable
@@ -535,6 +700,7 @@ private fun ConfiguredPaymentsSection(
     uiState: PaymentUiState,
     viewModel: PaymentMethodsViewModel,
     onOpenMethod: (PaymentMethodType) -> Unit,
+    onOpenFees: () -> Unit,
 ) {
     val scrollState = rememberScrollState()
 
@@ -550,15 +716,125 @@ private fun ConfiguredPaymentsSection(
             style = bodyMedium(color = MaterialTheme.colorScheme.onSurfaceVariant)
         )
 
-        GeneralSummaryCard(uiState = uiState, viewModel = viewModel)
+        GeneralConfigurationCard(uiState = uiState, viewModel = viewModel)
+        FeesNavigationCard(
+            uiState = uiState,
+            viewModel = viewModel,
+            onOpenFees = onOpenFees,
+        )
         ChannelsCard(uiState = uiState, viewModel = viewModel, onOpenMethod = onOpenMethod)
-        CommissionsSection(uiState = uiState, viewModel = viewModel)
+    }
+}
+
+@Composable
+private fun GeneralConfigurationCard(
+    uiState: PaymentUiState,
+    viewModel: PaymentMethodsViewModel,
+) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(20.dp),
+        colors = CardDefaults.cardColors(containerColor = cardContainerColor()),
+        elevation = CardDefaults.cardElevation(2.dp)
+    ) {
+        Column(
+            modifier = Modifier.padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(14.dp)
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Text("Configuración general", style = bodyMediumBold())
+                    Text(
+                        "Emitir factura automáticamente al recibir un pago",
+                        style = bodyMedium(color = MaterialTheme.colorScheme.onSurfaceVariant),
+                    )
+                }
+                if (uiState.canConfigurePayments) {
+                    Switch(
+                        checked = uiState.autoInvoiceEnabled,
+                        onCheckedChange = viewModel::onToggleAutoInvoice,
+                        colors = SwitchDefaults.colors(
+                            checkedThumbColor = MaterialTheme.colorScheme.secondary,
+                            checkedTrackColor = MaterialTheme.colorScheme.secondary.copy(alpha = 0.35f)
+                        )
+                    )
+                } else {
+                    Text(
+                        text = if (uiState.autoInvoiceEnabled) "Activada" else "Desactivada",
+                        style = bodyMediumBold(color = MaterialTheme.colorScheme.onSurfaceVariant),
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun FeesNavigationCard(
+    uiState: PaymentUiState,
+    viewModel: PaymentMethodsViewModel,
+    onOpenFees: () -> Unit,
+) {
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(onClick = onOpenFees),
+        shape = RoundedCornerShape(20.dp),
+        colors = CardDefaults.cardColors(containerColor = cardContainerColor()),
+        elevation = CardDefaults.cardElevation(2.dp),
+    ) {
+        Row(
+            modifier = Modifier.padding(16.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
+            Icon(
+                imageVector = Icons.Filled.Payment,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.size(24.dp),
+            )
+            Column(
+                modifier = Modifier.weight(1f),
+                verticalArrangement = Arrangement.spacedBy(4.dp),
+            ) {
+                Text("Comisiones fees", style = bodyMediumBold())
+                Text(
+                    text = if (viewModel.hasConfiguredFees()) {
+                        "Por pagar: ${formatNumberToMoney(viewModel.formatCents(viewModel.feesHeadlineCents()))}"
+                    } else {
+                        "Consulta transacciones y ciclos de cobro"
+                    },
+                    style = labelSmall(color = MaterialTheme.colorScheme.onSurfaceVariant),
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
+            if (uiState.feeTransactions.loading || uiState.feeBatches.loading) {
+                Box(
+                    modifier = Modifier
+                        .size(10.dp)
+                        .clip(CircleShape)
+                        .background(MaterialTheme.colorScheme.primary)
+                )
+            }
+            Icon(
+                imageVector = Icons.Filled.ArrowForwardIos,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.size(18.dp),
+            )
+        }
     }
 }
 
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
-private fun GeneralSummaryCard(
+private fun FeesSummaryCard(
     uiState: PaymentUiState,
     viewModel: PaymentMethodsViewModel,
 ) {
@@ -574,66 +850,68 @@ private fun GeneralSummaryCard(
         ) {
             Text("Resumen de comisiones", style = bodyMediumBold())
 
-            if (viewModel.hasConfiguredFees()) {
-                val headline = formatNumberToMoney(viewModel.formatCents(viewModel.feesHeadlineCents()))
-                Text(
-                    text = headline,
-                    style = headlineMediumBold(color = MaterialTheme.colorScheme.primary),
-                )
+            val headline = formatNumberToMoney(viewModel.formatCents(viewModel.feesHeadlineCents()))
+            Text(
+                text = headline,
+                style = headlineMediumBold(color = MaterialTheme.colorScheme.primary),
+            )
 
-                BoxWithConstraints(modifier = Modifier.fillMaxWidth()) {
-                    val perRow = when {
-                        maxWidth >= 1000.dp -> 4
-                        maxWidth >= 700.dp -> 2
-                        else -> 1
-                    }
-                    val bucketWidth = when (perRow) {
-                        4 -> 0.24f
-                        2 -> 0.49f
-                        else -> 1f
-                    }
-
-                    FlowRow(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(10.dp),
-                        verticalArrangement = Arrangement.spacedBy(10.dp),
-                        maxItemsInEachRow = perRow,
-                    ) {
-                        FeeBucket("Por pagar", uiState.feeSummary.pendingDueAmount, bucketWidth, viewModel)
-                        FeeBucket("Vencido", uiState.feeSummary.overdueAmount, bucketWidth, viewModel)
-                        FeeBucket("Acumulado del período", uiState.feeSummary.accruedCurrentPeriodAmount, bucketWidth, viewModel)
-                        FeeBucket("Pagado histórico", uiState.feeSummary.paidAmount, bucketWidth, viewModel)
-                    }
+            BoxWithConstraints(modifier = Modifier.fillMaxWidth()) {
+                val perRow = when {
+                    maxWidth >= 1000.dp -> 4
+                    maxWidth >= 700.dp -> 2
+                    else -> 1
+                }
+                val bucketWidth = when (perRow) {
+                    4 -> 0.24f
+                    2 -> 0.49f
+                    else -> 1f
                 }
 
-                Text(
-                    text = "${viewModel.feeDateLabel()}: ${formatApiDate(viewModel.resolveFeeDateValue())}",
-                    style = labelSmall(color = MaterialTheme.colorScheme.onSurfaceVariant)
-                )
-
-                Divider()
+                FlowRow(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(10.dp),
+                    verticalArrangement = Arrangement.spacedBy(10.dp),
+                    maxItemsInEachRow = perRow,
+                ) {
+                    FeeBucket("Por pagar", uiState.feeSummary.pendingDueAmount, bucketWidth, viewModel)
+                    FeeBucket("Vencido", uiState.feeSummary.overdueAmount, bucketWidth, viewModel)
+                    FeeBucket("Acumulado del período", uiState.feeSummary.accruedCurrentPeriodAmount, bucketWidth, viewModel)
+                    FeeBucket("Pagado histórico", uiState.feeSummary.paidAmount, bucketWidth, viewModel)
+                }
             }
 
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Column(modifier = Modifier.weight(1f)) {
-                    Text("Configuración general", style = bodyMediumBold())
-                    Text(
-                        "Emitir factura automáticamente al recibir un pago",
-                        style = bodyMedium(color = MaterialTheme.colorScheme.onSurfaceVariant),
-                    )
+            Text(
+                text = "${viewModel.feeDateLabel()}: ${formatApiDate(viewModel.resolveFeeDateValue())}",
+                style = labelSmall(color = MaterialTheme.colorScheme.onSurfaceVariant)
+            )
+
+            if (uiState.canPayFees) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    OutlinedButtonM(
+                        modifier = Modifier.weight(1f),
+                        onClick = viewModel::refreshCommissions,
+                    ) {
+                        Text("Actualizar")
+                    }
+                    ButtonM(
+                        modifier = Modifier.weight(1f),
+                        onClick = viewModel::onPayCommissions,
+                        enabled = viewModel.feesHeadlineCents() > 0L,
+                    ) {
+                        Text("Pagar comisiones")
+                    }
                 }
-                Switch(
-                    checked = uiState.autoInvoiceEnabled,
-                    onCheckedChange = viewModel::onToggleAutoInvoice,
-                    colors = SwitchDefaults.colors(
-                        checkedThumbColor = MaterialTheme.colorScheme.secondary,
-                        checkedTrackColor = MaterialTheme.colorScheme.secondary.copy(alpha = 0.35f)
-                    )
-                )
+            } else {
+                OutlinedButtonM(
+                    modifier = Modifier.fillMaxWidth(),
+                    onClick = viewModel::refreshCommissions,
+                ) {
+                    Text("Actualizar")
+                }
             }
         }
     }
@@ -679,116 +957,215 @@ private fun ChannelsCard(
     viewModel: PaymentMethodsViewModel,
     onOpenMethod: (PaymentMethodType) -> Unit,
 ) {
-    Card(
+    fun shouldShowMethod(method: PaymentMethodType): Boolean {
+        return viewModel.methodVisible(method) &&
+            (uiState.canConfigurePayments || viewModel.methodConfigured(method))
+    }
+
+    val physicalRows = listOf(PaymentMethodType.YappyOnsite).filter(::shouldShowMethod)
+    val linkRows = listOf(
+        PaymentMethodType.CardTilopay,
+        PaymentMethodType.Yappy,
+        PaymentMethodType.Ach,
+        PaymentMethodType.Paypal,
+    ).filter(::shouldShowMethod)
+
+    Column(
         modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(20.dp),
-        colors = CardDefaults.cardColors(containerColor = cardContainerColor())
+        verticalArrangement = Arrangement.spacedBy(14.dp),
     ) {
-        Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-            Text("Canales disponibles", style = bodyMediumBold())
+        Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+            Text(
+                text = "Canales disponibles",
+                style = titleMediumBold(color = MaterialTheme.colorScheme.onSurface),
+            )
+            Text(
+                text = "Elige el método según el tipo de cobro que quieres ofrecer.",
+                style = bodySmall(color = MaterialTheme.colorScheme.onSurfaceVariant),
+            )
+        }
 
-            val rows = remember(uiState.availablePaymentMethods) {
-                listOf(
-                    PaymentMethodType.Yappy,
-                    PaymentMethodType.Ach,
-                    PaymentMethodType.Paypal,
-                )
-            }.filter { viewModel.methodVisible(it) }
+        if (physicalRows.isNotEmpty()) {
+            ChannelGroupHeader(
+                icon = {
+                    Icon(
+                        imageVector = Icons.Filled.Payment,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.size(15.dp),
+                    )
+                },
+                title = "Cobros físicos",
+                description = "Métodos para ventas presenciales en caja con confirmación automática del pago.",
+            )
+            ChannelGroupCard {
+                physicalRows.forEachIndexed { index, method ->
+                    ChannelRow(
+                        method = method,
+                        configured = viewModel.methodConfigured(method),
+                        enabled = uiState.canConfigurePayments,
+                        onClick = { onOpenMethod(method) },
+                    )
+                    if (index < physicalRows.lastIndex) ChannelDivider()
+                }
+            }
+        }
 
-            rows.forEachIndexed { index, method ->
-                ChannelRow(
-                    method = method,
-                    configured = viewModel.methodConfigured(method),
-                    onClick = { onOpenMethod(method) },
-                    subtitle = when (method) {
-                        PaymentMethodType.Paypal -> uiState.availablePaymentMethods["paypal"]?.label
-                        PaymentMethodType.Ach -> uiState.availablePaymentMethods["ach"]?.label
-                        PaymentMethodType.Yappy -> null
-                    }
-                )
-                if (index < rows.lastIndex) {
-                    Divider()
+        if (linkRows.isNotEmpty()) {
+            ChannelGroupHeader(
+                icon = {
+                    Icon(
+                        imageVector = Icons.Filled.Link,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.size(15.dp),
+                    )
+                },
+                title = "QR y links de pago",
+                description = "Métodos para cobrar desde links enviados por WhatsApp, correo, redes sociales o QR compartidos.",
+            )
+            ChannelGroupCard {
+                linkRows.forEachIndexed { index, method ->
+                    ChannelRow(
+                        method = method,
+                        configured = viewModel.methodConfigured(method),
+                        enabled = uiState.canConfigurePayments,
+                        onClick = { onOpenMethod(method) },
+                    )
+                    if (index < linkRows.lastIndex) ChannelDivider()
                 }
             }
         }
     }
 }
 
-@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun ChannelGroupHeader(
+    icon: @Composable () -> Unit,
+    title: String,
+    description: String,
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(top = 2.dp),
+        verticalAlignment = Alignment.Top,
+        horizontalArrangement = Arrangement.spacedBy(10.dp),
+    ) {
+        Box(
+            modifier = Modifier
+                .size(28.dp)
+                .clip(RoundedCornerShape(8.dp))
+                .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.12f))
+                .border(
+                    width = 1.dp,
+                    color = MaterialTheme.colorScheme.primary.copy(alpha = 0.18f),
+                    shape = RoundedCornerShape(8.dp),
+                ),
+            contentAlignment = Alignment.Center,
+        ) {
+            icon()
+        }
+
+        Column(
+            modifier = Modifier.weight(1f),
+            verticalArrangement = Arrangement.spacedBy(2.dp),
+        ) {
+            Text(
+                text = title,
+                style = bodyMediumBold(color = MaterialTheme.colorScheme.onSurface),
+            )
+            Text(
+                text = description,
+                style = bodySmall(color = MaterialTheme.colorScheme.onSurfaceVariant),
+            )
+        }
+    }
+}
+
+@Composable
+private fun ChannelGroupCard(content: @Composable ColumnScope.() -> Unit) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(14.dp),
+        colors = CardDefaults.cardColors(containerColor = cardContainerColor()),
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.08f)),
+    ) {
+        Column(modifier = Modifier.fillMaxWidth()) {
+            content()
+        }
+    }
+}
+
 @Composable
 private fun ChannelRow(
     method: PaymentMethodType,
     configured: Boolean,
-    subtitle: String?,
+    enabled: Boolean,
     onClick: () -> Unit,
 ) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(14.dp))
-            .background(MaterialTheme.colorScheme.surface)
-            .clickable(onClick = onClick)
-            .padding(12.dp),
-        verticalAlignment = Alignment.Top,
-        horizontalArrangement = Arrangement.spacedBy(12.dp)
+            .then(if (enabled) Modifier.clickable(onClick = onClick) else Modifier)
+            .padding(horizontal = 12.dp, vertical = 14.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
     ) {
         ChannelLogo(method)
 
         Column(
             modifier = Modifier.weight(1f),
-            verticalArrangement = Arrangement.spacedBy(6.dp)
+            verticalArrangement = Arrangement.spacedBy(6.dp),
         ) {
             Text(
-                text = when (method) {
-                    PaymentMethodType.Yappy -> "Yappy"
-                    PaymentMethodType.Ach -> "ACH con comprobante"
-                    PaymentMethodType.Paypal -> "PayPal"
-                },
-                style = bodyMediumBold(),
+                text = channelTitle(method),
+                style = bodyMediumBold(color = MaterialTheme.colorScheme.onSurface),
                 maxLines = 2,
                 overflow = TextOverflow.Ellipsis,
             )
-            subtitle?.takeIf { it.isNotBlank() }?.let {
-                Text(
-                    text = it,
-                    style = labelSmall(color = MaterialTheme.colorScheme.onSurfaceVariant),
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                )
-            }
-
             if (configured) {
-                FlowRow(
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    verticalArrangement = Arrangement.spacedBy(6.dp),
-                ) {
-                    StatusPill(text = "Configurado", positive = true)
-                    FeePill(method = method)
-                }
+                ChannelConfiguredFeeBadge(method = method)
             }
         }
 
-        Box(
-            modifier = Modifier.size(32.dp),
-            contentAlignment = Alignment.Center,
-        ) {
+        if (enabled) {
             Icon(
                 imageVector = Icons.Filled.ArrowForwardIos,
                 contentDescription = null,
-                tint = MaterialTheme.colorScheme.primary,
-                modifier = Modifier.size(16.dp)
+                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.size(16.dp),
             )
         }
     }
+}
+
+@Composable
+private fun ChannelDivider() {
+    Divider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.08f))
+}
+
+private fun channelTitle(method: PaymentMethodType): String = when (method) {
+    PaymentMethodType.Yappy -> "Botón de pago Yappy"
+    PaymentMethodType.YappyOnsite -> "Yappy en caja"
+    PaymentMethodType.Ach -> "ACH con comprobante de pago"
+    PaymentMethodType.Paypal -> "PayPal"
+    PaymentMethodType.CardTilopay -> "Tarjetas de crédito o débito | Tilopay"
 }
 
 @Composable
 private fun ChannelLogo(method: PaymentMethodType) {
     Box(
         modifier = Modifier
-            .size(44.dp)
-            .clip(RoundedCornerShape(12.dp))
-            .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.35f)),
+            .width(86.dp)
+            .height(34.dp)
+            .clip(RoundedCornerShape(8.dp))
+            .background(MaterialTheme.colorScheme.surface)
+            .border(
+                width = 1.dp,
+                color = MaterialTheme.colorScheme.outline.copy(alpha = 0.12f),
+                shape = RoundedCornerShape(8.dp),
+            ),
         contentAlignment = Alignment.Center
     ) {
         when (method) {
@@ -796,19 +1173,62 @@ private fun ChannelLogo(method: PaymentMethodType) {
                 painter = painterResource(Res.drawable.yappy_logo),
                 contentDescription = null,
                 tint = Color.Unspecified,
-                modifier = Modifier.size(24.dp)
+                modifier = Modifier
+                    .width(68.dp)
+                    .height(22.dp)
+            )
+            PaymentMethodType.YappyOnsite -> Icon(
+                painter = painterResource(Res.drawable.yappy_logo),
+                contentDescription = null,
+                tint = Color.Unspecified,
+                modifier = Modifier
+                    .width(68.dp)
+                    .height(22.dp)
             )
             PaymentMethodType.Ach -> Icon(
                 painter = painterResource(Res.drawable.ic_bank),
                 contentDescription = null,
-                tint = MaterialTheme.colorScheme.primary,
+                tint = MaterialTheme.colorScheme.onSurface,
                 modifier = Modifier.size(22.dp)
             )
             PaymentMethodType.Paypal -> Icon(
                 painter = painterResource(Res.drawable.ic_paypal_logo),
                 contentDescription = null,
                 tint = Color.Unspecified,
-                modifier = Modifier.size(26.dp)
+                modifier = Modifier
+                    .width(66.dp)
+                    .height(22.dp)
+            )
+            PaymentMethodType.CardTilopay -> CardBrandLogo()
+        }
+    }
+}
+
+@Composable
+private fun CardBrandLogo() {
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(5.dp),
+    ) {
+        Text(
+            text = "VISA",
+            style = bodyMediumBold(color = Color(0xFF172B85)),
+            maxLines = 1,
+        )
+        Box(modifier = Modifier.width(24.dp).height(16.dp)) {
+            Box(
+                modifier = Modifier
+                    .size(14.dp)
+                    .align(Alignment.CenterStart)
+                    .clip(CircleShape)
+                    .background(Color(0xFFEA001B)),
+            )
+            Box(
+                modifier = Modifier
+                    .size(14.dp)
+                    .align(Alignment.CenterEnd)
+                    .clip(CircleShape)
+                    .background(Color(0xFFFFA200).copy(alpha = 0.92f)),
             )
         }
     }
@@ -829,19 +1249,25 @@ private fun StatusPill(text: String, positive: Boolean) {
 }
 
 @Composable
-private fun FeePill(method: PaymentMethodType) {
+private fun ChannelConfiguredFeeBadge(method: PaymentMethodType) {
     val value = when (method) {
         PaymentMethodType.Yappy -> "1%"
+        PaymentMethodType.YappyOnsite -> "1%"
         PaymentMethodType.Ach -> "$0.27"
         PaymentMethodType.Paypal -> "1%"
+        PaymentMethodType.CardTilopay -> "0.50%"
     }
     Box(
         modifier = Modifier
             .clip(RoundedCornerShape(999.dp))
-            .background(MaterialTheme.colorScheme.secondaryContainer)
-            .padding(horizontal = 9.dp, vertical = 4.dp)
+            .background(MaterialTheme.colorScheme.secondary)
+            .padding(horizontal = 10.dp, vertical = 4.dp)
     ) {
-        Text(text = "Comisión $value", style = labelSmall(color = MaterialTheme.colorScheme.onSecondaryContainer))
+        Text(
+            text = "Configurado: $value",
+            style = labelSmall(color = MaterialTheme.colorScheme.onSecondary),
+            fontWeight = FontWeight.SemiBold,
+        )
     }
 }
 
@@ -893,18 +1319,45 @@ private fun CommissionsSection(
 }
 
 @Composable
+private fun FeesDetailsSection(
+    uiState: PaymentUiState,
+    viewModel: PaymentMethodsViewModel,
+) {
+    val scrollState = rememberScrollState()
+
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .verticalScroll(scrollState)
+            .padding(16.dp),
+        verticalArrangement = Arrangement.spacedBy(16.dp)
+    ) {
+        Text(
+            text = "Consulta el resumen, las transacciones y los ciclos de cobro de tus comisiones.",
+            style = bodyMedium(color = MaterialTheme.colorScheme.onSurfaceVariant)
+        )
+        if (viewModel.hasConfiguredFees()) {
+            FeesSummaryCard(uiState = uiState, viewModel = viewModel)
+        }
+        CommissionsSection(uiState = uiState, viewModel = viewModel)
+    }
+}
+
+@Composable
 private fun TabPill(selected: Boolean, label: String, onClick: () -> Unit) {
     val background = if (selected) MaterialTheme.colorScheme.secondary else Color.Transparent
     val textColor = if (selected) MaterialTheme.colorScheme.onSecondary else MaterialTheme.colorScheme.secondary
 
-    TextButtonS(
+    Text(
+        text = label,
         modifier = Modifier
             .clip(RoundedCornerShape(999.dp))
             .background(background)
-            .padding(horizontal = 4.dp, vertical = 2.dp),
-        label = label,
-        color = textColor,
-        onClick = onClick,
+            .clickable(onClick = onClick)
+            .padding(horizontal = 18.dp, vertical = 10.dp),
+        style = bodyMedium(color = textColor),
+        maxLines = 1,
+        overflow = TextOverflow.Ellipsis,
     )
 }
 
@@ -913,8 +1366,17 @@ private fun TransactionsTab(
     uiState: PaymentUiState,
     viewModel: PaymentMethodsViewModel,
 ) {
-    val statusItems = FeeTransactionStatusUi.entries
-    val methodItems = listOf("Todos", "ACH", "PAYPAL", "YAPPY")
+    val statusItems = listOf(
+        FeeFilterOption("", "Todos"),
+        FeeFilterOption("unpaid", "Pendiente"),
+        FeeFilterOption("paid", "Pagado"),
+    )
+    val methodItems = listOf(
+        FeeFilterOption("", "Todos"),
+        FeeFilterOption("YAPPY", "Yappy"),
+        FeeFilterOption("ACH", "ACH"),
+        FeeFilterOption("TILOPAY_CARD", "Tarjeta"),
+    )
 
     DMDropDownField(
         label = "Estado",
@@ -928,15 +1390,35 @@ private fun TransactionsTab(
     DMDropDownField(
         label = "Método",
         items = methodItems,
-        selectedIndex = methodItems.indexOfFirst {
-            val selected = uiState.filters.transactionsMethod ?: "Todos"
-            it == selected
-        }.takeIf { it >= 0 } ?: 0,
+        selectedIndex = methodItems.indexOfFirst { it.api == uiState.filters.transactionsMethod.orEmpty() }
+            .takeIf { it >= 0 } ?: 0,
         onItemSelected = { _, item ->
-            viewModel.onTransactionsMethodFilterChange(item.takeIf { it != "Todos" })
+            viewModel.onTransactionsMethodFilterChange(item.api.takeIf { it.isNotBlank() })
         },
-        selectedItemToString = { it },
+        selectedItemToString = { it.label },
     )
+
+    uiState.filters.selectedBatchId?.let { batchId ->
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .clip(RoundedCornerShape(12.dp))
+                .background(MaterialTheme.colorScheme.secondaryContainer)
+                .padding(12.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween,
+        ) {
+            Text(
+                text = "Ciclo #$batchId",
+                style = bodyMediumBold(color = MaterialTheme.colorScheme.onSecondaryContainer),
+            )
+            TextButtonS(
+                label = "Ver todo de nuevo",
+                onClick = viewModel::onClearFeeBatchFilter,
+                color = MaterialTheme.colorScheme.onSecondaryContainer,
+            )
+        }
+    }
 
     if (uiState.feeTransactions.loading && uiState.feeTransactions.items.isEmpty()) {
         InlineShimmerList()
@@ -963,7 +1445,7 @@ private fun TransactionsTab(
                             )
                         }
                         Text(
-                            text = "Método: ${item.paymentMethod.ifBlank { "-" }}",
+                            text = "Método: ${feePaymentMethodLabel(item.paymentMethod)}",
                             style = labelSmall(color = MaterialTheme.colorScheme.onSurfaceVariant),
                         )
                         Text(
@@ -995,7 +1477,12 @@ private fun BatchesTab(
     uiState: PaymentUiState,
     viewModel: PaymentMethodsViewModel,
 ) {
-    val statusItems = FeeBatchStatusUi.entries
+    val statusItems = listOf(
+        FeeFilterOption("", "Todos"),
+        FeeFilterOption("issued", "Emitido"),
+        FeeFilterOption("pending_due", "Por pagar"),
+        FeeFilterOption("paid", "Pagado"),
+    )
 
     DMDropDownField(
         label = "Estado",
@@ -1024,24 +1511,25 @@ private fun BatchesTab(
                             horizontalArrangement = Arrangement.SpaceBetween,
                             verticalAlignment = Alignment.CenterVertically,
                         ) {
-                            Text("${item.periodStart} - ${item.periodEnd}", style = bodyMediumBold())
+                            Text(formatBatchPeriodLabel(item.periodStart, item.periodEnd), style = bodyMediumBold())
                             StatusPill(
                                 text = FeeBatchStatusUi.fromApi(item.status).label,
                                 positive = item.status.equals("paid", ignoreCase = true),
                             )
                         }
                         Text(
-                            text = "Líneas: ${item.totalLines}",
-                            style = labelSmall(color = MaterialTheme.colorScheme.onSurfaceVariant)
-                        )
-                        Text(
-                            text = "Total: ${formatNumberToMoney(viewModel.formatCents(item.totalFeeTotal))}",
+                            text = "Total fees: ${formatNumberToMoney(viewModel.formatCents(item.totalFeeTotal))}",
                             style = bodyMediumBold(color = MaterialTheme.colorScheme.primary),
                         )
                         Text(
                             text = "Vence: ${formatApiDate(item.dueAt)}",
                             style = labelSmall(color = MaterialTheme.colorScheme.onSurfaceVariant),
                         )
+                        item.id?.let { batchId ->
+                            OutlinedButtonM(onClick = { viewModel.onFeeBatchSelected(batchId) }) {
+                                Text("Ver detalles")
+                            }
+                        }
                     }
                 }
             }
@@ -1067,25 +1555,44 @@ private fun MethodDetailSection(
 ) {
     val activeMethod = uiState.activeMethod ?: return
     val isYappyOnboarding = isOnboardingFlow && activeMethod == PaymentMethodType.Yappy
+    val isYappyOnsiteOnboarding = isOnboardingFlow && activeMethod == PaymentMethodType.YappyOnsite
     val isAchOnboarding = isOnboardingFlow && activeMethod == PaymentMethodType.Ach
     val isPaypalOnboarding = isOnboardingFlow && activeMethod == PaymentMethodType.Paypal
+    val isTiloPayOnboarding = isOnboardingFlow && activeMethod == PaymentMethodType.CardTilopay
     val yappyGuideStep = uiState.activeStep in 1..4
-    val achGuideStep = uiState.activeStep in 1..3
+    val yappyOnsiteGuideStep = uiState.activeStep in 1..4
+    val achGuideStep = uiState.activeStep in 1..4
     val paypalGuideStep = uiState.activeStep in 1..4
+    val tiloPayGuideStep = uiState.activeStep in 1..4
     val scroll = rememberScrollState()
+    val focusManager = LocalFocusManager.current
+
+    if (!uiState.canConfigurePayments) {
+        ReadOnlyMethodDetailSection(
+            method = activeMethod,
+            onExitToMethods = onExitToMethods,
+        )
+        return
+    }
 
     Column(
         modifier = Modifier
             .fillMaxSize()
+            .dismissKeyboardOnOutsideTap(focusManager)
             .verticalScroll(scroll)
-            .padding(16.dp),
+            .padding(
+                horizontal = if (activeMethod == PaymentMethodType.YappyOnsite) 10.dp else 16.dp,
+                vertical = 16.dp,
+            ),
         verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
         if (isOnboardingFlow) {
             val shouldShowStepper = when {
                 isYappyOnboarding -> uiState.activeStep <= 4
-                isAchOnboarding -> uiState.activeStep <= 3
+                isYappyOnsiteOnboarding -> uiState.activeStep <= 4
+                isAchOnboarding -> uiState.activeStep <= 4
                 isPaypalOnboarding -> uiState.activeStep <= 4
+                isTiloPayOnboarding -> uiState.activeStep <= 4
                 else -> uiState.activeStep <= 2
             }
             if (shouldShowStepper) {
@@ -1093,8 +1600,10 @@ private fun MethodDetailSection(
                     step = uiState.activeStep,
                     totalSteps = when {
                         isYappyOnboarding -> 4
-                        isAchOnboarding -> 3
+                        isYappyOnsiteOnboarding -> 4
+                        isAchOnboarding -> 4
                         isPaypalOnboarding -> 4
+                        isTiloPayOnboarding -> 4
                         else -> 3
                     },
                 )
@@ -1110,24 +1619,52 @@ private fun MethodDetailSection(
             isYappyOnboarding && uiState.activeStep == 5 -> MethodSuccessStep(
                 onDone = onExitToMethods,
             )
+            isYappyOnsiteOnboarding && yappyOnsiteGuideStep -> YappyOnsiteOnboardingStep(
+                step = uiState.activeStep,
+                uiState = uiState,
+                viewModel = viewModel,
+            )
             isAchOnboarding && achGuideStep -> AchOnboardingStep(
                 step = uiState.activeStep,
                 uiState = uiState,
                 viewModel = viewModel,
             )
-            isAchOnboarding && uiState.activeStep == 4 -> MethodSuccessStep(onDone = onExitToMethods)
+            isAchOnboarding && uiState.activeStep == 5 -> MethodSuccessStep(onDone = onExitToMethods)
             isPaypalOnboarding && paypalGuideStep -> PaypalOnboardingStep(
                 step = uiState.activeStep,
                 uiState = uiState,
                 viewModel = viewModel,
             )
             isPaypalOnboarding && uiState.activeStep == 5 -> MethodSuccessStep(onDone = onExitToMethods)
+            isTiloPayOnboarding && tiloPayGuideStep -> TiloPayOnboardingStep(
+                step = uiState.activeStep,
+                uiState = uiState,
+                viewModel = viewModel,
+            )
+            isTiloPayOnboarding && uiState.activeStep == 5 -> MethodSuccessStep(onDone = onExitToMethods)
             isOnboardingFlow && uiState.activeStep == 1 -> MethodIntroCarousel(activeMethod)
             isOnboardingFlow && uiState.activeStep == 3 -> MethodSuccessStep(onDone = onExitToMethods)
             else -> MethodConfigurationStep(uiState = uiState, viewModel = viewModel, method = activeMethod, isOnboardingFlow = isOnboardingFlow)
         }
 
-        if (isYappyOnboarding && yappyGuideStep) {
+        if (isYappyOnsiteOnboarding && yappyOnsiteGuideStep) {
+            YappyOnsiteOnboardingFooter(
+                step = uiState.activeStep,
+                editingGroup = uiState.editingYappyOnsiteGroupId != null,
+                editingDevice = uiState.editingYappyOnsiteDeviceId != null,
+                onBack = {
+                    if (uiState.activeStep <= 1) onExitToMethods() else viewModel.onPrevStep()
+                },
+                onPrimary = {
+                    when (uiState.activeStep) {
+                        2 -> viewModel.onSaveYappyOnsiteGroups()
+                        3 -> viewModel.onSaveYappyOnsiteDevices()
+                        4 -> onExitToMethods()
+                        else -> viewModel.onNextStep()
+                    }
+                },
+            )
+        } else if (isYappyOnboarding && yappyGuideStep) {
             YappyOnboardingFooter(
                 step = uiState.activeStep,
                 onBack = {
@@ -1148,7 +1685,7 @@ private fun MethodDetailSection(
                     if (uiState.activeStep <= 1) onExitToMethods() else viewModel.onPrevStep()
                 },
                 onPrimary = {
-                    if (uiState.activeStep < 3) {
+                    if (uiState.activeStep < 4) {
                         viewModel.onNextStep()
                     } else {
                         viewModel.onSaveAch()
@@ -1161,7 +1698,19 @@ private fun MethodDetailSection(
                 onBack = {
                     if (uiState.activeStep <= 1) onExitToMethods() else viewModel.onPrevStep()
                 },
-                onPrimary = viewModel::onNextStep,
+                onPrimary = {
+                    if (uiState.activeStep < 4) viewModel.onNextStep() else viewModel.onConnectPaypal()
+                },
+            )
+        } else if (isTiloPayOnboarding && tiloPayGuideStep) {
+            TiloPayOnboardingFooter(
+                step = uiState.activeStep,
+                onBack = {
+                    if (uiState.activeStep <= 1) onExitToMethods() else viewModel.onPrevStep()
+                },
+                onPrimary = {
+                    if (uiState.activeStep < 4) viewModel.onNextStep() else viewModel.onSaveTiloPay()
+                },
             )
         } else if (isOnboardingFlow && uiState.activeStep <= 2) {
             OnboardingFooter(step = uiState.activeStep, method = activeMethod, onBack = {
@@ -1171,9 +1720,44 @@ private fun MethodDetailSection(
                     uiState.activeStep == 1 -> viewModel.onNextStep()
                     activeMethod == PaymentMethodType.Ach -> viewModel.onSaveAch()
                     activeMethod == PaymentMethodType.Paypal -> viewModel.onNextStep()
+                    activeMethod == PaymentMethodType.CardTilopay -> viewModel.onSaveTiloPay()
                     else -> viewModel.onNextStep()
                 }
             })
+        }
+    }
+}
+
+@Composable
+private fun ReadOnlyMethodDetailSection(
+    method: PaymentMethodType,
+    onExitToMethods: () -> Unit,
+) {
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(16.dp),
+        verticalArrangement = Arrangement.spacedBy(16.dp),
+    ) {
+        Card(
+            modifier = Modifier.fillMaxWidth(),
+            colors = CardDefaults.cardColors(containerColor = cardContainerColor()),
+            shape = RoundedCornerShape(18.dp),
+        ) {
+            Column(
+                modifier = Modifier.padding(16.dp),
+                verticalArrangement = Arrangement.spacedBy(10.dp),
+            ) {
+                Text(channelTitle(method), style = titleMediumBold())
+                StatusPill(text = "Configurado", positive = true)
+                Text(
+                    text = "Tu usuario puede ver este canal, pero no modificar su configuración.",
+                    style = bodyMedium(color = MaterialTheme.colorScheme.onSurfaceVariant),
+                )
+            }
+        }
+        OutlinedButtonM(onClick = onExitToMethods) {
+            Text("Volver")
         }
     }
 }
@@ -1220,6 +1804,16 @@ private fun MethodIntroCarousel(method: PaymentMethodType) {
             "Conecta tu cuenta y habilita cobros instantáneos.",
             "Gestiona tus cobros desde el módulo de métodos de pago."
         )
+        PaymentMethodType.YappyOnsite -> listOf(
+            "Genera un QR en caja para que el cliente pague al momento.",
+            "Detecta el pago automáticamente y reduce comprobantes falsos.",
+            "Emite la factura cuando el pago queda confirmado."
+        )
+        PaymentMethodType.CardTilopay -> listOf(
+            "Acepta tarjetas en links de pago mediante TiloPay.",
+            "Guarda credenciales del comercio para habilitar el proveedor.",
+            "TiloPay gestiona procesamiento, disputas y liquidaciones."
+        )
     }
 
     LazyRow(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -1262,8 +1856,10 @@ private fun MethodConfigurationStep(
 ) {
     when (method) {
         PaymentMethodType.Yappy -> YappyConfiguration(uiState, viewModel)
+        PaymentMethodType.YappyOnsite -> YappyOnsiteSummaryStep(uiState, viewModel)
         PaymentMethodType.Ach -> AchConfiguration(uiState, viewModel)
         PaymentMethodType.Paypal -> PaypalConfiguration(uiState, viewModel, isOnboardingFlow)
+        PaymentMethodType.CardTilopay -> TiloPayConfiguration(uiState, viewModel, isOnboardingFlow)
     }
 }
 
@@ -1290,6 +1886,20 @@ private fun YappyOnboardingStep(
 }
 
 @Composable
+private fun YappyOnsiteOnboardingStep(
+    step: Int,
+    uiState: PaymentUiState,
+    viewModel: PaymentMethodsViewModel,
+) {
+    when (step) {
+        1 -> YappyOnsiteHowItWorksStep()
+        2 -> YappyOnsiteGroupStep(uiState, viewModel)
+        3 -> YappyOnsiteDeviceStep(uiState, viewModel)
+        4 -> YappyOnsiteReadyStep()
+    }
+}
+
+@Composable
 private fun AchOnboardingStep(
     step: Int,
     uiState: PaymentUiState,
@@ -1297,8 +1907,9 @@ private fun AchOnboardingStep(
 ) {
     when (step) {
         1 -> AchHowItWorksStep()
-        2 -> AchFeesStep()
-        3 -> AchConfigurationOnboarding(
+        2 -> AchKnowledgeStep()
+        3 -> AchFeesStep()
+        4 -> AchConfigurationOnboarding(
             uiState = uiState,
             viewModel = viewModel,
         )
@@ -1324,6 +1935,380 @@ private fun PaypalOnboardingStep(
 }
 
 @Composable
+private fun TiloPayOnboardingStep(
+    step: Int,
+    uiState: PaymentUiState,
+    viewModel: PaymentMethodsViewModel,
+) {
+    when (step) {
+        1 -> TiloPayHowItWorksStep()
+        2 -> TiloPayFeesStep()
+        3 -> TiloPayAccountStep(
+            onOpenAffiliation = { viewModel.onOpenExternalUrl(TiloPayAffiliationUrl) },
+        )
+        4 -> TiloPayConfiguration(
+            uiState = uiState,
+            viewModel = viewModel,
+            isOnboardingFlow = true,
+        )
+    }
+}
+
+@Composable
+private fun TiloPayHowItWorksStep() {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        colors = CardDefaults.cardColors(containerColor = cardContainerColor()),
+        shape = RoundedCornerShape(18.dp),
+    ) {
+        Column(
+            modifier = Modifier.padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
+            Text(text = "Conoce Tarjetas de crédito o débito | Tilopay", style = titleMediumBold())
+            Text(
+                text = "Revisa cómo funciona, los requisitos y los costos antes de conectar este método.",
+                style = bodyMedium(color = MaterialTheme.colorScheme.onSurfaceVariant),
+            )
+            CardBrandStrip()
+            Divider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.12f))
+            Text(text = "Cómo funciona", style = bodyMediumBold())
+            Text(
+                text = "Permite cobrar con tarjetas Visa y Mastercard desde el link de pago usando TiloPay.",
+                style = bodyMedium(color = MaterialTheme.colorScheme.onSurfaceVariant),
+            )
+            BulletItem("VentaGo usa únicamente la integración de pagos con tarjeta de TiloPay; no habilitamos otros productos de TiloPay.")
+            BulletItem("VentaGo no procesa pagos ni responde por disputas, contracargos o situaciones del cargo con tarjeta.")
+            BulletItem("El manejo operativo del pago, liquidaciones y reclamos se coordina directamente con TiloPay.")
+        }
+    }
+}
+
+@Composable
+private fun TiloPayFeesStep() {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        colors = CardDefaults.cardColors(containerColor = cardContainerColor()),
+        shape = RoundedCornerShape(18.dp),
+    ) {
+        Column(
+            modifier = Modifier.padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(14.dp),
+        ) {
+            Text(text = "Comisiones por transacción", style = titleMediumBold())
+            Text(
+                text = "Estos cargos aplican cuando el pago con tarjeta se completa correctamente. TiloPay confirma las condiciones finales de tu afiliación.",
+                style = bodyMedium(color = MaterialTheme.colorScheme.onSurfaceVariant),
+            )
+            TiloPayCardFeeSection(
+                brand = "Visa",
+                logo = { VisaLogo() },
+            )
+            ChannelDivider()
+            TiloPayCardFeeSection(
+                brand = "Mastercard",
+                logo = { MastercardLogo() },
+            )
+            ChannelDivider()
+            TiloPayCardFeeSection(
+                brand = "American Express",
+                logo = { AmericanExpressLogo() },
+            )
+            Text(
+                text = "VentaGo cobra 0.50% como integrador tecnológico. No somos procesador de pagos; disputas, contracargos, liquidaciones y reclamos del cargo se gestionan directamente con TiloPay.",
+                style = bodySmall(color = MaterialTheme.colorScheme.onSurfaceVariant),
+            )
+            Text(
+                text = "Solo compatible con links de pago.",
+                style = bodyMediumBold(color = MaterialTheme.colorScheme.onSurface),
+            )
+        }
+    }
+}
+
+@Composable
+private fun TiloPayCardFeeSection(
+    brand: String,
+    logo: @Composable () -> Unit,
+) {
+    Column(
+        modifier = Modifier.fillMaxWidth(),
+        verticalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        Text(
+            text = brand,
+            style = bodyMediumBold(color = MaterialTheme.colorScheme.onSurface),
+        )
+        logo()
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(14.dp),
+        ) {
+            Column(
+                modifier = Modifier.weight(1f),
+                verticalArrangement = Arrangement.spacedBy(2.dp),
+            ) {
+                Text(
+                    text = "TILOPAY",
+                    style = labelSmall(color = MaterialTheme.colorScheme.onSurfaceVariant),
+                    fontWeight = FontWeight.SemiBold,
+                )
+                Text(
+                    text = "3.75% + $0.50",
+                    style = headlineMediumBold(color = MaterialTheme.colorScheme.primary),
+                    maxLines = 1,
+                )
+                Text(
+                    text = "por transacción + ITBMS",
+                    style = labelSmall(color = MaterialTheme.colorScheme.primary),
+                    maxLines = 1,
+                )
+            }
+            Text(
+                text = "+",
+                style = titleMediumBold(color = MaterialTheme.colorScheme.onSurface),
+            )
+            Column(
+                modifier = Modifier.weight(1f),
+                verticalArrangement = Arrangement.spacedBy(2.dp),
+            ) {
+                Text(
+                    text = "VENTAGO",
+                    style = labelSmall(color = MaterialTheme.colorScheme.onSurfaceVariant),
+                    fontWeight = FontWeight.SemiBold,
+                )
+                Text(
+                    text = "0.50%",
+                    style = headlineMediumBold(color = Color(0xFF0F766E)),
+                    maxLines = 1,
+                )
+                Text(
+                    text = "por transacción exitosa + ITBMS",
+                    style = labelSmall(color = Color(0xFF0F766E)),
+                    maxLines = 1,
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun CardBrandStrip() {
+    Row(
+        horizontalArrangement = Arrangement.spacedBy(10.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        VisaLogo()
+        MastercardLogo()
+        AmericanExpressLogo()
+    }
+}
+
+@Composable
+private fun VisaLogo() {
+    Box(
+        modifier = Modifier
+            .width(56.dp)
+            .height(36.dp)
+            .clip(RoundedCornerShape(4.dp))
+            .background(Color.White)
+            .border(1.dp, Color(0xFFE2E8F0), RoundedCornerShape(4.dp)),
+        contentAlignment = Alignment.Center,
+    ) {
+        Column(
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(2.dp),
+        ) {
+            Text(
+                text = "VISA",
+                style = labelSmall(color = Color(0xFF172B85)),
+                fontWeight = FontWeight.Black,
+            )
+            Box(
+                modifier = Modifier
+                    .width(34.dp)
+                    .height(4.dp)
+                    .background(Color(0xFFFFA200)),
+            )
+        }
+    }
+}
+
+@Composable
+private fun MastercardLogo() {
+    Box(
+        modifier = Modifier
+            .width(42.dp)
+            .height(32.dp)
+            .clip(RoundedCornerShape(4.dp))
+            .background(Color(0xFF4678D7)),
+        contentAlignment = Alignment.Center,
+    ) {
+        Box(modifier = Modifier.width(26.dp).height(16.dp)) {
+            Box(
+                modifier = Modifier
+                    .size(15.dp)
+                    .align(Alignment.CenterStart)
+                    .clip(CircleShape)
+                    .background(Color(0xFFFF5F00)),
+            )
+            Box(
+                modifier = Modifier
+                    .size(15.dp)
+                    .align(Alignment.CenterEnd)
+                    .clip(CircleShape)
+                    .background(Color(0xFFFFC14D).copy(alpha = 0.92f)),
+            )
+        }
+    }
+}
+
+@Composable
+private fun AmericanExpressLogo() {
+    Box(
+        modifier = Modifier
+            .width(56.dp)
+            .height(32.dp)
+            .clip(RoundedCornerShape(4.dp))
+            .background(Color(0xFF4DB6D7)),
+        contentAlignment = Alignment.Center,
+    ) {
+        Text(
+            text = "AMERICAN\nEXPRESS",
+            style = labelSmall(color = Color.White),
+            fontWeight = FontWeight.Black,
+            textAlign = TextAlign.Center,
+            maxLines = 2,
+        )
+    }
+}
+
+@Composable
+private fun TiloPayAccountStep(onOpenAffiliation: () -> Unit) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        colors = CardDefaults.cardColors(containerColor = cardContainerColor()),
+        shape = RoundedCornerShape(18.dp),
+    ) {
+        Column(
+            modifier = Modifier.padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
+            Text("Cuenta TiloPay", style = titleMediumBold())
+            Text("¿Aún no tienes cuenta TiloPay?", style = bodyMediumBold())
+            Text(
+                text = "Solicita tu afiliación antes de configurar credenciales",
+                style = bodyMediumBold(color = MaterialTheme.colorScheme.primary),
+            )
+            Text(
+                text = "Para cobrar con tarjeta necesitas una cuenta comercial aprobada por TiloPay. Cuando la tengas, TiloPay te entrega el Usuario API, Contraseña API y Llave API para conectarla con VentaGo.",
+                style = bodyMedium(color = MaterialTheme.colorScheme.onSurfaceVariant),
+            )
+            OutlinedButtonM(
+                onClick = onOpenAffiliation,
+                contentColor = MaterialTheme.colorScheme.primary,
+                border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary),
+            ) {
+                Text("Solicitar cuenta TiloPay")
+            }
+            Divider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.12f))
+            Text(
+                text = "Si ya tienes una cuenta comercial activa, continúa para ingresar tu Usuario API, Contraseña API y Llave API de TiloPay.",
+                style = bodyMedium(color = MaterialTheme.colorScheme.onSurfaceVariant),
+            )
+        }
+    }
+}
+
+@Composable
+private fun TiloPayConfiguration(
+    uiState: PaymentUiState,
+    viewModel: PaymentMethodsViewModel,
+    isOnboardingFlow: Boolean,
+) {
+    val configured = viewModel.methodConfigured(PaymentMethodType.CardTilopay)
+    val status = uiState.tiloPayStatus
+    val maskedCredential = "*********"
+
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        colors = CardDefaults.cardColors(containerColor = cardContainerColor()),
+        shape = RoundedCornerShape(18.dp),
+    ) {
+        Column(
+            modifier = Modifier.padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp),
+        ) {
+            Text("Credenciales TiloPay", style = titleMediumBold())
+            Text(
+                "Ingresa las credenciales API entregadas por TiloPay para aceptar tarjetas en links de pago.",
+                style = bodyMedium(color = MaterialTheme.colorScheme.onSurfaceVariant),
+            )
+
+            StatusRow(
+                label = "Canal habilitado",
+                active = configured || status?.readyForPayments() == true,
+            )
+
+            DMOutlinedTextField(
+                text = credentialDisplayValue(uiState.tiloPayForm.apiKey, configured, maskedCredential),
+                label = "Llave API",
+                modifier = Modifier.fillMaxWidth(),
+                onChange = { value ->
+                    viewModel.onTiloPayApiKeyChange(credentialInputValue(value, maskedCredential))
+                },
+            )
+            DMOutlinedTextField(
+                text = credentialDisplayValue(uiState.tiloPayForm.apiUser, configured, maskedCredential),
+                label = "Usuario API",
+                modifier = Modifier.fillMaxWidth(),
+                onChange = { value ->
+                    viewModel.onTiloPayApiUserChange(credentialInputValue(value, maskedCredential))
+                },
+            )
+            DMOutlinedTextField(
+                text = credentialDisplayValue(uiState.tiloPayForm.password, configured, maskedCredential),
+                label = "Contraseña API",
+                modifier = Modifier.fillMaxWidth(),
+                onChange = { value ->
+                    viewModel.onTiloPayPasswordChange(credentialInputValue(value, maskedCredential))
+                },
+            )
+
+            if (configured) {
+                Text(
+                    text = "Por seguridad no mostramos credenciales guardadas. Para actualizar el canal, ingresa los tres valores nuevamente.",
+                    style = bodySmall(color = MaterialTheme.colorScheme.onSurfaceVariant),
+                )
+            }
+
+            if (!isOnboardingFlow) {
+                ButtonM(onClick = viewModel::onSaveTiloPay) {
+                    Text(if (configured) "Actualizar cuenta TiloPay" else "Vincular cuenta TiloPay")
+                }
+            }
+            if (!isOnboardingFlow && configured) {
+                OutlinedButtonM(onClick = { viewModel.requestUnlinkMethod(PaymentMethodType.CardTilopay) }) {
+                    Text("Desconectar TiloPay")
+                }
+            }
+        }
+    }
+}
+
+private fun credentialDisplayValue(
+    value: String,
+    configured: Boolean,
+    maskedCredential: String,
+): String = if (configured && value.isBlank()) maskedCredential else value
+
+private fun credentialInputValue(
+    value: String,
+    maskedCredential: String,
+): String = value.replace(maskedCredential, "")
+
+@Composable
 private fun PaypalHowItWorksStep() {
     Card(
         modifier = Modifier.fillMaxWidth(),
@@ -1346,7 +2331,7 @@ private fun PaypalHowItWorksStep() {
                     .clip(RoundedCornerShape(14.dp)),
             )
             Text(text = "Cómo funciona", style = titleMediumBold())
-            BulletItem("Para habilitarlo se necesitan 2 pasos: conectar cuenta y autorizar cobro automático.")
+            BulletItem("Conecta la cuenta PayPal empresarial del negocio.")
             BulletItem("El cliente puede pagar con su cuenta o métodos compatibles de PayPal.")
             BulletItem("En Panamá es un canal complementario para ventas online.")
         }
@@ -1366,7 +2351,7 @@ private fun PaypalRequirementsStep() {
         ) {
             Text(text = "Requisitos", style = titleMediumBold())
             BulletItem("Iniciar sesión con la cuenta PayPal del negocio.")
-            BulletItem("Autorizar el cobro automático de comisiones de plataforma.")
+            BulletItem("Completar la autorización de PayPal en la página segura que se abrirá.")
         }
     }
 }
@@ -1384,7 +2369,7 @@ private fun PaypalFeesStep() {
         ) {
             Text(text = "Costos y cobros", style = titleMediumBold())
             BulletItem("Comisión Ventago: 1% + 7% ITBMS por transacción exitosa.")
-            BulletItem("El cobro se gestiona automáticamente con la autorización de PayPal.")
+            BulletItem("PayPal puede aplicar sus propias tarifas de procesamiento.")
 
             Row(
                 modifier = Modifier
@@ -1438,8 +2423,117 @@ private fun AchHowItWorksStep() {
             )
             Text(text = "Cómo funciona", style = titleMediumBold())
             Text(
-                text = "Permite que tus clientes paguen por transferencia ACH y suban su comprobante en el mismo link de pago. El sistema centraliza la evidencia y aplica validaciones automáticas para ayudarte a revisar cada pago con más rapidez.\n\nTu negocio recibe notificaciones, decide si acepta o rechaza el comprobante y, si no se revisa en 7 días, el comprobante expira automáticamente.",
+                text = "Permite que tus clientes paguen por transferencia ACH y suban su comprobante en el mismo link de pago. El sistema centraliza la evidencia y te muestra señales de riesgo para ayudarte a revisar cada pago con más rapidez.\n\nTu negocio recibe notificaciones, decide si acepta o rechaza el comprobante y, si no se revisa en 7 días, el comprobante expira automáticamente.",
                 style = bodyMedium(color = MaterialTheme.colorScheme.onSurfaceVariant),
+            )
+            SurfaceBadge(
+                title = "Validación no automática",
+                description = "No consultamos directamente el banco del cliente; revisamos el comprobante subido y te mostramos señales de riesgo.",
+                icon = Icons.Filled.Info,
+            )
+        }
+    }
+}
+
+@Composable
+private fun AchKnowledgeStep() {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        colors = CardDefaults.cardColors(containerColor = cardContainerColor()),
+        shape = RoundedCornerShape(18.dp),
+    ) {
+        Column(
+            modifier = Modifier.padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(14.dp),
+        ) {
+            Text(text = "Conoce ACH con comprobante de pago", style = titleMediumBold())
+            Text(
+                text = "Revisa cómo funciona, los requisitos y los costos antes de conectar este método.",
+                style = bodyMedium(color = MaterialTheme.colorScheme.onSurfaceVariant),
+            )
+
+            SurfaceBadge(
+                title = "Validación del comprobante",
+                description = "ACH con comprobante no confirma el movimiento directamente con el banco del cliente. Te ayuda a revisar mejor la evidencia antes de aprobarla.",
+                icon = Icons.Filled.Info,
+            )
+
+            AchProcessCard(
+                title = "1 El cliente sube el comprobante",
+                description = "Desde el link de pago carga la imagen o PDF del ticket de transferencia.",
+            )
+            AchProcessCard(
+                title = "2 Ventago lee los datos clave",
+                description = "Identificamos banco, monto, fecha y referencias visibles para compararlos con la orden.",
+            )
+            AchProcessCard(
+                title = "3 Se calcula el riesgo",
+                description = "Te avisamos si el monto no coincide, si faltan datos o si el comprobante muestra señales de alteración.",
+            )
+            AchProcessCard(
+                title = "4 Tu negocio decide",
+                description = "Con los detalles encontrados, apruebas o rechazas el comprobante antes de confirmar el pago.",
+            )
+        }
+    }
+}
+
+@Composable
+private fun AchProcessCard(
+    title: String,
+    description: String,
+) {
+    Surface(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(14.dp),
+        color = MaterialTheme.colorScheme.surface,
+        tonalElevation = 1.dp,
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.12f)),
+    ) {
+        Column(
+            modifier = Modifier.padding(14.dp),
+            verticalArrangement = Arrangement.spacedBy(6.dp),
+        ) {
+            Text(title, style = bodyMediumBold())
+            Text(
+                description,
+                style = bodySmall(color = MaterialTheme.colorScheme.onSurfaceVariant),
+            )
+        }
+    }
+}
+
+@Composable
+private fun SurfaceBadge(
+    title: String,
+    description: String,
+    icon: ImageVector,
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(12.dp))
+            .background(MaterialTheme.colorScheme.secondary.copy(alpha = 0.10f))
+            .border(
+                width = 1.dp,
+                color = MaterialTheme.colorScheme.secondary.copy(alpha = 0.18f),
+                shape = RoundedCornerShape(12.dp),
+            )
+            .padding(12.dp),
+        horizontalArrangement = Arrangement.spacedBy(10.dp),
+        verticalAlignment = Alignment.Top,
+    ) {
+        Icon(
+            imageVector = icon,
+            contentDescription = null,
+            tint = MaterialTheme.colorScheme.secondary,
+            modifier = Modifier.size(20.dp),
+        )
+        Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+            Text(title, style = bodyMediumBold(color = MaterialTheme.colorScheme.secondary))
+            Text(
+                description,
+                style = bodySmall(color = MaterialTheme.colorScheme.onSurfaceVariant),
             )
         }
     }
@@ -1457,8 +2551,48 @@ private fun AchFeesStep() {
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
             Text(text = "Costos y cobros", style = titleMediumBold())
-            BulletItem("Comisión Ventago: \$0.27 por transacción aceptada (ITBMS incluido).")
-            BulletItem("Cobro de plataforma en fechas periódicas (manual).")
+            Text(
+                text = buildAnnotatedString {
+                    append("Comisión Ventago: ")
+                    withStyle(SpanStyle(fontWeight = FontWeight.Bold)) {
+                        append("\$0.27")
+                    }
+                    append(" por transacción aceptada (")
+                    withStyle(SpanStyle(fontWeight = FontWeight.Bold)) {
+                        append("ITBMS incluido")
+                    }
+                    append(").")
+                },
+                style = bodyMedium(color = MaterialTheme.colorScheme.onSurfaceVariant),
+            )
+            Text(
+                text = "Cobro de plataforma en fechas periódicas (manual).",
+                style = bodyMedium(color = MaterialTheme.colorScheme.onSurfaceVariant),
+            )
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(12.dp))
+                    .background(MaterialTheme.colorScheme.secondary.copy(alpha = 0.10f))
+                    .border(
+                        width = 1.dp,
+                        color = MaterialTheme.colorScheme.secondary.copy(alpha = 0.18f),
+                        shape = RoundedCornerShape(12.dp),
+                    )
+                    .padding(12.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                Icon(
+                    imageVector = Icons.Filled.Info,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.secondary,
+                )
+                Text(
+                    text = "Solo compatible con links de pago.",
+                    style = bodyMediumBold(color = MaterialTheme.colorScheme.secondary),
+                )
+            }
         }
     }
 }
@@ -1663,6 +2797,916 @@ private fun YappyCostsStep() {
 }
 
 @Composable
+private fun YappyOnsiteHowItWorksStep() {
+    var showFeesDialog by remember { mutableStateOf(false) }
+
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        colors = CardDefaults.cardColors(containerColor = cardContainerColor()),
+        shape = RoundedCornerShape(18.dp),
+    ) {
+        Column(
+            modifier = Modifier.padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(14.dp),
+        ) {
+            Text(text = "¿Cómo funciona Yappy en caja?", style = titleMediumBold())
+            Text(
+                text = "Cobra con un QR dinámico en el punto de venta y reduce validaciones manuales.",
+                style = bodyMedium(color = MaterialTheme.colorScheme.onSurfaceVariant),
+            )
+            Divider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.12f))
+            Row(
+                modifier = Modifier
+                    .clip(RoundedCornerShape(50))
+                    .background(MaterialTheme.colorScheme.secondary.copy(alpha = 0.12f))
+                    .border(
+                        width = 1.dp,
+                        color = MaterialTheme.colorScheme.secondary.copy(alpha = 0.24f),
+                        shape = RoundedCornerShape(50),
+                    )
+                    .padding(horizontal = 10.dp, vertical = 6.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(6.dp),
+            ) {
+                Icon(
+                    imageVector = Icons.Filled.Shield,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.secondary,
+                    modifier = Modifier.size(16.dp),
+                )
+                Text(
+                    "Pago confirmado automáticamente",
+                    style = labelSmall(color = MaterialTheme.colorScheme.secondary),
+                    fontWeight = FontWeight.SemiBold,
+                )
+            }
+            Text(
+                "Evita capturas falsas. Más ventas cerradas en caja.",
+                style = bodyMediumBold(color = MaterialTheme.colorScheme.primary),
+            )
+            Text(
+                "Genera un QR por venta, muéstralo al cliente y deja que Ventago detecte el pago automáticamente. El monto viaja exacto, el cobro se confirma sin revisión manual y la factura se genera al recibir la confirmación.",
+                style = bodyMedium(color = MaterialTheme.colorScheme.onSurfaceVariant),
+            )
+
+            YappyOnsiteFeatureRow(
+                title = "QR dinámico",
+                description = "Un código único por transacción.",
+            )
+            YappyOnsiteFeatureRow(
+                title = "Pago detectado",
+                description = "Evita depender de capturas o mensajes del cliente.",
+            )
+            YappyOnsiteFeatureRow(
+                title = "Factura automática",
+                description = "La factura se emite cuando el pago queda confirmado.",
+            )
+
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(12.dp))
+                    .background(MaterialTheme.colorScheme.secondary.copy(alpha = 0.08f))
+                    .border(
+                        width = 1.dp,
+                        color = MaterialTheme.colorScheme.secondary.copy(alpha = 0.22f),
+                        shape = RoundedCornerShape(12.dp),
+                    )
+                    .padding(12.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(10.dp),
+            ) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        "Comisión Ventago 1%",
+                        style = bodyMediumBold(color = MaterialTheme.colorScheme.secondary),
+                    )
+                    Text(
+                        "Aplicable por transacción, adicional a cargos de Yappy Comercial.",
+                        style = bodySmall(color = MaterialTheme.colorScheme.onSurfaceVariant),
+                    )
+                }
+                IconButton(onClick = { showFeesDialog = true }) {
+                    Box(
+                        modifier = Modifier
+                            .size(28.dp)
+                            .clip(CircleShape)
+                            .background(MaterialTheme.colorScheme.secondary),
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        Text("?", style = bodyMediumBold(color = MaterialTheme.colorScheme.onSecondary))
+                    }
+                }
+            }
+        }
+    }
+
+    DMAlertDialog(
+        title = "Costos y cobros",
+        message = "Comisión de plataforma Ventago: 1% + 7% ITBMS sobre ese 1%.\n\nYappy Comercial puede aplicar su propia comisión.\n\nCobro de plataforma en fechas periódicas (manual).\n\nEjemplo por $100: comisión Ventago $1.00 + ITBMS $0.07 = $1.07 (más la comisión de Yappy Comercial).",
+        show = showFeesDialog,
+        onDismiss = { showFeesDialog = false },
+        onConfirm = { showFeesDialog = false },
+        confirmText = "Entendido",
+        dismissText = "Cerrar",
+    )
+}
+
+@Composable
+private fun YappyOnsiteFeatureRow(
+    title: String,
+    description: String,
+) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        verticalAlignment = Alignment.Top,
+        horizontalArrangement = Arrangement.spacedBy(10.dp),
+    ) {
+        Icon(
+            imageVector = Icons.Filled.Check,
+            contentDescription = null,
+            tint = MaterialTheme.colorScheme.primary,
+            modifier = Modifier.size(20.dp),
+        )
+        Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+            Text(title, style = bodyMediumBold())
+            Text(
+                description,
+                style = bodySmall(color = MaterialTheme.colorScheme.onSurfaceVariant),
+            )
+        }
+    }
+}
+
+@Composable
+private fun YappyOnsiteGroupStep(
+    uiState: PaymentUiState,
+    viewModel: PaymentMethodsViewModel,
+) {
+    LaunchedEffect(uiState.branches.size, uiState.yappyOnsiteGroupDrafts.isEmpty(), uiState.yappyOnsiteGroups.isEmpty()) {
+        if (
+            uiState.branches.isNotEmpty() &&
+            uiState.yappyOnsiteGroupDrafts.isEmpty() &&
+            uiState.yappyOnsiteGroups.isEmpty()
+        ) {
+            viewModel.prepareYappyOnsiteOnboardingDrafts()
+        }
+    }
+
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        colors = CardDefaults.cardColors(containerColor = cardContainerColor()),
+        shape = RoundedCornerShape(18.dp),
+    ) {
+        Column(
+            modifier = Modifier.padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
+            Text("Grupos de Yappy", style = bodyMediumBold())
+            Text(
+                "Crea los grupos en el dashboard comercial de Yappy, copia cada ID y selecciona la sucursal correspondiente. Usaremos el nombre de la sucursal como nombre del grupo.",
+                style = bodyMedium(color = MaterialTheme.colorScheme.onSurfaceVariant),
+            )
+            FlowRow(
+                horizontalArrangement = Arrangement.spacedBy(12.dp),
+                verticalArrangement = Arrangement.spacedBy(4.dp),
+            ) {
+                TextButtonS(
+                    label = "Abrir Yappy Comercial",
+                    icon = Icons.Filled.Link,
+                    color = MaterialTheme.colorScheme.secondary,
+                    onClick = { viewModel.onOpenExternalUrl(YappyOnsiteTutorialUrl) },
+                )
+                TextButtonS(
+                    label = "Ver tutorial",
+                    icon = Icons.Filled.Visibility,
+                    color = MaterialTheme.colorScheme.secondary,
+                    onClick = { viewModel.onOpenExternalUrl(YappyOnsiteTutorialUrl) },
+                )
+            }
+
+            if (uiState.yappyOnsiteGroups.isNotEmpty()) {
+                Divider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.12f))
+                Text("Grupos registrados", style = bodyMediumBold())
+                uiState.yappyOnsiteGroups.forEach { group ->
+                    YappyOnsiteSavedGroupRow(
+                        title = "${group.groupId} · ${group.name}",
+                        subtitle = "Sucursal ${group.branchCode} · ${if (group.enabled) "Activo" else "Inactivo"}",
+                        onDelete = { viewModel.requestDeleteYappyOnsiteGroup(group.groupId) },
+                    )
+                }
+            }
+
+            if (uiState.branches.isEmpty()) {
+                InlineEmptyState("No hay sucursales disponibles para crear grupos.")
+            } else {
+                uiState.yappyOnsiteGroupDrafts.forEachIndexed { index, draft ->
+                    YappyOnsiteGroupDraftCard(
+                        index = index,
+                        draft = draft,
+                        uiState = uiState,
+                        viewModel = viewModel,
+                    )
+                }
+                val canAddMore = uiState.yappyOnsiteGroups.size + uiState.yappyOnsiteGroupDrafts.size < uiState.branches.size
+                if (canAddMore) {
+                    TextButtonS(
+                        label = "Agregar grupo",
+                        icon = Icons.Filled.Add,
+                        color = MaterialTheme.colorScheme.secondary,
+                        onClick = viewModel::onAddYappyOnsiteGroupDraft,
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun YappyOnsiteSavedGroupRow(
+    title: String,
+    subtitle: String,
+    onDelete: () -> Unit,
+) {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(12.dp))
+            .background(MaterialTheme.colorScheme.surface)
+            .border(
+                width = 1.dp,
+                color = MaterialTheme.colorScheme.outlineVariant,
+                shape = RoundedCornerShape(12.dp),
+            )
+            .padding(12.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        Text(title, style = bodyMediumBold())
+        Text(
+            subtitle,
+            style = bodyMedium(color = MaterialTheme.colorScheme.onSurfaceVariant),
+            maxLines = 2,
+            overflow = TextOverflow.Ellipsis,
+        )
+        TextButtonS(
+            label = "Eliminar",
+            icon = Icons.Filled.Delete,
+            color = MaterialTheme.colorScheme.error,
+            onClick = onDelete,
+        )
+    }
+}
+
+@Composable
+private fun YappyOnsiteGroupDraftCard(
+    index: Int,
+    draft: com.teco.ventago.features.payments.ui.home.viewmodel.YappyOnsiteGroupDraftState,
+    uiState: PaymentUiState,
+    viewModel: PaymentMethodsViewModel,
+) {
+    val branches = uiState.branches
+    val selectedBranchIndex = branches.indexOfFirst { it.branchCode == draft.branchCode }
+        .takeIf { it >= 0 } ?: 0
+    val branchName = branches.firstOrNull { it.branchCode == draft.branchCode }?.name.orEmpty()
+
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(12.dp))
+            .background(MaterialTheme.colorScheme.surface)
+            .border(
+                width = 1.dp,
+                color = MaterialTheme.colorScheme.outlineVariant,
+                shape = RoundedCornerShape(12.dp),
+            )
+            .padding(12.dp),
+        verticalArrangement = Arrangement.spacedBy(10.dp),
+    ) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            Column(modifier = Modifier.weight(1f)) {
+                Text("Grupo ${index + 1}", style = bodyMediumBold())
+                Text(
+                    listOf(draft.groupId.ifBlank { "Sin ID" }, branchName.ifBlank { "Sucursal pendiente" }).joinToString(" · "),
+                    style = bodySmall(color = MaterialTheme.colorScheme.onSurfaceVariant),
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
+            TextButtonS(
+                label = if (draft.collapsed) "Mostrar" else "Ocultar",
+                color = MaterialTheme.colorScheme.secondary,
+                onClick = { viewModel.onToggleYappyOnsiteGroupDraft(draft.localId) },
+            )
+            if (uiState.yappyOnsiteGroupDrafts.size > 1) {
+                IconButton(onClick = { viewModel.onRemoveYappyOnsiteGroupDraft(draft.localId) }) {
+                    Icon(
+                        imageVector = Icons.Filled.Delete,
+                        contentDescription = "Eliminar grupo",
+                        tint = MaterialTheme.colorScheme.error,
+                    )
+                }
+            }
+        }
+
+        if (!draft.collapsed) {
+            DMOutlinedTextField(
+                text = draft.groupId,
+                label = "ID del grupo",
+                modifier = Modifier.fillMaxWidth(),
+                onChange = { viewModel.onYappyOnsiteGroupDraftIdChange(draft.localId, it) },
+            )
+            DMDropDownField(
+                label = "Sucursal",
+                items = branches,
+                selectedIndex = selectedBranchIndex,
+                onItemSelected = { _, branch ->
+                    viewModel.onYappyOnsiteGroupDraftBranchChange(draft.localId, branch.branchCode)
+                },
+                selectedItemToString = { branchLabel(it.branchCode, branches) },
+            )
+            DMOutlinedTextField(
+                text = draft.apiKey,
+                label = "API key",
+                modifier = Modifier.fillMaxWidth(),
+                onChange = { viewModel.onYappyOnsiteGroupDraftApiKeyChange(draft.localId, it) },
+            )
+            DMOutlinedTextField(
+                text = draft.secretKey,
+                label = "Secret key",
+                modifier = Modifier.fillMaxWidth(),
+                onChange = { viewModel.onYappyOnsiteGroupDraftSecretKeyChange(draft.localId, it) },
+            )
+        }
+    }
+}
+
+@Composable
+private fun YappyOnsiteDeviceStep(
+    uiState: PaymentUiState,
+    viewModel: PaymentMethodsViewModel,
+) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        colors = CardDefaults.cardColors(containerColor = cardContainerColor()),
+        shape = RoundedCornerShape(18.dp),
+    ) {
+        Column(
+            modifier = Modifier.padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
+            Text("Agregar unidades de cobro", style = titleMediumBold())
+            Text(
+                "Para cada grupo puedes registrar varias unidades de cobro. Asocia cada unidad con el punto de facturación donde se usará la caja.",
+                style = bodyMedium(color = MaterialTheme.colorScheme.onSurfaceVariant),
+            )
+            if (uiState.yappyOnsiteGroups.isEmpty()) {
+                InlineEmptyState("Guarda al menos un grupo antes de registrar unidades de cobro.")
+            } else {
+                uiState.yappyOnsiteDeviceDrafts.forEachIndexed { index, draft ->
+                    YappyOnsiteDeviceDraftCard(
+                        index = index,
+                        draft = draft,
+                        uiState = uiState,
+                        viewModel = viewModel,
+                    )
+                }
+                val billingPointCount = uiState.branches.sumOf { it.fiscalBillingPoints.size }
+                val canAddMore = uiState.yappyOnsiteDevices.size + uiState.yappyOnsiteDeviceDrafts.size < billingPointCount
+                if (canAddMore) {
+                    TextButtonS(
+                        label = "Agregar unidad de cobro",
+                        icon = Icons.Filled.Add,
+                        color = MaterialTheme.colorScheme.secondary,
+                        onClick = viewModel::onAddYappyOnsiteDeviceDraft,
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun YappyOnsiteDeviceDraftCard(
+    index: Int,
+    draft: com.teco.ventago.features.payments.ui.home.viewmodel.YappyOnsiteDeviceDraftState,
+    uiState: PaymentUiState,
+    viewModel: PaymentMethodsViewModel,
+) {
+    val groups = uiState.yappyOnsiteGroups
+    val selectedGroupIndex = groups.indexOfFirst { it.groupId == draft.groupId }
+        .takeIf { it >= 0 } ?: 0
+    val billingPoints = uiState.branches
+        .firstOrNull { it.branchCode == draft.branchCode }
+        ?.fiscalBillingPoints
+        .orEmpty()
+    val selectedBillingPointIndex = billingPoints.indexOfFirst { it.billingPoint == draft.billingPoint }
+        .takeIf { it >= 0 } ?: 0
+    val pointLabel = billingPoints.firstOrNull { it.billingPoint == draft.billingPoint }
+        ?.let { billingPointLabel(draft.branchCode, it.billingPoint, uiState.branches) }
+        ?: "Punto pendiente"
+
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(12.dp))
+            .background(MaterialTheme.colorScheme.surface)
+            .border(
+                width = 1.dp,
+                color = MaterialTheme.colorScheme.outlineVariant,
+                shape = RoundedCornerShape(12.dp),
+            )
+            .padding(12.dp),
+        verticalArrangement = Arrangement.spacedBy(10.dp),
+    ) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            Column(modifier = Modifier.weight(1f)) {
+                Text("Unidad de cobro ${index + 1}", style = bodyMediumBold())
+                Text(
+                    listOf(draft.deviceId.ifBlank { "Sin Device ID" }, pointLabel).joinToString(" · "),
+                    style = bodySmall(color = MaterialTheme.colorScheme.onSurfaceVariant),
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
+            TextButtonS(
+                label = if (draft.collapsed) "Mostrar" else "Ocultar",
+                color = MaterialTheme.colorScheme.secondary,
+                onClick = { viewModel.onToggleYappyOnsiteDeviceDraft(draft.localId) },
+            )
+            if (uiState.yappyOnsiteDeviceDrafts.size > 1) {
+                IconButton(onClick = { viewModel.onRemoveYappyOnsiteDeviceDraft(draft.localId) }) {
+                    Icon(
+                        imageVector = Icons.Filled.Delete,
+                        contentDescription = "Eliminar unidad de cobro",
+                        tint = MaterialTheme.colorScheme.error,
+                    )
+                }
+            }
+        }
+
+        if (!draft.collapsed) {
+            DMDropDownField(
+                label = "Grupo",
+                items = groups,
+                selectedIndex = selectedGroupIndex,
+                onItemSelected = { _, group ->
+                    viewModel.onYappyOnsiteDeviceDraftGroupChange(draft.localId, group.groupId)
+                },
+                    selectedItemToString = { it.name.ifBlank { it.groupId } },
+            )
+            if (billingPoints.isNotEmpty()) {
+                DMDropDownField(
+                    label = "Punto de facturación",
+                    items = billingPoints,
+                    selectedIndex = selectedBillingPointIndex,
+                    onItemSelected = { _, point ->
+                        viewModel.onYappyOnsiteDeviceDraftBillingPointChange(draft.localId, point.billingPoint)
+                    },
+                    selectedItemToString = { billingPointLabel(draft.branchCode, it.billingPoint, uiState.branches) },
+                )
+            }
+            DMOutlinedTextField(
+                text = draft.deviceId,
+                label = "Device ID",
+                modifier = Modifier.fillMaxWidth(),
+                onChange = { viewModel.onYappyOnsiteDeviceDraftIdChange(draft.localId, it) },
+            )
+        }
+    }
+}
+
+@Composable
+private fun YappyOnsiteReadyStep() {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        colors = CardDefaults.cardColors(containerColor = cardContainerColor()),
+        shape = RoundedCornerShape(18.dp),
+    ) {
+        Column(
+            modifier = Modifier.padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+        ) {
+            Box(
+                modifier = Modifier
+                    .size(56.dp)
+                    .clip(CircleShape)
+                    .background(Color(0xFF2E7D32)),
+                contentAlignment = Alignment.Center,
+            ) {
+                Icon(
+                    imageVector = Icons.Filled.Check,
+                    contentDescription = null,
+                    tint = Color.White,
+                )
+            }
+            Text(
+                text = "Yappy en caja está listo",
+                style = titleMediumBold(),
+                textAlign = TextAlign.Center,
+            )
+            Text(
+                text = "La configuración de grupos y unidades de cobro quedó guardada. Ya puedes generar QR dinámicos en caja y confirmar pagos automáticamente desde VentaGo.",
+                style = bodyMedium(color = MaterialTheme.colorScheme.onSurfaceVariant),
+                textAlign = TextAlign.Center,
+            )
+        }
+    }
+}
+
+@Composable
+private fun YappyOnsiteSummaryStep(
+    uiState: PaymentUiState,
+    viewModel: PaymentMethodsViewModel,
+) {
+    val onsite = uiState.paymentSummary?.paymentMethods?.yappy?.onsite
+    val canAddGroup = uiState.yappyOnsiteGroups.size < uiState.branches.size
+    val canAddDevice = uiState.yappyOnsiteDevices.size < uiState.branches.sumOf { it.fiscalBillingPoints.size }
+
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        colors = CardDefaults.cardColors(containerColor = cardContainerColor()),
+        shape = RoundedCornerShape(18.dp),
+    ) {
+        Column(
+            modifier = Modifier.padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
+            Text("Configuración Yappy en caja", style = bodyMediumBold())
+            if (uiState.yappyOnsiteLoading) {
+                InlineShimmerList()
+            } else {
+                StatusRow(
+                    label = "Canal habilitado",
+                    active = onsite?.enabled == true && onsite.configured,
+                )
+                Text(
+                    "Grupos: ${onsite?.groupsCount ?: uiState.yappyOnsiteGroups.size} · Unidades de cobro: ${onsite?.devicesCount ?: uiState.yappyOnsiteDevices.size} · Sesiones abiertas: ${onsite?.openSessionsCount ?: 0}",
+                    style = bodyMedium(color = MaterialTheme.colorScheme.onSurfaceVariant),
+                )
+                Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                    if (canAddGroup) {
+                        TextButtonS(
+                            label = "Agregar grupo",
+                            icon = Icons.Filled.Edit,
+                            color = MaterialTheme.colorScheme.secondary,
+                            onClick = viewModel::onAddYappyOnsiteGroup,
+                        )
+                    }
+                    if (canAddDevice) {
+                        TextButtonS(
+                            label = "Agregar unidad de cobro",
+                            icon = Icons.Filled.CreditCard,
+                            color = MaterialTheme.colorScheme.secondary,
+                            onClick = viewModel::onAddYappyOnsiteDevice,
+                        )
+                    }
+                }
+                Divider()
+                if (uiState.yappyOnsiteGroups.isEmpty()) {
+                    InlineEmptyState("Aún no hay grupos configurados.")
+                } else {
+                    uiState.yappyOnsiteGroups.forEach { group ->
+                        YappyOnsiteGroupConfiguredCard(
+                            group = group,
+                            devices = uiState.yappyOnsiteDevices.filter {
+                                it.groupId.equals(group.groupId, ignoreCase = true)
+                            },
+                            branches = uiState.branches,
+                            viewModel = viewModel,
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun YappyOnsiteGroupConfiguredCard(
+    group: YappyOnsiteGroup,
+    devices: List<YappyOnsiteDevice>,
+    branches: List<Branch>,
+    viewModel: PaymentMethodsViewModel,
+) {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(12.dp))
+            .background(MaterialTheme.colorScheme.surface)
+            .border(
+                width = 1.dp,
+                color = MaterialTheme.colorScheme.outlineVariant,
+                shape = RoundedCornerShape(12.dp),
+            )
+            .padding(12.dp),
+        verticalArrangement = Arrangement.spacedBy(10.dp),
+    ) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalAlignment = Alignment.Top,
+        ) {
+            Column(
+                modifier = Modifier.weight(1f),
+                verticalArrangement = Arrangement.spacedBy(2.dp),
+            ) {
+                Text(group.name.ifBlank { group.groupId }, style = bodyMediumBold())
+                Text(
+                    "ID ${group.groupId} · ${branchLabel(group.branchCode, branches)} · ${if (group.enabled) "Activo" else "Inactivo"}",
+                    style = bodySmall(color = MaterialTheme.colorScheme.onSurfaceVariant),
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
+            TextButtonS(
+                label = "Editar",
+                icon = Icons.Filled.Edit,
+                color = MaterialTheme.colorScheme.secondary,
+                onClick = { viewModel.onEditYappyOnsiteGroup(group.groupId) },
+            )
+            TextButtonS(
+                label = "Eliminar",
+                icon = Icons.Filled.Delete,
+                color = MaterialTheme.colorScheme.error,
+                onClick = { viewModel.requestDeleteYappyOnsiteGroup(group.groupId) },
+            )
+        }
+
+        Divider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.12f))
+        Text("Unidades de cobro", style = bodyMediumBold())
+        if (devices.isEmpty()) {
+            InlineEmptyState("Aún no hay unidades de cobro registradas para este grupo.")
+        } else {
+            devices.forEach { device ->
+                YappyOnsiteDeviceConfiguredRow(
+                    device = device,
+                    branches = branches,
+                    viewModel = viewModel,
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun YappyOnsiteDeviceConfiguredRow(
+    device: YappyOnsiteDevice,
+    branches: List<Branch>,
+    viewModel: PaymentMethodsViewModel,
+) {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(10.dp))
+            .background(MaterialTheme.colorScheme.background)
+            .border(
+                width = 1.dp,
+                color = MaterialTheme.colorScheme.outline.copy(alpha = 0.08f),
+                shape = RoundedCornerShape(10.dp),
+            )
+            .padding(10.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        Text(device.name.ifBlank { "Unidad de cobro ${device.deviceId}" }, style = bodyMediumBold())
+        Text(
+            "${billingPointLabel(device.branchCode, device.billingPoint, branches)} · Device ID ${device.deviceId} · ${if (device.hasOpenSession) "Sesión abierta" else if (device.enabled) "Activa" else "Inactiva"}",
+            style = bodySmall(color = MaterialTheme.colorScheme.onSurfaceVariant),
+            maxLines = 3,
+            overflow = TextOverflow.Ellipsis,
+        )
+        Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+            TextButtonS(
+                label = "Editar",
+                icon = Icons.Filled.Edit,
+                color = MaterialTheme.colorScheme.secondary,
+                onClick = { viewModel.onEditYappyOnsiteDevice(device) },
+            )
+            TextButtonS(
+                label = "Eliminar",
+                icon = Icons.Filled.Delete,
+                color = MaterialTheme.colorScheme.error,
+                onClick = { viewModel.requestDeleteYappyOnsiteDevice(device) },
+            )
+        }
+    }
+}
+
+@Composable
+private fun YappyOnsiteGroupEditSheet(
+    uiState: PaymentUiState,
+    viewModel: PaymentMethodsViewModel,
+) {
+    val form = uiState.yappyOnsiteGroupForm
+    val branches = uiState.branches
+    val usedBranchCodes = uiState.yappyOnsiteGroups
+        .filterNot { it.groupId.equals(uiState.editingYappyOnsiteGroupId.orEmpty(), ignoreCase = true) }
+        .map { it.branchCode }
+        .toSet()
+    val availableBranches = branches.filter {
+        it.branchCode == form.branchCode || it.branchCode !in usedBranchCodes
+    }
+    val selectedBranchIndex = availableBranches.indexOfFirst { it.branchCode == form.branchCode }
+        .takeIf { it >= 0 } ?: 0
+
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp)
+            .padding(bottom = 24.dp),
+        verticalArrangement = Arrangement.spacedBy(12.dp),
+    ) {
+        Text(
+            if (uiState.editingYappyOnsiteGroupId != null) "Editar grupo" else "Agregar grupo",
+            style = titleMediumBold(),
+        )
+        DMOutlinedTextField(
+            text = form.groupId,
+            label = "ID del grupo",
+            modifier = Modifier.fillMaxWidth(),
+            onChange = viewModel::onYappyOnsiteGroupIdChange,
+        )
+        if (availableBranches.isNotEmpty()) {
+            DMDropDownField(
+                label = "Sucursal",
+                items = availableBranches,
+                selectedIndex = selectedBranchIndex,
+                onItemSelected = { _, branch ->
+                    viewModel.onYappyOnsiteGroupBranchChange(branch.branchCode)
+                },
+                selectedItemToString = { branchLabel(it.branchCode, branches) },
+            )
+        }
+        DMOutlinedTextField(
+            text = form.apiKey,
+            label = "API key",
+            modifier = Modifier.fillMaxWidth(),
+            onChange = viewModel::onYappyOnsiteGroupApiKeyChange,
+        )
+        DMOutlinedTextField(
+            text = form.secretKey,
+            label = "Secret key",
+            modifier = Modifier.fillMaxWidth(),
+            onChange = viewModel::onYappyOnsiteGroupSecretKeyChange,
+        )
+        Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+            OutlinedButtonM(
+                modifier = Modifier.weight(1f),
+                onClick = viewModel::onCancelYappyOnsiteGroupEdit,
+            ) {
+                Text("Cancelar")
+            }
+            ButtonM(
+                modifier = Modifier.weight(1f),
+                onClick = viewModel::onSaveYappyOnsiteGroup,
+            ) {
+                Text("Guardar")
+            }
+        }
+    }
+}
+
+@Composable
+private fun YappyOnsiteDeviceEditSheet(
+    uiState: PaymentUiState,
+    viewModel: PaymentMethodsViewModel,
+) {
+    val form = uiState.yappyOnsiteDeviceForm
+    val isEditing = uiState.editingYappyOnsiteDeviceId != null
+    val groups = uiState.yappyOnsiteGroups
+    val selectedGroupIndex = groups.indexOfFirst { it.groupId.equals(form.groupId, ignoreCase = true) }
+        .takeIf { it >= 0 } ?: 0
+    val group = uiState.yappyOnsiteGroups.firstOrNull {
+        it.groupId.equals(form.groupId, ignoreCase = true)
+    }
+    val branchCode = form.branchCode.ifBlank { group?.branchCode.orEmpty() }
+    val currentDeviceId = uiState.editingYappyOnsiteDeviceId.orEmpty()
+    val usedBillingPoints = uiState.yappyOnsiteDevices
+        .filter {
+            it.groupId.equals(form.groupId, ignoreCase = true) &&
+                !it.deviceId.equals(currentDeviceId, ignoreCase = true)
+        }
+        .map { it.billingPoint }
+        .toSet()
+    val billingPoints = uiState.branches
+        .firstOrNull { it.branchCode == branchCode }
+        ?.fiscalBillingPoints
+        ?.filter {
+            it.billingPoint == form.billingPoint || it.billingPoint !in usedBillingPoints
+        }
+        .orEmpty()
+    val selectedBillingPointIndex = billingPoints.indexOfFirst { it.billingPoint == form.billingPoint }
+        .takeIf { it >= 0 } ?: 0
+
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp)
+            .padding(bottom = 24.dp),
+        verticalArrangement = Arrangement.spacedBy(12.dp),
+    ) {
+        Text(if (isEditing) "Editar unidad de cobro" else "Agregar unidad de cobro", style = titleMediumBold())
+        if (!isEditing && groups.isNotEmpty()) {
+            DMDropDownField(
+                label = "Grupo",
+                items = groups,
+                selectedIndex = selectedGroupIndex,
+                onItemSelected = { _, selectedGroup ->
+                    viewModel.onYappyOnsiteDeviceGroupChange(selectedGroup.groupId)
+                },
+                selectedItemToString = { it.name.ifBlank { it.groupId } },
+            )
+        } else {
+            group?.let {
+                Text(
+                    "Grupo ${it.groupId} · ${branchLabel(it.branchCode, uiState.branches)}",
+                    style = bodySmall(color = MaterialTheme.colorScheme.onSurfaceVariant),
+                )
+            }
+        }
+        if (!isEditing && groups.isEmpty()) {
+            Text(
+                "Guarda al menos un grupo antes de registrar unidades de cobro.",
+                style = bodySmall(color = MaterialTheme.colorScheme.onSurfaceVariant),
+            )
+        }
+        DMOutlinedTextField(
+            text = form.deviceId,
+            label = "Device ID",
+            modifier = Modifier.fillMaxWidth(),
+            onChange = viewModel::onYappyOnsiteDeviceIdChange,
+        )
+        if (billingPoints.isNotEmpty()) {
+            DMDropDownField(
+                label = "Punto de facturación",
+                items = billingPoints,
+                selectedIndex = selectedBillingPointIndex,
+                onItemSelected = { _, point ->
+                    viewModel.onYappyOnsiteDeviceBillingPointChange(point.billingPoint)
+                },
+                selectedItemToString = {
+                    billingPointLabel(branchCode, it.billingPoint, uiState.branches)
+                },
+            )
+        }
+        Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+            OutlinedButtonM(
+                modifier = Modifier.weight(1f),
+                onClick = viewModel::onCancelYappyOnsiteDeviceEdit,
+            ) {
+                Text("Cancelar")
+            }
+            ButtonM(
+                modifier = Modifier.weight(1f),
+                onClick = viewModel::onSaveYappyOnsiteDevice,
+            ) {
+                Text("Guardar")
+            }
+        }
+    }
+}
+
+private fun branchLabel(branchCode: String, branches: List<Branch>): String {
+    return branches.firstOrNull { it.branchCode == branchCode }
+        ?.name
+        ?.trim()
+        .orEmpty()
+        .ifBlank { "Sucursal" }
+}
+
+private fun billingPointLabel(
+    branchCode: String,
+    billingPoint: String,
+    branches: List<Branch>,
+): String {
+    val branchName = branchLabel(branchCode, branches)
+    val point = branches
+        .firstOrNull { it.branchCode == branchCode }
+        ?.fiscalBillingPoints
+        ?.firstOrNull { it.billingPoint == billingPoint }
+    val pointName = point?.description?.trim().orEmpty().ifBlank { "Punto" }
+    return "$branchName - $pointName"
+}
+
+@Composable
+private fun InlineEmptyState(message: String) {
+    Text(
+        text = message,
+        modifier = Modifier.fillMaxWidth(),
+        style = bodyMedium(color = MaterialTheme.colorScheme.onSurfaceVariant),
+        textAlign = TextAlign.Center,
+    )
+}
+
+@Composable
 private fun BulletItem(text: String) {
     BulletItem(AnnotatedString(text))
 }
@@ -1754,7 +3798,7 @@ private fun PaypalConfiguration(
 ) {
     val summary = uiState.paymentSummary
     val linkedAccount = summary?.paymentMethods?.paypal?.linkedAccount == true
-    val linkedBilling = summary?.linkedPaypalBillingAgreement == true
+    val ready = summary?.paymentMethods?.paypal?.readyForPayments() == true
 
     Card(
         modifier = Modifier.fillMaxWidth(),
@@ -1769,34 +3813,23 @@ private fun PaypalConfiguration(
 
             PaypalStatusRow(
                 label = "Cuenta PayPal conectada",
-                active = linkedAccount,
-                activeText = "Conectada",
-            )
-            PaypalStatusRow(
-                label = "Autorización de cobro",
-                active = linkedBilling,
-                activeText = "Autorizada",
+                active = ready || linkedAccount,
+                activeText = if (ready) "Lista" else "Conectada",
             )
 
             Text(
-                text = "Debes completar ambos pasos para finalizar la configuración.",
+                text = "Se abrirá PayPal para completar la conexión segura de la cuenta.",
                 style = labelSmall(color = MaterialTheme.colorScheme.onSurfaceVariant),
             )
 
-            ButtonM(
-                onClick = viewModel::onConnectPaypal,
-                containerColor = MaterialTheme.colorScheme.secondary,
-                contentColor = MaterialTheme.colorScheme.onSecondary,
-            ) {
-                Text("Conectar cuenta PayPal")
-            }
-
-            OutlinedButtonM(
-                onClick = viewModel::onAuthorizePaypalBilling,
-                contentColor = MaterialTheme.colorScheme.secondary,
-                border = BorderStroke(1.dp, MaterialTheme.colorScheme.secondary),
-            ) {
-                Text("Autorización de cobro")
+            if (!isOnboardingFlow) {
+                ButtonM(
+                    onClick = viewModel::onConnectPaypal,
+                    containerColor = MaterialTheme.colorScheme.secondary,
+                    contentColor = MaterialTheme.colorScheme.onSecondary,
+                ) {
+                    Text("Conectar cuenta PayPal")
+                }
             }
 
             if (!isOnboardingFlow && linkedAccount) {
@@ -1807,7 +3840,7 @@ private fun PaypalConfiguration(
 
             if (!isOnboardingFlow) {
                 Text(
-                    text = "Cuando ambas validaciones estén completas, PayPal quedará totalmente operativo.",
+                    text = "Cuando PayPal confirme la conexión, el canal quedará disponible para links de pago.",
                     style = labelSmall(color = MaterialTheme.colorScheme.onSurfaceVariant),
                 )
             }
@@ -1873,7 +3906,7 @@ private fun AchConfiguration(
 
             DMOutlinedTextField(
                 text = uiState.achForm.accountNumber,
-                label = if (configured) "Número de cuenta (reingresar para actualizar)" else "Número de cuenta",
+                label = if (configured) "Número de cuenta (opcional si no cambia)" else "Número de cuenta",
                 modifier = Modifier.fillMaxWidth(),
                 onChange = viewModel::onAchAccountNumberChange,
             )
@@ -2030,6 +4063,36 @@ private fun YappyOnboardingFooter(
             ) {
             Text(primaryLabel)
         }
+        OnboardingTermsIfFirstStep(step)
+    }
+}
+
+@Composable
+private fun YappyOnsiteOnboardingFooter(
+    step: Int,
+    editingGroup: Boolean,
+    editingDevice: Boolean,
+    onBack: () -> Unit,
+    onPrimary: () -> Unit,
+) {
+    val primaryLabel = when (step) {
+        2 -> if (editingGroup) "Guardar cambios" else "Continuar"
+        3 -> if (editingDevice) "Guardar cambios" else "Guardar unidades de cobro"
+        4 -> "Finalizar"
+        else -> "Continuar"
+    }
+    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        OutlinedButtonM(onClick = onBack) {
+            Text("Atrás")
+        }
+        ButtonM(
+            onClick = onPrimary,
+            containerColor = MaterialTheme.colorScheme.secondary,
+            contentColor = MaterialTheme.colorScheme.onSecondary,
+        ) {
+            Text(primaryLabel)
+        }
+        OnboardingTermsIfFirstStep(step)
     }
 }
 
@@ -2039,7 +4102,7 @@ private fun AchOnboardingFooter(
     onBack: () -> Unit,
     onPrimary: () -> Unit,
 ) {
-    val primaryLabel = if (step < 3) "Continuar" else "Guardar configuración ACH"
+    val primaryLabel = if (step < 4) "Continuar" else "Guardar configuración ACH"
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
         OutlinedButtonM(
             onClick = onBack,
@@ -2055,6 +4118,7 @@ private fun AchOnboardingFooter(
         ) {
             Text(primaryLabel)
         }
+        OnboardingTermsIfFirstStep(step)
     }
 }
 
@@ -2064,7 +4128,7 @@ private fun PaypalOnboardingFooter(
     onBack: () -> Unit,
     onPrimary: () -> Unit,
 ) {
-    val primaryLabel = if (step < 4) "Continuar" else "Finalizar configuración"
+    val primaryLabel = if (step < 4) "Continuar" else "Conectar PayPal"
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
         OutlinedButtonM(
             onClick = onBack,
@@ -2080,6 +4144,33 @@ private fun PaypalOnboardingFooter(
         ) {
             Text(primaryLabel)
         }
+        OnboardingTermsIfFirstStep(step)
+    }
+}
+
+@Composable
+private fun TiloPayOnboardingFooter(
+    step: Int,
+    onBack: () -> Unit,
+    onPrimary: () -> Unit,
+) {
+    val primaryLabel = if (step < 4) "Continuar" else "Vincular cuenta TiloPay"
+    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        OutlinedButtonM(
+            onClick = onBack,
+            contentColor = MaterialTheme.colorScheme.secondary,
+            border = BorderStroke(1.dp, MaterialTheme.colorScheme.secondary),
+        ) {
+            Text("Atrás")
+        }
+        ButtonM(
+            onClick = onPrimary,
+            containerColor = MaterialTheme.colorScheme.secondary,
+            contentColor = MaterialTheme.colorScheme.onSecondary,
+        ) {
+            Text(primaryLabel)
+        }
+        OnboardingTermsIfFirstStep(step)
     }
 }
 
@@ -2093,8 +4184,10 @@ private fun OnboardingFooter(
     val primaryLabel = when {
         step == 1 -> "Continuar"
         method == PaymentMethodType.Yappy -> "Conectar Yappy"
+        method == PaymentMethodType.YappyOnsite -> "Continuar"
         method == PaymentMethodType.Ach -> "Guardar configuración ACH"
         method == PaymentMethodType.Paypal -> "Continuar"
+        method == PaymentMethodType.CardTilopay -> "Vincular cuenta TiloPay"
         else -> "Continuar"
     }
 
@@ -2105,6 +4198,17 @@ private fun OnboardingFooter(
         ButtonM(onClick = onPrimary) {
             Text(primaryLabel)
         }
+        OnboardingTermsIfFirstStep(step)
+    }
+}
+
+@Composable
+private fun OnboardingTermsIfFirstStep(step: Int) {
+    if (step == 1) {
+        PaymentTermsText(
+            textColor = MaterialTheme.colorScheme.onSurfaceVariant,
+            linkColor = MaterialTheme.colorScheme.secondary,
+        )
     }
 }
 
@@ -2192,4 +4296,41 @@ private fun formatApiDate(raw: String?): String {
     }
 
     return value
+}
+
+private fun formatBatchPeriodLabel(periodStart: String?, periodEnd: String?): String {
+    val value = periodStart.orEmpty().ifBlank { periodEnd.orEmpty() }.trim()
+    if (value.isBlank()) return "-"
+
+    val datePart = value.take(10)
+    val parts = datePart.split("-")
+    if (parts.size < 2) return value
+
+    val year = parts[0].toIntOrNull() ?: return value
+    val month = parts[1].toIntOrNull() ?: return value
+    val monthName = listOf(
+        "Enero",
+        "Febrero",
+        "Marzo",
+        "Abril",
+        "Mayo",
+        "Junio",
+        "Julio",
+        "Agosto",
+        "Septiembre",
+        "Octubre",
+        "Noviembre",
+        "Diciembre",
+    ).getOrNull(month - 1) ?: return value
+
+    return "$monthName $year"
+}
+
+private fun feePaymentMethodLabel(method: String): String {
+    return when (method.trim().uppercase()) {
+        "YAPPY", "YAPPY_ONSITE" -> "Yappy"
+        "ACH" -> "ACH"
+        "TILOPAY_CARD", "CARD", "CARD_TILOPAY" -> "Tarjeta"
+        else -> method.ifBlank { "-" }
+    }
 }

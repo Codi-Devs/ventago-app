@@ -119,4 +119,6 @@ sealed class SettingsStateUiEvent {
     data object LaunchCamera: SettingsStateUiEvent()
     data object LaunchGallery: SettingsStateUiEvent()
     data object LaunchSettings: SettingsStateUiEvent()
+    data object AccountDeleted: SettingsStateUiEvent()
+    data object DeleteAccountFailed: SettingsStateUiEvent()
 }

@@ -7,15 +7,29 @@ import com.teco.ventago.features.payments.data.provider.IPaymentsProvider
 import com.teco.ventago.features.payments.domain.models.AchAccount
 import com.teco.ventago.features.payments.domain.models.AchAccountConfigRequest
 import com.teco.ventago.features.payments.domain.models.AchStatus
+import com.teco.ventago.features.payments.domain.models.DirectCheckoutRequest
+import com.teco.ventago.features.payments.domain.models.DirectCheckoutResponse
 import com.teco.ventago.features.payments.domain.models.FeeBatchItem
 import com.teco.ventago.features.payments.domain.models.FeeBatchesPayload
 import com.teco.ventago.features.payments.domain.models.FeeSummary
 import com.teco.ventago.features.payments.domain.models.FeeTransactionItem
 import com.teco.ventago.features.payments.domain.models.FeeTransactionsPayload
+import com.teco.ventago.features.payments.domain.models.TiloPayCredentialsRequest
+import com.teco.ventago.features.payments.domain.models.TiloPayStatus
+import com.teco.ventago.features.payments.domain.models.YappyOnsiteCancelPendingRequest
+import com.teco.ventago.features.payments.domain.models.YappyOnsiteCancelPendingResponse
+import com.teco.ventago.features.payments.domain.models.YappyOnsiteCancelRequest
+import com.teco.ventago.features.payments.domain.models.YappyOnsiteDevice
+import com.teco.ventago.features.payments.domain.models.YappyOnsiteDeviceConfigRequest
+import com.teco.ventago.features.payments.domain.models.YappyOnsiteGroup
+import com.teco.ventago.features.payments.domain.models.YappyOnsiteGroupConfigRequest
+import com.teco.ventago.features.payments.domain.models.YappyOnsiteTransactionPayload
+import com.teco.ventago.features.payments.domain.models.YappyOnsiteTransactionStatus
 import com.teco.ventago.utils.ApiResponse
 import com.teco.ventago.utils.BadRequestException
 import com.teco.ventago.utils.isError
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.booleanOrNull
 import kotlinx.serialization.json.contentOrNull
@@ -31,6 +45,9 @@ interface IPaymentsRepository {
     suspend fun getAchAccount(businessId: Int): AchAccount
     suspend fun configureAchAccount(businessId: Int, request: AchAccountConfigRequest): Boolean
     suspend fun disableAch(businessId: Int): Boolean
+    suspend fun getTiloPayStatus(businessId: Int): TiloPayStatus
+    suspend fun configureTiloPayCredentials(businessId: Int, request: TiloPayCredentialsRequest): TiloPayStatus
+    suspend fun disconnectTiloPay(businessId: Int): TiloPayStatus
     suspend fun getFeesSummary(businessId: Int, currencyCode: String): FeeSummary
     suspend fun getFeeTransactions(
         businessId: Int,
@@ -38,6 +55,7 @@ interface IPaymentsRepository {
         size: Int,
         status: String?,
         paymentMethod: String?,
+        batchId: Long?,
         currencyCode: String
     ): Pair<List<FeeTransactionItem>, Int>
     suspend fun getFeeBatches(
@@ -47,6 +65,24 @@ interface IPaymentsRepository {
         status: String?,
         currencyCode: String
     ): Pair<List<FeeBatchItem>, Int>
+    suspend fun configureYappyOnsiteGroup(businessId: Int, groupId: String, request: YappyOnsiteGroupConfigRequest): Boolean
+    suspend fun listYappyOnsiteGroups(businessId: Int): List<YappyOnsiteGroup>
+    suspend fun deleteYappyOnsiteGroup(businessId: Int, groupId: String): Boolean
+    suspend fun registerYappyOnsiteDevice(businessId: Int, groupId: String, request: YappyOnsiteDeviceConfigRequest): Boolean
+    suspend fun updateYappyOnsiteDevice(businessId: Int, groupId: String, deviceId: String, request: YappyOnsiteDeviceConfigRequest): Boolean
+    suspend fun deleteYappyOnsiteDevice(businessId: Int, groupId: String, deviceId: String): Boolean
+    suspend fun listYappyOnsiteDevices(businessId: Int, groupId: String): List<YappyOnsiteDevice>
+    suspend fun getYappyOnsiteTransaction(businessId: Int, transactionId: String): YappyOnsiteTransactionPayload
+    suspend fun cancelYappyOnsiteTransaction(
+        businessId: Int,
+        transactionId: String,
+        request: YappyOnsiteCancelRequest
+    ): YappyOnsiteTransactionStatus
+    suspend fun cancelPendingYappyOnsiteTransaction(
+        businessId: Int,
+        request: YappyOnsiteCancelPendingRequest
+    ): YappyOnsiteCancelPendingResponse
+    suspend fun createDirectCheckout(businessId: Int, request: DirectCheckoutRequest): DirectCheckoutResponse
 }
 
 class PaymentsRepository(
@@ -138,6 +174,45 @@ class PaymentsRepository(
         }
     }
 
+    override suspend fun getTiloPayStatus(businessId: Int): TiloPayStatus {
+        return try {
+            val response = provider.getTiloPayStatus(businessId)
+            ensureOk(response)
+            val data = response.data as? JsonObject ?: JsonObject(emptyMap())
+            json.decodeFromJsonElement<TiloPayStatus>(data)
+        } catch (e: Exception) {
+            logger.sendLog(Log(LogLevel.ERROR, "PaymentsRepository::getTiloPayStatus", "Error loading TiloPay status. Error: ${e.message ?: "UNKNOWN"}, businessId: $businessId"))
+            throw e
+        }
+    }
+
+    override suspend fun configureTiloPayCredentials(
+        businessId: Int,
+        request: TiloPayCredentialsRequest
+    ): TiloPayStatus {
+        return try {
+            val response = provider.configureTiloPayCredentials(businessId, request)
+            ensureOk(response)
+            val data = response.data as? JsonObject ?: JsonObject(emptyMap())
+            json.decodeFromJsonElement<TiloPayStatus>(data)
+        } catch (e: Exception) {
+            logger.sendLog(Log(LogLevel.ERROR, "PaymentsRepository::configureTiloPayCredentials", "Error configuring TiloPay. Error: ${e.message ?: "UNKNOWN"}, businessId: $businessId"))
+            throw e
+        }
+    }
+
+    override suspend fun disconnectTiloPay(businessId: Int): TiloPayStatus {
+        return try {
+            val response = provider.disconnectTiloPay(businessId)
+            ensureOk(response)
+            val data = response.data as? JsonObject ?: JsonObject(emptyMap())
+            json.decodeFromJsonElement<TiloPayStatus>(data)
+        } catch (e: Exception) {
+            logger.sendLog(Log(LogLevel.ERROR, "PaymentsRepository::disconnectTiloPay", "Error disconnecting TiloPay. Error: ${e.message ?: "UNKNOWN"}, businessId: $businessId"))
+            throw e
+        }
+    }
+
     override suspend fun getFeesSummary(businessId: Int, currencyCode: String): FeeSummary {
         return try {
             val response = provider.getFeesSummary(businessId, currencyCode)
@@ -156,6 +231,7 @@ class PaymentsRepository(
         size: Int,
         status: String?,
         paymentMethod: String?,
+        batchId: Long?,
         currencyCode: String
     ): Pair<List<FeeTransactionItem>, Int> {
         return try {
@@ -165,12 +241,13 @@ class PaymentsRepository(
                 size = size,
                 status = status,
                 paymentMethod = paymentMethod,
+                batchId = batchId,
                 currencyCode = currencyCode
             )
             ensureOk(response)
             val data = response.data as? JsonObject ?: JsonObject(emptyMap())
             val payload = json.decodeFromJsonElement<FeeTransactionsPayload>(data)
-            payload.items to payload.pagination.total
+            payload.items to (payload.total.takeIf { it > 0 } ?: payload.pagination.total)
         } catch (e: Exception) {
             logger.sendLog(Log(LogLevel.ERROR, "PaymentsRepository::getFeeTransactions", "Error loading fee transactions. Error: ${e.message ?: "UNKNOWN"}"))
             throw e
@@ -195,9 +272,166 @@ class PaymentsRepository(
             ensureOk(response)
             val data = response.data as? JsonObject ?: JsonObject(emptyMap())
             val payload = json.decodeFromJsonElement<FeeBatchesPayload>(data)
-            payload.items to payload.pagination.total
+            payload.items to (payload.total.takeIf { it > 0 } ?: payload.pagination.total)
         } catch (e: Exception) {
             logger.sendLog(Log(LogLevel.ERROR, "PaymentsRepository::getFeeBatches", "Error loading fee batches. Error: ${e.message ?: "UNKNOWN"}"))
+            throw e
+        }
+    }
+
+    override suspend fun configureYappyOnsiteGroup(
+        businessId: Int,
+        groupId: String,
+        request: YappyOnsiteGroupConfigRequest
+    ): Boolean {
+        return try {
+            val response = provider.configureYappyOnsiteGroup(businessId, groupId, request)
+            ensureOk(response)
+            response.successful
+        } catch (e: Exception) {
+            logger.sendLog(Log(LogLevel.ERROR, "PaymentsRepository::configureYappyOnsiteGroup", "Error configuring Yappy onsite group. Error: ${e.message ?: "UNKNOWN"}, businessId: $businessId, groupId: $groupId"))
+            throw e
+        }
+    }
+
+    override suspend fun listYappyOnsiteGroups(businessId: Int): List<YappyOnsiteGroup> {
+        return try {
+            val response = provider.listYappyOnsiteGroups(businessId)
+            ensureOk(response)
+            val data = response.data as? JsonArray ?: JsonArray(emptyList())
+            json.decodeFromJsonElement<List<YappyOnsiteGroup>>(data)
+        } catch (e: Exception) {
+            logger.sendLog(Log(LogLevel.ERROR, "PaymentsRepository::listYappyOnsiteGroups", "Error listing Yappy onsite groups. Error: ${e.message ?: "UNKNOWN"}, businessId: $businessId"))
+            throw e
+        }
+    }
+
+    override suspend fun deleteYappyOnsiteGroup(businessId: Int, groupId: String): Boolean {
+        return try {
+            val response = provider.deleteYappyOnsiteGroup(businessId, groupId)
+            ensureOk(response)
+            extractBooleanData(response)
+        } catch (e: Exception) {
+            logger.sendLog(Log(LogLevel.ERROR, "PaymentsRepository::deleteYappyOnsiteGroup", "Error deleting Yappy onsite group. Error: ${e.message ?: "UNKNOWN"}, businessId: $businessId, groupId: $groupId"))
+            throw e
+        }
+    }
+
+    override suspend fun registerYappyOnsiteDevice(
+        businessId: Int,
+        groupId: String,
+        request: YappyOnsiteDeviceConfigRequest
+    ): Boolean {
+        return try {
+            val response = provider.registerYappyOnsiteDevice(businessId, groupId, request)
+            ensureOk(response)
+            response.successful
+        } catch (e: Exception) {
+            logger.sendLog(Log(LogLevel.ERROR, "PaymentsRepository::registerYappyOnsiteDevice", "Error registering Yappy onsite device. Error: ${e.message ?: "UNKNOWN"}, businessId: $businessId, groupId: $groupId"))
+            throw e
+        }
+    }
+
+    override suspend fun updateYappyOnsiteDevice(
+        businessId: Int,
+        groupId: String,
+        deviceId: String,
+        request: YappyOnsiteDeviceConfigRequest
+    ): Boolean {
+        return try {
+            val response = provider.updateYappyOnsiteDevice(businessId, groupId, deviceId, request)
+            ensureOk(response)
+            extractBooleanData(response)
+        } catch (e: Exception) {
+            logger.sendLog(Log(LogLevel.ERROR, "PaymentsRepository::updateYappyOnsiteDevice", "Error updating Yappy onsite device. Error: ${e.message ?: "UNKNOWN"}, businessId: $businessId, groupId: $groupId, deviceId: $deviceId"))
+            throw e
+        }
+    }
+
+    override suspend fun deleteYappyOnsiteDevice(
+        businessId: Int,
+        groupId: String,
+        deviceId: String
+    ): Boolean {
+        return try {
+            val response = provider.deleteYappyOnsiteDevice(businessId, groupId, deviceId)
+            ensureOk(response)
+            extractBooleanData(response)
+        } catch (e: Exception) {
+            logger.sendLog(Log(LogLevel.ERROR, "PaymentsRepository::deleteYappyOnsiteDevice", "Error deleting Yappy onsite device. Error: ${e.message ?: "UNKNOWN"}, businessId: $businessId, groupId: $groupId, deviceId: $deviceId"))
+            throw e
+        }
+    }
+
+    override suspend fun listYappyOnsiteDevices(businessId: Int, groupId: String): List<YappyOnsiteDevice> {
+        return try {
+            val response = provider.listYappyOnsiteDevices(businessId, groupId)
+            ensureOk(response)
+            val data = response.data as? JsonArray ?: JsonArray(emptyList())
+            json.decodeFromJsonElement<List<YappyOnsiteDevice>>(data)
+        } catch (e: Exception) {
+            logger.sendLog(Log(LogLevel.ERROR, "PaymentsRepository::listYappyOnsiteDevices", "Error listing Yappy onsite devices. Error: ${e.message ?: "UNKNOWN"}, businessId: $businessId, groupId: $groupId"))
+            throw e
+        }
+    }
+
+    override suspend fun getYappyOnsiteTransaction(
+        businessId: Int,
+        transactionId: String
+    ): YappyOnsiteTransactionPayload {
+        return try {
+            val response = provider.getYappyOnsiteTransaction(businessId, transactionId)
+            ensureOk(response)
+            val data = response.data as? JsonObject ?: JsonObject(emptyMap())
+            json.decodeFromJsonElement<YappyOnsiteTransactionPayload>(data)
+        } catch (e: Exception) {
+            logger.sendLog(Log(LogLevel.ERROR, "PaymentsRepository::getYappyOnsiteTransaction", "Error polling Yappy onsite transaction. Error: ${e.message ?: "UNKNOWN"}, businessId: $businessId, transactionId: $transactionId"))
+            throw e
+        }
+    }
+
+    override suspend fun cancelYappyOnsiteTransaction(
+        businessId: Int,
+        transactionId: String,
+        request: YappyOnsiteCancelRequest
+    ): YappyOnsiteTransactionStatus {
+        return try {
+            val response = provider.cancelYappyOnsiteTransaction(businessId, transactionId, request)
+            ensureOk(response)
+            val data = response.data as? JsonObject ?: JsonObject(emptyMap())
+            json.decodeFromJsonElement<YappyOnsiteTransactionStatus>(data)
+        } catch (e: Exception) {
+            logger.sendLog(Log(LogLevel.ERROR, "PaymentsRepository::cancelYappyOnsiteTransaction", "Error cancelling Yappy onsite transaction. Error: ${e.message ?: "UNKNOWN"}, businessId: $businessId, transactionId: $transactionId"))
+            throw e
+        }
+    }
+
+    override suspend fun cancelPendingYappyOnsiteTransaction(
+        businessId: Int,
+        request: YappyOnsiteCancelPendingRequest
+    ): YappyOnsiteCancelPendingResponse {
+        return try {
+            val response = provider.cancelPendingYappyOnsiteTransaction(businessId, request)
+            ensureOk(response)
+            val data = response.data as? JsonObject ?: JsonObject(emptyMap())
+            json.decodeFromJsonElement<YappyOnsiteCancelPendingResponse>(data)
+        } catch (e: Exception) {
+            logger.sendLog(Log(LogLevel.ERROR, "PaymentsRepository::cancelPendingYappyOnsiteTransaction", "Error cancelling pending Yappy onsite transaction. Error: ${e.message ?: "UNKNOWN"}, businessId: $businessId, branchCode: ${request.branchCode}, billingPoint: ${request.billingPoint}"))
+            throw e
+        }
+    }
+
+    override suspend fun createDirectCheckout(
+        businessId: Int,
+        request: DirectCheckoutRequest
+    ): DirectCheckoutResponse {
+        return try {
+            val response = provider.createDirectCheckout(businessId, request)
+            ensureOk(response)
+            val data = response.data as? JsonObject ?: JsonObject(emptyMap())
+            json.decodeFromJsonElement<DirectCheckoutResponse>(data)
+        } catch (e: Exception) {
+            logger.sendLog(Log(LogLevel.ERROR, "PaymentsRepository::createDirectCheckout", "Error creating direct checkout. Error: ${e.message ?: "UNKNOWN"}, businessId: $businessId, productType: ${request.productType}"))
             throw e
         }
     }
@@ -218,6 +452,18 @@ class PaymentsRepository(
 
                 val obj = runCatching { data.jsonObject }.getOrNull()
                 if (obj != null) {
+                    val deleted = obj["deleted"]?.jsonPrimitive?.booleanOrNull
+                    if (deleted != null) return deleted
+
+                    val cancelled = obj["cancelled"]?.jsonPrimitive?.booleanOrNull
+                    if (cancelled != null) return cancelled
+
+                    val configured = obj["configured"]?.jsonPrimitive?.booleanOrNull
+                    if (configured != null) return configured
+
+                    val enabled = obj["enabled"]?.jsonPrimitive?.booleanOrNull
+                    if (enabled != null) return enabled
+
                     val successful = obj["successful"]?.jsonPrimitive?.booleanOrNull
                     if (successful != null) return successful
                     val status = obj["status"]?.jsonPrimitive?.contentOrNull

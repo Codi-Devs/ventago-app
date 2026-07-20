@@ -62,7 +62,9 @@ fun routeKeyForScreen(screen: PosScreens): RouteKey? {
         PosScreens.PaymentsTransferenceScreen,
         PosScreens.PaymentsPaypalScreen,
         PosScreens.PaymentsPaypalOnboardingScreen,
-        PosScreens.PaymentsYappyScreen -> RouteKey.PAYMENTS_PAGE
+        PosScreens.PaymentsYappyScreen,
+        PosScreens.PaymentsYappyOnsiteScreen,
+        PosScreens.PaymentsTiloPayScreen -> RouteKey.PAYMENTS_PAGE
         PosScreens.BranchesManageScreen,
         PosScreens.BillingPointManageScreen,
         PosScreens.AddBillingPointScreen,

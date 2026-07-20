@@ -196,6 +196,8 @@
     <string name="paypal_charges">Cargos de PayPal</string>
     <string name="paypal">PayPal</string>
     <string name="yappy">Yappy</string>
+    <string name="yappy_onsite">Yappy en caja</string>
+    <string name="tilopay">TiloPay</string>
     <string name="domain">Dominio web</string>
     <string name="accept_payments_paypal">Acepta pagos de tus clientes directamente con PayPal</string>
     <string name="fast_secure_professional">Rápido, seguro y profesional</string>
@@ -242,6 +244,7 @@
     <string name="notifications_info_title">Tus notificaciones se actualizan en tiempo real</string>
     <string name="notifications_info_subtitle">Revisa aquí el estado de tus pagos y comprobantes.</string>
     <string name="commissions">Comisiones</string>
+    <string name="commissions_fees">Comisiones fees</string>
     <string name="paypal_commissions">Nota: Nuestra plataforma cobra una tarifa del 2% por pagos realizados a través de PayPal. Esta tarifa es independiente y adicional a las tarifas de transacción propias de PayPal, que son gestionadas directamente por PayPal.</string>
     <string name="check_paypal_commissions">Consultar tarifas de PayPal</string>
     <string name="bank_transfer">Transferencia bancaria</string>
@@ -490,6 +493,9 @@
     <string name="email_not_found">El correo %1$s no existe en la aplicación de MenuCodi. ¿Deseas registrarte en su lugar?</string>
     <string name="sign_out">Cerrar sesión</string>
     <string name="delete_account">Eliminar Cuenta</string>
+    <string name="delete_account_confirm_title">¿Eliminar cuenta?</string>
+    <string name="delete_account_confirm_message">Esto eliminará permanentemente tu cuenta de VentaGo y quitará el acceso a los datos de tu cuenta. Esta acción no se puede deshacer.</string>
+    <string name="delete_account_failed">No pudimos eliminar tu cuenta. Inténtalo nuevamente.</string>
     <string name="retry">Reintentar</string>
     <string name="authz_access_denied_title">Acceso restringido</string>
     <string name="authz_access_denied_message">Tu cuenta no tiene permiso para abrir ninguna pantalla disponible en la app en este momento.</string>
@@ -657,4 +663,8 @@
     <string name="customers_delete_customer_confirm_message">¿Seguro que deseas eliminar este cliente?</string>
     <string name="customers_delete_address_confirm_title">Eliminar dirección</string>
     <string name="customers_delete_address_confirm_message">¿Seguro que deseas eliminar esta dirección de facturación?</string>
+    <string name="pos_order_restore_title">Orden sin guardar en progreso</string>
+    <string name="pos_order_restore_message">Tienes una orden sin guardar en progreso. ¿Deseas continuar donde la dejaste?</string>
+    <string name="pos_order_restore_confirm">Sí, restaurar</string>
+    <string name="pos_order_restore_dismiss">No, empezar de nuevo</string>
 </resources>

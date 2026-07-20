@@ -9,5 +9,4 @@ interface IFirebaseService {
     fun getUser(): Flow<FirebaseUserDM?>
     suspend fun signOut()
     suspend fun sendPasswordResetEmail(email: String)
-    suspend fun deleteAccount()
 }

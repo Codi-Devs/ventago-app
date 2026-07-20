@@ -91,7 +91,7 @@ class AuthzEvaluatorTest {
     }
 
     @Test
-    fun paymentLinkAndAchPoliciesRequirePaymentsBetaAndScopes() {
+    fun paymentLinkAndAchPoliciesRequireScopesWithoutPaymentsBeta() {
         val scopedUser = subUser(
             setOf(
                 ScopeKey.INVOICE_CREATE_PAYMENT_LINK,
@@ -101,25 +101,68 @@ class AuthzEvaluatorTest {
             )
         )
 
-        assertFalse(AuthzEvaluator.canAction(ActionKey.ORDERS_PAYMENT_LINK, scopedUser, emptySet()))
-        assertFalse(AuthzEvaluator.canRoute(RouteKey.ACH_PAYMENT_DETAILS, scopedUser, emptySet()))
+        assertTrue(AuthzEvaluator.canAction(ActionKey.ORDERS_PAYMENT_LINK, scopedUser, emptySet()))
+        assertTrue(AuthzEvaluator.canAction(ActionKey.ACH_PAYMENT_APPROVE, scopedUser, emptySet()))
+        assertTrue(AuthzEvaluator.canAction(ActionKey.ACH_PAYMENT_REJECT, scopedUser, emptySet()))
+        assertTrue(AuthzEvaluator.canRoute(RouteKey.ACH_PAYMENT_DETAILS, scopedUser, emptySet()))
         assertFalse(AuthzEvaluator.canRoute(RouteKey.PAYMENTS_PAGE, scopedUser, emptySet()))
-
-        val beta = setOf(BetaFeature.PAYMENTS)
-        assertTrue(AuthzEvaluator.canAction(ActionKey.ORDERS_PAYMENT_LINK, scopedUser, beta))
-        assertTrue(AuthzEvaluator.canAction(ActionKey.ACH_PAYMENT_APPROVE, scopedUser, beta))
-        assertTrue(AuthzEvaluator.canAction(ActionKey.ACH_PAYMENT_REJECT, scopedUser, beta))
-        assertTrue(AuthzEvaluator.canRoute(RouteKey.ACH_PAYMENT_DETAILS, scopedUser, beta))
-        assertTrue(AuthzEvaluator.canRoute(RouteKey.PAYMENTS_PAGE, scopedUser, beta))
     }
 
     @Test
-    fun paymentsRouteDeniesSubUserWithoutScopesEvenIfPaymentsBetaEnabled() {
+    fun paymentsRouteDeniesSubUserWithoutScopes() {
         assertFalse(
             AuthzEvaluator.canRoute(
                 RouteKey.PAYMENTS_PAGE,
                 subUser(),
-                setOf(BetaFeature.PAYMENTS)
+                emptySet()
+            )
+        )
+    }
+
+    @Test
+    fun ownerCanAccessPaymentsAndYappyOnsiteQrWithoutScopes() {
+        val owner = owner()
+
+        assertTrue(AuthzEvaluator.canRoute(RouteKey.PAYMENTS_PAGE, owner, emptySet()))
+        assertTrue(AuthzEvaluator.canAction(ActionKey.PAYMENTS_CONFIGURE, owner, emptySet()))
+        assertTrue(AuthzEvaluator.canAction(ActionKey.PAYMENTS_PAY, owner, emptySet()))
+        assertTrue(AuthzEvaluator.canAction(ActionKey.ORDERS_YAPPY_ONSITE, owner, emptySet()))
+    }
+
+    @Test
+    fun paymentsRouteAllowsEachPaymentsScope() {
+        assertTrue(AuthzEvaluator.canRoute(RouteKey.PAYMENTS_PAGE, subUser(setOf(ScopeKey.PAYMENTS_CONFIGURE)), emptySet()))
+        assertTrue(AuthzEvaluator.canRoute(RouteKey.PAYMENTS_PAGE, subUser(setOf(ScopeKey.PAYMENTS_VIEW)), emptySet()))
+        assertTrue(AuthzEvaluator.canRoute(RouteKey.PAYMENTS_PAGE, subUser(setOf(ScopeKey.PAYMENTS_PAY)), emptySet()))
+    }
+
+    @Test
+    fun paymentsActionsRequireMatchingScopes() {
+        val configureUser = subUser(setOf(ScopeKey.PAYMENTS_CONFIGURE))
+        val payUser = subUser(setOf(ScopeKey.PAYMENTS_PAY))
+        val viewUser = subUser(setOf(ScopeKey.PAYMENTS_VIEW))
+
+        assertTrue(AuthzEvaluator.canAction(ActionKey.PAYMENTS_CONFIGURE, configureUser, emptySet()))
+        assertFalse(AuthzEvaluator.canAction(ActionKey.PAYMENTS_PAY, configureUser, emptySet()))
+        assertTrue(AuthzEvaluator.canAction(ActionKey.PAYMENTS_PAY, payUser, emptySet()))
+        assertFalse(AuthzEvaluator.canAction(ActionKey.PAYMENTS_CONFIGURE, payUser, emptySet()))
+        assertTrue(AuthzEvaluator.canAction(ActionKey.PAYMENTS_VIEW, viewUser, emptySet()))
+    }
+
+    @Test
+    fun yappyOnsiteQrRequiresDedicatedInvoiceScope() {
+        assertTrue(
+            AuthzEvaluator.canAction(
+                ActionKey.ORDERS_YAPPY_ONSITE,
+                subUser(setOf(ScopeKey.INVOICE_YAPPY_ONSITE)),
+                emptySet()
+            )
+        )
+        assertFalse(
+            AuthzEvaluator.canAction(
+                ActionKey.ORDERS_YAPPY_ONSITE,
+                subUser(setOf(ScopeKey.INVOICE_CREATE_PAYMENT_LINK)),
+                emptySet()
             )
         )
     }

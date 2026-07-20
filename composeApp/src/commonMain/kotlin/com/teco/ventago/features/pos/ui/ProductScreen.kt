@@ -33,6 +33,7 @@ import com.teco.ventago.design_system.organism.PosListOrganism
 import com.teco.ventago.features.pos.ui.viewmodel.PosViewModel
 import com.teco.ventago.features.pos.ui.viewmodel.totalItems
 import com.teco.ventago.features.pos.ui.viewmodel.FlowMode
+import com.teco.ventago.features.pos.ui.viewmodel.OrderCreationStep
 import com.teco.ventago.isTablet
 import com.teco.ventago.navigation.PosScreens
 import com.teco.ventago.utils.formatNumberToMoney
@@ -86,6 +87,7 @@ fun PosProductScreenBottomBar(backStackEntry: NavBackStackEntry?, navigate: (Pos
         ) {
             ButtonM(
                 onClick = {
+                    viewModel.saveOrderCreationCheckpoint(OrderCreationStep.CART)
                     navigate(if (isQuoteFlow) PosScreens.QuoteSummaryScreen else PosScreens.PaymentScreen)
                 },
                 modifier = Modifier.padding(start = 16.dp, end = 16.dp, bottom = 16.dp),

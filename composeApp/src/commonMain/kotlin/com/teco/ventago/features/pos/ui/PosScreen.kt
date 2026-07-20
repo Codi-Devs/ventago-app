@@ -54,6 +54,7 @@ import com.teco.ventago.core.LocalStorage
 import com.teco.ventago.core.flags.IFlagsService
 import com.teco.ventago.design_system.buttons.ButtonM
 import com.teco.ventago.design_system.molecules.InstallmentDueDateFieldKmp
+import com.teco.ventago.design_system.molecules.DMAlertDialog
 import com.teco.ventago.design_system.molecules.flags.DgiDownAlertBanner
 import com.teco.ventago.design_system.textfields.DMOutlinedTextField
 import com.teco.ventago.design_system.textfields.helpers.DMDropDownField
@@ -67,6 +68,7 @@ import com.teco.ventago.features.customers.ui.form.viewmodel.CustomerCountryOpti
 import com.teco.ventago.features.pos.ui.viewmodel.PosState
 import com.teco.ventago.features.pos.ui.viewmodel.PosViewModel
 import com.teco.ventago.features.pos.ui.viewmodel.FlowMode
+import com.teco.ventago.features.pos.ui.viewmodel.OrderCreationStep
 import com.teco.ventago.features.quotes.domain.QuoteSelectionStore
 import com.teco.ventago.navigation.PosScreens
 import com.teco.ventago.utils.DateFormat
@@ -87,6 +89,10 @@ import ventago.composeapp.generated.resources.pos_customer_type_question
 import ventago.composeapp.generated.resources.pos_customer_type_registered_desc
 import ventago.composeapp.generated.resources.pos_customer_type_registered_title
 import ventago.composeapp.generated.resources.pos_customer_type_required_to_continue
+import ventago.composeapp.generated.resources.pos_order_restore_confirm
+import ventago.composeapp.generated.resources.pos_order_restore_dismiss
+import ventago.composeapp.generated.resources.pos_order_restore_message
+import ventago.composeapp.generated.resources.pos_order_restore_title
 
 @Composable
 fun PosScreen(
@@ -100,6 +106,7 @@ fun PosScreen(
     val focusManager = LocalFocusManager.current
     val todayPanama = remember { currentPanamaDate() }
     val minInvoiceDate = remember(todayPanama) { todayPanama.plus(DatePeriod(months = -6)) }
+    val minOriginalInvoiceDate = remember { LocalDate(2000, 1, 1) }
     var invoiceConfigExpanded by rememberSaveable { mutableStateOf(false) }
 
     LaunchedEffect(Unit) {
@@ -109,6 +116,7 @@ fun PosScreen(
             QuoteSelectionStore.startQuoteFlow = false
 
             if (uiState.canCreateInvoice || uiState.canCreateDraft) {
+                viewModel.disableOrderCreationCheckpointForCurrentFlow(clearExisting = true)
                 viewModel.resetForNewSale()
                 viewModel.setFlowMode(FlowMode.SALE, quoteId = null)
                 if (quoteId != null) {
@@ -120,7 +128,32 @@ fun PosScreen(
         if (QuoteSelectionStore.startQuoteFlow) {
             viewModel.setFlowMode(FlowMode.QUOTE, quoteId = QuoteSelectionStore.selected?.id)
             QuoteSelectionStore.startQuoteFlow = false
+            return@LaunchedEffect
         }
+        viewModel.warmYappyOnsiteAvailabilityForNewOrder()
+        viewModel.checkOrderCreationCheckpointForRestore()
+    }
+
+    if (uiState.showOrderRestoreDialog) {
+        DMAlertDialog(
+            title = stringResource(Res.string.pos_order_restore_title),
+            message = stringResource(Res.string.pos_order_restore_message),
+            show = true,
+            onDismiss = {
+                viewModel.discardPendingOrderCreationCheckpoint()
+            },
+            onConfirm = {
+                when (viewModel.restorePendingOrderCreationCheckpoint()) {
+                    OrderCreationStep.PRODUCTS -> navigate(PosScreens.POSProductScreen)
+                    OrderCreationStep.CART -> navigate(PosScreens.CartScreen)
+                    OrderCreationStep.PAYMENT -> navigate(PosScreens.PaymentScreen)
+                    OrderCreationStep.CUSTOMER,
+                    null -> Unit
+                }
+            },
+            confirmText = stringResource(Res.string.pos_order_restore_confirm),
+            dismissText = stringResource(Res.string.pos_order_restore_dismiss),
+        )
     }
 
     Column(
@@ -150,12 +183,15 @@ fun PosScreen(
                 docTypeOptions = viewModel.docTypeOptions(),
                 operationNatureOptions = viewModel.operationNatureOptions(),
                 minInvoiceDate = minInvoiceDate,
+                minOriginalInvoiceDate = minOriginalInvoiceDate,
                 maxInvoiceDate = todayPanama,
                 onBranchSelected = viewModel::onBranchSelected,
                 onBillingPointSelected = viewModel::onBillingPointSelected,
                 onDocTypeSelected = viewModel::onDocTypeSelected,
                 onOperationNatureSelected = viewModel::onOperationNatureSelected,
-                onInvoiceIssueDateSelected = viewModel::onInvoiceIssueDateSelected
+                onInvoiceIssueDateSelected = viewModel::onInvoiceIssueDateSelected,
+                onOriginalInvoiceNumberChanged = viewModel::onOriginalInvoiceNumberChanged,
+                onOriginalInvoiceEmissionDateSelected = viewModel::onOriginalInvoiceEmissionDateSelected
             )
         }
 
@@ -207,6 +243,7 @@ fun PosScreen(
         ButtonM(
             onClick = {
                 if (viewModel.validateFinalCustomerSelection()) {
+                    viewModel.saveOrderCreationCheckpoint(OrderCreationStep.CUSTOMER)
                     navigate(PosScreens.POSProductScreen)
                 }
             },
@@ -230,14 +267,27 @@ private fun InvoiceConfigurationCard(
     docTypeOptions: List<String>,
     operationNatureOptions: List<String>,
     minInvoiceDate: LocalDate,
+    minOriginalInvoiceDate: LocalDate,
     maxInvoiceDate: LocalDate,
     onBranchSelected: (Int) -> Unit,
     onBillingPointSelected: (Int) -> Unit,
     onDocTypeSelected: (Int) -> Unit,
     onOperationNatureSelected: (Int) -> Unit,
     onInvoiceIssueDateSelected: (String) -> Unit,
+    onOriginalInvoiceNumberChanged: (String) -> Unit,
+    onOriginalInvoiceEmissionDateSelected: (String) -> Unit,
 ) {
     val rotation by animateFloatAsState(if (expanded) 180f else 0f)
+    val displayedDocTypeOptions = if (!uiState.enabledSelectionDocType && uiState.selectedDocType in setOf("04", "05")) {
+        listOf(presetNoteDocumentTypeLabel(uiState.selectedDocType))
+    } else {
+        docTypeOptions
+    }
+    val displayedDocTypeIndex = if (!uiState.enabledSelectionDocType && uiState.selectedDocType in setOf("04", "05")) {
+        0
+    } else {
+        uiState.selectedDocTypeIndex
+    }
 
     Card(
         modifier = Modifier
@@ -304,8 +354,8 @@ private fun InvoiceConfigurationCard(
 
                 DMDropDownField(
                     label = "Tipo de factura",
-                    items = docTypeOptions,
-                    selectedIndex = uiState.selectedDocTypeIndex,
+                    items = displayedDocTypeOptions,
+                    selectedIndex = displayedDocTypeIndex,
                     modifier = Modifier.padding(vertical = 6.dp),
                     onItemSelected = { idx, _ -> onDocTypeSelected(idx) },
                     isError = false,
@@ -322,6 +372,40 @@ private fun InvoiceConfigurationCard(
                     enabled = uiState.enabledOperationNature
                 )
 
+                if (uiState.selectedDocType == "06") {
+                    DMOutlinedTextField(
+                        text = uiState.originalInvoiceNumber,
+                        label = "Número de la Factura Original *",
+                        modifier = Modifier.padding(vertical = 6.dp),
+                        onChange = onOriginalInvoiceNumberChanged,
+                        keyboardType = KeyboardType.Text,
+                        imeAction = ImeAction.Next,
+                        supportingText = uiState.originalInvoiceNumberError
+                            ?: "Número de factura del documento original (máximo 22 caracteres)",
+                        isError = uiState.originalInvoiceNumberError != null
+                    )
+
+                    InstallmentDueDateFieldKmp(
+                        valueIso = uiState.originalInvoiceEmissionDateIso,
+                        onDatePickedIso = onOriginalInvoiceEmissionDateSelected,
+                        modifier = Modifier.padding(top = 6.dp, bottom = 2.dp),
+                        label = "Fecha de Emisión de la Factura Original *",
+                        minSelectableDate = minOriginalInvoiceDate,
+                        maxSelectableDate = maxInvoiceDate
+                    )
+                    Text(
+                        text = uiState.originalInvoiceEmissionDateError
+                            ?: "Fecha en que se emitió la factura original",
+                        style = bodySmall(),
+                        color = if (uiState.originalInvoiceEmissionDateError != null) {
+                            MaterialTheme.colorScheme.error
+                        } else {
+                            MaterialTheme.colorScheme.onSurfaceVariant
+                        },
+                        modifier = Modifier.padding(start = 16.dp, bottom = 6.dp)
+                    )
+                }
+
                 InstallmentDueDateFieldKmp(
                     valueIso = uiState.invoiceIssueDateIso,
                     onDatePickedIso = onInvoiceIssueDateSelected,
@@ -332,6 +416,14 @@ private fun InvoiceConfigurationCard(
                 )
             }
         }
+    }
+}
+
+private fun presetNoteDocumentTypeLabel(type: String): String {
+    return when (type) {
+        "04" -> "04 - Nota de Crédito Referente a FE"
+        "05" -> "05 - Nota de Débito Referente a FE"
+        else -> type
     }
 }
 

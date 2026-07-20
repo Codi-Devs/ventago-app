@@ -53,4 +53,23 @@ class OrderMutationErrorMapperTest {
 
         assertEquals("No se pudo anular el pedido.", message)
     }
+
+    @Test
+    fun messageForManualRefundRequiredBlocksReplacement() {
+        val error = Exception(
+            """
+            {"successful":false,"data":{"action":"manual_refund_required"},"error":"O_RP_005","errorMessage":"O_RP_005"}
+            """.trimIndent()
+        )
+
+        val message = OrderMutationErrorMapper.messageFor(
+            error = error,
+            fallback = "No se pudo cambiar el método de pago."
+        )
+
+        assertEquals(
+            "El proveedor ya confirmó el pago o el estado cambió. No se puede cambiar el método; requiere reembolso o conciliación manual.",
+            message
+        )
+    }
 }

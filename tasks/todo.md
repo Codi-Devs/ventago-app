@@ -1,3 +1,1039 @@
+# Yappy QR Exit Cancellation Guard TODO
+
+## Plan
+- [x] Trace Yappy onsite QR cancel and back-navigation paths.
+- [x] Add shared POS state for active QR exit confirmation so app-bar back can trigger the screen dialog.
+- [x] Show loading feedback while cancelling a Yappy onsite charge.
+- [x] Route hardware back and top-app-bar back through the same cancel-before-exit flow.
+- [x] Run focused compile verification and record results.
+
+## Verification Gates
+- [x] `./gradlew --no-build-cache --no-configuration-cache :composeApp:compileCommonMainKotlinMetadata`
+
+## Review Notes
+- Yappy onsite cancellation now calls `showLoading()` before the cancel endpoint and returns success/error feedback through the existing `LoadingSheet`.
+- Active QR exits are now represented in shared POS state so both the QR screen and the app shell can request the same confirmation dialog.
+- Hardware back and top-app-bar back on an active Yappy QR now prompt to cancel the QR before leaving; confirming cancels the transaction, hides loading, then returns to checkout.
+- The QR exit dialog is cleared on reset/new QR/replacement paths to avoid stale dialogs on later sales.
+- Common metadata compilation passed. Existing project warnings remain unrelated.
+
+# POS Manual Replacement False Invoice Warning TODO
+
+## Plan
+- [x] Trace the Yappy onsite -> payment link -> manual replacement flow from UI state to backend contracts.
+- [x] Make manual-payment registration resolve issued invoice status from the registration payload and refreshed order.
+- [x] Clear stale post-create invoice warning state after a successful manual replacement completion.
+- [x] Add focused regression coverage for nested manual-registration invoice/ticket payloads.
+- [x] Run focused tests/compile and record verification results.
+
+## Verification Gates
+- [x] `./gradlew --no-build-cache --no-configuration-cache :composeApp:testAndroidHostTest --tests com.teco.ventago.features.orders.RegisterManualPaymentsRequestTest`
+- [x] `./gradlew --no-build-cache --no-configuration-cache :composeApp:compileCommonMainKotlinMetadata`
+
+## Review Notes
+- Manual replacement now resolves invoice status from the manual registration response plus refreshed order evidence, including nested `invoice.status`, `invoice.cufe`, and fresh-order CUFE.
+- Successful manual replacement clears stale `postCreateInvoiceWarning`, so the POS success screen does not keep an old "factura manual" warning after the invoice is already issued.
+- Added regression coverage for stale refreshed-order status with issued manual-registration payload.
+- Focused manual-registration Android host tests and common metadata compilation passed. Existing project warnings remain unrelated.
+
+# POS Payment Change Ticket Print Cancellation TODO
+
+## Plan
+- [x] Confirm which automatic ticket print paths still run from cancellable UI/polling coroutines.
+- [x] Route payment-link issued-ticket printing through the existing `AppScope` non-cancellable print queue.
+- [x] Route Yappy onsite issued-ticket printing through the same protected print queue.
+- [x] Run focused compile/tests and record verification results.
+
+## Verification Gates
+- [x] `./gradlew --no-build-cache --no-configuration-cache :composeApp:compileCommonMainKotlinMetadata`
+- [x] `./gradlew --no-build-cache --no-configuration-cache :composeApp:testAndroidHostTest --tests com.teco.ventago.features.printers.PrinterRepositoryTest --tests com.teco.ventago.features.orders.RegisterManualPaymentsRequestTest`
+
+## Review Notes
+- Payment-link issued-invoice ticket printing now uses the same `AppScope` + `NonCancellable` queue as manual replacement instead of running inside the polling/UI coroutine.
+- Manual replacement queues the ticket before PDF loading, so a cancelled UI-only PDF fetch cannot prevent ticket printing.
+- Manual replacement passes the issued-status decision derived from the registration response/refreshed order through the print queue, avoiding false skips when the refreshed order has a missing invoice status.
+- Yappy onsite ticket printing now enqueues its provided ticket payload on the protected background queue instead of printing inline from polling.
+- Common metadata compilation and focused Android host tests passed. Existing project warnings remain unrelated.
+
+
+# POS Manual Replacement Ticket Print TODO
+
+## Plan
+- [x] Confirm why ticket printing fails after payment-link/manual replacement success.
+- [x] Move replacement ticket printing out of the UI-bound confirmation coroutine.
+- [x] Keep printer repository cancellation from being logged as a normal printer error.
+- [x] Run focused compile/tests and record verification results.
+
+## Verification Gates
+- [x] `./gradlew --no-build-cache --no-configuration-cache :composeApp:testAndroidHostTest --tests com.teco.ventago.features.printers.PrinterRepositoryTest`
+- [x] `./gradlew --no-build-cache --no-configuration-cache :composeApp:compileCommonMainKotlinMetadata`
+
+## Review Notes
+- Manual replacement success now captures the selected branch/billing point before closing the replacement UI and enqueues issued-invoice ticket printing on `AppScope`, so the print fetch/command is not cancelled by the success screen transition.
+- Queued manual-replacement ticket printing now runs inside `NonCancellable`, because the previous `AppScope` launch could still receive cancellation from suspend boundaries during the post-payment transition. Ticket failures now include the failing stage (`ticket_payload` or `print_ticket`) and throwable type in the log.
+- Manual registration ticket resolution now accepts `ticket` from either the top-level response field or nested `invoice.ticket`, avoiding the fallback docs fetch when the backend includes the ticket under the invoice object.
+- The fallback `/orders/{id}/invoices/docs/ticket` fetch now retries three times on `CancellationException` before failing the print attempt, with per-attempt cancellation logs.
+- Android Epson printer retries now rethrow `CancellationException` instead of treating it as a normal printer attempt failure.
+- `PosViewModel` DI now explicitly passes the named `AppScope` instead of relying on `viewModelOf` constructor resolution.
+- Printer repository calls rethrow `CancellationException` without logging it as a printer repository error.
+- Added focused repository and manual-registration DTO regression tests. Targeted Android host tests and common metadata compilation passed.
+
+# POS Pending Payment Method Change UI TODO
+
+## Plan
+- [x] Refactor POS payment UI so the payment selector/allocation surface can run in normal create mode and post-order replacement mode.
+- [x] Replace separate payment-link switch buttons with one “Seleccionar otro método de pago” action that opens replacement mode and hides the source method plus draft option.
+- [x] Implement release-first replacement actions for manual, payment link, and Yappy onsite, including manual success PDF loading and ticket printing.
+- [x] Guard exits during replacement selection with a cancel-order confirmation dialog.
+- [x] Extend manual payment DTO parsing/serialization for due dates and optional invoice/order/ticket response fields.
+- [x] Add focused tests and run verification commands.
+
+## Verification Gates
+- [x] `./gradlew --no-build-cache --no-configuration-cache :composeApp:testAndroidHostTest`
+- [x] `./gradlew --no-build-cache --no-configuration-cache :composeApp:compileCommonMainKotlinMetadata`
+
+## Review Notes
+- Payment-link success now shows one “Seleccionar otro método de pago” entry while the link is pending; opening it renders the shared payment screen content with payment link and draft hidden.
+- Active Yappy QR screens also expose the shared replacement selector with Yappy hidden, plus loading feedback for replacement/cancel mutations.
+- Replacement actions release the current pending intent only after the cashier confirms the new method, then create/register the chosen replacement.
+- Manual replacement registration now supports credit `due_date`, refreshes the order, loads the invoice PDF for the existing success actions, and prints the ticket once when a printer is configured.
+- Leaving an open replacement selector through back/home/new-sale prompts that the order will be cancelled and calls the existing order cancellation service on confirmation.
+- Added DTO and replacement option policy tests. Android host tests and common metadata compilation passed; existing project warnings remain unrelated.
+
+# Payment Success Order Deeplink TODO
+
+## Plan
+- [x] Route in-app notification order actions through `OrdersScreenRoute(orderNumber)`.
+- [x] Add external deep link support for `https://ventago.tecodigi.com/orders/order-details.html?orderNumber=...`.
+- [x] Add Android and iOS app/universal link host declarations for `ventago.tecodigi.com`.
+- [x] Add focused regression coverage for the payment-success order-details URL.
+- [x] Run focused resolver tests and common compile verification.
+
+## Verification Gates
+- [x] Attempted `./gradlew --no-build-cache --no-configuration-cache :composeApp:testDebugUnitTest --tests com.teco.ventago.features.notifications.NotificationActionResolverTest` but this migrated KMP module no longer has `testDebugUnitTest`.
+- [x] `./gradlew --no-build-cache --no-configuration-cache :composeApp:testAndroidHostTest --tests com.teco.ventago.features.notifications.NotificationActionResolverTest`
+- [x] `./gradlew --no-build-cache --no-configuration-cache :composeApp:compileCommonMainKotlinMetadata`
+
+## Review Notes
+- In-app notification taps that resolve to order details now propagate `OrdersScreenRoute(orderNumber)` from the notifications route into the orders graph.
+- `OrdersScreenRoute` now accepts `https://ventago.tecodigi.com/orders/order-details.html?orderNumber=...` as an external deep link while preserving the existing `tecodigi.com/orders` patterns.
+- Android App Links and iOS associated domains now include `ventago.tecodigi.com`; backend-hosted assetlinks/AASA files are still required for verified OS delivery.
+- Added regression coverage for the sample payment-success order number URL.
+- Focused Android host notification resolver tests and common metadata compilation passed. Existing project warnings remain unrelated.
+
+# Order Pending Payment Method Change TODO
+
+## Plan
+- [x] Audit pre-create POS payment selection against MANUAL, LINK, and YAPPY_ONSITE contracts.
+- [x] Audit post-create order detail/confirmation replacement flows for active Yappy QR and payment link release behavior.
+- [x] Align request/response DTOs, provider/repository/service calls, and ViewModel state transitions with the documented API wrapper contracts.
+- [x] Keep UI changes minimal and consistent with existing order detail/POS payment patterns.
+- [x] Add or update focused tests where contracts are parsed or request payloads are built.
+- [x] Run focused compile/tests and record verification results.
+
+## Verification Gates
+- [x] `./gradlew --no-build-cache --no-configuration-cache :composeApp:testAndroidHostTest --tests com.teco.ventago.features.orders.CxcOrderDetailsContractTest --tests com.teco.ventago.features.orders.ui.order_details.viewmodel.OrderMutationErrorMapperTest`
+- [x] `./gradlew --no-build-cache --no-configuration-cache :composeApp:compileCommonMainKotlinMetadata`
+
+## Review Notes
+- POS payment-link success now shows a `Cambiar método de pago` card while the link is still pending, with `Cobro manual` and conditional `Yappy en caja` actions.
+- Switching payment link to manual releases the active hosted pending intent with `customer_selected_cash`, hides the link, opens a manual registration panel, and submits payments through `POST /orders/{id}/payments/manual`.
+- Switching payment link to Yappy releases the active hosted pending intent with `customer_selected_yappy_onsite`, creates a replacement Yappy onsite pending intent, and navigates to the Yappy QR confirmation screen.
+- Pending-intent release parsing now supports `next_actions`, replacement link parsing accepts nested snake/camel URL shapes, and `manual_refund_required` maps to a blocking reconciliation message.
+- Focused Android host tests and common metadata compilation passed. Existing project warnings remain unrelated.
+
+# Credit Notes Fixes TODO
+
+## Plan
+- [x] Remove referenced credit/debit note and generic debit note types from the normal POS invoice-type dropdown.
+- [x] Preserve order-details preset creation for referenced credit/debit notes.
+- [x] Add generic credit-note original invoice fields, inline validation, and request references serialization.
+- [x] Add focused regression tests for dropdown mapping, validation, and request reference serialization.
+- [x] Run focused tests and common compile verification.
+
+## Verification Gates
+- [x] `./gradlew --no-build-cache --no-configuration-cache :composeApp:testAndroidHostTest --tests com.teco.ventago.features.pos.ui.viewmodel.PosNoteValidatorsTest --tests com.teco.ventago.features.orders.CreateOrderRequestTest`
+- [x] `./gradlew --no-build-cache --no-configuration-cache :composeApp:compileCommonMainKotlinMetadata`
+
+## Review Notes
+- Normal POS invoice-type dropdown now excludes `04`, `05`, and `07`; `06 - Nota de Crédito Genérica` remains selectable.
+- Order-details referenced note creation still presets `04`/`05`, disables the selector, and displays the preset note label even though those values are hidden from the normal dropdown.
+- Generic credit notes now collect original invoice number/date on the first step, validate required/max-length fields inline, and send a `paper` reference with midnight issue datetime.
+- POS payment actions now treat `06` as a note for CTA copy and draft/payment-link gating.
+- Focused tests and common metadata compilation passed. Existing project warnings remain unrelated.
+
+# POS Payment Link Success Polling TODO
+
+## Plan
+- [x] Add POS payment-link polling state and reset handling.
+- [x] Poll created payment-link orders from the success screen until payment/invoice terminal state.
+- [x] Hide link QR/share/copy after payment, show invoice-generation state, then show invoice actions.
+- [x] Print the ticket once after payment-link invoice generation when an active printer is configured.
+- [x] Run focused compile verification and record results.
+
+## Verification Gates
+- [x] `./gradlew --no-build-cache --no-configuration-cache :composeApp:compileCommonMainKotlinMetadata`
+
+## Review Notes
+- Added `createdOrderId`, payment-link polling/payment-detected state, and one-shot payment-link invoice print tracking to POS state.
+- `SuccessScreen` starts payment-link polling while mounted and stops it on dispose; unpaid links keep QR/copy/share, paid links show invoice generation, and issued invoices show invoice actions.
+- Payment-link polling refreshes the created order, detects paid status, fetches invoice PDF after issued status, stops on issued/failed, and attempts ticket printing once when an active printer is configured.
+- Common metadata compilation passed. Existing project warnings remain unrelated.
+
+# POS Yappy Onsite QR Conditional Padding TODO
+
+## Plan
+- [x] Restore the normal 72dp top content padding for non-QR Yappy onsite states.
+- [x] Keep the active QR view at zero top content padding and preserve 8dp QR inner padding on all sides.
+- [x] Run focused compile verification and record results.
+
+## Verification Gates
+- [x] `./gradlew --no-build-cache --no-configuration-cache :composeApp:compileCommonMainKotlinMetadata`
+
+## Review Notes
+- Added `isPendingQrView` so only the active QR display uses `top = 0.dp`; success, invoice-processing, failed, expired, cancelled, returned, and missing-QR states keep the standard `72.dp` top padding.
+- QR image keeps `8.dp` padding on all sides inside the white QR card.
+- Common metadata compilation passed. Existing project warnings remain unrelated.
+
+# POS Yappy Onsite QR Size Polish TODO
+
+## Plan
+- [x] Remove the extra top content padding from the Yappy onsite QR screen.
+- [x] Make the QR panel fill the available card width and reduce generated QR quiet-zone margin.
+- [x] Run focused compile verification and record results.
+
+## Verification Gates
+- [x] `./gradlew --no-build-cache --no-configuration-cache :composeApp:compileCommonMainKotlinMetadata`
+
+## Review Notes
+- Removed the 72dp top inset from the Yappy onsite QR content column.
+- QR generation now uses a larger 1200px bitmap with zero quiet-zone margin, and the QR card fills the available success card width with only 8dp inner padding.
+- Common metadata compilation passed. Existing project warnings remain unrelated.
+
+# POS Yappy Availability Warmup TODO
+
+## Plan
+- [x] Cache Yappy onsite device availability per business.
+- [x] Warm payment/Yappy availability at POS order start instead of waiting for payment screen entry.
+- [x] Keep payment-screen refresh as a fallback without causing late option churn when cache exists.
+- [x] Run common compile verification and record results.
+
+## Verification Gates
+- [x] `./gradlew --no-build-cache --no-configuration-cache :composeApp:compileCommonMainKotlinMetadata`
+
+## Review Notes
+- POS now warms Yappy onsite availability at order entry and after `resetForNewSale()`, so the payment screen can use already-resolved availability instead of doing the first device check there.
+- Yappy onsite devices are cached per business in `LocalStorage` and loaded immediately before the background refresh.
+- Background device refresh saves the cache on success and keeps cached devices visible while refreshing, avoiding a loading-state removal/reinsert of the Yappy option.
+- The payment screen still calls the refresh path as a fallback, but it no longer clears cached availability while checking.
+- Common metadata compilation passed. Existing project warnings remain unrelated.
+
+# Yappy Portrait Payment Options TODO
+
+## Plan
+- [x] Use the provided portrait Yappy logo asset for POS payment options.
+- [x] Keep payment-method configuration Yappy options on their existing horizontal logo.
+- [x] Run common compile verification and record results.
+
+## Verification Gates
+- [x] `./gradlew --no-build-cache --no-configuration-cache :composeApp:compileCommonMainKotlinMetadata`
+
+## Review Notes
+- The provided `/Users/oscar/Downloads/logo-yappy-color/yappy-color-portrait.png` matches the existing `composeResources/drawable/yappy_logo_portrait.png` asset by SHA-256, so no duplicate binary asset was added.
+- POS `Yappy en caja` payment option now uses `yappy_logo_portrait` instead of the horizontal `yappy_logo`.
+- Rolled back the payment-method configuration options for `Yappy` and `Yappy en caja` to their existing horizontal `yappy_logo`.
+- Common metadata compilation passed. Existing project warnings remain unrelated.
+
+# POS Yappy Onsite QR Success UI TODO
+
+## Plan
+- [x] Restyle `YappyOnsitePaymentScreen` to match POS success screen background, cards, button widths, and final actions.
+- [x] Rebuild the QR pending state around the Yappy brand style, larger QR, ticking timer, Spanish labels, and `$XX.XX` amount format.
+- [x] Show a clear paid/invoice-processing state with green check and loader copy while the invoice is being generated.
+- [x] Reuse generated invoice PDF handling for download/share actions and expose order detail navigation.
+- [x] Run focused compile verification and record results.
+
+## Verification Gates
+- [x] `./gradlew --no-build-cache --no-configuration-cache :composeApp:compileCommonMainKotlinMetadata`
+
+## Review Notes
+- Yappy onsite QR page now uses the POS success background/card language, the Yappy logo, a larger rounded QR panel, `$XX.XX` amount formatting, Spanish status labels, and a ticking timer pill.
+- Payment success before invoice completion now shows a green animated check, loader, and `Pago recibido` / invoice-generation copy.
+- Final invoice success now mirrors the POS success actions: download PDF, share invoice, make another order, and open order details.
+- Added a narrow `shareYappyOnsiteInvoicePdf()` helper that reuses the existing invoice PDF fetch/cache path.
+- Common metadata compilation passed. Existing project warnings remain unrelated.
+
+# POS Yappy Logo Icon TODO
+
+## Plan
+- [x] Reuse the existing Yappy brand asset in the POS payment selector.
+- [x] Keep generic vector icon rendering for the other payment methods.
+- [x] Run common compile verification and record results.
+
+## Verification Gates
+- [x] `./gradlew --no-build-cache --no-configuration-cache :composeApp:compileCommonMainKotlinMetadata`
+
+## Review Notes
+- `Yappy en caja` now renders the existing `yappy_logo` Compose resource as an untinted painter in the payment method icon slot.
+- `PaymentMethodOptionCard` still supports regular Material vector icons for the other payment options.
+- Common metadata compilation passed. Existing project warnings remain unrelated.
+
+# POS Yappy Selector Stability TODO
+
+## Plan
+- [x] Add explicit Yappy onsite availability resolution state to POS UI state.
+- [x] Render a stable Yappy onsite selector row while configured-device availability is loading.
+- [x] Keep final visibility rules unchanged once availability is resolved.
+- [x] Run common compile verification and record results.
+
+## Verification Gates
+- [x] `./gradlew --no-build-cache --no-configuration-cache :composeApp:compileCommonMainKotlinMetadata`
+
+## Review Notes
+- Payment screen now distinguishes payment profile resolution, Yappy onsite configuration, and selected point device-availability resolution.
+- When the user can use or configure Yappy onsite, the selector renders a stable disabled row with "Verificando disponibilidad para este punto" while the profile or units load instead of inserting the option milliseconds later.
+- Once availability resolves, the existing business rules remain: enabled only for selected branch/billing point with Yappy onsite enabled; hidden if configured but unavailable for the selected point; configuration CTA still appears only when the user can configure Yappy onsite.
+- Common metadata compilation passed. Existing KMP cinterop warning remains unrelated.
+
+# POS Restore False Positive TODO
+
+## Plan
+- [x] Confirm why entering POS without edits can create a meaningful checkpoint.
+- [x] Exclude default invoice-setting state from meaningful user-data detection.
+- [x] Add focused regression coverage for default bottom-note configuration.
+- [x] Run focused tests and common compile verification.
+
+## Verification Gates
+- [x] `./gradlew --no-build-cache --no-configuration-cache :composeApp:testAndroidHostTest --tests com.teco.ventago.features.pos.OrderCreationCheckpointTest`
+- [x] `./gradlew --no-build-cache --no-configuration-cache :composeApp:compileCommonMainKotlinMetadata`
+
+## Review Notes
+- Root cause: `includeBottomNote` is seeded from business invoicing settings and was counted as meaningful checkpoint data whenever non-null, even if the user had not edited the POS order.
+- `OrderCreationCheckpointData.hasMeaningfulUserData()` no longer treats bottom-note inclusion alone as a user modification.
+- Added regression coverage proving `includeBottomNote = true` and `includeBottomNote = false` are not meaningful by themselves.
+- Focused checkpoint tests and common metadata compilation passed. Existing KMP cinterop/deprecation warnings remain unrelated.
+
+# POS Payment Channel Visibility TODO
+
+## Plan
+- [x] Split POS payment configuration state into payment-link readiness and Yappy onsite readiness.
+- [x] Update PaymentScreen selector behavior for configured, unconfigured, and hidden channels.
+- [x] Preserve permission guards for invoice payment links, Yappy onsite QR, and payments configuration/view access.
+- [x] Run focused compile verification and record results.
+
+## Verification Gates
+- [x] `./gradlew --no-build-cache --no-configuration-cache :composeApp:compileCommonMainKotlinMetadata`
+
+## Review Notes
+- POS now stores payment-link readiness separately from overall payment-method readiness, so Yappy onsite or manual transfer no longer make the link option look ready.
+- Payment link remains visible for users who can create payment links; if no compatible link channel is configured, the card shows a `Configurar links de pago` CTA before use.
+- Configured Yappy en caja only appears when the selected branch/billing point has an onsite unit and the user can generate Yappy onsite QRs.
+- Unconfigured Yappy en caja appears only for owners or sub-users with `invoice:yappy_onsite`, `payments:configure`, and `payments:view`, and its CTA opens the Yappy en caja configuration route.
+- Common metadata compilation passed. Existing KMP cinterop/deprecation warnings remain unrelated.
+
+# Local Unsaved POS Order Checkpoint TODO
+
+## Plan
+- [x] Add serializable POS order checkpoint models and meaningful-data detection.
+- [x] Persist/restore normal sale checkpoints through `PosViewModel`.
+- [x] Wire the restore dialog into the POS entry screen and payment-settings redirect.
+- [x] Clear checkpoints on successful order/draft/quote completion.
+- [x] Add focused checkpoint tests and run verification.
+
+## Verification Gates
+- [x] `./gradlew --no-build-cache --no-configuration-cache :composeApp:compileCommonMainKotlinMetadata`
+- [x] `./gradlew --no-build-cache --no-configuration-cache :composeApp:testAndroidHostTest`
+- [x] Attempted `./gradlew --no-build-cache --no-configuration-cache :composeApp:allTests`
+
+## Review Notes
+- Added business-scoped `pos.order_creation_checkpoint:<businessId>` persistence for normal POS sale creation, with restore prompt, meaningful-data filtering, product snapshots, and payment reset-on-restore.
+- Checkpoint writes are skipped for quote/edit, quote-to-order, credit/debit note, and disabled flow contexts, and are cleared after successful order/draft/quote completion or explicit start over.
+- Added focused checkpoint serialization, meaningful-data, and cart-line restore tests.
+- Common metadata compilation and Android host tests passed. `allTests` reached iOS simulator test linking but failed because the local Xcode link step could not find the `FirebaseCore` framework; this is an environment/linkage blocker outside the checkpoint code.
+
+# Payments Fees Tab Chip Polish TODO
+
+## Plan
+- [x] Replace nested text-button tab chips with balanced clipped text chips.
+- [x] Run focused compile verification and record results.
+
+## Verification Gates
+- [x] `./gradlew --no-build-cache --no-configuration-cache :composeApp:compileCommonMainKotlinMetadata`
+
+## Review Notes
+- Replaced the tab selector implementation with balanced clipped text chips so selected and unselected labels align cleanly.
+- Common metadata compilation passed. Existing KMP cinterop/deprecation warnings remain unrelated.
+
+# Payments Fees Filters TODO
+
+## Plan
+- [x] Limit transaction status filters to all, pending, and paid.
+- [x] Limit transaction method filters to all, Yappy, ACH, and card.
+- [x] Limit batch status filters to all, issued, due, and paid.
+- [x] Render batch period labels and simplified batch card copy/actions.
+- [x] Ensure batch detail action resets transaction status/method filters and filters by `batch_id`.
+- [x] Run focused compile verification and record results.
+
+## Verification Gates
+- [x] `./gradlew --no-build-cache --no-configuration-cache :composeApp:compileCommonMainKotlinMetadata`
+
+## Review Notes
+- Transaction filters now expose `Todos`, `Pendiente`, `Pagado`, and method filters expose `Todos`, `Yappy`, `ACH`, `Tarjeta`.
+- Batch filters now expose `Todos`, `Emitido`, `Por pagar`, `Pagado`.
+- Batch cards now show a month/year period label, `Total fees`, no line-count row, and a `Ver detalles` action.
+- `Ver detalles` opens transactions filtered by `batch_id` with all transaction status/method filters cleared and page size 10; `Ver todo de nuevo` clears the batch/status/method filters.
+- Common metadata compilation passed. Existing KMP cinterop/deprecation warnings remain unrelated.
+
+# Separate Comisiones Fees Screen TODO
+
+## Plan
+- [x] Split general payment configuration from fee summary/detail UI.
+- [x] Add a dedicated `PaymentsFeesScreen` route sharing the payments graph ViewModel.
+- [x] Move fee summary, transaction list, and batch list into the new fees screen.
+- [x] Preserve page-based load-more behavior for fee transactions and batches.
+- [x] Run focused compile verification and record results.
+
+## Verification Gates
+- [x] `./gradlew --no-build-cache --no-configuration-cache :composeApp:compileCommonMainKotlinMetadata`
+
+## Review Notes
+- Added `PaymentsFeesScreen` under the payments graph, sharing the existing `PaymentMethodsViewModel`.
+- Payment methods home now renders general configuration, channel cards, and a compact entry into `Comisiones fees`; it no longer renders fee transactions or batches inline.
+- The new fees screen renders the fee summary only when any summary amount is non-zero, then shows the existing transactions/batches tabs, filters, refresh, pay, and load-more behavior.
+- Common metadata compilation passed. Existing KMP cinterop/deprecation warnings remain unrelated.
+
+# PayPal Deeplink Return Crash TODO
+
+## Plan
+- [x] Trace the PayPal callback URI from platform entry point to Compose navigation.
+- [x] Add a supported PayPal deeplink route and guard external URI navigation against unmatched destinations.
+- [x] Run focused compile verification and record results.
+
+## Verification Gates
+- [x] `./gradlew --no-build-cache --no-configuration-cache :composeApp:compileCommonMainKotlinMetadata`
+
+## Review Notes
+- Android delivers `tecodigi://paypal` into `ExternalUriHandler`, and the prior listener passed it directly to `navController.navigate(NavUri(uri))`, which throws when no destination matches the URI.
+- `PaymentsPaypalScreen` now declares `tecodigi://paypal` as a Navigation deep link.
+- External URI handling now routes PayPal callbacks directly to `PaymentsPaypalScreen` and wraps unknown URI navigation with `runCatching`, preventing unmatched external links from crashing composition.
+- Common metadata compilation passed; existing KMP cinterop/deprecation warnings remain unrelated.
+
+# ACH Onboarding Disclosure TODO
+
+## Plan
+- [x] Add the requested ACH `Validación no automática` badge to the first onboarding step.
+- [x] Add TecoDigi terms text with link to every channel onboarding first-step footer.
+- [x] Run focused compile verification and record results.
+
+## Verification Gates
+- [x] `./gradlew --no-build-cache --no-configuration-cache :composeApp:compileCommonMainKotlinMetadata`
+
+## Review Notes
+- ACH Step 1 now shows a secondary-colored `Validación no automática` badge explaining that VentaGo reviews uploaded receipts and risk signals but does not directly query the customer's bank.
+- ACH intro copy now says `señales de riesgo` instead of `validaciones automáticas` to avoid contradictory language.
+- Yappy, Yappy en caja, ACH, PayPal, TiloPay, and the generic onboarding footer now render the TecoDigi payment terms text on Step 1.
+- Common metadata compilation passed; existing KMP cinterop/deprecation warnings remain unrelated.
+
+
+# Yappy En Caja Last Group Delete Navigation TODO
+
+## Plan
+- [x] Trace Yappy onsite group delete success flow and method-route exit callback.
+- [x] Add a payment-methods-home navigation event for last-group deletion.
+- [x] Reset payment screen state when the final Yappy onsite group is removed.
+- [x] Run focused compile verification and record results.
+
+## Verification Gates
+- [x] `./gradlew --no-build-cache --no-configuration-cache :composeApp:compileCommonMainKotlinMetadata`
+
+## Review Notes
+- Added `NavigateToPaymentMethodsHome` and handled it in `PaymentMethodsScreen`.
+- After successful deletion of the last Yappy en caja group, the ViewModel resets payment method state and emits navigation back to payment methods.
+- If other groups remain, the existing configured-page refresh behavior is preserved.
+- Common metadata compilation passed; existing KMP cinterop/deprecation warnings remain unrelated.
+
+
+# Yappy En Caja Config Sheet Navigation TODO
+
+## Plan
+- [x] Trace why configured edit/add unit opens the onboarding Step 3 form.
+- [x] Add explicit configured-mode sheet visibility state for group/unit forms.
+- [x] Keep configured add/edit group and unit flows on the configuration page.
+- [x] Update unit add sheet to include group selection before billing point.
+- [x] Run focused compile verification and record results.
+
+## Verification Gates
+- [x] `./gradlew --no-build-cache --no-configuration-cache :composeApp:compileCommonMainKotlinMetadata`
+
+## Review Notes
+- Added explicit `showYappyOnsiteGroupSheet` and `showYappyOnsiteDeviceSheet` state so configured add/edit forms no longer depend on onboarding step state.
+- Configured add/edit group and unidad de cobro now open bottom sheets and stay on the Yappy en caja configuration page.
+- Add unidad de cobro sheet includes group selection, billing point selection, and Device ID; edit keeps the existing group and allows Device ID plus billing point.
+- Unit save now derives the backend name from the selected billing point, so hidden form fields no longer block sheet saves.
+- Common metadata compilation passed; existing KMP cinterop/deprecation warnings remain unrelated.
+
+
+# Payments Permissions TODO
+
+## Plan
+- [x] Add payments and Yappy onsite authz scope/action keys.
+- [x] Update Payments route/action policies and focused authz tests.
+- [x] Publish payments permission flags from PaymentMethodsViewModel and guard mutations.
+- [x] Hide configure/pay controls in PaymentMethodsScreen by permission.
+- [x] Gate POS Yappy en caja QR generation and payment-method configuration navigation.
+- [x] Run focused verification and record results.
+
+## Verification Gates
+- [x] `./gradlew --no-build-cache --no-configuration-cache :composeApp:testAndroidHostTest`
+- [x] `./gradlew --no-build-cache --no-configuration-cache :composeApp:compileCommonMainKotlinMetadata`
+
+## Review Notes
+- Added `payments:configure`, `payments:view`, `payments:pay`, and `invoice:yappy_onsite` scope/action coverage, including focused authorization tests.
+- Payments settings now require owner access or one payments scope; view-only users can inspect configured channels/fees without configure controls, and commission payment is limited to `payments:pay`.
+- POS Yappy en caja QR generation now requires `invoice:yappy_onsite`; missing payment-channel setup only navigates to Payments settings when the user can configure payments.
+- Verification passed. Android host tests and common metadata compilation completed successfully; existing KMP cinterop/SDK/deprecation warnings remain unrelated.
+
+# Yappy En Caja Configuration View TODO
+
+## Plan
+- [x] Group configured unidades de cobro under their Yappy group cards.
+- [x] Replace device wording with `unidades de cobro` and use branch/billing-point names instead of raw codes.
+- [x] Reduce horizontal content padding for Yappy en caja detail/configuration content.
+- [x] Move configured group/device edits into bottom sheets.
+- [x] Hide add actions when no branch or billing-point capacity remains.
+- [x] Run focused compile verification and record results.
+
+## Verification Gates
+- [x] `./gradlew --no-build-cache --no-configuration-cache :composeApp:compileCommonMainKotlinMetadata`
+
+## Review Notes
+- Configured Yappy en caja now renders one card per group, with its unidades de cobro listed inside the corresponding group card.
+- Configured group/device edits now open bottom sheets. Group edit supports group ID, branch, API key, and secret key; unit edit supports Device ID and billing point.
+- Add group/unit actions are hidden when all branches or billing points are already used.
+- Branch and billing point dropdown/display labels now use names such as `Casa Matriz - Punto 1` instead of raw code pairs.
+- Replaced user-facing Yappy onsite `dispositivo(s)` copy with `unidad(es) de cobro`.
+- Common metadata compilation passed; existing KMP cinterop/deprecation warnings remain unrelated.
+
+
+# Yappy En Caja Finalize Navigation TODO
+
+## Plan
+- [x] Trace the Yappy en caja success-step primary button and method-route exit callback.
+- [x] Route Step 4 `Finalizar` through the method-route exit callback instead of the generic stepper.
+- [x] Run focused compile verification and record results.
+
+## Verification Gates
+- [x] `./gradlew --no-build-cache --no-configuration-cache :composeApp:compileCommonMainKotlinMetadata`
+
+## Review Notes
+- `Finalizar` on Yappy en caja Step 4 now calls the method-route exit callback, which resets the payment home route and navigates back to `PaymentMethodsScreen`.
+- This avoids clearing `activeMethod` while remaining on the method-detail route, which produced the blank white screen under the `Yappy en caja` app bar.
+- Common metadata compilation passed; existing KMP cinterop/deprecation warnings remain unrelated.
+
+# Yappy En Caja Onboarding Resume Polish TODO
+
+## Plan
+- [x] Remove the duplicated Step 2 title/subtitle from the group card.
+- [x] Add a tutorial text action next to the Yappy Comercial action.
+- [x] Show saved groups on Step 2 with delete access for users returning to edit registration.
+- [x] Resume interrupted onboarding directly at device registration when saved groups exist and no devices are registered.
+- [x] Run focused compile verification and record results.
+
+## Verification Gates
+- [x] `./gradlew --no-build-cache --no-configuration-cache :composeApp:compileKotlinMetadata`
+- [x] `./gradlew --no-build-cache --no-configuration-cache :composeApp:compileCommonMainKotlinMetadata`
+
+## Review Notes
+- Removed the duplicate Step 2 title/subtitle so the group card starts at `Grupos de Yappy`.
+- Added a secondary text action for `Ver tutorial` next to `Abrir Yappy Comercial`.
+- Step 2 now lists saved groups with delete access, and saved groups suppress the automatic blank group draft.
+- Returning to onboarding with saved groups and no devices now resumes at Step 3 with the first available device card seeded.
+- Metadata compilation completed successfully. `compileKotlinMetadata` was skipped as up-to-date, then `compileCommonMainKotlinMetadata` compiled the edited common source successfully; existing KMP cinterop/deprecation warnings remain unrelated.
+
+# Yappy En Caja Onboarding Badge Polish TODO
+
+## Plan
+- [x] Convert first-step payment confirmation text into a shield badge.
+- [x] Use secondary color for the terms link, Ventago fee title, and fee question mark icon.
+- [x] Run focused compile verification and record results.
+
+## Verification Gates
+- [x] `./gradlew --no-build-cache --no-configuration-cache :composeApp:compileKotlinMetadata`
+
+## Review Notes
+- First-step payment confirmation now renders as a compact secondary-colored shield badge.
+- Terms link, Ventago fee title, and fee question mark icon now use the secondary color.
+- Metadata compilation completed successfully and was skipped as up-to-date; existing KMP cinterop commonization warning remains unrelated.
+
+# Yappy En Caja Onboarding Refresh TODO
+
+## Plan
+- [x] Add multi-card draft state for Yappy onsite groups and devices.
+- [x] Add ViewModel handlers for draft add/remove/collapse/update and batch save.
+- [x] Refresh Yappy onsite onboarding UI copy, fee dialog, terms link, and success page.
+- [x] Add focused tests for limits, duplicate prevention, derived names, and one-by-one saves.
+- [x] Run verification gates and record results.
+
+## Verification Gates
+- [x] `./gradlew --no-build-cache --no-configuration-cache :composeApp:testAndroidHostTest`
+- [x] `./gradlew --no-build-cache --no-configuration-cache :composeApp:compileKotlinMetadata`
+
+## Review Notes
+- Reworked Yappy en caja onboarding into the requested four-step flow with new copy, fee explanation dialog, commercial dashboard link, multi-card groups/devices, and a success confirmation page.
+- Added draft state plus ViewModel handlers for collapsible group/device cards, duplicate prevention, branch/billing-point limits, derived backend names, and batch saves that call the existing endpoints one item at a time.
+- Added focused policy tests for group/device capacity, duplicate prevention, and branch/billing-point derived names.
+- Verification passed. `compileKotlinMetadata` completed successfully with the task skipped as up-to-date; existing KMP cinterop commonization warning remains unrelated.
+
+# Payment Method Detail Polish TODO
+
+## Plan
+
+- [x] Show masked TiloPay credential placeholders for configured accounts without submitting mask text.
+- [x] Hide the internal PayPal connect button during onboarding so only the footer connect button remains.
+- [x] Run focused compile verification and record results.
+
+## Verification Gates
+
+- [x] `./gradlew --no-build-cache --no-configuration-cache :composeApp:compileKotlinMetadata`
+
+## Review Notes
+
+- Configured TiloPay credential fields now display `*********` while the local form value is blank, without saving/submitting the mask as credential text.
+- PayPal onboarding step 4 now relies on the footer `Conectar PayPal` button only; the internal card connect button remains available outside onboarding.
+- Metadata compilation completed successfully and was skipped as up-to-date; existing KMP cinterop commonization warning remains unrelated.
+
+# Channel Configured Fee Badge TODO
+
+## Plan
+
+- [x] Replace separate configured and fee badges on channel rows with one secondary badge.
+- [x] Show only the VentaGo fee on the channel badge.
+- [x] Run focused compile verification and record results.
+
+## Verification Gates
+
+- [x] `./gradlew --no-build-cache --no-configuration-cache :composeApp:compileKotlinMetadata`
+
+## Review Notes
+
+- Channel rows now render one secondary-colored badge for configured methods in the format `Configurado: <fee>`.
+- TiloPay's channel badge now shows only the VentaGo fee: `Configurado: 0.50%`.
+- Metadata compilation completed successfully and was skipped as up-to-date; existing KMP cinterop commonization warning remains unrelated.
+
+# TiloPay Configured State TODO
+
+## Plan
+
+- [x] Fix TiloPay configured detection after credential save so the method opens as configured instead of onboarding again.
+- [x] Restore configured/fee badges on payment method rows.
+- [x] Run focused compile verification and record results.
+
+## Verification Gates
+
+- [x] `./gradlew --no-build-cache --no-configuration-cache :composeApp:compileKotlinMetadata`
+
+## Review Notes
+
+- TiloPay credential save now updates the in-memory payment summary immediately with a TiloPay card provider, so returning to the payment page sees the method as configured without waiting on a later profile emission.
+- TiloPay configured detection now uses credential configuration state (`configured && enabled`) from either the summary/provider or the latest TiloPay status, instead of requiring full `readyForPayments()` platform/business flags.
+- Payment channel rows now show `Configurado` and a fee badge again when `methodConfigured(method)` is true; TiloPay's fee badge includes `3.75% + $0.50 + 0.50%`.
+- Metadata compilation completed successfully and was skipped as up-to-date; existing KMP cinterop commonization warning remains unrelated.
+
+# TiloPay Fee Row Match TODO
+
+## Plan
+
+- [x] Update the TiloPay fee row to match the provided two-column image.
+- [x] Run focused compile verification and record results.
+
+## Verification Gates
+
+- [x] `./gradlew --no-build-cache --no-configuration-cache :composeApp:compileKotlinMetadata`
+
+## Review Notes
+
+- TiloPay fee rows now render as two side-by-side columns with a centered plus: `TILOPAY / 3.75% + $0.50` and `VENTAGO / 0.50%`, each with its own transaction subtitle.
+- Metadata compilation completed successfully and was skipped as up-to-date; existing KMP cinterop commonization warning remains unrelated.
+
+# TiloPay Onboarding Polish TODO
+
+## Plan
+
+- [x] Change the TiloPay account request CTA to an outlined primary button.
+- [x] Compact the card fee layout into a single-line TiloPay + VentaGo fee presentation.
+- [x] Run focused compile verification and record results.
+
+## Verification Gates
+
+- [x] `./gradlew --no-build-cache --no-configuration-cache :composeApp:compileKotlinMetadata`
+
+## Review Notes
+
+- The TiloPay account request CTA now uses `OutlinedButtonM` with `MaterialTheme.colorScheme.primary`.
+- Each brand fee section now shows `TILOPAY` and `VENTAGO` side by side, followed by one combined fee line: `3.75% + $0.50 + 0.50%`.
+- Metadata compilation completed successfully and was skipped as up-to-date; existing KMP cinterop commonization warning remains unrelated.
+
+# TiloPay Cards Onboarding Refresh TODO
+
+## Plan
+
+- [x] Split TiloPay card onboarding into four guide/configuration steps plus success.
+- [x] Replace TiloPay step copy and fee presentation with the requested Visa, Mastercard, and American Express layout.
+- [x] Add the TiloPay affiliation CTA and keep only the credential save button on the credentials step.
+- [x] Run focused compile verification and record results.
+
+## Verification Gates
+
+- [x] `./gradlew --no-build-cache --no-configuration-cache :composeApp:compileKotlinMetadata`
+
+## Review Notes
+
+- TiloPay onboarding now has four visible steps: method overview, transaction commissions, account affiliation, and credentials.
+- Added the requested Visa, Mastercard, and American Express fee breakdown with TiloPay `3.75% + $0.50` and VentaGo `0.50%` messaging.
+- Added the TiloPay account affiliation CTA opening `https://web.tilopay.com/start/affiliation-pty`.
+- The credentials step now labels fields as `Llave API`, `Usuario API`, and `Contraseña API`, includes the saved-credential security note for configured accounts, and avoids duplicate save buttons during onboarding.
+- Metadata compilation completed successfully and was skipped as up-to-date; existing KMP cinterop commonization warning remains unrelated.
+
+# Payment Channels Visual Refresh TODO
+
+## Plan
+
+- [x] Rework `PaymentMethodsScreen` channels into the provided grouped visual structure.
+- [x] Keep channel availability/navigation logic unchanged while updating labels, logos, spacing, and dark-mode-aware colors.
+- [x] Run focused compile verification and record results.
+
+## Verification Gates
+
+- [x] `./gradlew --no-build-cache --no-configuration-cache :composeApp:compileKotlinMetadata`
+
+## Review Notes
+
+- Rebuilt the payment channels section as two groups: `Cobros físicos` and `QR y links de pago`, matching the provided hierarchy with icon headers and rounded method-list containers.
+- Preserved method visibility and navigation behavior while changing row labels, logo treatment, spacing, dividers, and chevron styling.
+- Used theme-aware surface, outline, text, and primary colors so the section remains compatible with dark mode.
+- Metadata compilation completed successfully and was skipped as up-to-date; existing KMP cinterop commonization warning remains unrelated.
+
+# Payments Onboarding Copy TODO
+
+## Plan
+- [x] Update first-time payments onboarding hero title/body and checklist copy.
+- [x] Add linked TecoDigi payments terms text below the primary button.
+- [x] Run focused compile verification and record results.
+
+## Verification Gates
+- [x] `./gradlew --no-build-cache --no-configuration-cache :composeApp:compileKotlinMetadata`
+
+## Review Notes
+- First-time payments onboarding now uses the requested VentaGo payment-channel headline, body, three checklist items, and bold closing line.
+- Removed the stale secondary explainer card that still referenced the old channel list.
+- Added the TecoDigi payments terms sentence below the primary button with the terms phrase linked to `https://tecodigi.com/paas-terminos-condiciones/`.
+- Metadata compilation completed successfully and was skipped as up-to-date; existing KMP cinterop warning remains unrelated.
+
+# Remove Payments Beta Gate TODO
+
+## Plan
+- [x] Confirm payment route/action authorization is already scope-only in production code.
+- [x] Remove POS/payment settings beta visibility state so payment links and Yappy en caja are available to all eligible businesses.
+- [x] Update focused authz tests and task lessons for the new product rule.
+- [x] Run focused verification and record results.
+
+## Verification Gates
+- [x] `./gradlew --no-build-cache --no-configuration-cache :composeApp:testAndroidHostTest --tests com.teco.ventago.core.authz.AuthzEvaluatorTest`
+- [x] `./gradlew --no-build-cache --no-configuration-cache :composeApp:compileKotlinMetadata`
+
+## Review Notes
+- Removed the `payments` beta enum and stale POS `hasPaymentsBeta` state.
+- POS now shows payment-link and Yappy en caja options without beta membership; existing permission/configuration guards still control whether a user can select and complete those flows.
+- Updated the blocked payments copy to remove beta language.
+- Updated authz tests so payment routes/actions require scopes only, while users without scopes remain blocked.
+- Added missing payments screen mode/event definitions required by the current payments UI code to compile.
+- Focused authz test passed. Metadata compilation completed successfully and was skipped as up-to-date; existing KMP cinterop warning remains unrelated.
+
+# Payments Web Parity TODO
+
+## Plan
+- [x] Audit the current KMP payment implementation against `payments-kmp-replication.md`.
+- [x] Fill missing shared API contracts, provider/repository/service methods, and normalization helpers.
+- [x] Complete settings payment overview, channel setup pages, fee billing detail/checkout, and home fee prompt parity.
+- [x] Complete POS payment-link/Yappy onsite creation, pending-conflict handling, confirmation runtime, and payment-method replacement parity.
+- [x] Complete order-detail link generation, payment replacement, cancellation/payment maintenance, and ACH review parity.
+- [x] Add or update focused contract/ViewModel tests for newly implemented flows.
+- [x] Run verification gates and record results.
+
+## Verification Gates
+- [x] Focused source audit against all documented endpoints and UI flows.
+- [x] `./gradlew --no-build-cache --no-configuration-cache :composeApp:compileCommonMainKotlinMetadata`
+- [x] `./gradlew --no-build-cache --no-configuration-cache :composeApp:testAndroidHostTest`
+- [x] `./gradlew --no-build-cache --no-configuration-cache :composeApp:compileKotlinMetadata`
+
+## Review Notes
+- Implemented payment configuration parity across PayPal, Yappy links, Yappy en caja groups/devices, ACH, TiloPay/card, manual/onsite visibility, and financial-profile configured-state helpers.
+- Added missing payment API contracts and service paths for TiloPay status/config/disconnect, direct fee checkout, Yappy onsite group/device CRUD, pending transaction cancellation, fee batch filtering, and replacement payment intents.
+- Completed app flows for payment settings, fee billing, home fee prompts, POS draft/payment-link/Yappy onsite creation, pending-conflict recovery, QR polling/cancellation, and order-detail payment replacement/manual-payment transitions.
+- Verification passed: common metadata compile, Android host tests, and metadata compile. Existing unrelated Gradle warnings remain.
+
+# Get Orders Related Documents TODO
+
+## Plan
+- [x] Confirm current `get-orders` parsing, order detail rendering, and related-order navigation.
+- [x] Show the related document type as the backend document type code plus user-friendly label.
+- [x] Add focused contract coverage for `related_documents` inside the paginated `get-orders` response envelope.
+- [ ] Run focused verification and record results.
+
+## Verification Gates
+- [x] `./gradlew --no-build-cache --no-configuration-cache :composeApp:testAndroidHostTest --tests com.teco.ventago.features.orders.CxcOrderDetailsContractTest`
+- [x] `./gradlew --no-build-cache --no-configuration-cache :composeApp:compileKotlinMetadata`
+
+## Review Notes
+- Confirmed `Order.relatedDocuments` is already decoded from `related_documents` in `/api/v1/orders/get-orders` list items and rendered by `OrderDetailsScreen` when present.
+- The related documents card now shows the backend document type code with the readable label, for example `04 - Nota de crédito`, alongside the clickable order number and amount.
+- Clicking a related order number continues to route through `OrdersScreenRoute(orderNumber = ...)`, which finds/selects the target order and opens `OrderDetailsScreen`.
+- Added contract coverage for the paginated `get-orders` envelope containing `related_documents`.
+- Focused Android host test passed. Metadata compilation succeeded and was skipped as up-to-date; existing KMP cinterop warning remains unrelated.
+
+# Order Details Credit Notes TODO
+
+## Plan
+- [x] Add a reusable order helper for credit-note document types `04` and `06`.
+- [x] Hide credit/plazos, rescheduling, and payment collection actions on credit-note order details.
+- [x] Guard ViewModel payment/reschedule/payment-link entry points against credit notes.
+- [x] Add focused tests for the new credit-note behavior.
+- [x] Run verification gates and record results.
+
+## Verification Gates
+- [x] `./gradlew --no-build-cache --no-configuration-cache :composeApp:testAndroidHostTest --tests com.teco.ventago.features.orders.CxcOrderDetailsContractTest --tests com.teco.ventago.features.orders.ui.order_details.viewmodel.OrdersDetailsViewModelCxcTest`
+- [x] `./gradlew --no-build-cache --no-configuration-cache :composeApp:compileKotlinMetadata`
+
+## Review Notes
+- Added `Order.isCreditNoteDocument()` and `Order.supportsReceivableActions()` so document types `04` and `06` are centrally treated as credit notes for receivable/payment UI policy.
+- `OrderDetailsScreen` now hides the `Cuotas de pago` card, `Reprogramar cuotas`, `Registrar pago`, payment-link collection actions, and related sheets for credit-note orders while preserving read-only invoice/order information.
+- `OrdersDetailsViewModel` now blocks payment link generation/sharing, draft invoice payment collection, register-payment open/submit, and receivable reschedule open/confirm paths for credit notes.
+- Added focused coverage that normal invoices and debit notes still support receivable actions, while referenced and generic credit notes do not.
+- Verification passed. `compileKotlinMetadata` completed successfully with the task skipped as up-to-date; existing KMP cinterop warning remains unrelated.
+
+# Yappy En Caja Onsite Payments TODO
+
+## Plan
+- [x] Add onsite Yappy summary, group/device, transaction, and order response contracts.
+- [x] Add `Yappy en caja` settings channel with onboarding steps for groups and devices.
+- [x] Add POS onsite payment mode with QR display, polling, cancellation, invoice wait states, and ticket printing.
+- [x] Add focused serialization/parsing/polling tests.
+- [x] Run verification gates and record results.
+
+## Verification Gates
+- [x] `./gradlew --no-build-cache --no-configuration-cache :composeApp:testAndroidHostTest`
+- [x] `./gradlew --no-build-cache --no-configuration-cache :composeApp:compileKotlinMetadata`
+
+## Review Notes
+- Added `Yappy en caja` to payment methods, config summary parsing, financial-profile configured-state checks, settings navigation, and localized screen titles.
+- Added typed Yappy onsite group/device/transaction/cancel contracts through provider, repository, and service layers; secrets are only sent in configure requests and are not rendered in saved summaries.
+- Added a four-step onboarding/configuration flow using observed branches and billing points for dropdowns, with saved group/device summaries and aggregate open-session counts from config summary.
+- Added POS onsite mode, current branch/billing-point device eligibility checks, `payment_flow_type = "in_place"`, `PaymentLinksBlock.method = "YAPPY_ONSITE"`, QR rendering, transaction polling, pending invoice handling, cancel/expired states, PDF download, invoice retry, and ticket auto-print when a configured printer and ticket payload exist.
+- Added serialization/parsing coverage for onsite order creation, `onsite_payment`, config summary, group/device requests, transaction polling states, invoice issued with/without ticket, invoice failed, expired, cancelled, and returned.
+- Verification passed. `compileKotlinMetadata` is invoked successfully but Gradle currently skips the task after resource checks.
+
+# Related Credit/Debit Notes TODO
+
+## Plan
+- [x] Add `related_documents` parsing and credit/debit helper logic to orders.
+- [x] Add contract coverage for related documents and credit-note capacity calculations.
+- [x] Show related credit/debit notes on order details with clickable order-number navigation.
+- [x] Pass remaining credit-note capacity into referenced POS note creation.
+- [x] Block referenced credit-note submission when the new note exceeds the remaining allowed amount.
+- [x] Hydrate stale selected order details once on detail open so `related_documents` appears for cached orders.
+- [x] Run focused tests/compile verification and record results.
+
+## Verification Gates
+- [x] `./gradlew --no-build-cache --no-configuration-cache :composeApp:testAndroidHostTest --tests com.teco.ventago.features.orders.CxcOrderDetailsContractTest`
+- [x] `./gradlew --no-build-cache --no-configuration-cache :composeApp:testAndroidHostTest --tests com.teco.ventago.features.pos.ui.viewmodel.PosNoteValidatorsTest`
+- [x] `./gradlew --no-build-cache --no-configuration-cache :composeApp:compileKotlinMetadata`
+
+## Review Notes
+- Added `related_documents` to the shared `Order` model with helper methods for credit/debit note classification and active credit-note capacity.
+- `OrderDetailsScreen` now shows a related documents card with clickable order numbers routed through `OrdersScreenRoute(orderNumber = ...)`.
+- Referenced credit-note creation now receives the remaining credit capacity and blocks submit before API calls when the note total exceeds that amount.
+- Follow-up: order details now refreshes the selected order once from `/find/order-id` when the cached selected order has no related documents, fixing stale cache cases like order 715.
+- Focused tests and metadata compile passed. Metadata compilation was skipped as up-to-date after the Android host test compiled common code.
+
+# iOS App Encryption Export Compliance TODO
+
+## Plan
+- [x] Review Apple export-compliance documentation for the App Store Connect encryption algorithm question.
+- [x] Inspect iOS target dependencies and source for proprietary, non-standard, or app-implemented standard crypto.
+- [x] Verify iOS networking/storage paths and identify whether encryption is limited to Apple OS APIs.
+- [x] Record the recommended App Store Connect answer.
+
+## Verification Gates
+- [x] Apple docs reviewed: encryption limited to Apple's operating system requires no App Store Connect encryption documentation; non-Apple standard algorithms or proprietary algorithms require documentation.
+- [x] Repo scan covered iOS/KMP source, Xcode package/product dependencies, Info.plist, Ktor engine configuration, SecureStorage, Firebase, Epson, and HMAC/security keywords.
+- [x] Confirmed iOS HTTP client uses Ktor Darwin engine and iOS secure storage uses Keychain/Security APIs.
+- [x] Confirmed app-owned HMAC implementation is Android-only; iOS actual implementation returns an empty string.
+
+## Review Notes
+- Recommended answer for the current iOS app: `None of the algorithms mentioned above`.
+- The app does use/access encryption through Apple OS facilities: HTTPS/TLS through the Darwin engine and secure storage through Keychain/Security.
+- No app-owned proprietary or non-standard encryption implementation was found.
+- No app-owned iOS implementation of standard algorithms such as AES/RSA/HMAC/SHA was found. The only direct HMAC code is in `androidMain`; iOS stubs it out.
+- iOS links Firebase products and a transitive `grpc-binary` package; no app source directly implements or configures cryptographic algorithms through those dependencies.
+- If future iOS changes add app-level crypto or a third-party TLS/crypto library used directly for encryption, re-run this review before answering App Store Connect.
+
+# Delete Account Login Reset TODO
+
+## Plan
+
+- [x] Trace current account-deleted event handling and sign-out cleanup.
+- [x] Add a dedicated account-deleted navigation callback that clears the back stack to login.
+- [x] Verify deletion cleanup still clears cache/tokens/session and no Firebase deletion exists.
+- [x] Run focused iOS compile verification and record results.
+
+## Verification Gates
+
+- [x] Focused source scan for account deletion navigation and Firebase deletion patterns.
+- [x] `./gradlew --no-build-cache --no-configuration-cache :composeApp:compileKotlinIosArm64`
+
+## Review Notes
+
+- `SettingsScreen` now handles `AccountDeleted` through a dedicated `onAccountDeleted` callback instead of generic route navigation.
+- Settings navigation now sends the user to `LoginScreen` with `popUpTo(PosScreens.LoginRegister.name) { inclusive = true }` and `launchSingleTop`, clearing authenticated screens from the stack.
+- Successful backend deletion now performs sign-out-style cleanup without Firebase account deletion: cancels user listeners, removes change listeners, signs out of Firebase, clears cache/user state, deletes JWT/refresh JWT, and clears the session id.
+- Focused scan confirmed no Firebase account-delete patterns remain; the only Firebase auth operation in deletion cleanup is `firebase.signOut()`.
+- iOS ARM64 Kotlin compilation passed. Existing warnings remain from unrelated iOS printer/PDF/expect-actual code.
+
+# Internal-Only Account Deletion TODO
+
+## Plan
+
+- [x] Inspect the delete-account success path and identify the Firebase failure source.
+- [x] Remove Firebase account deletion from successful internal account deletion.
+- [x] Verify source no longer calls `firebase.deleteAccount()` from `AuthService.deleteAccount`.
+- [x] Run focused compile verification and record results.
+
+## Verification Gates
+
+- [x] Focused source scan for `firebase.deleteAccount`.
+- [x] `./gradlew --no-build-cache --no-configuration-cache :composeApp:compileKotlinIosArm64`
+
+## Review Notes
+
+- `AuthService.deleteAccount` now treats a successful backend deletion as the source of truth and no longer calls Firebase account deletion.
+- Removed the unused `deleteAccount()` API from `IFirebaseService`/`FirebaseService` so common auth code no longer exposes `FirebaseAuth.currentUser.delete()`.
+- Successful deletion now cancels user-change collection, removes change listeners, clears local cache/user state, deletes stored JWT/refresh JWT, and clears the session id.
+- Focused source scan confirmed no Firebase account-delete patterns remain in the common/iOS app source; remaining `deleteAccount` references are the internal endpoint flow and Settings trigger.
+- iOS ARM64 Kotlin compilation passed. Existing warnings remain: cinterop commonization disabled, Skiko version mismatch, and unrelated iOS printer/PDF warnings.
+
+# Account Deletion Response Contract TODO
+
+## Plan
+
+- [x] Inspect current delete-account provider/repository parsing.
+- [x] Model the backend response contract without manual JSON payload construction.
+- [x] Add focused tests for `status: true`, `status: false`, and Yii 404 handling.
+- [x] Run focused tests/compile verification and record results.
+
+## Verification Gates
+
+- [x] Focused account-delete source scan.
+- [x] `./gradlew --no-build-cache --no-configuration-cache :composeApp:testAndroidHostTest --tests com.teco.ventago.features.auth.data.provider.DeleteAccountResponseParsingTest`
+- [x] `./gradlew --no-build-cache --no-configuration-cache :composeApp:compileKotlinIosArm64`
+
+## Review Notes
+
+- `AuthProvider.deleteAccount` now sends a typed `DeleteAccountRequest` instead of a raw JSON string payload.
+- Added explicit delete-account response parsing: `{"status": true}` maps to success, `{"status": false}` maps to a false result without an API error, and non-2xx Yii JSON such as 404 is preserved in `ApiResponse.data` with `ApiError.UNDEFINED`, `errorCode`, and `errorMessage`.
+- `UserRepository.deleteAccount` continues to return `false` for backend `status:false`, while non-2xx error responses flow through the existing exception/logging path.
+- Added `DeleteAccountResponseParsingTest` covering the three expected backend examples.
+- Focused Android host test and iOS ARM64 Kotlin compile passed. Existing warnings remain: cinterop commonization disabled, AGP compile SDK support warning, Skiko version mismatch, and unrelated deprecations/casts.
+
+# Account Deletion Settings Flow TODO
+
+## Plan
+- [x] Inspect existing delete-account endpoint/service and Settings UI patterns.
+- [x] Add Settings delete-account action below sign out with confirmation dialog.
+- [x] Wire ViewModel deletion to backend, loading/success/error feedback, app-state clearing, and login navigation.
+- [x] Add localized strings for the confirmation and failure feedback.
+- [x] Run focused compile verification and record results.
+
+## Verification Gates
+- [x] Search Settings/auth delete-account wiring.
+- [x] `./gradlew --no-build-cache --no-configuration-cache :composeApp:compileKotlinMetadata`
+- [x] `./gradlew --no-build-cache --no-configuration-cache :composeApp:compileKotlinIosSimulatorArm64`
+- [x] `./gradlew --no-build-cache --no-configuration-cache :composeApp:compileKotlinIosArm64`
+
+## Review Notes
+- Re-enabled the visible delete-account action in Settings, directly below `Sign out`, using the existing red settings button style.
+- Added a confirmation dialog before deletion with localized English and Spanish copy.
+- Confirming deletion now reads the current JWT, calls the existing backend-backed `authService.deleteAccount(token)` flow, shows the existing `LoadingSheet` states, clears feature service state on success, and emits navigation back to `LoginScreen`.
+- Failure paths now emit an error state and show a localized snackbar message.
+- Focused scan confirmed delete-account UI state, events, strings, and backend service wiring are present.
+- Metadata, iOS simulator ARM64, and iOS device ARM64 Kotlin compilation passed. Existing warnings remain: cinterop commonization disabled, Skiko version mismatch, and unrelated deprecations/casts.
+
+# Disable In-App Account Creation TODO
+
+## Plan
+- [x] Trace all registration entry points from login/navigation.
+- [x] Remove or disable visible account creation actions so reviewers cannot start self-service registration.
+- [x] Guard registration routes in navigation in case an internal path tries to open them.
+- [x] Run focused compile verification and record results.
+
+## Verification Gates
+- [x] Search auth UI/navigation for `Create account`, register routes, and register screen calls.
+- [x] `./gradlew --no-build-cache --no-configuration-cache :composeApp:compileKotlinMetadata`
+- [x] `./gradlew --no-build-cache --no-configuration-cache :composeApp:compileKotlinIosSimulatorArm64`
+- [x] `./gradlew --no-build-cache --no-configuration-cache :composeApp:compileKotlinIosArm64`
+
+## Review Notes
+- Removed the login-screen self-registration CTA (`¿No tienes cuenta? / Sign Up`) and the email-not-found dialog action that navigated to account registration.
+- `ApiError.F_AUTH_002` now surfaces as a normal sign-in error instead of offering registration.
+- The `RegisterScreen` nav route now redirects to `LoginScreen`, so accidental/internal navigation cannot render the account creation form.
+- Existing logged-in business onboarding (`BusinessRegisterScreen`) remains unchanged for users whose account already exists but lacks a business.
+- Focused scans show no remaining `navigate(PosScreens.RegisterScreen)` calls from auth UI; remaining matches are the enum value and the unused screen function.
+- Metadata, iOS simulator ARM64, and iOS device ARM64 Kotlin compilation passed. Existing warnings remain: cinterop commonization disabled, Skiko version mismatch, and unrelated deprecations/casts.
+
+
+# iOS App Store Tracking Rejection Review TODO
+
+## Plan
+- [x] Review Apple tracking/ATT requirements against this app's actual SDK usage.
+- [x] Inspect iOS/KMP dependencies and source for IDFA, ad attribution, tracking SDKs, and privacy manifests.
+- [x] Decide whether the correct fix is App Store Connect privacy label updates or ATT implementation.
+- [x] Record verification evidence and recommended App Review response.
+
+## Verification Gates
+- [x] Search repo for `AppTrackingTransparency`, `NSUserTrackingUsageDescription`, `AdSupport`, `IDFA`, ad/attribution SDKs, Firebase, analytics, and privacy manifests.
+- [x] Review Gradle/Xcode dependency declarations for iOS-relevant SDKs.
+- [x] Cross-check against official Apple tracking definition.
+
+## Review Notes
+- Apple requires ATT only when app/user/device data is linked with third-party data for targeted advertising/advertising measurement or shared with a data broker.
+- iOS repo scan found no direct `AppTrackingTransparency`, `NSUserTrackingUsageDescription`, `AdSupport`, `ASIdentifierManager`, IDFA, AdMob, AppsFlyer, Adjust, Branch, Facebook/Meta, or similar attribution SDK usage.
+- iOS project links Firebase SDK 11.2.0 products: Analytics, Auth, Crashlytics, Database, Firestore, and Messaging.
+- `GoogleService-Info.plist` sets `IS_ANALYTICS_ENABLED` to false and `IS_ADS_ENABLED` to false, but shared KMP code still instantiates `Firebase.analytics`, logs events, sets user ID, and sends user/email/business parameters.
+- Android has FingerprintJS device fingerprinting, but iOS `FingerPrintService` currently returns the literal `"IOS"` for backend fingerprint headers, so Android-only fingerprinting should not be treated as iOS tracking.
+- No app-level `PrivacyInfo.xcprivacy` was found in source; Firebase may provide SDK manifests through SPM dependencies, but the app's App Store Connect privacy answers still need to match actual behavior.
+- Recommended default fix if VentaGo does not use ads attribution/data brokers/cross-app tracking on iOS: update App Store Connect privacy information so collected data is not marked as "used for tracking", then reply to App Review explaining the iOS app does not track and does not access IDFA.
+- If Firebase/Google Analytics is configured for Google Ads attribution, Google signals, ads personalization, or cross-company advertising measurement, implement ATT before enabling that collection or disable those features/remove FirebaseAnalytics on iOS.
+
+# iOS Crashlytics dSYM Upload TODO
+
+## Plan
+- [x] Confirm Firebase's current Xcode 15 Crashlytics dSYM run-script requirements.
+- [x] Inspect the iOS target build phases and debug-symbol settings.
+- [x] Add the Crashlytics dSYM upload script and required input files with minimal pbxproj changes.
+- [x] Verify the project metadata and record results.
+
+## Verification Gates
+- [x] Xcode project file parses with `plutil -lint`.
+- [x] Crashlytics run script and required input files are present in `project.pbxproj`.
+- [x] Xcode Debug/Release build settings resolve `DEBUG_INFORMATION_FORMAT=dwarf-with-dsym`.
+
+## Review Notes
+- Added `Upload Crashlytics dSYMs` as the final iOS target build phase, using the Swift Package Manager script path from Firebase:
+  `"${BUILD_DIR%/Build/*}/SourcePackages/checkouts/firebase-ios-sdk/Crashlytics/run"`.
+- Added the Xcode 15 input files required by Firebase: dSYM bundle, DWARF binary, dSYM `Info.plist`, built `GoogleService-Info.plist`, and app executable.
+- Updated Debug `DEBUG_INFORMATION_FORMAT` from `dwarf` to `dwarf-with-dsym`; Release already produced dSYMs.
+- Did not add the optional `.debug.dylib` input because Xcode resolves `ENABLE_USER_SCRIPT_SANDBOXING=NO` for both Debug and Release.
+- Verification passed: `plutil -lint iosApp/iosApp.xcodeproj/project.pbxproj`, required-path scan, and `xcodebuild -showBuildSettings` for Debug and Release.
+
 # POS Cart Item Edit Sheet TODO
 
 ## Follow-up Plan
@@ -4413,3 +5449,314 @@
 - `getToken()` on iOS now only reads existing notification settings and registers for remote notifications when authorization is already granted/provisional, so app open no longer shows the permission prompt.
 - The successful-order path remains `SuccessScreen -> platformState.requestNotificationPermission()`, preserving the intended permission request timing after order creation.
 - Metadata compile passed; iOS simulator ARM64 Kotlin compile passed after fixing nullable `UNNotificationSettings` handling.
+# Archive iOS CocoaPods Config Error
+
+## Plan
+
+- [x] Inspect iOS/CocoaPods project metadata for stale absolute paths mentioned by Xcode.
+- [x] Identify whether the durable fix is regeneration or a source-controlled project file correction.
+- [x] Apply the smallest change needed to let Xcode archive resolve `composeApp.release.xcconfig`.
+- [ ] Verify no stale `/Users/oscar/Documents/CODI/VentaGo` references remain in relevant iOS project files.
+
+## Review
+
+- Pending.
+
+# iOS Folio Purchase CTA App Review TODO
+
+## Plan
+
+- [x] Audit folio/package/subscription purchase wording and external purchase entry points.
+- [x] Remove or gate iOS UI so users cannot start folio/package purchases or contact purchase support from the iOS app.
+- [x] Verify no iOS-rendered purchase CTA remains through focused source searches.
+- [x] Run focused iOS compile verification and record results.
+
+## Verification Gates
+
+- [x] Focused source search for folio/package/purchase CTAs.
+- [x] `./gradlew --no-build-cache --no-configuration-cache :composeApp:compileKotlinIosArm64`
+
+## Review Notes
+
+- `HomeScreen` now passes no folio purchase action on iOS; `InvoicingPlanCard` also keeps its existing internal `isIOS()` guard, so the `Comprar folios` button cannot render on iOS.
+- `HomeSummaryScreen` already gated the folio WhatsApp action on iOS; scan confirmed the same pattern remains.
+- `InvoiceLandingScreen` now hides the WhatsApp lead CTA and `Ver Precios` external website button on iOS.
+- `InvoicingLandingScreen` now hides the starting price, WhatsApp CTA, and external information link on iOS.
+- `SettingsScreen` already hides the payment-methods settings entry on iOS.
+- Remaining purchase/payment wording found by scan is either inside Android-only runtime branches, merchant/customer payment flows, commented legacy subscription code, report/customer purchase terminology, or backend/model fields.
+- iOS ARM64 Kotlin compilation passed. Existing warnings remain: cinterop commonization disabled, Skiko version mismatch, and unrelated deprecations/casts.
+
+# ACH Onboarding Four-Step Refresh TODO
+
+## Plan
+
+- [x] Expand ACH onboarding to four setup steps plus a final success screen.
+- [x] Add the ACH knowledge phase with validation explanation and four process cards.
+- [x] Update the ACH costs step copy.
+- [x] Update ACH next-step, footer, and save-success routing.
+- [x] Run focused Kotlin metadata compilation.
+
+## Verification Gates
+
+- [x] `./gradlew --no-build-cache --no-configuration-cache :composeApp:compileCommonMainKotlinMetadata`
+
+## Review Notes
+
+- ACH onboarding now keeps the existing first step, inserts a new knowledge phase as step 2, moves costs to step 3, configuration to step 4, and success confirmation to step 5.
+- The new knowledge phase explains comprobante validation and the four-step review flow.
+- The cost step now shows the `$0.27` accepted-transaction fee, periodic platform billing note, and links-only compatibility alert.
+- Metadata compilation passed. Existing project warnings remain unrelated.
+
+# iOS Archive Kotlin Native Heap Failure TODO
+
+## Plan
+
+- [x] Review the attached archive failure log.
+- [x] Inspect Gradle/Kotlin Native memory configuration.
+- [x] Apply the smallest build configuration change for the release link heap failure.
+- [x] Run focused iOS release framework verification.
+- [x] Record verification result and any residual risk.
+
+## Verification Gates
+
+- [x] `./gradlew --no-build-cache --no-configuration-cache :composeApp:linkReleaseFrameworkIosArm64`
+
+## Review Notes
+
+- Attached archive failure is `java.lang.OutOfMemoryError: Java heap space` during `:composeApp:linkReleaseFrameworkIosArm64`, inside Kotlin/Native release framework optimization/devirtualization.
+- Raised Kotlin daemon heap from 3 GB to 6 GB and Gradle daemon heap from 4 GB to 8 GB in `gradle.properties`; the iOS release linker runs under the Gradle daemon and now starts with `-Xmx8192M`.
+- Verification passed: `:composeApp:linkReleaseFrameworkIosArm64` completed successfully in 12m24s, producing the iOS arm64 release `ComposeApp.framework`.
+- Non-blocking warnings remain from existing configuration: cinterop commonization disabled and a Skiko dependency version mismatch warning.
+
+# iOS Archive Version TODO
+
+## Plan
+
+- [x] Find the iOS archive marketing version source.
+- [x] Update iOS marketing version from `1.0` to `1.6.0`.
+- [x] Verify Xcode build settings resolve `MARKETING_VERSION=1.6.0`.
+
+## Verification Gates
+
+- [x] `xcodebuild -project iosApp/iosApp.xcodeproj -target iosApp -configuration Release -showBuildSettings`
+
+## Review Notes
+
+- iOS archive marketing version is sourced from `iosApp/Configuration/Config.xcconfig`.
+- Updated `MARKETING_VERSION` to `1.6.0`; left `CURRENT_PROJECT_VERSION=1` unchanged because that is the build number, not the user-facing app version.
+- Xcode Release build settings now resolve `MARKETING_VERSION = 1.6.0`.
+
+# iOS Bluetooth Purpose String TODO
+
+## Plan
+
+- [x] Review the App Store Connect warning and current iOS Info.plist purpose strings.
+- [x] Add `NSBluetoothAlwaysUsageDescription` with a printer-focused user-facing purpose string.
+- [x] Verify the plist is valid and contains the new key.
+
+## Verification Gates
+
+- [x] `plutil -lint iosApp/iosApp/Info.plist`
+- [x] `plutil -p iosApp/iosApp/Info.plist | rg "NSBluetoothAlwaysUsageDescription"`
+
+## Review Notes
+
+- App Store delivery succeeded, but Apple flagged `ITMS-90683` for the next delivery because the app or an SDK references Bluetooth-sensitive APIs.
+- Added `NSBluetoothAlwaysUsageDescription` to `iosApp/iosApp/Info.plist`: `VentaGo necesita acceso a Bluetooth para descubrir y conectarse a impresoras térmicas compatibles.`
+- Plist syntax validation passed and PlistBuddy confirms the new key value.
+
+# iOS Build Number 2 TODO
+
+## Plan
+
+- [x] Confirm current iOS marketing version and build number.
+- [x] Update `CURRENT_PROJECT_VERSION` from `1` to `2`.
+- [x] Verify Xcode Release build settings resolve version `1.6.0` and build `2`.
+
+## Verification Gates
+
+- [x] `xcodebuild -project iosApp/iosApp.xcodeproj -target iosApp -configuration Release -showBuildSettings`
+
+## Review Notes
+
+- Updated `CURRENT_PROJECT_VERSION` to `2` in `iosApp/Configuration/Config.xcconfig`.
+- Xcode Release build settings now resolve `MARKETING_VERSION = 1.6.0` and `CURRENT_PROJECT_VERSION = 2`.
+
+# Epson Ticket Web Parity TODO
+
+## Plan
+
+- [x] Audit current ticket parser and Android/iOS Epson renderers for paper, logo, QR, and authorization behavior.
+- [x] Add shared print profile metadata for 56/57/58/80mm columns and dot widths.
+- [x] Force authorization key/value blocks to full-width wrapped text.
+- [x] Ignore backend QR size hints and resolve QR module size/x-position from the required paper rules.
+- [x] Align logo/image canvas sizing and centering with the web Epson output on Android and iOS.
+- [x] Add focused parser tests for paper profiles, authorization wrapping, and QR sizing/position.
+- [x] Run focused printer tests and common compile verification.
+
+## Verification Gates
+
+- [x] `./gradlew --no-build-cache --no-configuration-cache :composeApp:testAndroidHostTest --tests com.teco.ventago.features.printers.TicketLayoutParserTest`
+- [x] `./gradlew --no-build-cache --no-configuration-cache :composeApp:compileCommonMainKotlinMetadata`
+- [x] `./gradlew --no-build-cache --no-configuration-cache :composeApp:compileKotlinIosSimulatorArm64`
+
+## Review Notes
+
+- Added shared ticket paper profiles: 56/57mm use 34 chars and 420 dots, 58mm uses 32 chars and 384 dots, and 80mm uses 48 chars and 576 dots.
+- Authorization key/value blocks now print as normal left-aligned full-width text (`Autorización: value`) and ignore right-column/totals alignment hints.
+- QR blocks now ignore backend size/width hints for print, resolve module width and explicit dot x-position from paper profile and QR version rules, and preserve backend error correction only for L/M/Q/H.
+- Android and iOS Epson engines now print QR from left alignment with explicit horizontal positioning and reset position afterward.
+- Logo/image blocks now render into a white fixed-width raster canvas and center the image inside that canvas; iOS now applies the same paper-aware image sizing Android already had.
+- Focused parser tests, common metadata compilation, and iOS simulator Kotlin compilation passed. Existing project warnings remain unrelated.
+
+# POS Credit Note Success Copy TODO
+
+## Plan
+
+- [x] Locate the POS success hero title logic.
+- [x] Use existing POS document type state to detect credit notes.
+- [x] Change only the completed-title copy for credit note orders.
+- [x] Run focused common metadata compilation.
+
+## Verification Gates
+
+- [x] `./gradlew --no-build-cache --no-configuration-cache :composeApp:compileCommonMainKotlinMetadata`
+
+## Review Notes
+
+- Credit note POS success titles now show `¡Nota de crédito completada!` for document types `04` and `06`.
+- Standard invoices keep `¡Factura completada!`; warning, payment-link, and failure copy remains unchanged.
+- Common metadata compilation passed. Existing project warnings remain unrelated.
+
+# POS Yappy Pending QR Conflict TODO
+
+## Plan
+
+- [x] Trace POS Yappy onsite order creation error handling and navigation.
+- [x] Model the backend pending-transaction error so the ViewModel can preserve branch and billing point.
+- [x] Show a focused confirmation dialog when the pending QR conflict happens.
+- [x] On keep-active, return to payment selection so the cashier can choose another method.
+- [x] On cancel, call the existing cancel-pending endpoint, then retry the original Yappy onsite order creation.
+- [x] Run focused compile/tests or the nearest reliable verification gate.
+
+## Verification Gates
+
+- [x] `./gradlew --no-build-cache --no-configuration-cache :composeApp:compileCommonMainKotlinMetadata`
+
+## Review Notes
+
+- Added a typed `YappyOnsitePendingTransactionDto` and `YappyOnsitePendingTransactionExistsException` for `yappy_onsite_pending_transaction_exists`.
+- `OrdersRepository.createOrder` now handles the pending-QR error before decoding order data and treats any `success:false` create-order response as an error.
+- POS state preserves the pending QR branch/billing point from the backend response for cancel-pending.
+- The payment screen now shows the requested Spanish dialog copy.
+- Choosing `Mantener QR activo` closes the dialog and returns the payment flow to manual/installments so the cashier can use another payment method.
+- Choosing `Cancelar QR pendiente` calls `cancelPendingYappyOnsiteTransaction` with reason `cashier_cancelled_pending_qr`, then retries Yappy onsite order creation only when cancellation succeeds.
+- Common metadata compilation passed. Existing warnings remain unrelated.
+
+# Yappy QR Change Payment Crash TODO
+
+## Plan
+
+- [x] Inspect attached Android crash and identify the crashing Compose hierarchy.
+- [x] Remove nested vertical scroll when showing the embedded replacement payment page from Yappy QR.
+- [x] Run focused compile verification.
+- [x] Record result and any lesson from the crash pattern.
+
+## Verification Gates
+
+- [x] `./gradlew --no-build-cache --no-configuration-cache :composeApp:compileCommonMainKotlinMetadata`
+
+## Review Notes
+
+- Crash was caused by rendering `PaymentScreenContent` inside `YappyOnsitePaymentScreen`'s outer `Column.verticalScroll`, while `PaymentScreenContent` owns its own scrollable layout.
+- The pending-payment replacement branch now renders as a top-level full-height branch, outside the QR/status scroll container.
+- The active QR/status states keep the existing scroll behavior.
+- Common metadata compilation passed. Existing warnings remain unrelated.
+
+# Yappy QR Change Payment Confirmation TODO
+
+## Plan
+
+- [x] Add a confirmation dialog before leaving an active Yappy QR to select another payment method.
+- [x] On confirmation, release the active Yappy onsite pending intent through `/orders/{id}/payments/pending-intent/release` with `payment_method=yappy_onsite` and `reason=customer_selected_cash`.
+- [x] Mark the pending source as already released so the replacement confirmation does not double-release it.
+- [x] Keep cancel/dismiss behavior preserving the active QR.
+- [x] Run focused compile verification and record results.
+
+## Verification Gates
+
+- [x] `./gradlew --no-build-cache --no-configuration-cache :composeApp:compileCommonMainKotlinMetadata`
+
+## Review Notes
+
+- Added a confirmation dialog when the cashier taps `Seleccionar otro método de pago` on an active Yappy QR.
+- Confirming the dialog calls the existing pending-intent release endpoint with `payment_method = "yappy_onsite"` and `reason = "customer_selected_cash"` before showing the replacement payment selector.
+- Dismissing the dialog keeps the QR active and does not call the release endpoint.
+- Added `pendingPaymentChangeSourceReleased` so subsequent replacement confirmation does not release the same Yappy pending intent again.
+- Common metadata compilation passed. Existing warnings remain unrelated.
+
+# Yappy QR Stop Polling On Release TODO
+
+## Plan
+
+- [x] Trace where the Yappy transaction polling loop is scheduled and where pending-intent release begins.
+- [x] Add a state guard that suppresses transaction polling before calling pending-intent release.
+- [x] Reset the guard only when a new Yappy onsite QR/session is created or POS state is reset.
+- [x] Run focused compile verification and record results.
+
+## Verification Gates
+
+- [x] `./gradlew --no-build-cache --no-configuration-cache :composeApp:compileCommonMainKotlinMetadata`
+
+## Review Notes
+
+- `YappyOnsitePaymentScreen` now stops scheduling the Yappy transaction polling loop once `yappyOnsitePollingSuppressed` is set.
+- `releasePendingPaymentChangeIntent` now calls `stopYappyOnsitePollingForRelease()` before the pending-intent release endpoint when the source method is Yappy onsite.
+- The ViewModel cancels the active Yappy transaction polling job and rejects delayed poll calls while release is in progress.
+- The suppression flag resets on new POS sale state and when a new Yappy onsite QR/session is created.
+- Common metadata compilation passed. Existing warnings remain unrelated.
+
+# Payment Link Stop Polling On Release TODO
+
+## Plan
+
+- [x] Trace payment-link "select other payment method" CTA and current selector exit cancellation path.
+- [x] Change payment-link CTA to stop polling and call pending-intent release before opening the replacement selector.
+- [x] Reuse the released-source guard so replacement confirmation does not call release twice.
+- [x] Verify exiting the selector still prompts and cancels the order through the cancel endpoint.
+- [x] Run focused compile verification and record results.
+
+## Verification Gates
+
+- [x] `./gradlew --no-build-cache --no-configuration-cache :composeApp:compileCommonMainKotlinMetadata`
+
+## Review Notes
+
+- Payment-link `Seleccionar otro método de pago` now calls a release-first ViewModel action instead of opening the selector directly.
+- The new action stops payment-link polling, releases the pending payment link intent with `payment_method = "payment_link"` and `reason = "customer_selected_cash"`, then opens the replacement selector only on success.
+- `pendingPaymentChangeSourceReleased` remains true after the pre-release, so confirming manual/Yappy replacement does not release the same payment link again.
+- The selector exit flow was verified: back/home/new-sale attempts show the cancel-order dialog, and confirmation calls `POST /api/v1/orders/cancel` through `orderService.cancelOrder` with reason `customer_abandoned_payment_method_change`.
+- Common metadata compilation passed. Existing warnings remain unrelated.
+
+# POS Config Summary Excess Calls TODO
+
+## Plan
+
+- [x] Trace all POS calls that can hit `/api/v1/business/config-summary` during Yappy onsite replacement flow.
+- [x] Identify why opening the replacement payment selector re-runs config warmup.
+- [x] Prevent embedded replacement selectors from refreshing config summary.
+- [x] Keep normal payment screen config warmup, but make it run once per screen mount instead of on config-state mutations.
+- [x] Run focused compile verification and record results.
+
+## Verification Gates
+
+- [x] `./gradlew --no-build-cache --no-configuration-cache :composeApp:compileCommonMainKotlinMetadata`
+
+## Review Notes
+
+- `PaymentScreenContent` was calling `onPaymentScreenVisible()` from a `LaunchedEffect` keyed by payment config state, so config-state changes could re-trigger payment config warmup.
+- The Yappy/payment-link replacement selectors reuse `PaymentScreenContent`; opening them after pending-intent release should not refresh `/api/v1/business/config-summary`.
+- `PaymentScreenContent` now runs `onPaymentScreenVisible()` only for the normal payment screen and only once per mount.
+- Replacement selectors now use existing POS config state and do not initiate config-summary refresh.
+- The `.165` Chrome log entries with `jwt_request_missing_fingerprint` / `invalid_token` are separate from the app `.124` POS flow and were not caused by this app-side replacement selector path.
+- Common metadata compilation passed. Existing warnings remain unrelated.

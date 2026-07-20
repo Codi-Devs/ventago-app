@@ -9,7 +9,7 @@ import com.teco.ventago.features.printers.domain.model.TicketBlockStyle
 import com.teco.ventago.features.printers.domain.model.TicketDocumentPayload
 import com.teco.ventago.features.printers.domain.model.TicketLayout
 import com.teco.ventago.features.printers.domain.model.UnknownTicketBlockException
-import com.teco.ventago.features.printers.domain.model.toPaperColumns
+import com.teco.ventago.features.printers.domain.model.toTicketPaperProfile
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
@@ -52,7 +52,8 @@ class TicketLayoutParser {
     }
 
     fun toCommands(layout: TicketLayout, printerConfig: PrinterConfig): List<PrintCommand> {
-        val width = printerConfig.paperWidthMm.toPaperColumns()
+        val paperProfile = printerConfig.paperWidthMm.toTicketPaperProfile()
+        val width = paperProfile.lineChars
         val commands = mutableListOf<PrintCommand>()
         var explicitCut = false
 
@@ -95,11 +96,25 @@ class TicketLayoutParser {
                 }
 
                 is TicketBlock.KeyValue -> {
-                    val key = block.key.trim()
+                    val key = block.key.trim().authorizationDisplayLabel()
                     val value = block.value.trim()
                     if (key.isBlank() && value.isBlank()) return@forEach
 
-                    if (block.alignValueRight && key.isNotBlank() && value.isNotBlank()) {
+                    if (block.key.isAuthorizationKey() && value.isNotBlank()) {
+                        wrapFixedWidthText("$key: $value", width).forEach { line ->
+                            commands += PrintCommand.Text(
+                                text = padAlignedText(line, width, PrintAlignment.LEFT),
+                                alignment = PrintAlignment.LEFT,
+                                style = block.style.copy(
+                                    bold = false,
+                                    underline = false,
+                                    doubleWidth = false,
+                                    doubleHeight = false,
+                                    inverse = false
+                                )
+                            )
+                        }
+                    } else if (block.alignValueRight && key.isNotBlank() && value.isNotBlank()) {
                         val valueWidth = (width * 0.45f).toInt().coerceIn(8, (width - 9).coerceAtLeast(8))
                         val keyWidth = (width - valueWidth - 1).coerceAtLeast(8)
                         val keyLines = wrapText(key, keyWidth)
@@ -221,11 +236,18 @@ class TicketLayoutParser {
                 }
 
                 is TicketBlock.Qr -> {
-                    val qrSize = resolveQrModuleSize(block, width)
+                    val qrPrintLayout = resolveQrPrintLayout(
+                        block = block,
+                        paperWidthMm = printerConfig.paperWidthMm,
+                        lineChars = width,
+                        paperWidthDots = paperProfile.canvasWidthDots
+                    )
                     commands += PrintCommand.Qr(
                         data = block.data,
-                        alignment = PrintAlignment.CENTER,
-                        size = qrSize
+                        alignment = PrintAlignment.LEFT,
+                        size = qrPrintLayout.moduleWidth,
+                        xPositionDots = qrPrintLayout.xPositionDots,
+                        errorCorrection = block.errorCorrection
                     )
                 }
             }
@@ -395,17 +417,36 @@ class TicketLayoutParser {
                     ?: throw InvalidTicketBlockException(type, "Faltan los datos del código QR")
                 val qrSize = (raw.int("size")
                     ?: raw.int("module_size")
+                    ?: raw.int("size_hint")
                     ?: qrObject?.int("size")
                     ?: qrObject?.int("module_size")
+                    ?: qrObject?.int("size_hint")
                     ?: 8).coerceIn(1, 16)
                 val qrWidthHint = raw.percentHint("width_hint")
+                    ?: raw.percentHint("widthHint")
                     ?: qrObject?.percentHint("width_hint")
+                    ?: qrObject?.percentHint("widthHint")
+                val qrVersion = raw.int("version")
+                    ?: raw.int("qr_version")
+                    ?: raw.int("qrVersion")
+                    ?: qrObject?.int("version")
+                    ?: qrObject?.int("qr_version")
+                    ?: qrObject?.int("qrVersion")
+                val errorCorrection = raw.string("error_correction")
+                    ?: raw.string("errorCorrection")
+                    ?: raw.string("level")
+                    ?: qrObject?.string("error_correction")
+                    ?: qrObject?.string("errorCorrection")
+                    ?: qrObject?.string("level")
+                    ?: "M"
 
                 listOf(
                     TicketBlock.Qr(
                         data = qrData,
                         size = qrSize,
                         widthHintPercent = qrWidthHint,
+                        version = qrVersion?.coerceIn(1, QR_MAX_VERSION),
+                        errorCorrection = errorCorrection.normalizeQrErrorCorrection(),
                         alignment = alignment,
                         style = style
                     )
@@ -455,6 +496,18 @@ class TicketLayoutParser {
                         }
                     }
                 }
+            }
+        }
+    }
+
+    private fun wrapFixedWidthText(text: String, width: Int): List<String> {
+        val safeWidth = width.coerceAtLeast(1)
+        val normalized = text.replace("\r\n", "\n").replace('\r', '\n')
+        return normalized.split('\n').flatMap { line ->
+            if (line.isEmpty()) {
+                listOf("")
+            } else {
+                line.chunked(safeWidth)
             }
         }
     }
@@ -527,17 +580,36 @@ class TicketLayoutParser {
         return separator.repeat(left) + normalizedLabel + separator.repeat(right)
     }
 
-    private fun resolveQrModuleSize(block: TicketBlock.Qr, lineWidth: Int): Int {
-        val maxModuleSize = if (lineWidth <= 34) 8 else 12
-        val hint = block.widthHintPercent
-        if (hint != null) {
-            val ratio = hint.coerceIn(1, 100) / 100.0
-            return ((maxModuleSize * ratio).toInt()).coerceIn(3, maxModuleSize)
+    private fun resolveQrPrintLayout(
+        block: TicketBlock.Qr,
+        paperWidthMm: Int,
+        lineChars: Int,
+        paperWidthDots: Int,
+    ): QrPrintLayout {
+        val qrVersion = block.version ?: estimateQrVersion(block.data, block.errorCorrection)
+        val moduleCount = QR_BASE_MODULE_COUNT + (qrVersion * QR_MODULES_PER_VERSION)
+
+        return if (paperWidthMm == 57) {
+            val moduleWidth = ((paperWidthDots - QR_57_MM_MARGIN_DOTS) / moduleCount)
+                .coerceIn(QR_MIN_MODULE_WIDTH, QR_57_MM_MAX_MODULE_WIDTH)
+            val xPosition = ((paperWidthDots - (moduleCount * moduleWidth)) / 2) + QR_57_MM_CENTER_OFFSET_DOTS
+            QrPrintLayout(moduleWidth = moduleWidth, xPositionDots = xPosition.coerceAtLeast(0))
+        } else {
+            val maxModuleWidth = if (lineChars <= EXTRA_NARROW_LINE_CHARS) 8 else 12
+            val moduleWidth = (maxModuleWidth * QR_NON_57_WIDTH_RATIO)
+                .toIntWithRound()
+                .coerceIn(QR_MIN_MODULE_WIDTH, maxModuleWidth)
+            val xPosition = (paperWidthDots - (moduleCount * moduleWidth)) / 2
+            QrPrintLayout(moduleWidth = moduleWidth, xPositionDots = xPosition.coerceAtLeast(0))
         }
-        return block.size.coerceIn(3, maxModuleSize)
     }
 
 }
+
+private data class QrPrintLayout(
+    val moduleWidth: Int,
+    val xPositionDots: Int,
+)
 
 private fun JsonObject.string(key: String): String? = (this[key] as? JsonPrimitive)?.contentOrNull?.takeIf { it.isNotBlank() }
 
@@ -693,3 +765,85 @@ private fun String.toPrintAlignment(): PrintAlignment = when (trim().lowercase()
     "right", "end", "derecha" -> PrintAlignment.RIGHT
     else -> PrintAlignment.LEFT
 }
+
+private fun String.isAuthorizationKey(): Boolean {
+    val normalized = normalizeAuthorizationKey()
+    return normalized == "autorizacion" || normalized == "authorization"
+}
+
+private fun String.authorizationDisplayLabel(): String {
+    return if (isAuthorizationKey()) "Autorización" else this
+}
+
+private fun String.normalizeAuthorizationKey(): String {
+    return trim()
+        .lowercase()
+        .removeSuffix(":")
+        .replace("á", "a")
+        .replace("é", "e")
+        .replace("í", "i")
+        .replace("ó", "o")
+        .replace("ú", "u")
+        .replace("_", " ")
+        .replace("-", " ")
+        .replace(Regex("\\s+"), " ")
+        .trim()
+}
+
+private fun String.normalizeQrErrorCorrection(): String {
+    return when (trim().uppercase()) {
+        "L", "M", "Q", "H" -> trim().uppercase()
+        else -> "M"
+    }
+}
+
+private fun estimateQrVersion(data: String, errorCorrection: String): Int {
+    val byteCount = data.encodeToByteArray().size
+    val capacities = when (errorCorrection.normalizeQrErrorCorrection()) {
+        "L" -> QR_BYTE_CAPACITY_L
+        "Q" -> QR_BYTE_CAPACITY_Q
+        "H" -> QR_BYTE_CAPACITY_H
+        else -> QR_BYTE_CAPACITY_M
+    }
+    return capacities.indexOfFirst { byteCount <= it }
+        .takeIf { it >= 0 }
+        ?.plus(1)
+        ?: QR_MAX_VERSION
+}
+
+private fun Double.toIntWithRound(): Int = kotlin.math.round(this).toInt()
+
+private const val QR_BASE_MODULE_COUNT = 17
+private const val QR_MODULES_PER_VERSION = 4
+private const val QR_MAX_VERSION = 40
+private const val QR_MIN_MODULE_WIDTH = 3
+private const val QR_57_MM_MARGIN_DOTS = 8
+private const val QR_57_MM_CENTER_OFFSET_DOTS = 20
+private const val QR_57_MM_MAX_MODULE_WIDTH = 16
+private const val QR_NON_57_WIDTH_RATIO = 0.65
+private const val EXTRA_NARROW_LINE_CHARS = 34
+
+private val QR_BYTE_CAPACITY_L = intArrayOf(
+    17, 32, 53, 78, 106, 134, 154, 192, 230, 271,
+    321, 367, 425, 458, 520, 586, 644, 718, 792, 858,
+    929, 1003, 1091, 1171, 1273, 1367, 1465, 1528, 1628, 1732,
+    1840, 1952, 2068, 2188, 2303, 2431, 2563, 2699, 2809, 2953
+)
+private val QR_BYTE_CAPACITY_M = intArrayOf(
+    14, 26, 42, 62, 84, 106, 122, 152, 180, 213,
+    251, 287, 331, 362, 412, 450, 504, 560, 624, 666,
+    711, 779, 857, 911, 997, 1059, 1125, 1190, 1264, 1370,
+    1452, 1538, 1628, 1722, 1809, 1911, 1989, 2099, 2213, 2331
+)
+private val QR_BYTE_CAPACITY_Q = intArrayOf(
+    11, 20, 32, 46, 60, 74, 86, 108, 130, 151,
+    177, 203, 241, 258, 292, 322, 364, 394, 442, 482,
+    509, 565, 611, 661, 715, 751, 805, 868, 908, 982,
+    1030, 1112, 1168, 1228, 1283, 1351, 1423, 1499, 1579, 1663
+)
+private val QR_BYTE_CAPACITY_H = intArrayOf(
+    7, 14, 24, 34, 44, 58, 64, 84, 98, 119,
+    137, 155, 177, 194, 220, 250, 280, 310, 338, 382,
+    403, 439, 461, 511, 535, 593, 625, 658, 698, 742,
+    790, 842, 898, 958, 983, 1051, 1093, 1139, 1219, 1273
+)

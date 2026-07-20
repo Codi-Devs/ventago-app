@@ -8,6 +8,7 @@ import com.teco.ventago.core.SnackbarService
 import com.teco.ventago.core.firebase.AnalyticsService
 import com.teco.ventago.core.authz.ActionKey
 import com.teco.ventago.core.authz.AuthzEvaluator
+import com.teco.ventago.core.authz.ScopeKey
 import com.teco.ventago.core.beta.BetaFeature
 import com.teco.ventago.core.beta.BetaService
 import com.teco.ventago.design_system.molecules.pos.DiscountMode
@@ -15,6 +16,7 @@ import com.teco.ventago.design_system.molecules.pos.GlobalDiscountMode
 import com.teco.ventago.features.auth.domain.IAuthService
 import com.teco.ventago.features.branches.domain.BranchService
 import com.teco.ventago.features.branches.domain.model.Branch as BranchModel
+import com.teco.ventago.features.branches.domain.model.FiscalBillingPoint
 import com.teco.ventago.features.business.domain.BusinessService
 import com.teco.ventago.features.business.domain.model.Business
 import com.teco.ventago.features.customers.domain.CustomerService
@@ -23,10 +25,14 @@ import com.teco.ventago.features.customers.domain.models.CustomerListItem
 import com.teco.ventago.features.customers.domain.models.CustomerTaxRetentionCatalog
 import com.teco.ventago.features.financialProfile.domain.FinancialProfileService
 import com.teco.ventago.features.invoicing.domain.InvoicingSettingsService
+import com.teco.ventago.features.invoicing.domain.PostCreateInvoiceWarningState
 import com.teco.ventago.features.invoicing.domain.resolvePostCreateInvoiceWarning
 import com.teco.ventago.features.invoicing.domain.models.InvoiceStatus
+import com.teco.ventago.features.orders.domain.OrderService
+import com.teco.ventago.features.orders.domain.OrderPaymentSubmission
 import com.teco.ventago.features.orders.domain.models.CustomerSnapshot
 import com.teco.ventago.features.orders.domain.models.Order
+import com.teco.ventago.features.orders.domain.models.PaymentStatus
 import com.teco.ventago.features.orders.domain.models.requests.Branch
 import com.teco.ventago.features.orders.domain.models.requests.Charge
 import com.teco.ventago.features.orders.domain.models.requests.CommercialAddenda
@@ -52,10 +58,20 @@ import com.teco.ventago.features.orders.domain.models.requests.PharmaSale
 import com.teco.ventago.features.orders.domain.models.requests.ReferenceNumber
 import com.teco.ventago.features.orders.domain.models.requests.References
 import com.teco.ventago.features.orders.domain.models.requests.Retentions
+import com.teco.ventago.features.orders.domain.models.requests.PendingIntentReleaseResponse
+import com.teco.ventago.features.orders.domain.models.requests.RegisterManualPaymentsDataResponse
 import com.teco.ventago.features.orders.domain.models.requests.ThirdParty
+import com.teco.ventago.features.orders.domain.models.responses.CreateOrderLinkDto
+import com.teco.ventago.features.orders.domain.models.responses.OnsitePaymentDto
+import com.teco.ventago.features.orders.domain.models.responses.YAPPY_ONSITE_PENDING_TRANSACTION_EXISTS
+import com.teco.ventago.features.orders.domain.models.responses.YappyOnsitePendingTransactionDto
+import com.teco.ventago.features.orders.domain.models.responses.YappyOnsitePendingTransactionExistsException
+import com.teco.ventago.features.payments.domain.PaymentService
+import com.teco.ventago.features.payments.domain.models.YappyOnsiteDevice
 import com.teco.ventago.features.pos.domain.PosService
 import com.teco.ventago.features.printers.domain.PrinterService
 import com.teco.ventago.features.printers.domain.model.PrintContext
+import com.teco.ventago.features.printers.domain.model.TicketDocumentPayload
 import com.teco.ventago.features.pos.domain.models.CartLine
 import com.teco.ventago.features.pos.domain.models.Discount
 import com.teco.ventago.features.pos.domain.models.Money
@@ -85,6 +101,8 @@ import com.teco.ventago.utils.randomUUID
 import com.teco.ventago.utils.toDecimalString
 import com.teco.ventago.utils.toLongCents
 import com.teco.ventago.utils.toQuantityRequestString
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.IO
 import kotlinx.coroutines.delay
@@ -92,6 +110,7 @@ import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.launchIn
 import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import kotlinx.datetime.Clock
@@ -102,7 +121,6 @@ import kotlinx.datetime.LocalTime
 import kotlinx.datetime.TimeZone
 import kotlinx.datetime.toInstant
 import kotlinx.datetime.toLocalDateTime
-import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.jsonPrimitive
@@ -120,6 +138,8 @@ internal const val INVALID_FINAL_CUSTOMER_CEDULA_MESSAGE =
     "Cedula invalida. Revise el formato (ej: 1-1234-12345, 8-88-8456, PE-123-12345, E-1234-12345, N-12345-1234, 1AV1234-12345, 1PI-1234-1234)."
 internal const val INVALID_FINAL_CUSTOMER_EMAIL_MESSAGE = "Correo inválido"
 
+private fun CreateOrderLinkDto.resolvedUrl(): String = url.ifBlank { link.orEmpty() }
+
 class PosViewModel(
     private val authService: IAuthService,
     private val businessService: BusinessService,
@@ -127,6 +147,8 @@ class PosViewModel(
     private val customerService: CustomerService,
     private val productService: ProductService,
     private val posService: PosService,
+    private val orderService: OrderService,
+    private val paymentService: PaymentService,
     private val financialProfileService: FinancialProfileService,
     private val quotesService: QuotesService,
     private val invoicingSettingsService: InvoicingSettingsService,
@@ -136,43 +158,17 @@ class PosViewModel(
     private val printerService: PrinterService,
     private val snackbarService: SnackbarService,
     private val analyticsService: AnalyticsService,
+    private val appScope: CoroutineScope,
 ) : BaseViewModel<PosState, PosStateUiEvent>(PosState()) {
     private companion object {
         const val DEFAULT_QUOTE_BRANCH_CODE = "0000"
         const val PRODUCT_VIEW_MODE_KEY_PREFIX = "pos.product_view_mode"
         const val BRANCH_BILLING_POINT_KEY_PREFIX = "pos.last_branch_billing_point"
         const val PAYMENT_LINK_BADGE_SEEN_KEY_PREFIX = "pos.payment_link_tab_seen"
-        const val PAYMENT_LINK_CHECKPOINT_KEY_PREFIX = "pos.payment_link_checkpoint"
-        const val PAYMENT_LINK_CHECKPOINT_MAX_AGE_SECONDS = 60L * 60L * 12L
+        const val ORDER_CREATION_CHECKPOINT_KEY_PREFIX = "pos.order_creation_checkpoint"
+        const val YAPPY_ONSITE_DEVICES_CACHE_KEY_PREFIX = "pos.yappy_onsite_devices"
         const val PAYMENT_CONFIG_REFRESH_THROTTLE_SECONDS = 60L
-    }
-
-    @Serializable
-    private data class PaymentStepCheckpoint(
-        val paymentFlowMode: String = PaymentFlowMode.MANUAL_OR_INSTALLMENTS.name,
-        val tipAmount: Long = 0L,
-        val tipIsPercentage: Boolean = true,
-        val charged: Map<Int, Long> = emptyMap(),
-        val installments: List<InstallmentCheckpoint> = emptyList(),
-        val otherPaymentDescription: String = "",
-        val selectedDocTypeIndex: Int = 0,
-        val selectedDocType: String = "01",
-        val selectedOperationNatureIndex: Int = 0,
-        val selectedOperationNature: String = "01",
-        val savedAtEpochSeconds: Long = 0L
-    )
-
-    @Serializable
-    private data class InstallmentCheckpoint(
-        val amountCents: Long,
-        val dueDateIso: String
-    )
-
-    private enum class RestoreCheckpointResult {
-        RESTORED_AND_CLEARED,
-        KEEP_FOR_LATER,
-        CLEAR_INVALID_OR_STALE,
-        NONE
+        const val PAYMENT_LINK_POLL_MS = 1_500L
     }
 
     var business: Business? = null
@@ -180,8 +176,15 @@ class PosViewModel(
 
     private var order: Order? = null
     private var pendingQuoteBranchCode: String? = null
+    private var pendingOrderCreationCheckpoint: OrderCreationCheckpoint? = null
+    private var orderCheckpointPromptChecked = false
+    private var suppressOrderCheckpointWrites = false
+    private var orderCheckpointDisabledForCurrentFlow = false
     private var customerAddressesJob: Job? = null
     private var paymentConfigRefreshJob: Job? = null
+    private var yappyOnsiteDevicesJob: Job? = null
+    private var paymentLinkPollingJob: Job? = null
+    private var yappyOnsitePollingJob: Job? = null
     private var lastPaymentConfigRefreshAtEpochSeconds: Long = 0L
     private data class PersistedBranchBillingPoint(
         val branchCode: String,
@@ -192,7 +195,9 @@ class PosViewModel(
         val canCreateInvoice: Boolean,
         val canCreateDraft: Boolean,
         val canCreatePaymentLink: Boolean,
-        val hasPaymentsBeta: Boolean,
+        val canConfigurePayments: Boolean,
+        val canConfigureYappyOnsite: Boolean,
+        val canCreateYappyOnsiteQr: Boolean,
         val canCreateQuote: Boolean,
         val canUpdateQuote: Boolean,
         val canUseCustomProduct: Boolean,
@@ -206,11 +211,19 @@ class PosViewModel(
                     val betaSnapshot = betaResponse?.features.orEmpty()
                         .mapNotNull(BetaFeature::fromKey)
                         .toSet()
+                    val yappyOnsiteSetupScopes = setOf(
+                        ScopeKey.INVOICE_YAPPY_ONSITE,
+                        ScopeKey.PAYMENTS_CONFIGURE,
+                        ScopeKey.PAYMENTS_VIEW
+                    )
                     PosAuthzState(
                         canCreateInvoice = AuthzEvaluator.canAction(ActionKey.ORDERS_CREATE, user, betaSnapshot),
                         canCreateDraft = AuthzEvaluator.canAction(ActionKey.ORDERS_CREATE_DRAFT, user, betaSnapshot),
                         canCreatePaymentLink = AuthzEvaluator.canAction(ActionKey.ORDERS_PAYMENT_LINK, user, betaSnapshot),
-                        hasPaymentsBeta = BetaFeature.PAYMENTS in betaSnapshot,
+                        canConfigurePayments = AuthzEvaluator.canAction(ActionKey.PAYMENTS_CONFIGURE, user, betaSnapshot),
+                        canConfigureYappyOnsite = user?.isOwnerMain == true ||
+                            user?.scopes?.containsAll(yappyOnsiteSetupScopes) == true,
+                        canCreateYappyOnsiteQr = AuthzEvaluator.canAction(ActionKey.ORDERS_YAPPY_ONSITE, user, betaSnapshot),
                         canCreateQuote = AuthzEvaluator.canAction(ActionKey.QUOTES_CREATE, user, betaSnapshot),
                         canUpdateQuote = AuthzEvaluator.canAction(ActionKey.QUOTES_UPDATE, user, betaSnapshot),
                         canUseCustomProduct = AuthzEvaluator.canAction(ActionKey.ORDERS_CUSTOM_PRODUCT, user, betaSnapshot),
@@ -223,7 +236,9 @@ class PosViewModel(
                             canCreateInvoice = authz.canCreateInvoice,
                             canCreateDraft = authz.canCreateDraft,
                             canCreatePaymentLink = authz.canCreatePaymentLink,
-                            hasPaymentsBeta = authz.hasPaymentsBeta,
+                            canConfigurePayments = authz.canConfigurePayments,
+                            canConfigureYappyOnsite = authz.canConfigureYappyOnsite,
+                            canCreateYappyOnsiteQr = authz.canCreateYappyOnsiteQr,
                             canCreateQuote = authz.canCreateQuote,
                             canUpdateQuote = authz.canUpdateQuote,
                             canUseCustomProduct = authz.canUseCustomProduct,
@@ -279,11 +294,25 @@ class PosViewModel(
 
             financialProfileService.observe().onEach { profile ->
                 profile?.let {
+                    val onsite = it.paymentSummary.paymentMethods.yappy.onsite
+                    val onsiteConfigured = onsite.configured && onsite.enabled
                     updateState {
                         copy(
                             paymentsConfigured = financialProfileService.paymentsConfigured(),
+                            paymentProfileResolved = true,
+                            paymentLinkConfigured = financialProfileService.paymentLinkMethodsConfigured(),
+                            yappyOnsiteConfigured = onsiteConfigured,
+                            yappyOnsiteDevices = if (onsiteConfigured) yappyOnsiteDevices else emptyList(),
+                            yappyOnsiteDevicesResolved = if (onsiteConfigured) {
+                                onsiteConfigured && yappyOnsiteDevicesResolved
+                            } else {
+                                true
+                            },
                             invoicingEnabled = it.invoicingActive
                         )
+                    }
+                    if (onsiteConfigured) {
+                        loadYappyOnsiteDevices(forceRefresh = true)
                     }
                     if (it.invoicingActive) {
                         refreshBottomNoteSettingsInBackground()
@@ -307,6 +336,7 @@ class PosViewModel(
                     refreshBottomNoteSettingsInBackground()
                     applyPersistedBranchBillingPointSelectionIfPossible()
                     fetchCustomerAddresses()
+                    warmYappyOnsiteAvailabilityForNewOrder()
                 }
             }.launchIn(this)
 
@@ -350,19 +380,25 @@ class PosViewModel(
     fun startNoteFromInvoice(
         args: PosNoteRoute,
     ) {
+        disableOrderCreationCheckpointForCurrentFlow(clearExisting = true)
         updateState {
             copy(
                 selectedDocTypeIndex = when (args.op) {
-                    "04" -> 3 // Nota de Crédito Referente a FE
-                    "05" -> 4 // Nota de Débito Referente a FE
+                    "04", "05" -> 0 // Preset-only note types are hidden from the normal dropdown.
                     else -> 0
                 },
                 selectedDocType = args.op,
                 enabledSelectionDocType = false,
                 referencedNoteCUFE = args.cufe,
                 referencedCreatedAt = args.createdAt,
+                originalInvoiceNumber = "",
+                originalInvoiceNumberError = null,
+                originalInvoiceEmissionDateIso = "",
+                originalInvoiceEmissionDateError = null,
                 // Force manual payment for credit/debit notes (no payment links or drafts)
-                paymentFlowMode = PaymentFlowMode.MANUAL_OR_INSTALLMENTS
+                paymentFlowMode = PaymentFlowMode.MANUAL_OR_INSTALLMENTS,
+                maxCreditNoteAmountCents = args.maxCreditNoteAmountCents,
+                sourceOrderNumber = args.sourceOrderNumber
             )
         }
 
@@ -639,6 +675,7 @@ class PosViewModel(
             uiState.value.finalCustomer == false -> clearSelectedCustomerTaxDefaults()
         }
         fetchCustomerAddresses()
+        saveOrderCreationCheckpoint(OrderCreationStep.CUSTOMER)
     }
 
     private fun fetchCustomerAddresses() {
@@ -841,6 +878,7 @@ class PosViewModel(
             )
         }
     }
+        saveOrderCreationCheckpoint(OrderCreationStep.PRODUCTS)
     }
 
     fun updateCartLine(
@@ -877,6 +915,7 @@ class PosViewModel(
         setLineShipping(lineId, itemShippingCents)
         setLineInsurance(lineId, itemInsuranceCents)
         setLinePharma(lineId, pharmaBatchNumber, pharmaBatchQty)
+        saveOrderCreationCheckpoint(OrderCreationStep.CART)
     }
 
     private fun setLineProductName(lineId: String, productName: String) = updateState {
@@ -947,23 +986,25 @@ class PosViewModel(
         copy(cart = cart.map { if (it.lineId == lineId) it.copy(discount = discount) else it })
     }
 
-    fun toggleTaxExempt(enabled: Boolean) = updateState { copy(taxExempt = enabled) }
+    fun toggleTaxExempt(enabled: Boolean) {
+        updateState { copy(taxExempt = enabled) }
+        saveOrderCreationCheckpoint(OrderCreationStep.CART)
+    }
 
-    fun removeLine(lineId: String) =
+    fun removeLine(lineId: String) {
         updateState { 
-            val lineToRemove = cart.firstOrNull { it.lineId == lineId }
             copy(
                 cart = cart.filterNot { it.lineId == lineId },
-                // Remove personalized item if this line was a personalized product
-                personalizedItems = if (lineToRemove?.itemId != null && lineToRemove.itemId < 0) {
-                    personalizedItems - lineId
-                } else {
-                    personalizedItems
-                }
+                personalizedItems = personalizedItems - lineId
             )
         }
+        saveOrderCreationCheckpoint(OrderCreationStep.CART)
+    }
 
-    fun clearCart() = updateState { copy(cart = emptyList(), personalizedItems = mapOf()) }
+    fun clearCart() {
+        updateState { copy(cart = emptyList(), personalizedItems = mapOf()) }
+        saveOrderCreationCheckpoint(OrderCreationStep.CART)
+    }
 
 
     fun getChange(): Long {
@@ -984,6 +1025,13 @@ class PosViewModel(
             ?.fiscalBillingPoints
             .orEmpty()
         customerAddressesJob?.cancel()
+        paymentLinkPollingJob?.cancel()
+        paymentLinkPollingJob = null
+        yappyOnsitePollingJob?.cancel()
+        yappyOnsitePollingJob = null
+        pendingOrderCreationCheckpoint = null
+        orderCheckpointPromptChecked = false
+        orderCheckpointDisabledForCurrentFlow = false
         updateState {
             copy(
                 cart = emptyList(),
@@ -1026,6 +1074,12 @@ class PosViewModel(
                 globalOtherChargesCents = 0L,
                 referencedNoteCUFE = "",
                 referencedCreatedAt = "",
+                maxCreditNoteAmountCents = null,
+                sourceOrderNumber = null,
+                originalInvoiceNumber = "",
+                originalInvoiceNumberError = null,
+                originalInvoiceEmissionDateIso = "",
+                originalInvoiceEmissionDateError = null,
                 includeBottomNote = if (
                     !currentState.bottomNoteRefreshFailed &&
                     currentState.bottomNoteSettings != null &&
@@ -1079,13 +1133,35 @@ class PosViewModel(
                 invoiceStatus = InvoiceStatus.NONE,
                 pdfDocument = "", // base64
                 paymentLink = "",
+                createdOrderId = null,
+                paymentLinkPolling = false,
+                paymentLinkPaymentDetected = false,
+                paymentLinkInvoicePrintAttemptedOrderId = null,
+                paymentLinkManualPanelVisible = false,
+                paymentLinkManualErrorMessage = null,
+                pendingPaymentChangeSourceMethod = null,
+                pendingPaymentChangeSourceReleased = false,
+                pendingPaymentChangeOpen = false,
+                pendingPaymentChangeCompleted = false,
+                pendingPaymentChangeCancelDialogVisible = false,
+                pendingPaymentChangeCancelErrorMessage = null,
+                pendingPaymentChangeExitAction = null,
+                onsitePayment = null,
+                yappyOnsiteTransaction = null,
+                yappyOnsitePolling = false,
+                yappyOnsitePollingSuppressed = false,
+                yappyOnsiteInvoiceProcessingTimedOut = false,
+                yappyOnsitePrintAttemptedTransactionId = null,
+                yappyOnsiteExitCancelDialogVisible = false,
                 orderNumber = "",
                 postCreateInvoiceWarning = com.teco.ventago.features.invoicing.domain.PostCreateInvoiceWarningState(),
                 orderCreationFailed = false,
+                showOrderRestoreDialog = false,
 
                 )
         }
         persistCurrentBranchBillingPointSelection()
+        warmYappyOnsiteAvailabilityForNewOrder()
     }
 
     private fun resolveSelectionForNewSaleReset(state: PosState): Pair<Int, Int> {
@@ -1104,8 +1180,305 @@ class PosViewModel(
         return safeBranchIndex to safeBillingPointIndex
     }
 
+    fun checkOrderCreationCheckpointForRestore() {
+        if (orderCheckpointPromptChecked) return
+        orderCheckpointPromptChecked = true
 
-    fun createOrder(createPaymentLink: Boolean = false, saveAsDraft: Boolean) {
+        val businessId = business?.businessId ?: return
+        val state = uiState.value
+        if (!canUseOrderCreationCheckpoint(state)) return
+
+        val raw = localStorage.string(orderCreationCheckpointKey(businessId))
+        if (raw.isNullOrBlank()) return
+
+        val checkpoint = runCatching {
+            json.decodeFromString<OrderCreationCheckpoint>(raw)
+        }.getOrNull()
+
+        if (checkpoint == null || checkpoint.businessId != businessId || checkpoint.version != 1) {
+            clearOrderCreationCheckpoint()
+            return
+        }
+
+        if (!checkpoint.data.hasMeaningfulUserData()) {
+            clearOrderCreationCheckpoint()
+            return
+        }
+
+        pendingOrderCreationCheckpoint = checkpoint
+        updateState { copy(showOrderRestoreDialog = true) }
+    }
+
+    fun restorePendingOrderCreationCheckpoint(): OrderCreationStep? {
+        val checkpoint = pendingOrderCreationCheckpoint ?: return null
+        val data = checkpoint.data
+        val current = uiState.value
+        val (branchIndex, billingPoints, billingPointIndex) = resolveCheckpointBranchSelection(data, current)
+        val (docTypeIndex, docType) = PosDocumentTypeOptions.sanitizedSelection(
+            code = data.selectedDocType,
+            index = data.selectedDocTypeIndex
+        )
+
+        suppressOrderCheckpointWrites = true
+        updateState {
+            copy(
+                selectedBranchIndex = branchIndex,
+                billingPoints = billingPoints,
+                selectedBillingPointIndex = billingPointIndex,
+                selectedDocTypeIndex = docTypeIndex,
+                selectedDocType = docType,
+                enabledSelectionDocType = true,
+                selectedOperationNatureIndex = data.selectedOperationNatureIndex,
+                selectedOperationNature = data.selectedOperationNature,
+                enabledOperationNature = true,
+                invoiceIssueDateIso = data.invoiceIssueDateIso,
+                customer = data.customer,
+                finalCustomer = data.finalCustomer,
+                finalName = data.finalName,
+                finalEmail = data.finalEmail?.trim()?.takeIf { it.isNotEmpty() },
+                finalEmailError = validateFinalCustomerEmail(data.finalEmail),
+                finalPhone = data.finalPhone,
+                finalIdTypeIndex = data.finalIdTypeIndex,
+                finalIdType = data.finalIdType,
+                finalIdNumber = normalizeFinalCustomerIdentificationNumber(data.finalIdType, data.finalIdNumber),
+                finalIdNumberError = validateFinalCustomerIdentification(data.finalIdType, data.finalIdNumber),
+                finalCustomerCountryCode = data.finalCustomerCountryCode,
+                cart = data.cart.map { it.toCartLine() },
+                personalizedItems = data.productSnapshots,
+                taxExempt = data.taxExempt,
+                globalDiscountMode = data.globalDiscountMode,
+                globalDiscountPercent = data.globalDiscountPercent,
+                globalDiscountFixedCents = data.globalDiscountFixedCents,
+                globalShippingCents = data.globalShippingCents,
+                globalInsuranceCents = data.globalInsuranceCents,
+                globalOtherChargesCents = data.globalOtherChargesCents,
+                referencedNoteCUFE = "",
+                referencedCreatedAt = "",
+                maxCreditNoteAmountCents = null,
+                sourceOrderNumber = null,
+                originalInvoiceNumber = "",
+                originalInvoiceNumberError = null,
+                originalInvoiceEmissionDateIso = "",
+                originalInvoiceEmissionDateError = null,
+                includeBottomNote = data.includeBottomNote,
+                logisticsInfo = data.logisticsInfo,
+                logisticsVehiclePlate = data.logisticsVehiclePlate,
+                logisticsCarrierLegalName = data.logisticsCarrierLegalName,
+                logisticsCarrierRuc = data.logisticsCarrierRuc,
+                logisticsCarrierDv = data.logisticsCarrierDv,
+                logisticsCarrierTaxpayerTypeIndex = data.logisticsCarrierTaxpayerTypeIndex,
+                logisticsBoxesQty = data.logisticsBoxesQty,
+                logisticsTotalWeightLb = data.logisticsTotalWeightLb,
+                deliveryReceiverLegalName = data.deliveryReceiverLegalName,
+                deliveryReceiverRuc = data.deliveryReceiverRuc,
+                deliveryReceiverDv = data.deliveryReceiverDv,
+                deliveryReceiverTaxpayerTypeIndex = data.deliveryReceiverTaxpayerTypeIndex,
+                deliveryContactPhone = data.deliveryContactPhone,
+                deliveryAltContactPhone = data.deliveryAltContactPhone,
+                deliveryProvinceIndex = data.deliveryProvinceIndex,
+                deliveryDistrictIndex = data.deliveryDistrictIndex,
+                deliveryCorregIndex = data.deliveryCorregIndex,
+                customerAddresses = emptyList(),
+                selectedCustomerAddressId = data.selectedCustomerAddressId,
+                customerAddressesLoading = false,
+                retentionCodeIndex = data.retentionCodeIndex,
+                retentionAmount = data.retentionAmount,
+                exportIncoterm = data.exportIncoterm,
+                exportCurrency = data.exportCurrency,
+                exportPortOfLoading = data.exportPortOfLoading,
+                flowMode = FlowMode.SALE,
+                quoteId = null,
+                paymentFlowMode = PaymentFlowMode.MANUAL_OR_INSTALLMENTS,
+                tipAmount = 0L,
+                tipIsPercentage = true,
+                charged = emptyMap(),
+                otherPaymentDescription = "",
+                wantPaymentLink = false,
+                installments = emptyList(),
+                invoiceStatus = InvoiceStatus.NONE,
+                pdfDocument = "",
+                paymentLink = "",
+                createdOrderId = null,
+                paymentLinkPolling = false,
+                paymentLinkPaymentDetected = false,
+                paymentLinkInvoicePrintAttemptedOrderId = null,
+                paymentLinkManualPanelVisible = false,
+                paymentLinkManualErrorMessage = null,
+                pendingPaymentChangeSourceMethod = null,
+                pendingPaymentChangeSourceReleased = false,
+                pendingPaymentChangeOpen = false,
+                pendingPaymentChangeCompleted = false,
+                pendingPaymentChangeCancelDialogVisible = false,
+                pendingPaymentChangeCancelErrorMessage = null,
+                pendingPaymentChangeExitAction = null,
+                onsitePayment = null,
+                yappyOnsiteTransaction = null,
+                yappyOnsitePolling = false,
+                yappyOnsitePollingSuppressed = false,
+                yappyOnsiteInvoiceProcessingTimedOut = false,
+                yappyOnsitePrintAttemptedTransactionId = null,
+                yappyOnsiteExitCancelDialogVisible = false,
+                orderNumber = "",
+                orderCreationFailed = false,
+                showOrderRestoreDialog = false,
+                postCreateInvoiceWarning = com.teco.ventago.features.invoicing.domain.PostCreateInvoiceWarningState(),
+            )
+        }
+        suppressOrderCheckpointWrites = false
+
+        pendingOrderCreationCheckpoint = null
+        data.customer?.id?.let {
+            hydrateSelectedCustomerTaxSettings(
+                customerId = it,
+                applyDefaultsOnlyWhenMissing = true,
+            )
+        }
+        fetchCustomerAddresses()
+        saveOrderCreationCheckpoint(checkpoint.currentStep)
+        return checkpoint.currentStep
+    }
+
+    fun discardPendingOrderCreationCheckpoint() {
+        pendingOrderCreationCheckpoint = null
+        clearOrderCreationCheckpoint()
+        resetForNewSale()
+    }
+
+    fun clearOrderCreationCheckpoint() {
+        val businessId = business?.businessId ?: return
+        localStorage.deleteObject(orderCreationCheckpointKey(businessId))
+    }
+
+    fun saveOrderCreationCheckpoint(step: OrderCreationStep) {
+        if (suppressOrderCheckpointWrites) return
+        val businessId = business?.businessId ?: return
+        val state = uiState.value
+        if (!canUseOrderCreationCheckpoint(state)) return
+
+        val data = state.toOrderCreationCheckpointData()
+        if (!data.hasMeaningfulUserData()) {
+            clearOrderCreationCheckpoint()
+            return
+        }
+
+        val checkpoint = OrderCreationCheckpoint(
+            businessId = businessId,
+            savedAtEpochSeconds = Clock.System.now().epochSeconds,
+            currentStep = step,
+            data = data,
+        )
+        localStorage.set(orderCreationCheckpointKey(businessId), json.encodeToString(checkpoint))
+    }
+
+    fun disableOrderCreationCheckpointForCurrentFlow(clearExisting: Boolean = true) {
+        orderCheckpointDisabledForCurrentFlow = true
+        pendingOrderCreationCheckpoint = null
+        updateState { copy(showOrderRestoreDialog = false) }
+        if (clearExisting) {
+            clearOrderCreationCheckpoint()
+        }
+    }
+
+    private fun canUseOrderCreationCheckpoint(state: PosState = uiState.value): Boolean {
+        if (orderCheckpointDisabledForCurrentFlow) return false
+        if (state.flowMode != FlowMode.SALE) return false
+        if (state.selectedDocType in noteDocumentTypes()) return false
+        if (state.referencedNoteCUFE.isNotBlank()) return false
+        return true
+    }
+
+    private fun noteDocumentTypes(): Set<String> = setOf("04", "05", "06")
+
+    private fun orderCreationCheckpointKey(businessId: Int): String {
+        return "$ORDER_CREATION_CHECKPOINT_KEY_PREFIX:$businessId"
+    }
+
+    private fun PosState.toOrderCreationCheckpointData(): OrderCreationCheckpointData {
+        val branchCode = branches.getOrNull(selectedBranchIndex)?.branchCode
+        val billingPoint = billingPoints.getOrNull(selectedBillingPointIndex)?.billingPoint
+        val snapshots = cart.mapNotNull { line ->
+            resolveProductForLine(this, line)?.let { product -> line.lineId to product }
+        }.toMap()
+
+        return OrderCreationCheckpointData(
+            branchCode = branchCode,
+            billingPoint = billingPoint,
+            selectedDocTypeIndex = selectedDocTypeIndex,
+            selectedDocType = selectedDocType,
+            selectedOperationNatureIndex = selectedOperationNatureIndex,
+            selectedOperationNature = selectedOperationNature,
+            invoiceIssueDateIso = invoiceIssueDateIso,
+            customer = customer,
+            finalCustomer = finalCustomer,
+            finalName = finalName,
+            finalEmail = finalEmail,
+            finalPhone = finalPhone,
+            finalIdTypeIndex = finalIdTypeIndex,
+            finalIdType = finalIdType,
+            finalIdNumber = finalIdNumber,
+            finalCustomerCountryCode = finalCustomerCountryCode,
+            cart = cart.map(OrderCreationCartLineCheckpoint::from),
+            productSnapshots = snapshots,
+            taxExempt = taxExempt,
+            globalDiscountMode = globalDiscountMode,
+            globalDiscountPercent = globalDiscountPercent,
+            globalDiscountFixedCents = globalDiscountFixedCents,
+            globalShippingCents = globalShippingCents,
+            globalInsuranceCents = globalInsuranceCents,
+            globalOtherChargesCents = globalOtherChargesCents,
+            referencedNoteCUFE = referencedNoteCUFE,
+            referencedCreatedAt = referencedCreatedAt,
+            includeBottomNote = includeBottomNote,
+            logisticsInfo = logisticsInfo,
+            logisticsVehiclePlate = logisticsVehiclePlate,
+            logisticsCarrierLegalName = logisticsCarrierLegalName,
+            logisticsCarrierRuc = logisticsCarrierRuc,
+            logisticsCarrierDv = logisticsCarrierDv,
+            logisticsCarrierTaxpayerTypeIndex = logisticsCarrierTaxpayerTypeIndex,
+            logisticsBoxesQty = logisticsBoxesQty,
+            logisticsTotalWeightLb = logisticsTotalWeightLb,
+            deliveryReceiverLegalName = deliveryReceiverLegalName,
+            deliveryReceiverRuc = deliveryReceiverRuc,
+            deliveryReceiverDv = deliveryReceiverDv,
+            deliveryReceiverTaxpayerTypeIndex = deliveryReceiverTaxpayerTypeIndex,
+            deliveryContactPhone = deliveryContactPhone,
+            deliveryAltContactPhone = deliveryAltContactPhone,
+            deliveryProvinceIndex = deliveryProvinceIndex,
+            deliveryDistrictIndex = deliveryDistrictIndex,
+            deliveryCorregIndex = deliveryCorregIndex,
+            selectedCustomerAddressId = selectedCustomerAddressId,
+            retentionCodeIndex = retentionCodeIndex,
+            retentionAmount = retentionAmount,
+            exportIncoterm = exportIncoterm,
+            exportCurrency = exportCurrency,
+            exportPortOfLoading = exportPortOfLoading,
+        )
+    }
+
+    private fun resolveCheckpointBranchSelection(
+        data: OrderCreationCheckpointData,
+        current: PosState,
+    ): Triple<Int, List<FiscalBillingPoint>, Int> {
+        val branches = current.branches
+        if (branches.isEmpty()) return Triple(0, emptyList(), 0)
+        val branchIndex = data.branchCode
+            ?.let { code -> branches.indexOfFirst { it.branchCode == code } }
+            ?.takeIf { it >= 0 }
+            ?: current.selectedBranchIndex.coerceIn(0, branches.lastIndex)
+        val billingPoints = branches[branchIndex].fiscalBillingPoints
+        val billingPointIndex = data.billingPoint
+            ?.let { point -> billingPoints.indexOfFirst { it.billingPoint == point } }
+            ?.takeIf { it >= 0 }
+            ?: if (billingPoints.isEmpty()) 0 else current.selectedBillingPointIndex.coerceIn(0, billingPoints.lastIndex)
+        return Triple(branchIndex, billingPoints, billingPointIndex)
+    }
+
+
+    fun createOrder(
+        createPaymentLink: Boolean = false,
+        createYappyOnsite: Boolean = false,
+        saveAsDraft: Boolean
+    ) {
         if (!validateFinalCustomerSelection()) {
             return
         }
@@ -1119,12 +1492,27 @@ class PosViewModel(
             analyticsService.logOrderCreationPaymentOptionSelected(mode = "DRAFT")
         }
         val hasPaymentLinkAccess = canAction(ActionKey.ORDERS_PAYMENT_LINK)
+        val hasYappyOnsiteAccess = canAction(ActionKey.ORDERS_YAPPY_ONSITE)
         val effectiveCreatePaymentLink = createPaymentLink && hasPaymentLinkAccess
+        val effectiveCreateYappyOnsite = createYappyOnsite && hasYappyOnsiteAccess && selectedBillingPointHasYappyOnsiteDevice()
         if (createPaymentLink && !hasPaymentLinkAccess) {
             updateState { copy(paymentFlowMode = PaymentFlowMode.MANUAL_OR_INSTALLMENTS) }
             viewModelScope.launch {
                 snackbarService.show("No tienes permisos para crear enlaces de pago. Se aplicará cobro manual.")
             }
+        }
+        if (createYappyOnsite && !hasYappyOnsiteAccess) {
+            updateState { copy(paymentFlowMode = PaymentFlowMode.MANUAL_OR_INSTALLMENTS) }
+            viewModelScope.launch {
+                snackbarService.show("No tienes permisos para generar QR de Yappy en caja.")
+            }
+            return
+        }
+        if (createYappyOnsite && !effectiveCreateYappyOnsite) {
+            viewModelScope.launch {
+                snackbarService.show("Yappy en caja no está configurado para esta sucursal y punto de facturación.")
+            }
+            return
         }
         val allowed = if (saveAsDraft) {
             canAction(ActionKey.ORDERS_CREATE_DRAFT)
@@ -1136,23 +1524,28 @@ class PosViewModel(
             return
         }
         val stateBeforeSubmit = uiState.value
-        if (!saveAsDraft && !effectiveCreatePaymentLink && stateBeforeSubmit.installments.any { it.dueDateIso.isBlank() }) {
+        if (!saveAsDraft && !effectiveCreatePaymentLink && !effectiveCreateYappyOnsite && stateBeforeSubmit.installments.any { it.dueDateIso.isBlank() }) {
             viewModelScope.launch {
                 snackbarService.show("Selecciona fecha de vencimiento para cada pago a crédito.")
             }
+            return
+        }
+        if (!saveAsDraft && !validateCreditNoteAmountLimit(stateBeforeSubmit)) {
+            return
+        }
+        if (!saveAsDraft && !validateGenericCreditNoteReference(stateBeforeSubmit)) {
             return
         }
         showLoading()
         viewModelScope.launch {
             withContext(Dispatchers.IO) {
                 try {
-                    val request = createOrderRequest(effectiveCreatePaymentLink, saveAsDraft)
-                    println("ASDASD: ${json.encodeToString(request)}")
+                    val request = createOrderRequest(effectiveCreatePaymentLink, saveAsDraft, effectiveCreateYappyOnsite)
                   val response = posService.createOrder(business!!.businessId, request)
                   val hasValidOrderNumber = response.orderNumber.isNotBlank()
                   val invoiceStatusFromResponse = InvoiceStatus.fromId(response.invoiceStatus)
                   val postCreateInvoiceWarning = resolvePostCreateInvoiceWarning(
-                      invoiceStatus = response.invoiceStatus,
+                          invoiceStatus = response.invoiceStatus,
                       invoiceWarningCode = response.invoiceWarningCode,
                       invoiceWarningMessage = response.invoiceWarningMessage,
                       isImmediateInvoiceCreate = !effectiveCreatePaymentLink && !saveAsDraft
@@ -1162,15 +1555,36 @@ class PosViewModel(
                       copy(
                           invoiceStatus = invoiceStatusFromResponse,
                           pdfDocument = response.invoiceFiles?.pdf ?: "",
-                          paymentLink = response.links?.firstOrNull { link -> link.action == "payer_action" }?.url
+                          paymentLink = response.links?.firstOrNull { link -> link.action == "payer_action" }?.resolvedUrl()
+                              ?: response.links?.firstOrNull { it.resolvedUrl().isNotBlank() }?.resolvedUrl()
                               ?: "",
+                          createdOrderId = response.id,
+                          paymentLinkPolling = false,
+                          paymentLinkPaymentDetected = false,
+                          paymentLinkInvoicePrintAttemptedOrderId = null,
+                          paymentLinkManualPanelVisible = false,
+                          paymentLinkManualErrorMessage = null,
+                          pendingPaymentChangeSourceMethod = null,
+                          pendingPaymentChangeSourceReleased = false,
+                          pendingPaymentChangeOpen = false,
+                          pendingPaymentChangeCompleted = false,
+                          pendingPaymentChangeCancelDialogVisible = false,
+                          pendingPaymentChangeCancelErrorMessage = null,
+                          pendingPaymentChangeExitAction = null,
+                          onsitePayment = response.onsitePayment,
+                          yappyOnsiteTransaction = null,
+                          yappyOnsitePolling = false,
+                          yappyOnsitePollingSuppressed = false,
+                          yappyOnsiteInvoiceProcessingTimedOut = false,
+                          yappyOnsitePrintAttemptedTransactionId = null,
+                          yappyOnsiteExitCancelDialogVisible = false,
                           orderNumber = response.orderNumber,
                           postCreateInvoiceWarning = postCreateInvoiceWarning,
                           orderCreationFailed = !hasValidOrderNumber
                       )
                   }
 
-                  if (hasValidOrderNumber && !effectiveCreatePaymentLink && !saveAsDraft) {
+                  if (hasValidOrderNumber && !effectiveCreatePaymentLink && !effectiveCreateYappyOnsite && !saveAsDraft) {
                       val printer = printerService.resolveActivePrinter(
                           branchCode = request.branch.code,
                           billingPointCode = request.branch.billingPoint
@@ -1205,12 +1619,26 @@ class PosViewModel(
                       if (!hasValidOrderNumber) {
                           showError()
                       } else {
-                        clearPaymentLinkCheckpoint()
+                        clearOrderCreationCheckpoint()
                         showSuccess()
                       }
                   }
                 } catch (e: Exception) {
                     println("Error creating order: ${e.message}")
+                    val yappyPendingConflict = yappyOnsitePendingConflict(e)
+                    if (effectiveCreateYappyOnsite && yappyPendingConflict != null) {
+                        updateState {
+                            copy(
+                                orderCreationFailed = false,
+                                showYappyOnsitePendingConflictDialog = true,
+                                yappyOnsitePendingConflict = yappyPendingConflict,
+                            )
+                        }
+                        withContext(Dispatchers.Main) {
+                            hideLoading()
+                        }
+                        return@withContext
+                    }
                     updateState { copy(orderCreationFailed = true) }
                     withContext(Dispatchers.Main) {
                         showError()
@@ -1221,8 +1649,121 @@ class PosViewModel(
         }
     }
 
+    private fun yappyOnsitePendingConflict(error: Throwable): YappyOnsitePendingTransactionDto? {
+        if (error is YappyOnsitePendingTransactionExistsException) {
+            return error.pendingTransaction
+        }
+        val raw = error.message.orEmpty()
+        return if (raw.contains(YAPPY_ONSITE_PENDING_TRANSACTION_EXISTS, ignoreCase = true)) {
+            YappyOnsitePendingTransactionDto()
+        } else {
+            null
+        }
+    }
+
+    fun keepYappyOnsitePendingConflictActive() {
+        updateState {
+            copy(
+                showYappyOnsitePendingConflictDialog = false,
+                yappyOnsitePendingConflict = null,
+                paymentFlowMode = PaymentFlowMode.MANUAL_OR_INSTALLMENTS,
+            )
+        }
+    }
+
+    fun cancelPendingYappyOnsiteAndRetry() {
+        val businessId = business?.businessId ?: -1
+        val state = uiState.value
+        val branchCode = state.yappyOnsitePendingConflict?.branchCode?.takeIf { it.isNotBlank() }
+            ?: state.branches.getOrNull(state.selectedBranchIndex)?.branchCode.orEmpty()
+        val billingPoint = state.yappyOnsitePendingConflict?.billingPoint?.takeIf { it.isNotBlank() }
+            ?: state.billingPoints.getOrNull(state.selectedBillingPointIndex)?.billingPoint.orEmpty()
+
+        if (businessId <= 0 || branchCode.isBlank() || billingPoint.isBlank()) {
+            updateState {
+                copy(
+                    showYappyOnsitePendingConflictDialog = false,
+                    yappyOnsitePendingConflict = null,
+                )
+            }
+            viewModelScope.launch { snackbarService.show("No se pudo identificar la caja para cancelar el QR pendiente.") }
+            return
+        }
+
+        updateState {
+            copy(
+                showYappyOnsitePendingConflictDialog = false,
+                yappyOnsitePendingConflict = null,
+            )
+        }
+        showLoading()
+        viewModelScope.launch {
+            val result = withContext(Dispatchers.IO) {
+                runCatching {
+                    paymentService.cancelPendingYappyOnsiteTransaction(
+                        businessId = businessId,
+                        branchCode = branchCode,
+                        billingPoint = billingPoint,
+                        reason = "cashier_cancelled_pending_qr",
+                    )
+                }
+            }
+            result.onSuccess { response ->
+                if (response.cancelled) {
+                    createOrder(createYappyOnsite = true, saveAsDraft = false)
+                } else {
+                    showError()
+                    snackbarService.show("No fue posible cancelar el QR pendiente.")
+                }
+            }.onFailure { error ->
+                println("Error cancelling pending Yappy onsite transaction: ${error.message}")
+                showError()
+                snackbarService.show("No fue posible cancelar el QR pendiente.")
+            }
+        }
+    }
+
+    private fun validateCreditNoteAmountLimit(state: PosState): Boolean {
+        val errorMessage = PosNoteValidators.validateCreditNoteAmountLimit(
+            selectedDocType = state.selectedDocType,
+            referencedNoteCUFE = state.referencedNoteCUFE,
+            maxCreditNoteAmountCents = state.maxCreditNoteAmountCents,
+            requestedCreditNoteCents = legalInvoiceTotal(),
+            sourceOrderNumber = state.sourceOrderNumber
+        ) ?: return true
+
+        viewModelScope.launch { snackbarService.show(errorMessage) }
+        return false
+    }
+
+    private fun validateGenericCreditNoteReference(state: PosState): Boolean {
+        val numberError = PosNoteValidators.validateOriginalInvoiceNumber(
+            selectedDocType = state.selectedDocType,
+            value = state.originalInvoiceNumber
+        )
+        val dateError = PosNoteValidators.validateOriginalInvoiceEmissionDate(
+            selectedDocType = state.selectedDocType,
+            value = state.originalInvoiceEmissionDateIso
+        )
+        if (numberError == null && dateError == null) return true
+
+        updateState {
+            copy(
+                originalInvoiceNumberError = numberError,
+                originalInvoiceEmissionDateError = dateError
+            )
+        }
+        val message = numberError ?: dateError ?: "Completa la referencia de la factura original."
+        viewModelScope.launch { snackbarService.show(message) }
+        return false
+    }
+
     @OptIn(ExperimentalTime::class)
-    fun createOrderRequest(createPaymentLink: Boolean, saveAsDraft: Boolean): CreateOrderRequest {
+    fun createOrderRequest(
+        createPaymentLink: Boolean,
+        saveAsDraft: Boolean,
+        createYappyOnsite: Boolean = false,
+    ): CreateOrderRequest {
         val state = uiState.value
         val isFinalCustomer = requireNotNull(state.finalCustomer) { "Customer type not selected" }
 
@@ -1287,8 +1828,8 @@ class PosViewModel(
                 // Personalized item: lookup by lineId
                 state.personalizedItems[line.lineId]
             } else {
-                // Saved item: lookup by itemId
-                itemsById[line.itemId]
+                // Saved item: lookup by itemId, then fall back to restored snapshot.
+                itemsById[line.itemId] ?: state.personalizedItems[line.lineId]
             }
         }
         
@@ -1532,12 +2073,12 @@ class PosViewModel(
 
         var links: PaymentLinksBlock? = null
         val payments = mutableListOf<CreateOrderPayment>()
-        if (createPaymentLink && !saveAsDraft) {
+        if ((createPaymentLink || createYappyOnsite) && !saveAsDraft) {
             links = PaymentLinksBlock(
                 create = true,
-                expireInMinutes = 140,
-                note = "", // No note handled bu now
-                method = "LINK" // For now just LINK. In future YAPPY QR
+                expireInMinutes = if (createYappyOnsite) 5 else 140,
+                note = if (createYappyOnsite) "Factura POS" else "", // No note handled bu now
+                method = if (createYappyOnsite) "YAPPY_ONSITE" else "LINK"
             )
         } else if (!saveAsDraft) {
             for ((key, value) in state.charged) {
@@ -1608,6 +2149,21 @@ class PosViewModel(
                     )
                 )
             )
+        } else if (state.selectedDocType == "06") {
+            val originalInvoiceNumber = state.originalInvoiceNumber.trim()
+            val originalInvoiceDate = state.originalInvoiceEmissionDateIso
+            if (originalInvoiceNumber.isNotBlank() && originalInvoiceDate.isNotBlank()) {
+                references = listOf(
+                    References(
+                        legalName = "",
+                        issueDatetime = "${originalInvoiceDate}T00:00:00",
+                        referenceNumber = ReferenceNumber(
+                            type = "paper",
+                            number = originalInvoiceNumber
+                        )
+                    )
+                )
+            }
         }
 
         val orderReference: OrderReference? = null // TODO add references if needed
@@ -1717,6 +2273,7 @@ class PosViewModel(
             additionalAddress = additionalAddress,
             commercialAddenda = commercialAddenda,
             links = links,
+            paymentFlowType = if (createYappyOnsite) "in_place" else null,
             formats = formats,
             includeBottomNote = if (
                 state.bottomNoteRefreshFailed ||
@@ -1730,6 +2287,1188 @@ class PosViewModel(
             },
             saveAs = if (saveAsDraft) "draft" else "confirmed"
         )
+    }
+
+    fun startPaymentLinkStatusPolling() {
+        val initialState = uiState.value
+        val businessId = business?.businessId ?: return
+        val orderId = initialState.createdOrderId ?: return
+        if (initialState.paymentFlowMode != PaymentFlowMode.PAYMENT_LINK) return
+        if (initialState.paymentLink.isBlank()) return
+        if (paymentLinkPollingJob?.isActive == true) return
+
+        paymentLinkPollingJob = viewModelScope.launch {
+            updateState { copy(paymentLinkPolling = true) }
+            try {
+                while (true) {
+                    val freshOrder = try {
+                        withContext(Dispatchers.IO) {
+                            orderService.refreshOrder(businessId = businessId, orderId = orderId)
+                        }
+                    } catch (error: Throwable) {
+                        if (error is CancellationException) throw error
+                        delay(PAYMENT_LINK_POLL_MS)
+                        continue
+                    }
+
+                    val invoiceStatus = InvoiceStatus.fromId(freshOrder.invoiceStatus ?: InvoiceStatus.NONE.id)
+                    val paymentDetected = uiState.value.paymentLinkPaymentDetected ||
+                        freshOrder.paymentStatus == PaymentStatus.PAID.id ||
+                        invoiceStatus == InvoiceStatus.ISSUED
+
+                    updateState {
+                        copy(
+                            paymentLinkPaymentDetected = paymentDetected,
+                            invoiceStatus = invoiceStatus,
+                            orderNumber = freshOrder.internalNumber.ifBlank { orderNumber },
+                        )
+                    }
+
+                    when (invoiceStatus) {
+                        InvoiceStatus.ISSUED -> {
+                            handlePaymentLinkInvoiceIssued(
+                                businessId = businessId,
+                                freshOrder = freshOrder,
+                            )
+                            return@launch
+                        }
+
+                        InvoiceStatus.FAILED -> {
+                            snackbarService.show("El pago fue recibido, pero la factura requiere atención.")
+                            return@launch
+                        }
+
+                        else -> delay(PAYMENT_LINK_POLL_MS)
+                    }
+                }
+            } finally {
+                updateState { copy(paymentLinkPolling = false) }
+                paymentLinkPollingJob = null
+            }
+        }
+    }
+
+    fun stopPaymentLinkStatusPolling() {
+        paymentLinkPollingJob?.cancel()
+        paymentLinkPollingJob = null
+        updateState { copy(paymentLinkPolling = false) }
+    }
+
+    fun canSwitchPaymentLinkToManual(): Boolean {
+        val state = uiState.value
+        return state.createdOrderId != null &&
+            state.paymentLink.isNotBlank() &&
+            !state.paymentLinkPaymentDetected &&
+            state.invoiceStatus != InvoiceStatus.ISSUED &&
+            state.invoiceStatus != InvoiceStatus.FAILED
+    }
+
+    fun canSwitchPaymentLinkToYappyOnsite(): Boolean {
+        val state = uiState.value
+        return canSwitchPaymentLinkToManual() &&
+            state.canCreateYappyOnsiteQr &&
+            selectedBillingPointHasYappyOnsiteDevice()
+    }
+
+    fun canOpenPendingPaymentMethodChange(sourceMethod: PendingPaymentIntentMethod): Boolean {
+        val state = uiState.value
+        return when (sourceMethod) {
+            PendingPaymentIntentMethod.PAYMENT_LINK -> canSwitchPaymentLinkToManual()
+            PendingPaymentIntentMethod.YAPPY_ONSITE -> hasActiveYappyOnsitePendingIntent(state)
+        }
+    }
+
+    fun openPendingPaymentMethodChange(sourceMethod: PendingPaymentIntentMethod) {
+        if (!canOpenPendingPaymentMethodChange(sourceMethod)) return
+        updateState {
+            copy(
+                pendingPaymentChangeSourceMethod = sourceMethod,
+                pendingPaymentChangeSourceReleased = false,
+                pendingPaymentChangeOpen = true,
+                pendingPaymentChangeCompleted = false,
+                pendingPaymentChangeCancelDialogVisible = false,
+                pendingPaymentChangeCancelErrorMessage = null,
+                pendingPaymentChangeExitAction = null,
+                paymentFlowMode = PaymentFlowMode.MANUAL_OR_INSTALLMENTS,
+                charged = emptyMap(),
+                installments = emptyList(),
+                otherPaymentDescription = "",
+                paymentLinkManualErrorMessage = null,
+            )
+        }
+    }
+
+    fun confirmOpenYappyOnsitePaymentMethodChange() {
+        val state = uiState.value
+        val businessId = business?.businessId ?: return
+        val orderId = state.createdOrderId ?: state.onsitePayment?.orderId ?: return
+        if (!canOpenPendingPaymentMethodChange(PendingPaymentIntentMethod.YAPPY_ONSITE)) return
+
+        showLoading()
+        viewModelScope.launch {
+            runCatching {
+                withContext(Dispatchers.IO) {
+                    val released = releasePendingPaymentChangeIntent(
+                        businessId = businessId,
+                        orderId = orderId,
+                        sourceMethod = PendingPaymentIntentMethod.YAPPY_ONSITE,
+                        targetMethod = PaymentFlowMode.MANUAL_OR_INSTALLMENTS,
+                    )
+                    if (!released.released || !released.allowsNextAction("manual_payment_allowed")) {
+                        error("No se pudo liberar el QR de Yappy pendiente.")
+                    }
+                }
+            }.onSuccess {
+                updateState {
+                    copy(
+                        createdOrderId = createdOrderId ?: orderId,
+                        pendingPaymentChangeSourceMethod = PendingPaymentIntentMethod.YAPPY_ONSITE,
+                        pendingPaymentChangeSourceReleased = true,
+                        pendingPaymentChangeOpen = true,
+                        pendingPaymentChangeCompleted = false,
+                        pendingPaymentChangeCancelDialogVisible = false,
+                        pendingPaymentChangeCancelErrorMessage = null,
+                        pendingPaymentChangeExitAction = null,
+                        paymentFlowMode = PaymentFlowMode.MANUAL_OR_INSTALLMENTS,
+                        paymentLinkManualErrorMessage = null,
+                        charged = emptyMap(),
+                        installments = emptyList(),
+                        otherPaymentDescription = "",
+                        onsitePayment = null,
+                        yappyOnsiteTransaction = null,
+                        yappyOnsitePolling = false,
+                        yappyOnsitePollingSuppressed = true,
+                    )
+                }
+                showSuccess()
+            }.onFailure { error ->
+                val message = paymentLinkSwitchErrorMessage(error)
+                snackbarService.show(message)
+                showError()
+            }
+        }
+    }
+
+    fun confirmOpenPaymentLinkPaymentMethodChange() {
+        val state = uiState.value
+        val businessId = business?.businessId ?: return
+        val orderId = state.createdOrderId ?: return
+        if (!canOpenPendingPaymentMethodChange(PendingPaymentIntentMethod.PAYMENT_LINK)) return
+
+        showLoading()
+        viewModelScope.launch {
+            runCatching {
+                withContext(Dispatchers.IO) {
+                    val released = releasePendingPaymentChangeIntent(
+                        businessId = businessId,
+                        orderId = orderId,
+                        sourceMethod = PendingPaymentIntentMethod.PAYMENT_LINK,
+                        targetMethod = PaymentFlowMode.MANUAL_OR_INSTALLMENTS,
+                    )
+                    if (!released.released || !released.allowsNextAction("manual_payment_allowed")) {
+                        error("No se pudo liberar el link de pago pendiente.")
+                    }
+                }
+            }.onSuccess {
+                updateState {
+                    copy(
+                        pendingPaymentChangeSourceMethod = PendingPaymentIntentMethod.PAYMENT_LINK,
+                        pendingPaymentChangeSourceReleased = true,
+                        pendingPaymentChangeOpen = true,
+                        pendingPaymentChangeCompleted = false,
+                        pendingPaymentChangeCancelDialogVisible = false,
+                        pendingPaymentChangeCancelErrorMessage = null,
+                        pendingPaymentChangeExitAction = null,
+                        paymentFlowMode = PaymentFlowMode.MANUAL_OR_INSTALLMENTS,
+                        paymentLinkPolling = false,
+                        paymentLinkManualPanelVisible = false,
+                        paymentLinkManualErrorMessage = null,
+                        charged = emptyMap(),
+                        installments = emptyList(),
+                        otherPaymentDescription = "",
+                    )
+                }
+                showSuccess()
+            }.onFailure { error ->
+                val message = paymentLinkSwitchErrorMessage(error)
+                snackbarService.show(message)
+                showError()
+            }
+        }
+    }
+
+    fun requestPendingPaymentChangeExit(action: PendingPaymentChangeExitAction): Boolean {
+        val state = uiState.value
+        if (!state.pendingPaymentChangeOpen || state.pendingPaymentChangeCompleted) return false
+        updateState {
+            copy(
+                pendingPaymentChangeCancelDialogVisible = true,
+                pendingPaymentChangeCancelErrorMessage = null,
+                pendingPaymentChangeExitAction = action,
+            )
+        }
+        return true
+    }
+
+    fun dismissPendingPaymentChangeCancelDialog() {
+        updateState {
+            copy(
+                pendingPaymentChangeCancelDialogVisible = false,
+                pendingPaymentChangeCancelErrorMessage = null,
+                pendingPaymentChangeExitAction = null,
+            )
+        }
+    }
+
+    fun confirmPendingPaymentChangeOrderCancellation(onCancelled: (PendingPaymentChangeExitAction) -> Unit) {
+        val state = uiState.value
+        val businessId = business?.businessId ?: return
+        val orderId = state.createdOrderId ?: state.onsitePayment?.orderId ?: return
+        val exitAction = state.pendingPaymentChangeExitAction ?: PendingPaymentChangeExitAction.POS_START
+
+        showLoading()
+        viewModelScope.launch {
+            runCatching {
+                withContext(Dispatchers.IO) {
+                    orderService.cancelOrder(
+                        businessId = businessId,
+                        orderID = orderId,
+                        reason = "customer_abandoned_payment_method_change",
+                        userName = authService.getUserSync()?.name ?: "App",
+                    )
+                }
+            }.onSuccess { cancelled ->
+                if (cancelled) {
+                    updateState {
+                        copy(
+                            pendingPaymentChangeCancelDialogVisible = false,
+                            pendingPaymentChangeCancelErrorMessage = null,
+                            pendingPaymentChangeExitAction = null,
+                            pendingPaymentChangeSourceReleased = false,
+                            pendingPaymentChangeOpen = false,
+                            pendingPaymentChangeCompleted = true,
+                        )
+                    }
+                    hideLoading()
+                    onCancelled(exitAction)
+                } else {
+                    updateState {
+                        copy(pendingPaymentChangeCancelErrorMessage = "No se pudo cancelar la orden.")
+                    }
+                    showError()
+                }
+            }.onFailure { error ->
+                val message = paymentLinkSwitchErrorMessage(error)
+                updateState { copy(pendingPaymentChangeCancelErrorMessage = message) }
+                snackbarService.show(message)
+                showError()
+            }
+        }
+    }
+
+    fun confirmPendingPaymentChangeManual(onCompleted: () -> Unit = {}) {
+        val state = uiState.value
+        val businessId = business?.businessId ?: return
+        val orderId = state.createdOrderId ?: state.onsitePayment?.orderId ?: return
+        val sourceMethod = state.pendingPaymentChangeSourceMethod ?: return
+        val validation = validateManualReplacementPayments(state)
+        if (validation != null) {
+            updateState { copy(paymentLinkManualErrorMessage = validation) }
+            return
+        }
+        val payments = manualReplacementPaymentSubmissions(state)
+        if (payments.isEmpty()) {
+            updateState { copy(paymentLinkManualErrorMessage = "Agrega al menos un método de pago.") }
+            return
+        }
+
+        showLoading()
+        viewModelScope.launch {
+            try {
+                val result = withContext(Dispatchers.IO) {
+                    val released = releasePendingPaymentChangeIntentIfNeeded(
+                        state = state,
+                        businessId = businessId,
+                        orderId = orderId,
+                        sourceMethod = sourceMethod,
+                        targetMethod = PaymentFlowMode.MANUAL_OR_INSTALLMENTS,
+                        requiredNextAction = "manual_payment_allowed",
+                    )
+                    if (!released) {
+                        error("No se pudo liberar el cobro pendiente.")
+                    }
+                    val response = orderService.registerOrderPayments(
+                        businessId = businessId,
+                        orderId = orderId,
+                        payments = payments,
+                    )
+                    val freshOrder = orderService.refreshOrder(businessId = businessId, orderId = orderId)
+                    response to freshOrder
+                }
+                val (response, freshOrder) = result
+                completeManualPaymentMethodChange(response, freshOrder)
+                showSuccess()
+                onCompleted()
+            } catch (error: Throwable) {
+                if (error is CancellationException) throw error
+                updateState { copy(paymentLinkManualErrorMessage = paymentLinkSwitchErrorMessage(error)) }
+                snackbarService.show(paymentLinkSwitchErrorMessage(error))
+                showError()
+            }
+        }
+    }
+
+    fun confirmPendingPaymentChangePaymentLink(onCreated: () -> Unit = {}) {
+        val state = uiState.value
+        val businessId = business?.businessId ?: return
+        val orderId = state.createdOrderId ?: state.onsitePayment?.orderId ?: return
+        val sourceMethod = state.pendingPaymentChangeSourceMethod ?: return
+        if (sourceMethod == PendingPaymentIntentMethod.PAYMENT_LINK) return
+        val amount = amountToCharge().takeIf { it > 0L }?.toDecimalString() ?: return
+
+        showLoading()
+        viewModelScope.launch {
+            runCatching {
+                withContext(Dispatchers.IO) {
+                    val released = releasePendingPaymentChangeIntentIfNeeded(
+                        state = state,
+                        businessId = businessId,
+                        orderId = orderId,
+                        sourceMethod = sourceMethod,
+                        targetMethod = PaymentFlowMode.PAYMENT_LINK,
+                        requiredNextAction = "payment_link_allowed",
+                    )
+                    if (!released) {
+                        error("No se pudo liberar el cobro pendiente.")
+                    }
+                    orderService.createReplacementPaymentLink(
+                        businessId = businessId,
+                        orderId = orderId,
+                        amount = amount,
+                    )
+                }
+            }.onSuccess { replacement ->
+                val link = replacement.resolvedPaymentLinkUrl()
+                updateState {
+                    copy(
+                        paymentFlowMode = PaymentFlowMode.PAYMENT_LINK,
+                        paymentLink = link,
+                        paymentLinkPolling = false,
+                        paymentLinkPaymentDetected = false,
+                        paymentLinkInvoicePrintAttemptedOrderId = null,
+                        paymentLinkManualPanelVisible = false,
+                        paymentLinkManualErrorMessage = null,
+                        pendingPaymentChangeSourceReleased = false,
+                        pendingPaymentChangeOpen = false,
+                        pendingPaymentChangeCompleted = true,
+                        pendingPaymentChangeCancelDialogVisible = false,
+                        pendingPaymentChangeCancelErrorMessage = null,
+                        pendingPaymentChangeExitAction = null,
+                        onsitePayment = null,
+                        yappyOnsiteTransaction = null,
+                        yappyOnsitePolling = false,
+                        yappyOnsitePollingSuppressed = false,
+                        yappyOnsiteExitCancelDialogVisible = false,
+                        orderNumber = replacement.orderNumber.ifBlank { orderNumber },
+                        invoiceStatus = InvoiceStatus.fromId(replacement.invoiceStatus),
+                    )
+                }
+                showSuccess()
+                onCreated()
+            }.onFailure { error ->
+                snackbarService.show(paymentLinkSwitchErrorMessage(error))
+                showError()
+            }
+        }
+    }
+
+    fun confirmPendingPaymentChangeYappyOnsite(onCreated: () -> Unit) {
+        val state = uiState.value
+        val businessId = business?.businessId ?: return
+        val orderId = state.createdOrderId ?: return
+        val sourceMethod = state.pendingPaymentChangeSourceMethod ?: return
+        if (sourceMethod == PendingPaymentIntentMethod.YAPPY_ONSITE) return
+        if (!state.canCreateYappyOnsiteQr || !selectedBillingPointHasYappyOnsiteDevice()) return
+        val amount = amountToCharge().takeIf { it > 0L }?.toDecimalString() ?: return
+
+        stopPaymentLinkStatusPolling()
+        showLoading()
+        viewModelScope.launch {
+            runCatching {
+                withContext(Dispatchers.IO) {
+                    val released = releasePendingPaymentChangeIntentIfNeeded(
+                        state = state,
+                        businessId = businessId,
+                        orderId = orderId,
+                        sourceMethod = sourceMethod,
+                        targetMethod = PaymentFlowMode.YAPPY_ONSITE,
+                        requiredNextAction = "yappy_onsite_allowed",
+                    )
+                    if (!released) {
+                        error("No se pudo liberar el cobro pendiente.")
+                    }
+                    orderService.createReplacementYappyOnsite(
+                        businessId = businessId,
+                        orderId = orderId,
+                        amount = amount,
+                    )
+                }
+            }.onSuccess { replacement ->
+                updateState {
+                    copy(
+                        paymentFlowMode = PaymentFlowMode.YAPPY_ONSITE,
+                        paymentLink = "",
+                        paymentLinkPolling = false,
+                        paymentLinkPaymentDetected = false,
+                        paymentLinkInvoicePrintAttemptedOrderId = null,
+                        paymentLinkManualPanelVisible = false,
+                        paymentLinkManualErrorMessage = null,
+                        pendingPaymentChangeSourceReleased = false,
+                        pendingPaymentChangeOpen = false,
+                        pendingPaymentChangeCompleted = true,
+                        pendingPaymentChangeCancelDialogVisible = false,
+                        pendingPaymentChangeCancelErrorMessage = null,
+                        pendingPaymentChangeExitAction = null,
+                        onsitePayment = replacement.onsitePayment,
+                        yappyOnsiteTransaction = null,
+                        yappyOnsitePolling = false,
+                        yappyOnsitePollingSuppressed = false,
+                        yappyOnsiteInvoiceProcessingTimedOut = false,
+                        yappyOnsitePrintAttemptedTransactionId = null,
+                        yappyOnsiteExitCancelDialogVisible = false,
+                        orderNumber = replacement.orderNumber.ifBlank { orderNumber },
+                        invoiceStatus = InvoiceStatus.fromId(replacement.invoiceStatus),
+                    )
+                }
+                showSuccess()
+                onCreated()
+            }.onFailure { error ->
+                snackbarService.show(paymentLinkSwitchErrorMessage(error))
+                showError()
+            }
+        }
+    }
+
+    fun switchPaymentLinkToManual() {
+        val state = uiState.value
+        val businessId = business?.businessId ?: return
+        val orderId = state.createdOrderId ?: return
+        if (!canSwitchPaymentLinkToManual()) return
+
+        stopPaymentLinkStatusPolling()
+        showLoading()
+        viewModelScope.launch {
+            runCatching {
+                withContext(Dispatchers.IO) {
+                    val released = orderService.releasePendingPaymentIntent(
+                        businessId = businessId,
+                        orderId = orderId,
+                        paymentMethod = "payment_link",
+                        reason = "customer_selected_cash",
+                    )
+                    if (!released.released || !released.allowsNextAction("manual_payment_allowed")) {
+                        error("No se pudo liberar el enlace de pago pendiente.")
+                    }
+                }
+            }.onSuccess {
+                updateState {
+                    copy(
+                        paymentFlowMode = PaymentFlowMode.MANUAL_OR_INSTALLMENTS,
+                        paymentLink = "",
+                        paymentLinkPolling = false,
+                        paymentLinkManualPanelVisible = true,
+                        paymentLinkManualErrorMessage = null,
+                        charged = emptyMap(),
+                        otherPaymentDescription = "",
+                        installments = emptyList(),
+                    )
+                }
+                showSuccess()
+            }.onFailure { error ->
+                updateState {
+                    copy(paymentLinkManualErrorMessage = paymentLinkSwitchErrorMessage(error))
+                }
+                snackbarService.show(paymentLinkSwitchErrorMessage(error))
+                showError()
+            }
+        }
+    }
+
+    fun submitPaymentLinkManualPayments() {
+        val state = uiState.value
+        val businessId = business?.businessId ?: return
+        val orderId = state.createdOrderId ?: return
+        val totalToCharge = amountToCharge()
+        val paid = state.charged.values.sum()
+        val requiresOtherDescription = state.charged.containsKey(99)
+        val otherDescription = state.otherPaymentDescription.trim()
+
+        val validation = when {
+            paid < totalToCharge -> "El pago manual debe cubrir el total de la orden."
+            requiresOtherDescription && otherDescription.length < 15 ->
+                "Completa una descripción de al menos 15 caracteres para Otro."
+            else -> null
+        }
+        if (validation != null) {
+            updateState { copy(paymentLinkManualErrorMessage = validation) }
+            return
+        }
+
+        val payments = state.charged.entries
+            .filter { it.value > 0L }
+            .map { (methodCode, amountCents) ->
+                OrderPaymentSubmission(
+                    methodCode = methodCode,
+                    amountCents = amountCents,
+                    paymentDateIso = currentPanamaDateTimeIsoWithOffset(),
+                    otherDescription = if (methodCode == 99) otherDescription else null,
+                )
+            }
+
+        if (payments.isEmpty()) {
+            updateState { copy(paymentLinkManualErrorMessage = "Agrega al menos un método de pago.") }
+            return
+        }
+
+        showLoading()
+        viewModelScope.launch {
+            runCatching {
+                withContext(Dispatchers.IO) {
+                    orderService.registerOrderPayments(
+                        businessId = businessId,
+                        orderId = orderId,
+                        payments = payments,
+                    )
+                    orderService.refreshOrder(businessId = businessId, orderId = orderId)
+                }
+            }.onSuccess { freshOrder ->
+                updateState {
+                    copy(
+                        orderNumber = freshOrder.internalNumber.ifBlank { orderNumber },
+                        invoiceStatus = InvoiceStatus.fromId(freshOrder.invoiceStatus ?: InvoiceStatus.NONE.id),
+                        paymentLinkManualPanelVisible = false,
+                        paymentLinkManualErrorMessage = null,
+                    )
+                }
+                showSuccess()
+            }.onFailure { error ->
+                updateState { copy(paymentLinkManualErrorMessage = paymentLinkSwitchErrorMessage(error)) }
+                snackbarService.show(paymentLinkSwitchErrorMessage(error))
+                showError()
+            }
+        }
+    }
+
+    fun switchPaymentLinkToYappyOnsite(onCreated: () -> Unit) {
+        val state = uiState.value
+        val businessId = business?.businessId ?: return
+        val orderId = state.createdOrderId ?: return
+        if (!canSwitchPaymentLinkToYappyOnsite()) return
+        val amount = amountToCharge().takeIf { it > 0L }?.toDecimalString() ?: return
+
+        stopPaymentLinkStatusPolling()
+        showLoading()
+        viewModelScope.launch {
+            runCatching {
+                withContext(Dispatchers.IO) {
+                    val released = orderService.releasePendingPaymentIntent(
+                        businessId = businessId,
+                        orderId = orderId,
+                        paymentMethod = "payment_link",
+                        reason = "customer_selected_yappy_onsite",
+                    )
+                    if (!released.released || !released.allowsNextAction("yappy_onsite_allowed")) {
+                        error("No se pudo liberar el enlace de pago pendiente.")
+                    }
+                    orderService.createReplacementYappyOnsite(
+                        businessId = businessId,
+                        orderId = orderId,
+                        amount = amount,
+                    )
+                }
+            }.onSuccess { replacement ->
+                updateState {
+                    copy(
+                        paymentFlowMode = PaymentFlowMode.YAPPY_ONSITE,
+                        paymentLink = "",
+                        paymentLinkPolling = false,
+                        paymentLinkManualPanelVisible = false,
+                        paymentLinkManualErrorMessage = null,
+                        onsitePayment = replacement.onsitePayment,
+                        yappyOnsiteTransaction = null,
+                        yappyOnsitePolling = false,
+                        yappyOnsitePollingSuppressed = false,
+                        yappyOnsiteInvoiceProcessingTimedOut = false,
+                        yappyOnsitePrintAttemptedTransactionId = null,
+                        yappyOnsiteExitCancelDialogVisible = false,
+                    )
+                }
+                showSuccess()
+                onCreated()
+            }.onFailure { error ->
+                snackbarService.show(paymentLinkSwitchErrorMessage(error))
+                showError()
+            }
+        }
+    }
+
+    private suspend fun releasePendingPaymentChangeIntent(
+        businessId: Int,
+        orderId: Int,
+        sourceMethod: PendingPaymentIntentMethod,
+        targetMethod: PaymentFlowMode,
+    ): PendingIntentReleaseResponse {
+        when (sourceMethod) {
+            PendingPaymentIntentMethod.PAYMENT_LINK -> stopPaymentLinkStatusPolling()
+            PendingPaymentIntentMethod.YAPPY_ONSITE -> stopYappyOnsitePollingForRelease()
+        }
+        return orderService.releasePendingPaymentIntent(
+            businessId = businessId,
+            orderId = orderId,
+            paymentMethod = sourceMethod.apiPaymentMethod(),
+            reason = sourceMethod.releaseReasonFor(targetMethod),
+        )
+    }
+
+    private suspend fun releasePendingPaymentChangeIntentIfNeeded(
+        state: PosState,
+        businessId: Int,
+        orderId: Int,
+        sourceMethod: PendingPaymentIntentMethod,
+        targetMethod: PaymentFlowMode,
+        requiredNextAction: String,
+    ): Boolean {
+        if (state.pendingPaymentChangeSourceReleased) return true
+        val released = releasePendingPaymentChangeIntent(
+            businessId = businessId,
+            orderId = orderId,
+            sourceMethod = sourceMethod,
+            targetMethod = targetMethod,
+        )
+        return released.released && released.allowsNextAction(requiredNextAction)
+    }
+
+    private fun PendingPaymentIntentMethod.apiPaymentMethod(): String {
+        return when (this) {
+            PendingPaymentIntentMethod.PAYMENT_LINK -> "payment_link"
+            PendingPaymentIntentMethod.YAPPY_ONSITE -> "yappy_onsite"
+        }
+    }
+
+    private fun PendingPaymentIntentMethod.releaseReasonFor(targetMethod: PaymentFlowMode): String {
+        return when (targetMethod) {
+            PaymentFlowMode.MANUAL_OR_INSTALLMENTS -> "customer_selected_cash"
+            PaymentFlowMode.PAYMENT_LINK -> "customer_selected_payment_link"
+            PaymentFlowMode.YAPPY_ONSITE -> "customer_selected_yappy_onsite"
+            PaymentFlowMode.DRAFT -> "customer_changed_payment_method"
+        }
+    }
+
+    private fun hasActiveYappyOnsitePendingIntent(state: PosState): Boolean {
+        val onsite = state.onsitePayment ?: return false
+        val transactionId = onsite.transactionId.ifBlank {
+            state.yappyOnsiteTransaction?.transaction?.transactionId.orEmpty()
+        }
+        if (transactionId.isBlank()) return false
+        val status = (
+            state.yappyOnsiteTransaction?.transaction?.status?.ifBlank { onsite.status }
+                ?: onsite.status
+            ).lowercase()
+        return status !in setOf("cancelled", "canceled", "expired", "returned", "succeeded") &&
+            state.invoiceStatus != InvoiceStatus.ISSUED &&
+            state.invoiceStatus != InvoiceStatus.FAILED
+    }
+
+    private fun validateManualReplacementPayments(state: PosState): String? {
+        val totalToCharge = amountToCharge()
+        val paid = state.charged.values.sum() + state.installments.sumOf { it.amountCents }
+        val requiresOtherDescription = state.charged.containsKey(99)
+        val otherDescription = state.otherPaymentDescription.trim()
+        return when {
+            paid < totalToCharge -> "El pago manual debe cubrir el total de la orden."
+            state.installments.any { it.dueDateIso.isBlank() } ->
+                "Selecciona fecha de vencimiento para cada pago a crédito."
+            requiresOtherDescription && otherDescription.length < 15 ->
+                "Completa una descripción de al menos 15 caracteres para Otro."
+            else -> null
+        }
+    }
+
+    private fun manualReplacementPaymentSubmissions(state: PosState): List<OrderPaymentSubmission> {
+        val paymentDate = currentPanamaDateTimeIsoWithOffset()
+        val otherDescription = state.otherPaymentDescription.trim()
+        return buildList {
+            state.charged.entries
+                .filter { it.value > 0L }
+                .forEach { (methodCode, amountCents) ->
+                    add(
+                        OrderPaymentSubmission(
+                            methodCode = methodCode,
+                            amountCents = amountCents,
+                            paymentDateIso = paymentDate,
+                            otherDescription = if (methodCode == 99) otherDescription else null,
+                        )
+                    )
+                }
+            state.installments
+                .filter { it.amountCents > 0L }
+                .forEach { installment ->
+                    add(
+                        OrderPaymentSubmission(
+                            methodCode = 11,
+                            amountCents = installment.amountCents,
+                            paymentDateIso = paymentDate,
+                            dueDateIso = convertDateToIso8601(installment.dueDateIso),
+                        )
+                    )
+                }
+        }
+    }
+
+    private suspend fun completeManualPaymentMethodChange(
+        response: RegisterManualPaymentsDataResponse,
+        freshOrder: Order,
+    ) {
+        val invoiceStatus = InvoiceStatus.fromId(
+            response.resolvedInvoiceStatus(
+                freshOrderInvoiceStatus = freshOrder.invoiceStatus,
+                freshOrderExternalInvoiceNumber = freshOrder.externalInvoiceNumber,
+            )
+        )
+        val cufe = response.resolvedInvoiceCufe(freshOrder.externalInvoiceNumber)
+        val stateBeforeCompletion = uiState.value
+        val branchCode = stateBeforeCompletion.branches
+            .getOrNull(stateBeforeCompletion.selectedBranchIndex)
+            ?.branchCode
+        val billingPoint = stateBeforeCompletion.billingPoints
+            .getOrNull(stateBeforeCompletion.selectedBillingPointIndex)
+            ?.billingPoint
+        enqueueIssuedOrderTicketPrint(
+            order = freshOrder,
+            source = "pos_manual_replacement",
+            providedTicket = response.resolvedTicketPayload(json),
+            branchCode = branchCode,
+            billingPoint = billingPoint,
+            invoiceIssued = invoiceStatus == InvoiceStatus.ISSUED,
+        )
+        val pdf = if (invoiceStatus == InvoiceStatus.ISSUED && cufe != null) {
+            withContext(Dispatchers.IO) {
+                runCatching {
+                    posService.getInvoiceDocsRaw(freshOrder.businessId, cufe).pdfBase64.orEmpty()
+                }.getOrElse { error ->
+                    if (error is CancellationException) throw error
+                    ""
+                }
+            }
+        } else {
+            ""
+        }
+
+        updateState {
+            copy(
+                paymentFlowMode = PaymentFlowMode.MANUAL_OR_INSTALLMENTS,
+                paymentLink = "",
+                paymentLinkPolling = false,
+                paymentLinkPaymentDetected = false,
+                paymentLinkManualPanelVisible = false,
+                paymentLinkManualErrorMessage = null,
+                pendingPaymentChangeSourceReleased = false,
+                pendingPaymentChangeOpen = false,
+                pendingPaymentChangeCompleted = true,
+                pendingPaymentChangeCancelDialogVisible = false,
+                pendingPaymentChangeCancelErrorMessage = null,
+                pendingPaymentChangeExitAction = null,
+                onsitePayment = null,
+                yappyOnsiteTransaction = null,
+                yappyOnsitePolling = false,
+                yappyOnsitePollingSuppressed = false,
+                yappyOnsiteInvoiceProcessingTimedOut = false,
+                orderNumber = freshOrder.internalNumber.ifBlank {
+                    response.orderNumber.ifBlank { orderNumber }
+                },
+                invoiceStatus = invoiceStatus,
+                pdfDocument = pdf.ifBlank { pdfDocument },
+                postCreateInvoiceWarning = PostCreateInvoiceWarningState(),
+            )
+        }
+
+        if (invoiceStatus == InvoiceStatus.ISSUED && pdf.isBlank()) {
+            snackbarService.show("La factura fue generada, pero no fue posible descargar el PDF.")
+        }
+    }
+
+    private fun paymentLinkSwitchErrorMessage(error: Throwable): String {
+        val raw = error.message.orEmpty()
+        return when {
+            raw.contains("manual_refund_required", ignoreCase = true) ->
+                "El proveedor ya confirmó el pago o el estado cambió. Requiere reembolso o conciliación manual."
+            raw.contains("O_RP_005", ignoreCase = true) ->
+                "No se puede cambiar el método por el estado actual del pago."
+            raw.contains("O_RP_004", ignoreCase = true) ->
+                "No se encontró una orden o enlace pendiente activo."
+            raw.contains("O_RP_002", ignoreCase = true) ->
+                "No se pudo liberar el cobro pendiente para cambiar el método de pago."
+            else -> "No se pudo cambiar el método de pago."
+        }
+    }
+
+    private suspend fun handlePaymentLinkInvoiceIssued(
+        businessId: Int,
+        freshOrder: Order,
+    ) {
+        val cufe = freshOrder.externalInvoiceNumber?.takeIf { it.isNotBlank() }
+        val stateBeforeCompletion = uiState.value
+        val branchCode = stateBeforeCompletion.branches
+            .getOrNull(stateBeforeCompletion.selectedBranchIndex)
+            ?.branchCode
+        val billingPoint = stateBeforeCompletion.billingPoints
+            .getOrNull(stateBeforeCompletion.selectedBillingPointIndex)
+            ?.billingPoint
+        enqueueIssuedOrderTicketPrint(
+            order = freshOrder,
+            source = "pos_payment_link",
+            providedTicket = null,
+            branchCode = branchCode,
+            billingPoint = billingPoint,
+        )
+        val pdf = if (cufe != null) {
+            withContext(Dispatchers.IO) {
+                runCatching {
+                    posService.getInvoiceDocsRaw(businessId, cufe).pdfBase64.orEmpty()
+                }.getOrElse { error ->
+                    if (error is CancellationException) throw error
+                    ""
+                }
+            }
+        } else {
+            ""
+        }
+
+        updateState {
+            copy(
+                paymentLinkPaymentDetected = true,
+                invoiceStatus = InvoiceStatus.ISSUED,
+                orderNumber = freshOrder.internalNumber.ifBlank { orderNumber },
+                pdfDocument = pdf.ifBlank { pdfDocument },
+            )
+        }
+
+        if (pdf.isBlank()) {
+            snackbarService.show("La factura fue generada, pero no fue posible descargar el PDF.")
+        }
+    }
+
+    private fun enqueueIssuedOrderTicketPrint(
+        order: Order,
+        source: String,
+        providedTicket: TicketDocumentPayload?,
+        branchCode: String?,
+        billingPoint: String?,
+        invoiceIssued: Boolean = order.invoiceStatus == InvoiceStatus.ISSUED.id,
+    ) {
+        if (!invoiceIssued) return
+        if (providedTicket == null && order.ticketEnabled != true) return
+        if (uiState.value.paymentLinkInvoicePrintAttemptedOrderId == order.id) return
+        if (branchCode.isNullOrBlank() || billingPoint.isNullOrBlank()) return
+        if (printerService.resolveActivePrinter(branchCode, billingPoint) == null) return
+
+        updateState { copy(paymentLinkInvoicePrintAttemptedOrderId = order.id) }
+        launchProtectedTicketPrint {
+            printIssuedOrderTicket(
+                order = order,
+                source = source,
+                providedTicket = providedTicket,
+                branchCode = branchCode,
+                billingPoint = billingPoint,
+                markAttempted = false,
+                invoiceIssued = invoiceIssued,
+            )
+        }
+    }
+
+    private fun launchProtectedTicketPrint(block: suspend () -> Unit) {
+        appScope.launch(Dispatchers.IO) {
+            withContext(NonCancellable + Dispatchers.IO) {
+                block()
+            }
+        }
+    }
+
+    private suspend fun printIssuedOrderTicket(
+        order: Order,
+        source: String,
+        providedTicket: TicketDocumentPayload?,
+        branchCode: String? = null,
+        billingPoint: String? = null,
+        markAttempted: Boolean = true,
+        invoiceIssued: Boolean = order.invoiceStatus == InvoiceStatus.ISSUED.id,
+    ) {
+        if (!invoiceIssued) return
+        if (providedTicket == null && order.ticketEnabled != true) return
+        if (markAttempted && uiState.value.paymentLinkInvoicePrintAttemptedOrderId == order.id) return
+
+        val state = uiState.value
+        val resolvedBranchCode = branchCode
+            ?: state.branches.getOrNull(state.selectedBranchIndex)?.branchCode
+            ?: return
+        val resolvedBillingPoint = billingPoint
+            ?: state.billingPoints.getOrNull(state.selectedBillingPointIndex)?.billingPoint
+            ?: return
+        val printer = printerService.resolveActivePrinter(resolvedBranchCode, resolvedBillingPoint) ?: return
+
+        if (markAttempted) {
+            updateState { copy(paymentLinkInvoicePrintAttemptedOrderId = order.id) }
+        }
+        var stage = "ticket_payload"
+        runCatching {
+            val ticketPayload = providedTicket
+                ?: fetchOrderTicketPayloadForPrint(order)
+            stage = "print_ticket"
+            printerService.printTicketPayload(
+                printerConfig = printer,
+                ticketPayload = ticketPayload,
+                context = PrintContext(
+                    source = source,
+                    orderId = order.id,
+                )
+            )
+        }.onFailure {
+            loggerPrintFailure(order.internalNumber, it, stage)
+            withContext(Dispatchers.Main) {
+                snackbarService.show("El pago fue exitoso, pero la impresión del ticket falló.")
+            }
+        }
+    }
+
+    private suspend fun fetchOrderTicketPayloadForPrint(order: Order): TicketDocumentPayload {
+        var lastCancellation: CancellationException? = null
+        repeat(3) { attemptIndex ->
+            try {
+                return printerService.fetchOrderTicketLayout(orderId = order.id, businessId = order.businessId)
+            } catch (error: CancellationException) {
+                lastCancellation = error
+                println(
+                    "Ticket payload fetch cancelled for order ${order.internalNumber} " +
+                        "attempt=${attemptIndex + 1}/3: ${error::class.simpleName}: ${error.message}"
+                )
+                delay(400L * (attemptIndex + 1))
+            }
+        }
+        throw lastCancellation ?: CancellationException("Ticket payload fetch cancelled")
+    }
+
+    fun pollYappyOnsiteTransaction(markInvoiceProcessingTimedOut: Boolean = false) {
+        val businessId = business?.businessId ?: return
+        val state = uiState.value
+        if (state.yappyOnsitePollingSuppressed || state.yappyOnsitePolling) return
+        val transactionId = state.onsitePayment?.transactionId
+            ?: state.yappyOnsiteTransaction?.transaction?.transactionId
+            ?: return
+
+        updateState { copy(yappyOnsitePolling = true) }
+        val pollingJob = viewModelScope.launch(Dispatchers.IO) {
+            runCatching {
+                paymentService.getYappyOnsiteTransaction(businessId, transactionId)
+            }.onSuccess { payload ->
+                withContext(Dispatchers.Main) {
+                    if (uiState.value.yappyOnsitePollingSuppressed) {
+                        updateState { copy(yappyOnsitePolling = false) }
+                        return@withContext
+                    }
+                    updateState {
+                        copy(
+                            yappyOnsiteTransaction = payload,
+                            yappyOnsitePolling = false,
+                            orderNumber = payload.order.orderNumber.ifBlank { orderNumber },
+                            invoiceStatus = InvoiceStatus.fromId(payload.invoice.status),
+                            yappyOnsiteInvoiceProcessingTimedOut =
+                                yappyOnsiteInvoiceProcessingTimedOut || markInvoiceProcessingTimedOut,
+                        )
+                    }
+                }
+                if (!uiState.value.yappyOnsitePollingSuppressed) {
+                    maybePrintYappyOnsiteTicket(payload)
+                }
+            }.onFailure {
+                withContext(Dispatchers.Main) {
+                    updateState { copy(yappyOnsitePolling = false) }
+                }
+            }
+        }
+        yappyOnsitePollingJob = pollingJob
+        pollingJob.invokeOnCompletion {
+            if (yappyOnsitePollingJob === pollingJob) {
+                yappyOnsitePollingJob = null
+            }
+        }
+    }
+
+    private fun stopYappyOnsitePollingForRelease() {
+        yappyOnsitePollingJob?.cancel()
+        yappyOnsitePollingJob = null
+        updateState {
+            copy(
+                yappyOnsitePolling = false,
+                yappyOnsitePollingSuppressed = true,
+            )
+        }
+    }
+
+    fun requestYappyOnsiteQrExit(): Boolean {
+        if (!hasActiveYappyOnsitePendingIntent(uiState.value)) return false
+        updateState { copy(yappyOnsiteExitCancelDialogVisible = true) }
+        return true
+    }
+
+    fun dismissYappyOnsiteQrExit() {
+        updateState { copy(yappyOnsiteExitCancelDialogVisible = false) }
+    }
+
+    fun confirmYappyOnsiteQrExitCancellation(onCancelled: () -> Unit) {
+        updateState { copy(yappyOnsiteExitCancelDialogVisible = false) }
+        cancelYappyOnsiteTransaction(onCancelled = onCancelled)
+    }
+
+    fun cancelYappyOnsiteTransaction(onCancelled: (() -> Unit)? = null) {
+        val businessId = business?.businessId ?: return
+        val transactionId = uiState.value.onsitePayment?.transactionId
+            ?: uiState.value.yappyOnsiteTransaction?.transaction?.transactionId
+            ?: return
+
+        stopYappyOnsitePollingForRelease()
+        showLoading()
+        viewModelScope.launch(Dispatchers.IO) {
+            runCatching {
+                paymentService.cancelYappyOnsiteTransaction(
+                    businessId = businessId,
+                    transactionId = transactionId,
+                    reason = "customer_changed_payment_method",
+                )
+            }.onSuccess { transaction ->
+                withContext(Dispatchers.Main) {
+                    updateState {
+                        copy(
+                            yappyOnsiteTransaction = yappyOnsiteTransaction?.copy(transaction = transaction),
+                            onsitePayment = onsitePayment?.copy(
+                                status = transaction.status,
+                                providerStatus = transaction.providerStatus,
+                            ),
+                            yappyOnsiteExitCancelDialogVisible = false,
+                        )
+                    }
+                    if (onCancelled == null) {
+                        showSuccess()
+                    } else {
+                        hideLoading()
+                        onCancelled()
+                    }
+                }
+            }.onFailure {
+                withContext(Dispatchers.Main) {
+                    updateState {
+                        copy(
+                            yappyOnsitePollingSuppressed = false,
+                            yappyOnsiteExitCancelDialogVisible = false,
+                        )
+                    }
+                    snackbarService.show("No fue posible cancelar el pago de Yappy.")
+                    showError()
+                }
+            }
+        }
+    }
+
+    fun retryYappyOnsiteInvoice() {
+        val businessId = business?.businessId ?: return
+        val orderId = uiState.value.yappyOnsiteTransaction?.order?.id
+            ?: uiState.value.onsitePayment?.orderId
+            ?: return
+
+        showLoading()
+        viewModelScope.launch(Dispatchers.IO) {
+            runCatching {
+                posService.retryElectronicInvoice(businessId, orderId)
+            }.onSuccess {
+                withContext(Dispatchers.Main) {
+                    showSuccess()
+                    pollYappyOnsiteTransaction()
+                }
+            }.onFailure {
+                withContext(Dispatchers.Main) {
+                    showError()
+                    snackbarService.show("No fue posible reintentar la factura.")
+                }
+            }
+        }
+    }
+
+    fun openYappyOnsiteInvoicePdf() {
+        loadYappyOnsiteInvoicePdf { openPdfDocument() }
+    }
+
+    fun shareYappyOnsiteInvoicePdf() {
+        loadYappyOnsiteInvoicePdf { sharePdfDocument() }
+    }
+
+    private fun loadYappyOnsiteInvoicePdf(onReady: () -> Unit) {
+        if (uiState.value.pdfDocument.isNotBlank()) {
+            onReady()
+            return
+        }
+
+        val businessId = business?.businessId ?: return
+        val invoice = uiState.value.yappyOnsiteTransaction?.invoice ?: return
+        val cufe = invoice.cufe?.takeIf { it.isNotBlank() } ?: return
+
+        viewModelScope.launch(Dispatchers.IO) {
+            runCatching {
+                posService.getInvoiceDocsRaw(businessId, cufe)
+            }.onSuccess { docs ->
+                val pdf = docs.pdfBase64.orEmpty()
+                if (pdf.isBlank()) return@onSuccess
+                withContext(Dispatchers.Main) {
+                    updateState { copy(pdfDocument = pdf) }
+                    onReady()
+                }
+            }.onFailure {
+                withContext(Dispatchers.Main) {
+                    snackbarService.show("No fue posible descargar la factura.")
+                }
+            }
+        }
+    }
+
+    private fun maybePrintYappyOnsiteTicket(payload: com.teco.ventago.features.payments.domain.models.YappyOnsiteTransactionPayload) {
+        if (payload.transaction.status.lowercase() != "succeeded") return
+        if (payload.invoice.status != 2) return
+        if (!payload.invoice.ticketEnabled) return
+        val ticket = payload.invoice.ticket ?: return
+        val transactionId = payload.transaction.transactionId
+        if (uiState.value.yappyOnsitePrintAttemptedTransactionId == transactionId) return
+
+        val state = uiState.value
+        val branch = state.branches.getOrNull(state.selectedBranchIndex)?.branchCode ?: return
+        val billingPoint = state.billingPoints.getOrNull(state.selectedBillingPointIndex)?.billingPoint ?: return
+        val printer = printerService.resolveActivePrinter(branch, billingPoint) ?: return
+
+        updateState { copy(yappyOnsitePrintAttemptedTransactionId = transactionId) }
+        launchProtectedTicketPrint {
+            runCatching {
+                printerService.printTicketPayload(
+                    printerConfig = printer,
+                    ticketPayload = ticket,
+                    context = PrintContext(
+                        source = "pos_yappy_onsite",
+                        orderId = payload.order.id
+                    )
+                )
+            }.onFailure {
+                loggerPrintFailure(payload.order.orderNumber, it)
+                withContext(Dispatchers.Main) {
+                    snackbarService.show("El pago fue exitoso, pero la impresión del ticket falló.")
+                }
+            }
+        }
     }
 
     fun setIncludeBottomNote(include: Boolean) {
@@ -1747,6 +3486,7 @@ class PosViewModel(
                 },
             )
         }
+        saveOrderCreationCheckpoint(OrderCreationStep.CART)
     }
 
     private fun refreshBottomNoteSettingsInBackground() {
@@ -1755,18 +3495,24 @@ class PosViewModel(
         }
     }
 
-    private fun loggerPrintFailure(orderNumber: String, throwable: Throwable) {
-        println("Ticket print failed for order $orderNumber: ${throwable.message}")
+    private fun loggerPrintFailure(orderNumber: String, throwable: Throwable, stage: String? = null) {
+        val stageText = stage?.let { " stage=$it" }.orEmpty()
+        println(
+            "Ticket print failed for order $orderNumber$stageText: " +
+                "${throwable::class.simpleName}: ${throwable.message}"
+        )
     }
 
     fun onBranchSelected(index: Int) {
         updateBranchSelection(index)
         persistCurrentBranchBillingPointSelection()
+        saveOrderCreationCheckpoint(OrderCreationStep.CUSTOMER)
     }
 
     fun onBillingPointSelected(index: Int) {
         updateState { copy(selectedBillingPointIndex = index) }
         persistCurrentBranchBillingPointSelection()
+        saveOrderCreationCheckpoint(OrderCreationStep.CUSTOMER)
     }
 
     private fun updateBranchSelection(
@@ -1863,23 +3609,20 @@ class PosViewModel(
         updateBranchSelection(resolvedIndex, branches)
     }
 
-    // TODO Convert to proper enum
-    fun docTypeOptions(): List<String> = listOf(
-        "01 - Factura de Operación Interna",
-        "02 - Factura de Importación",
-        "03 - Factura de Exportación",
-        "04 - Nota de Crédito Referente a FE",
-        "05 - Nota de Débito Referente a FE",
-        "06 - Nota de Crédito Genérica",
-        "07 - Nota de Débito Genérica",
-        "08 - Factura de Zona Franca",
-        "09 - Reembolso",
-        "10 - Factura de Operación Extranjera"
-    )
+    fun docTypeOptions(): List<String> = PosDocumentTypeOptions.selectable.map { it.toString() }
 
     fun onDocTypeSelected(index: Int) {
-        val key = docTypeOptions()[index].take(2) // "01", "02", ...
-        updateState { copy(selectedDocTypeIndex = index, selectedDocType = key) }
+        val key = PosDocumentTypeOptions.codeAt(index)
+        updateState {
+            copy(
+                selectedDocTypeIndex = PosDocumentTypeOptions.indexOf(key).coerceAtLeast(0),
+                selectedDocType = key,
+                originalInvoiceNumber = if (key == "06") originalInvoiceNumber else "",
+                originalInvoiceNumberError = null,
+                originalInvoiceEmissionDateIso = if (key == "06") originalInvoiceEmissionDateIso else "",
+                originalInvoiceEmissionDateError = null
+            )
+        }
         if (key == "03") {
             onOperationNatureSelected(1)
             updateState {
@@ -1901,6 +3644,37 @@ class PosViewModel(
                     enabledOperationNature = true
                 )
             }
+        }
+        if (key in noteDocumentTypes()) {
+            disableOrderCreationCheckpointForCurrentFlow(clearExisting = true)
+        } else if (uiState.value.referencedNoteCUFE.isBlank() && uiState.value.flowMode == FlowMode.SALE) {
+            orderCheckpointDisabledForCurrentFlow = false
+            saveOrderCreationCheckpoint(OrderCreationStep.CUSTOMER)
+        }
+    }
+
+    fun onOriginalInvoiceNumberChanged(value: String) {
+        val normalized = value
+        updateState {
+            copy(
+                originalInvoiceNumber = normalized,
+                originalInvoiceNumberError = PosNoteValidators.validateOriginalInvoiceNumber(
+                    selectedDocType = selectedDocType,
+                    value = normalized
+                )
+            )
+        }
+    }
+
+    fun onOriginalInvoiceEmissionDateSelected(isoDate: String) {
+        updateState {
+            copy(
+                originalInvoiceEmissionDateIso = isoDate,
+                originalInvoiceEmissionDateError = PosNoteValidators.validateOriginalInvoiceEmissionDate(
+                    selectedDocType = selectedDocType,
+                    value = isoDate
+                )
+            )
         }
     }
 
@@ -1926,10 +3700,12 @@ class PosViewModel(
         updateState {
             copy(selectedOperationNatureIndex = index, selectedOperationNature = key)
         }
+        saveOrderCreationCheckpoint(OrderCreationStep.CUSTOMER)
     }
 
     fun onInvoiceIssueDateSelected(isoDate: String) {
         updateState { copy(invoiceIssueDateIso = isoDate) }
+        saveOrderCreationCheckpoint(OrderCreationStep.CUSTOMER)
     }
 
     // === Customer ===
@@ -1948,6 +3724,9 @@ class PosViewModel(
                 showError()
                 return
             }
+            disableOrderCreationCheckpointForCurrentFlow(clearExisting = true)
+        } else if (quoteId == null && uiState.value.referencedNoteCUFE.isBlank()) {
+            orderCheckpointDisabledForCurrentFlow = false
         }
         updateState {
             copy(
@@ -1970,6 +3749,7 @@ class PosViewModel(
             showError()
             return
         }
+        disableOrderCreationCheckpointForCurrentFlow(clearExisting = true)
         viewModelScope.launch {
             try {
                 val quote = withContext(Dispatchers.IO) {
@@ -2279,6 +4059,7 @@ class PosViewModel(
         val request = buildQuoteRequest().copy(quoteId = null)
         val quote = quotesService.createQuote(request)
         updateState { copy(lastQuoteId = quote.id, lastQuoteNumber = quote.displayNumberOrQuoteNumber) }
+        clearOrderCreationCheckpoint()
         quote
     }
 
@@ -2300,6 +4081,7 @@ class PosViewModel(
         )
         val quote = quotesService.updateQuote(updateReq)
         updateState { copy(lastQuoteId = quote.id, lastQuoteNumber = quote.displayNumberOrQuoteNumber) }
+        clearOrderCreationCheckpoint()
         quote
     }
 
@@ -2341,30 +4123,43 @@ class PosViewModel(
         if (!isFinal) {
             fetchCustomerAddresses()
         }
+        saveOrderCreationCheckpoint(OrderCreationStep.CUSTOMER)
     }
 
-    fun clearFinalCustomerInfo() = updateState {
-        copy(
-            finalName = null,
-            finalEmail = null,
-            finalEmailError = null,
-            finalPhone = null,
-            finalIdTypeIndex = 0,
-            finalIdType = "cedula",
-            finalIdNumber = null,
-            finalIdNumberError = null,
-            finalCustomerCountryCode = null
-        )
+    fun clearFinalCustomerInfo() {
+        updateState {
+            copy(
+                finalName = null,
+                finalEmail = null,
+                finalEmailError = null,
+                finalPhone = null,
+                finalIdTypeIndex = 0,
+                finalIdType = "cedula",
+                finalIdNumber = null,
+                finalIdNumberError = null,
+                finalCustomerCountryCode = null
+            )
+        }
+        saveOrderCreationCheckpoint(OrderCreationStep.CUSTOMER)
     }
 
-    fun onFinalNameChanged(v: String) = updateState { copy(finalName = v) }
-    fun onFinalEmailChanged(v: String) = updateState {
-        copy(
-            finalEmail = v,
-            finalEmailError = validateFinalCustomerEmail(v)
-        )
+    fun onFinalNameChanged(v: String) {
+        updateState { copy(finalName = v) }
+        saveOrderCreationCheckpoint(OrderCreationStep.CUSTOMER)
     }
-    fun onFinalPhoneChanged(v: String) = updateState { copy(finalPhone = v) }
+    fun onFinalEmailChanged(v: String) {
+        updateState {
+            copy(
+                finalEmail = v,
+                finalEmailError = validateFinalCustomerEmail(v)
+            )
+        }
+        saveOrderCreationCheckpoint(OrderCreationStep.CUSTOMER)
+    }
+    fun onFinalPhoneChanged(v: String) {
+        updateState { copy(finalPhone = v) }
+        saveOrderCreationCheckpoint(OrderCreationStep.CUSTOMER)
+    }
 
     // TODO Convert to proper enum
     fun finalIdTypeDisplayNames(): List<String> = listOf(
@@ -2397,17 +4192,24 @@ class PosViewModel(
                     }
                 )
             }
+            saveOrderCreationCheckpoint(OrderCreationStep.CUSTOMER)
         }
     }
 
-    fun onFinalIdNumberChanged(v: String) = updateState {
-        val normalizedIdNumber = normalizeFinalCustomerIdentificationNumber(finalIdType, v)
-        copy(
-            finalIdNumber = normalizedIdNumber,
-            finalIdNumberError = validateFinalCustomerIdentification(finalIdType, normalizedIdNumber)
-        )
+    fun onFinalIdNumberChanged(v: String) {
+        updateState {
+            val normalizedIdNumber = normalizeFinalCustomerIdentificationNumber(finalIdType, v)
+            copy(
+                finalIdNumber = normalizedIdNumber,
+                finalIdNumberError = validateFinalCustomerIdentification(finalIdType, normalizedIdNumber)
+            )
+        }
+        saveOrderCreationCheckpoint(OrderCreationStep.CUSTOMER)
     }
-    fun onFinalCustomerCountrySelected(code: String) = updateState { copy(finalCustomerCountryCode = code) }
+    fun onFinalCustomerCountrySelected(code: String) {
+        updateState { copy(finalCustomerCountryCode = code) }
+        saveOrderCreationCheckpoint(OrderCreationStep.CUSTOMER)
+    }
 
     fun validateFinalCustomerSelection(showFeedback: Boolean = true): Boolean {
         val state = uiState.value
@@ -2449,33 +4251,42 @@ class PosViewModel(
 
 
     // ---------- Per-line extras ----------
-    fun setLineShipping(lineId: String, cents: Long?) = updateState {
-        copy(cart = cart.map {
-            if (it.lineId == lineId) it.copy(
-                shippingCents = cents?.coerceAtLeast(
-                    0L
-                )
-            ) else it
-        })
+    fun setLineShipping(lineId: String, cents: Long?) {
+        updateState {
+            copy(cart = cart.map {
+                if (it.lineId == lineId) it.copy(
+                    shippingCents = cents?.coerceAtLeast(
+                        0L
+                    )
+                ) else it
+            })
+        }
+        saveOrderCreationCheckpoint(OrderCreationStep.CART)
     }
 
-    fun setLineInsurance(lineId: String, cents: Long?) = updateState {
-        copy(cart = cart.map {
-            if (it.lineId == lineId) it.copy(
-                insuranceCents = cents?.coerceAtLeast(
-                    0L
-                )
-            ) else it
-        })
+    fun setLineInsurance(lineId: String, cents: Long?) {
+        updateState {
+            copy(cart = cart.map {
+                if (it.lineId == lineId) it.copy(
+                    insuranceCents = cents?.coerceAtLeast(
+                        0L
+                    )
+                ) else it
+            })
+        }
+        saveOrderCreationCheckpoint(OrderCreationStep.CART)
     }
 
-    fun setLinePharma(lineId: String, batchNumber: String?, batchQty: Int?) = updateState {
-        copy(cart = cart.map {
-            if (it.lineId == lineId) it.copy(
-                pharmaBatchNumber = batchNumber?.takeIf { it.isNotBlank() },
-                pharmaBatchQty = batchQty?.coerceAtLeast(0)
-            ) else it
-        })
+    fun setLinePharma(lineId: String, batchNumber: String?, batchQty: Int?) {
+        updateState {
+            copy(cart = cart.map {
+                if (it.lineId == lineId) it.copy(
+                    pharmaBatchNumber = batchNumber?.takeIf { it.isNotBlank() },
+                    pharmaBatchQty = batchQty?.coerceAtLeast(0)
+                ) else it
+            })
+        }
+        saveOrderCreationCheckpoint(OrderCreationStep.CART)
     }
 
     // ---------- Global discount / charges ----------
@@ -2485,50 +4296,53 @@ class PosViewModel(
         shippingCents: Long?,          // nullable; ignored if any item has shipping
         insuranceCents: Long?,         // nullable; ignored if any item has insurance
         otherCents: Long?
-    ) = updateState {
-        val anyItemHasShipping = cart.any { (it.shippingCents ?: 0L) > 0L }
-        val anyItemHasInsurance = cart.any { (it.insuranceCents ?: 0L) > 0L }
+    ) {
+        updateState {
+            val anyItemHasShipping = cart.any { (it.shippingCents ?: 0L) > 0L }
+            val anyItemHasInsurance = cart.any { (it.insuranceCents ?: 0L) > 0L }
 
-        when (mode) {
-            GlobalDiscountMode.NONE -> copy(
-                globalDiscountMode = mode,
-                globalDiscountPercent = 0,
-                globalDiscountFixedCents = 0L,
-                globalShippingCents = if (anyItemHasShipping) null else shippingCents?.coerceAtLeast(
-                    0L
-                ),
-                globalInsuranceCents = if (anyItemHasInsurance) null else insuranceCents?.coerceAtLeast(
-                    0L
-                ),
-                globalOtherChargesCents = otherCents?.coerceAtLeast(0L)
-            )
+            when (mode) {
+                GlobalDiscountMode.NONE -> copy(
+                    globalDiscountMode = mode,
+                    globalDiscountPercent = 0,
+                    globalDiscountFixedCents = 0L,
+                    globalShippingCents = if (anyItemHasShipping) null else shippingCents?.coerceAtLeast(
+                        0L
+                    ),
+                    globalInsuranceCents = if (anyItemHasInsurance) null else insuranceCents?.coerceAtLeast(
+                        0L
+                    ),
+                    globalOtherChargesCents = otherCents?.coerceAtLeast(0L)
+                )
 
-            GlobalDiscountMode.PERCENT -> copy(
-                globalDiscountMode = mode,
-                globalDiscountPercent = discountValue.toInt().coerceIn(0, 100),
-                globalDiscountFixedCents = 0L,
-                globalShippingCents = if (anyItemHasShipping) null else shippingCents?.coerceAtLeast(
-                    0L
-                ),
-                globalInsuranceCents = if (anyItemHasInsurance) null else insuranceCents?.coerceAtLeast(
-                    0L
-                ),
-                globalOtherChargesCents = otherCents?.coerceAtLeast(0L)
-            )
+                GlobalDiscountMode.PERCENT -> copy(
+                    globalDiscountMode = mode,
+                    globalDiscountPercent = discountValue.toInt().coerceIn(0, 100),
+                    globalDiscountFixedCents = 0L,
+                    globalShippingCents = if (anyItemHasShipping) null else shippingCents?.coerceAtLeast(
+                        0L
+                    ),
+                    globalInsuranceCents = if (anyItemHasInsurance) null else insuranceCents?.coerceAtLeast(
+                        0L
+                    ),
+                    globalOtherChargesCents = otherCents?.coerceAtLeast(0L)
+                )
 
-            GlobalDiscountMode.FIXED -> copy(
-                globalDiscountMode = mode,
-                globalDiscountPercent = 0,
-                globalDiscountFixedCents = discountValue.coerceAtLeast(0L),
-                globalShippingCents = if (anyItemHasShipping) null else shippingCents?.coerceAtLeast(
-                    0L
-                ),
-                globalInsuranceCents = if (anyItemHasInsurance) null else insuranceCents?.coerceAtLeast(
-                    0L
-                ),
-                globalOtherChargesCents = otherCents?.coerceAtLeast(0L)
-            )
+                GlobalDiscountMode.FIXED -> copy(
+                    globalDiscountMode = mode,
+                    globalDiscountPercent = 0,
+                    globalDiscountFixedCents = discountValue.coerceAtLeast(0L),
+                    globalShippingCents = if (anyItemHasShipping) null else shippingCents?.coerceAtLeast(
+                        0L
+                    ),
+                    globalInsuranceCents = if (anyItemHasInsurance) null else insuranceCents?.coerceAtLeast(
+                        0L
+                    ),
+                    globalOtherChargesCents = otherCents?.coerceAtLeast(0L)
+                )
+            }
         }
+        saveOrderCreationCheckpoint(OrderCreationStep.CART)
     }
 
     // Convenience for UI (to disable global fields)
@@ -2603,30 +4417,35 @@ class PosViewModel(
             else -> listOf("Centro", "Norte", "Sur")
         }
 
+    private fun updateAdditionalInvoiceInfo(block: PosState.() -> PosState) {
+        updateState(block)
+        saveOrderCreationCheckpoint(OrderCreationStep.CART)
+    }
+
     /* ---------- Logistics setters ---------- */
-    fun onLogInfo(v: String) = updateState { copy(logisticsInfo = v) }
-    fun onLogPlate(v: String) = updateState { copy(logisticsVehiclePlate = v) }
-    fun onLogCarrierName(v: String) = updateState { copy(logisticsCarrierLegalName = v) }
-    fun onLogCarrierRuc(v: String) = updateState { copy(logisticsCarrierRuc = v) }
-    fun onLogCarrierDv(v: String) = updateState { copy(logisticsCarrierDv = v) }
-    fun onLogCarrierType(idx: Int) = updateState { copy(logisticsCarrierTaxpayerTypeIndex = idx) }
-    fun onLogBoxes(v: String) = updateState { copy(logisticsBoxesQty = v.filter { it.isDigit() }) }
-    fun onLogWeightLb(v: String) = updateState {
+    fun onLogInfo(v: String) = updateAdditionalInvoiceInfo { copy(logisticsInfo = v) }
+    fun onLogPlate(v: String) = updateAdditionalInvoiceInfo { copy(logisticsVehiclePlate = v) }
+    fun onLogCarrierName(v: String) = updateAdditionalInvoiceInfo { copy(logisticsCarrierLegalName = v) }
+    fun onLogCarrierRuc(v: String) = updateAdditionalInvoiceInfo { copy(logisticsCarrierRuc = v) }
+    fun onLogCarrierDv(v: String) = updateAdditionalInvoiceInfo { copy(logisticsCarrierDv = v) }
+    fun onLogCarrierType(idx: Int) = updateAdditionalInvoiceInfo { copy(logisticsCarrierTaxpayerTypeIndex = idx) }
+    fun onLogBoxes(v: String) = updateAdditionalInvoiceInfo { copy(logisticsBoxesQty = v.filter { it.isDigit() }) }
+    fun onLogWeightLb(v: String) = updateAdditionalInvoiceInfo {
         copy(logisticsTotalWeightLb = v.filter { it.isDigit() || it == '.' }.take(10))
     }
 
     /* ---------- Delivery setters ---------- */
-    fun onDelName(v: String) = updateState { copy(deliveryReceiverLegalName = v) }
-    fun onDelRuc(v: String) = updateState { copy(deliveryReceiverRuc = v) }
-    fun onDelDv(v: String) = updateState { copy(deliveryReceiverDv = v) }
-    fun onDelType(idx: Int) = updateState { copy(deliveryReceiverTaxpayerTypeIndex = idx) }
-    fun onDelPhone(v: String) = updateState { copy(deliveryContactPhone = v) }
-    fun onDelAltPhone(v: String) = updateState { copy(deliveryAltContactPhone = v) }
-    fun onCustomerAddressSelected(addressId: Long) = updateState {
+    fun onDelName(v: String) = updateAdditionalInvoiceInfo { copy(deliveryReceiverLegalName = v) }
+    fun onDelRuc(v: String) = updateAdditionalInvoiceInfo { copy(deliveryReceiverRuc = v) }
+    fun onDelDv(v: String) = updateAdditionalInvoiceInfo { copy(deliveryReceiverDv = v) }
+    fun onDelType(idx: Int) = updateAdditionalInvoiceInfo { copy(deliveryReceiverTaxpayerTypeIndex = idx) }
+    fun onDelPhone(v: String) = updateAdditionalInvoiceInfo { copy(deliveryContactPhone = v) }
+    fun onDelAltPhone(v: String) = updateAdditionalInvoiceInfo { copy(deliveryAltContactPhone = v) }
+    fun onCustomerAddressSelected(addressId: Long) = updateAdditionalInvoiceInfo {
         copy(selectedCustomerAddressId = addressId)
     }
 
-    fun onProvinceSelected(idx: Int) = updateState {
+    fun onProvinceSelected(idx: Int) = updateAdditionalInvoiceInfo {
         copy(
             deliveryProvinceIndex = idx,
             deliveryDistrictIndex = 0,
@@ -2634,14 +4453,14 @@ class PosViewModel(
         )
     }
 
-    fun onDistrictSelected(idx: Int) = updateState {
+    fun onDistrictSelected(idx: Int) = updateAdditionalInvoiceInfo {
         copy(deliveryDistrictIndex = idx, deliveryCorregIndex = 0)
     }
 
-    fun onCorregSelected(idx: Int) = updateState { copy(deliveryCorregIndex = idx) }
+    fun onCorregSelected(idx: Int) = updateAdditionalInvoiceInfo { copy(deliveryCorregIndex = idx) }
 
     /* ---------- Retention setters ---------- */
-    fun onRetentionSelected(idx: Int) = updateState {
+    fun onRetentionSelected(idx: Int) = updateAdditionalInvoiceInfo {
         val option = retentionOptionsList.getOrNull(idx) ?: retentionOptionsList.first()
         val nextAmount = when {
             option.code.isEmpty() -> ""
@@ -2651,7 +4470,7 @@ class PosViewModel(
         }
         copy(retentionCodeIndex = idx, retentionAmount = nextAmount)
     }
-    fun onRetentionAmount(v: String) = updateState {
+    fun onRetentionAmount(v: String) = updateAdditionalInvoiceInfo {
         // Only allow digits (no decimals), filter and limit to 3 digits (0-100)
         val filtered = v.filter { it.isDigit() }.take(3)
         // Validate that the value is between 0-100
@@ -2742,9 +4561,9 @@ class PosViewModel(
     }
 
     /* ---------- Exportation setters ---------- */
-    fun onIncoterm(v: String) = updateState { copy(exportIncoterm = v.uppercase()) }
-    fun onExportCurrency(v: String) = updateState { copy(exportCurrency = v.uppercase()) }
-    fun onPortOfLoading(v: String) = updateState { copy(exportPortOfLoading = v) }
+    fun onIncoterm(v: String) = updateAdditionalInvoiceInfo { copy(exportIncoterm = v.uppercase()) }
+    fun onExportCurrency(v: String) = updateAdditionalInvoiceInfo { copy(exportCurrency = v.uppercase()) }
+    fun onPortOfLoading(v: String) = updateAdditionalInvoiceInfo { copy(exportPortOfLoading = v) }
 
 
     // ---------- Totals helpers ----------
@@ -2762,16 +4581,25 @@ class PosViewModel(
         val currentMode = uiState.value.paymentFlowMode
         if (mode == currentMode) return
         if (mode == PaymentFlowMode.PAYMENT_LINK && !uiState.value.canCreatePaymentLink) return
+        if (mode == PaymentFlowMode.DRAFT && !uiState.value.canCreateDraft) return
+        if (mode == PaymentFlowMode.YAPPY_ONSITE && !selectedBillingPointHasYappyOnsiteDevice()) {
+            viewModelScope.launch {
+                snackbarService.show("Configura un dispositivo Yappy en caja para esta sucursal y punto de facturación.")
+            }
+            return
+        }
 
         analyticsService.logOrderCreationPaymentOptionSelected(
             mode = when (mode) {
                 PaymentFlowMode.MANUAL_OR_INSTALLMENTS -> "MANUAL"
                 PaymentFlowMode.PAYMENT_LINK -> "LINK"
+                PaymentFlowMode.YAPPY_ONSITE -> "YAPPY_ONSITE"
+                PaymentFlowMode.DRAFT -> "DRAFT"
             }
         )
 
         updateState {
-            if (mode == PaymentFlowMode.PAYMENT_LINK) {
+            if (mode == PaymentFlowMode.PAYMENT_LINK || mode == PaymentFlowMode.YAPPY_ONSITE || mode == PaymentFlowMode.DRAFT) {
                 business?.businessId?.let { businessId ->
                     localStorage.set(paymentLinkBadgeSeenKey(businessId), true)
                 }
@@ -2795,36 +4623,26 @@ class PosViewModel(
 
     fun checkPaymentMethodsConfigured(onResult: (Boolean) -> Unit) {
         val configured = if (financialProfileService.hasLoadedProfile()) {
-            financialProfileService.paymentsConfigured()
+            financialProfileService.paymentLinkMethodsConfigured()
         } else {
-            uiState.value.paymentsConfigured
+            uiState.value.paymentLinkConfigured
         }
-        updateState { copy(paymentsConfigured = configured) }
+        updateState { copy(paymentLinkConfigured = configured) }
         onResult(configured)
     }
 
-    fun savePaymentLinkCheckpointForResume() {
-        val businessId = business?.businessId ?: return
+    fun selectedBillingPointHasYappyOnsiteDevice(): Boolean {
         val state = uiState.value
-        val checkpoint = PaymentStepCheckpoint(
-            paymentFlowMode = state.paymentFlowMode.name,
-            tipAmount = state.tipAmount,
-            tipIsPercentage = state.tipIsPercentage,
-            charged = state.charged,
-            installments = state.installments.map {
-                InstallmentCheckpoint(
-                    amountCents = it.amountCents,
-                    dueDateIso = it.dueDateIso
-                )
-            },
-            otherPaymentDescription = state.otherPaymentDescription,
-            selectedDocTypeIndex = state.selectedDocTypeIndex,
-            selectedDocType = state.selectedDocType,
-            selectedOperationNatureIndex = state.selectedOperationNatureIndex,
-            selectedOperationNature = state.selectedOperationNature,
-            savedAtEpochSeconds = Clock.System.now().epochSeconds
-        )
-        localStorage.set(paymentLinkCheckpointKey(businessId), json.encodeToString(checkpoint))
+        val branch = state.branches.getOrNull(state.selectedBranchIndex)?.branchCode ?: return false
+        val billingPoint = state.billingPoints.getOrNull(state.selectedBillingPointIndex)?.billingPoint ?: return false
+        return state.yappyOnsiteConfigured &&
+            state.yappyOnsiteDevices.any {
+                it.branchCode == branch && it.billingPoint == billingPoint
+            }
+    }
+
+    fun savePaymentLinkCheckpointForResume() {
+        saveOrderCreationCheckpoint(OrderCreationStep.PAYMENT)
     }
 
     fun onPaymentScreenVisible() {
@@ -2833,17 +4651,96 @@ class PosViewModel(
                 businessId = businessId,
                 force = !financialProfileService.hasLoadedProfile()
             )
+            loadYappyOnsiteDevices()
         }
-        when (restorePaymentLinkCheckpointSnapshot()) {
-            RestoreCheckpointResult.RESTORED_AND_CLEARED -> {
-                // restored and cleared
-            }
-            RestoreCheckpointResult.CLEAR_INVALID_OR_STALE -> {
-                clearPaymentLinkCheckpoint()
-            }
-            RestoreCheckpointResult.KEEP_FOR_LATER,
-            RestoreCheckpointResult.NONE -> Unit
+        saveOrderCreationCheckpoint(OrderCreationStep.PAYMENT)
+    }
+
+    fun warmYappyOnsiteAvailabilityForNewOrder() {
+        if (uiState.value.flowMode != FlowMode.SALE) return
+        val businessId = business?.businessId ?: return
+        loadCachedYappyOnsiteDevices(businessId)
+        refreshPaymentConfigInBackground(
+            businessId = businessId,
+            force = !financialProfileService.hasLoadedProfile()
+        )
+        if (financialProfileService.yappyOnsiteConfigured() || uiState.value.yappyOnsiteConfigured) {
+            loadYappyOnsiteDevices(forceRefresh = true)
         }
+    }
+
+    private fun loadYappyOnsiteDevices(forceRefresh: Boolean = false) {
+        val businessId = business?.businessId ?: return
+        val current = uiState.value
+        if (!current.yappyOnsiteConfigured) {
+            updateState { copy(yappyOnsiteDevices = emptyList(), yappyOnsiteDevicesResolved = true) }
+            return
+        }
+        if (!forceRefresh && current.yappyOnsiteDevicesResolved) return
+        if (yappyOnsiteDevicesJob?.isActive == true) return
+
+        if (current.yappyOnsiteDevices.isEmpty()) {
+            updateState { copy(yappyOnsiteDevicesResolved = false) }
+        }
+        yappyOnsiteDevicesJob = viewModelScope.launch(Dispatchers.IO) {
+            runCatching {
+                val groups = paymentService.listYappyOnsiteGroups(businessId)
+                paymentService.listAllYappyOnsiteDevices(businessId, groups)
+            }.onSuccess { devices ->
+                saveYappyOnsiteDevicesCache(businessId, devices)
+                withContext(Dispatchers.Main) {
+                    updateState {
+                        copy(
+                            yappyOnsiteDevices = devices,
+                            yappyOnsiteDevicesResolved = true
+                        )
+                    }
+                }
+            }.onFailure {
+                withContext(Dispatchers.Main) {
+                    updateState {
+                        if (yappyOnsiteDevices.isEmpty()) {
+                            copy(
+                                yappyOnsiteDevices = emptyList(),
+                                yappyOnsiteDevicesResolved = true
+                            )
+                        } else {
+                            copy(yappyOnsiteDevicesResolved = true)
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    private fun loadCachedYappyOnsiteDevices(businessId: Int) {
+        val raw = localStorage.string(yappyOnsiteDevicesCacheKey(businessId)).orEmpty()
+        if (raw.isBlank()) return
+        val cachedDevices = runCatching {
+            json.decodeFromString<List<YappyOnsiteDevice>>(raw)
+        }.getOrNull() ?: return
+        updateState {
+            copy(
+                yappyOnsiteDevices = cachedDevices,
+                yappyOnsiteDevicesResolved = true
+            )
+        }
+    }
+
+    private fun saveYappyOnsiteDevicesCache(
+        businessId: Int,
+        devices: List<YappyOnsiteDevice>
+    ) {
+        runCatching {
+            localStorage.set(
+                yappyOnsiteDevicesCacheKey(businessId),
+                json.encodeToString(devices)
+            )
+        }
+    }
+
+    private fun yappyOnsiteDevicesCacheKey(businessId: Int): String {
+        return "$YAPPY_ONSITE_DEVICES_CACHE_KEY_PREFIX.$businessId"
     }
 
     private fun refreshPaymentConfigInBackground(
@@ -2860,8 +4757,19 @@ class PosViewModel(
             withContext(Dispatchers.IO) {
                 financialProfileService.refresh(businessId)
             }
-            val configured = financialProfileService.paymentsConfigured()
-            updateState { copy(paymentsConfigured = configured) }
+            updateState {
+                copy(
+                    paymentsConfigured = financialProfileService.paymentsConfigured(),
+                    paymentProfileResolved = financialProfileService.hasLoadedProfile(),
+                    paymentLinkConfigured = financialProfileService.paymentLinkMethodsConfigured(),
+                    yappyOnsiteConfigured = financialProfileService.yappyOnsiteConfigured(),
+                    yappyOnsiteDevicesResolved = if (financialProfileService.yappyOnsiteConfigured()) {
+                        yappyOnsiteDevicesResolved
+                    } else {
+                        true
+                    }
+                )
+            }
         }
     }
 
@@ -3014,80 +4922,6 @@ class PosViewModel(
         return "$PAYMENT_LINK_BADGE_SEEN_KEY_PREFIX:$businessId"
     }
 
-    private fun paymentLinkCheckpointKey(businessId: Int): String {
-        return "$PAYMENT_LINK_CHECKPOINT_KEY_PREFIX:$businessId"
-    }
-
-    private fun restorePaymentLinkCheckpointSnapshot(): RestoreCheckpointResult {
-        val businessId = business?.businessId ?: return RestoreCheckpointResult.NONE
-        val key = paymentLinkCheckpointKey(businessId)
-        val state = uiState.value
-
-        val rawCheckpoint = localStorage.string(key)
-        if (rawCheckpoint.isNullOrBlank()) {
-            val legacyRestore = localStorage.bool(key) == true
-            if (!legacyRestore) return RestoreCheckpointResult.NONE
-            return if (state.canCreatePaymentLink && state.paymentsConfigured) {
-                updateState { copy(paymentFlowMode = PaymentFlowMode.PAYMENT_LINK) }
-                clearPaymentLinkCheckpoint()
-                RestoreCheckpointResult.RESTORED_AND_CLEARED
-            } else {
-                RestoreCheckpointResult.KEEP_FOR_LATER
-            }
-        }
-
-        val checkpoint = runCatching {
-            json.decodeFromString<PaymentStepCheckpoint>(rawCheckpoint)
-        }.getOrNull() ?: return RestoreCheckpointResult.CLEAR_INVALID_OR_STALE
-
-        val nowEpochSeconds = Clock.System.now().epochSeconds
-        if (nowEpochSeconds - checkpoint.savedAtEpochSeconds > PAYMENT_LINK_CHECKPOINT_MAX_AGE_SECONDS) {
-            return RestoreCheckpointResult.CLEAR_INVALID_OR_STALE
-        }
-
-        if (state.flowMode != FlowMode.SALE || state.cart.isEmpty()) {
-            return RestoreCheckpointResult.KEEP_FOR_LATER
-        }
-
-        val restoredMode = runCatching {
-            PaymentFlowMode.valueOf(checkpoint.paymentFlowMode)
-        }.getOrDefault(PaymentFlowMode.MANUAL_OR_INSTALLMENTS)
-
-        val canRestorePaymentLinkMode = restoredMode != PaymentFlowMode.PAYMENT_LINK ||
-            (state.canCreatePaymentLink && state.paymentsConfigured)
-        if (!canRestorePaymentLinkMode) {
-            return RestoreCheckpointResult.KEEP_FOR_LATER
-        }
-
-        updateState {
-            copy(
-                paymentFlowMode = restoredMode,
-                tipAmount = checkpoint.tipAmount,
-                tipIsPercentage = checkpoint.tipIsPercentage,
-                charged = checkpoint.charged,
-                installments = checkpoint.installments.map {
-                    InstallmentUI(
-                        amountCents = it.amountCents,
-                        dueDateIso = it.dueDateIso
-                    )
-                },
-                otherPaymentDescription = checkpoint.otherPaymentDescription,
-                selectedDocTypeIndex = checkpoint.selectedDocTypeIndex,
-                selectedDocType = checkpoint.selectedDocType,
-                selectedOperationNatureIndex = checkpoint.selectedOperationNatureIndex,
-                selectedOperationNature = checkpoint.selectedOperationNature,
-                showPaymentLinkNewBadge = false
-            )
-        }
-        clearPaymentLinkCheckpoint()
-        return RestoreCheckpointResult.RESTORED_AND_CLEARED
-    }
-
-    private fun clearPaymentLinkCheckpoint() {
-        val businessId = business?.businessId ?: return
-        localStorage.deleteObject(paymentLinkCheckpointKey(businessId))
-    }
-
     /** Remaining invoice total minus manual payments and installments. */
     fun remainingToAllocate(): Long {
         val total = amountToCharge()
@@ -3141,6 +4975,11 @@ class PosViewModel(
         return formatLocalDate(Clock.System.now().toLocalDateTime(TimeZone.of("America/Panama")).date)
     }
 
+    private fun currentPanamaDateTimeIsoWithOffset(): String {
+        val dateTime = Clock.System.now().toLocalDateTime(TimeZone.of("America/Panama"))
+        return "${formatLocalDate(dateTime.date)}T${formatLocalTime(dateTime.time)}-05:00"
+    }
+
     private fun parseIsoLocalDate(value: String): LocalDate? {
         return try {
             if (value.length < 10) return null
@@ -3159,6 +4998,13 @@ class PosViewModel(
         val monthStr = date.monthNumber.toString().padStart(2, '0')
         val dayStr = date.dayOfMonth.toString().padStart(2, '0')
         return "$yearStr-$monthStr-$dayStr"
+    }
+
+    private fun formatLocalTime(time: LocalTime): String {
+        val hourStr = time.hour.toString().padStart(2, '0')
+        val minuteStr = time.minute.toString().padStart(2, '0')
+        val secondStr = time.second.toString().padStart(2, '0')
+        return "$hourStr:$minuteStr:$secondStr"
     }
 
     private fun formatLocalDateTimeSeconds(dateTime: LocalDateTime): String {

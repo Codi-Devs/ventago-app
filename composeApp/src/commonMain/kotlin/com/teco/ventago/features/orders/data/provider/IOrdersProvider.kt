@@ -6,6 +6,8 @@ import com.teco.ventago.features.orders.domain.models.requests.CreatePaymentLink
 import com.teco.ventago.features.orders.domain.models.requests.CreateOrderRequest
 import com.teco.ventago.features.orders.domain.models.requests.DeleteOrderRequest
 import com.teco.ventago.features.orders.domain.models.requests.ListOrdersRequest
+import com.teco.ventago.features.orders.domain.models.requests.PendingIntentCreateRequest
+import com.teco.ventago.features.orders.domain.models.requests.PendingIntentReleaseRequest
 import com.teco.ventago.features.orders.domain.models.requests.RejectAchPaymentRequest
 import com.teco.ventago.features.orders.domain.models.requests.RescheduleReceivablesRequest
 import com.teco.ventago.features.orders.domain.models.requests.RegisterManualPaymentsRequest
@@ -35,6 +37,16 @@ interface IOrdersProvider {
     ): ApiResponse
     suspend fun getInvoiceDocsRaw(businessId: Int, cufe: String): ApiResponse
     suspend fun createPaymentLink(businessId: Int, request: CreatePaymentLinkRequest): ApiResponse
+    suspend fun releasePendingPaymentIntent(
+        businessId: Int,
+        orderId: Int,
+        request: PendingIntentReleaseRequest
+    ): ApiResponse
+    suspend fun createPendingPaymentIntent(
+        businessId: Int,
+        orderId: Int,
+        request: PendingIntentCreateRequest
+    ): ApiResponse
     suspend fun getAchPaymentByIntent(businessId: Int, paymentIntentId: String): ApiResponse
     suspend fun approveAchPayment(businessId: Int, paymentIntentId: String): ApiResponse
     suspend fun rejectAchPayment(

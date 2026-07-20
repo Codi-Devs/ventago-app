@@ -2,11 +2,20 @@ package com.teco.ventago.features.orders.domain
 
 import com.teco.ventago.features.orders.domain.models.Order
 import com.teco.ventago.features.orders.domain.models.OrderPaymentLinkDto
+import com.teco.ventago.features.orders.domain.models.OrderStatus
 import kotlinx.datetime.Instant
 
 object PaymentLinkResolver {
 
-    private val terminalStatuses = setOf("completed", "expired", "cancelled", "canceled")
+    private val terminalStatuses = setOf(
+        "completed",
+        "expired",
+        "cancelled",
+        "canceled",
+        "succeeded",
+        "success",
+        "paid"
+    )
     private val pendingStatuses = setOf(
         "pending",
         "pending_review",
@@ -40,6 +49,8 @@ object PaymentLinkResolver {
     }
 
     fun resolveCurrent(order: Order): ResolvedLink? {
+        if (order.status == OrderStatus.CANCELLED) return null
+
         val paymentLinks = paymentLinksCandidates(order)
         val links = linksCandidates(order)
         val direct = directLegacyCandidate(order)
@@ -59,20 +70,23 @@ object PaymentLinkResolver {
     }
 
     fun hasPendingLink(order: Order): Boolean {
+        if (order.status == OrderStatus.CANCELLED) return false
         return paymentLinksCandidates(order).any { it.isPending } ||
             linksCandidates(order).any { it.isPending }
     }
 
     fun hasActiveLink(order: Order): Boolean {
+        if (order.status == OrderStatus.CANCELLED) return false
         return paymentLinksCandidates(order).any { it.isActive } ||
             directLegacyCandidate(order)?.isActive == true ||
             linksCandidates(order).any { it.isActive }
     }
 
     fun hasOpenLink(order: Order): Boolean {
-        return paymentLinksCandidates(order).any { !it.isTerminal } ||
-            directLegacyCandidate(order)?.let { !it.isTerminal } == true ||
-            linksCandidates(order).any { !it.isTerminal }
+        if (order.status == OrderStatus.CANCELLED) return false
+        return paymentLinksCandidates(order).any { it.isActive || it.isPending } ||
+            directLegacyCandidate(order)?.let { it.isActive || it.isPending } == true ||
+            linksCandidates(order).any { it.isActive || it.isPending }
     }
 
     private fun paymentLinksCandidates(order: Order): List<ResolvedLink> {

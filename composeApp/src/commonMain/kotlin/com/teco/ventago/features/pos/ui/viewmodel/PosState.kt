@@ -13,19 +13,46 @@ import com.teco.ventago.features.customers.domain.models.CustomerListItem
 import com.teco.ventago.features.invoicing.domain.PostCreateInvoiceWarningState
 import com.teco.ventago.features.invoicing.domain.models.BottomNoteSettings
 import com.teco.ventago.features.invoicing.domain.models.InvoiceStatus
+import com.teco.ventago.features.orders.domain.models.responses.OnsitePaymentDto
+import com.teco.ventago.features.orders.domain.models.responses.YappyOnsitePendingTransactionDto
 
 import com.teco.ventago.features.pos.domain.models.CartLine
+import com.teco.ventago.features.pos.domain.models.Discount
 import com.teco.ventago.features.pos.domain.models.Money
+import com.teco.ventago.features.pos.domain.models.Tax
 import com.teco.ventago.features.product.domain.model.Item
+import com.teco.ventago.features.payments.domain.models.YappyOnsiteDevice
+import com.teco.ventago.features.payments.domain.models.YappyOnsiteTransactionPayload
 import com.teco.ventago.features.quotes.domain.models.QuoteSettings
+import com.teco.ventago.utils.toDecimalString
 import com.teco.ventago.utils.ViewState
 import kotlinx.datetime.Clock
 import kotlinx.datetime.TimeZone
 import kotlinx.datetime.toLocalDateTime
+import kotlinx.serialization.Serializable
 import kotlin.math.roundToLong
 
-enum class PaymentFlowMode { MANUAL_OR_INSTALLMENTS, PAYMENT_LINK }
+enum class PaymentFlowMode { MANUAL_OR_INSTALLMENTS, PAYMENT_LINK, YAPPY_ONSITE, DRAFT }
+enum class PendingPaymentIntentMethod { PAYMENT_LINK, YAPPY_ONSITE }
+enum class PendingPaymentChangeExitAction { POS_START, HOME }
 enum class ProductViewMode { LIST, GRID }
+
+fun PendingPaymentIntentMethod.hiddenPaymentFlowMode(): PaymentFlowMode {
+    return when (this) {
+        PendingPaymentIntentMethod.PAYMENT_LINK -> PaymentFlowMode.PAYMENT_LINK
+        PendingPaymentIntentMethod.YAPPY_ONSITE -> PaymentFlowMode.YAPPY_ONSITE
+    }
+}
+
+fun shouldShowPendingPaymentChangeOption(
+    mode: PaymentFlowMode,
+    sourceMethod: PendingPaymentIntentMethod?,
+    normallyVisible: Boolean,
+): Boolean {
+    if (!normallyVisible) return false
+    if (mode == PaymentFlowMode.DRAFT) return sourceMethod == null
+    return sourceMethod?.hiddenPaymentFlowMode() != mode
+}
 
 private fun currentPanamaDateIso(): String {
     val date = Clock.System.now().toLocalDateTime(TimeZone.of("America/Panama")).date
@@ -52,6 +79,240 @@ data class InstallmentUI(
     val dueDateIso: String = "" // "YYYY-MM-DD"
 )
 
+enum class OrderCreationStep { CUSTOMER, PRODUCTS, CART, PAYMENT }
+
+internal data class PosDocumentTypeOption(
+    val code: String,
+    val label: String,
+) {
+    override fun toString(): String = "$code - $label"
+}
+
+internal object PosDocumentTypeOptions {
+    val selectable: List<PosDocumentTypeOption> = listOf(
+        PosDocumentTypeOption("01", "Factura de Operación Interna"),
+        PosDocumentTypeOption("02", "Factura de Importación"),
+        PosDocumentTypeOption("03", "Factura de Exportación"),
+        PosDocumentTypeOption("06", "Nota de Crédito Genérica"),
+        PosDocumentTypeOption("08", "Factura de Zona Franca"),
+        PosDocumentTypeOption("09", "Reembolso"),
+        PosDocumentTypeOption("10", "Factura de Operación Extranjera")
+    )
+
+    fun indexOf(code: String): Int = selectable.indexOfFirst { it.code == code }
+
+    fun codeAt(index: Int): String = selectable.getOrNull(index)?.code ?: "01"
+
+    fun sanitizedSelection(code: String, index: Int): Pair<Int, String> {
+        val resolvedIndex = indexOf(code)
+        return if (resolvedIndex >= 0) {
+            resolvedIndex to code
+        } else {
+            0 to "01"
+        }
+    }
+}
+
+@Serializable
+data class OrderCreationCheckpoint(
+    val version: Int = 1,
+    val businessId: Int,
+    val savedAtEpochSeconds: Long,
+    val currentStep: OrderCreationStep,
+    val data: OrderCreationCheckpointData,
+)
+
+@Serializable
+data class OrderCreationCheckpointData(
+    val branchCode: String? = null,
+    val billingPoint: String? = null,
+    val selectedDocTypeIndex: Int = 0,
+    val selectedDocType: String = "01",
+    val selectedOperationNatureIndex: Int = 0,
+    val selectedOperationNature: String = "01",
+    val invoiceIssueDateIso: String = currentPanamaDateIso(),
+    val customer: CustomerListItem? = null,
+    val finalCustomer: Boolean? = null,
+    val finalName: String? = null,
+    val finalEmail: String? = null,
+    val finalPhone: String? = null,
+    val finalIdTypeIndex: Int = 0,
+    val finalIdType: String = "cedula",
+    val finalIdNumber: String? = null,
+    val finalCustomerCountryCode: String? = null,
+    val cart: List<OrderCreationCartLineCheckpoint> = emptyList(),
+    val productSnapshots: Map<String, Item> = emptyMap(),
+    val taxExempt: Boolean = false,
+    val globalDiscountMode: GlobalDiscountMode = GlobalDiscountMode.NONE,
+    val globalDiscountPercent: Int = 0,
+    val globalDiscountFixedCents: Long = 0L,
+    val globalShippingCents: Long? = null,
+    val globalInsuranceCents: Long? = null,
+    val globalOtherChargesCents: Long? = null,
+    val referencedNoteCUFE: String = "",
+    val referencedCreatedAt: String = "",
+    val includeBottomNote: Boolean? = null,
+    val logisticsInfo: String = "",
+    val logisticsVehiclePlate: String = "",
+    val logisticsCarrierLegalName: String = "",
+    val logisticsCarrierRuc: String = "",
+    val logisticsCarrierDv: String = "",
+    val logisticsCarrierTaxpayerTypeIndex: Int = 0,
+    val logisticsBoxesQty: String = "",
+    val logisticsTotalWeightLb: String = "",
+    val deliveryReceiverLegalName: String = "",
+    val deliveryReceiverRuc: String = "",
+    val deliveryReceiverDv: String = "",
+    val deliveryReceiverTaxpayerTypeIndex: Int = 0,
+    val deliveryContactPhone: String = "",
+    val deliveryAltContactPhone: String = "",
+    val deliveryProvinceIndex: Int = 0,
+    val deliveryDistrictIndex: Int = 0,
+    val deliveryCorregIndex: Int = 0,
+    val selectedCustomerAddressId: Long? = null,
+    val retentionCodeIndex: Int = 0,
+    val retentionAmount: String = "",
+    val exportIncoterm: String = "",
+    val exportCurrency: String = "PAB",
+    val exportPortOfLoading: String = "",
+)
+
+@Serializable
+data class OrderCreationCartLineCheckpoint(
+    val lineId: String,
+    val itemId: Int,
+    val name: String,
+    val baseUnitPrice: Long,
+    val quantity: Double = 1.0,
+    val overrideUnitPrice: Long? = null,
+    val discount: OrderCreationDiscountCheckpoint? = null,
+    val tax: OrderCreationTaxCheckpoint? = null,
+    val notes: String? = null,
+    val shippingCents: Long? = null,
+    val insuranceCents: Long? = null,
+    val pharmaBatchNumber: String? = null,
+    val pharmaBatchQty: Int? = null,
+    val costCents: Long? = null,
+) {
+    fun toCartLine(): CartLine = CartLine(
+        lineId = lineId,
+        itemId = itemId,
+        name = name,
+        baseUnitPrice = baseUnitPrice,
+        quantity = quantity,
+        overrideUnitPrice = overrideUnitPrice,
+        discount = discount?.toDiscount(),
+        tax = tax?.toTax(),
+        notes = notes,
+        shippingCents = shippingCents,
+        insuranceCents = insuranceCents,
+        pharmaBatchNumber = pharmaBatchNumber,
+        pharmaBatchQty = pharmaBatchQty,
+        costCents = costCents,
+    )
+
+    companion object {
+        fun from(line: CartLine): OrderCreationCartLineCheckpoint =
+            OrderCreationCartLineCheckpoint(
+                lineId = line.lineId,
+                itemId = line.itemId,
+                name = line.name,
+                baseUnitPrice = line.baseUnitPrice,
+                quantity = line.quantity,
+                overrideUnitPrice = line.overrideUnitPrice,
+                discount = OrderCreationDiscountCheckpoint.from(line.discount),
+                tax = line.tax?.let(OrderCreationTaxCheckpoint::from),
+                notes = line.notes,
+                shippingCents = line.shippingCents,
+                insuranceCents = line.insuranceCents,
+                pharmaBatchNumber = line.pharmaBatchNumber,
+                pharmaBatchQty = line.pharmaBatchQty,
+                costCents = line.costCents,
+            )
+    }
+}
+
+@Serializable
+data class OrderCreationDiscountCheckpoint(
+    val mode: String,
+    val value: Long,
+) {
+    fun toDiscount(): Discount? = when (mode) {
+        MODE_AMOUNT -> Discount.Amount(value)
+        MODE_PERCENT -> Discount.Percent(value.toInt())
+        else -> null
+    }
+
+    companion object {
+        private const val MODE_AMOUNT = "AMOUNT"
+        private const val MODE_PERCENT = "PERCENT"
+
+        fun from(discount: Discount?): OrderCreationDiscountCheckpoint? = when (discount) {
+            is Discount.Amount -> OrderCreationDiscountCheckpoint(MODE_AMOUNT, discount.value)
+            is Discount.Percent -> OrderCreationDiscountCheckpoint(MODE_PERCENT, discount.bps.toLong())
+            null -> null
+        }
+    }
+}
+
+@Serializable
+data class OrderCreationTaxCheckpoint(
+    val id: Int,
+    val name: String,
+    val rateBps: Int,
+) {
+    fun toTax(): Tax = Tax(id = id, name = name, rateBps = rateBps)
+
+    companion object {
+        fun from(tax: Tax): OrderCreationTaxCheckpoint =
+            OrderCreationTaxCheckpoint(id = tax.id, name = tax.name, rateBps = tax.rateBps)
+    }
+}
+
+fun OrderCreationCheckpointData.hasMeaningfulUserData(): Boolean {
+    val hasFinalCustomerInfo = finalCustomer != null ||
+        !finalName.isNullOrBlank() ||
+        !finalEmail.isNullOrBlank() ||
+        !finalPhone.isNullOrBlank() ||
+        !finalIdNumber.isNullOrBlank() ||
+        !finalCustomerCountryCode.isNullOrBlank()
+
+    val hasGlobalAdjustments = globalDiscountMode != GlobalDiscountMode.NONE ||
+        globalDiscountPercent > 0 ||
+        globalDiscountFixedCents > 0L ||
+        (globalShippingCents ?: 0L) > 0L ||
+        (globalInsuranceCents ?: 0L) > 0L ||
+        (globalOtherChargesCents ?: 0L) > 0L
+
+    val hasAdditionalInvoiceInfo = logisticsInfo.isNotBlank() ||
+        logisticsVehiclePlate.isNotBlank() ||
+        logisticsCarrierLegalName.isNotBlank() ||
+        logisticsCarrierRuc.isNotBlank() ||
+        logisticsCarrierDv.isNotBlank() ||
+        logisticsBoxesQty.isNotBlank() ||
+        logisticsTotalWeightLb.isNotBlank() ||
+        deliveryReceiverLegalName.isNotBlank() ||
+        deliveryReceiverRuc.isNotBlank() ||
+        deliveryReceiverDv.isNotBlank() ||
+        deliveryContactPhone.isNotBlank() ||
+        deliveryAltContactPhone.isNotBlank() ||
+        selectedCustomerAddressId != null ||
+        exportIncoterm.isNotBlank() ||
+        exportCurrency != "PAB" ||
+        exportPortOfLoading.isNotBlank()
+
+    val hasRetention = retentionCodeIndex != 0 || retentionAmount.isNotBlank()
+
+    return customer != null ||
+        hasFinalCustomerInfo ||
+        referencedNoteCUFE.isNotBlank() ||
+        cart.isNotEmpty() ||
+        hasGlobalAdjustments ||
+        taxExempt ||
+        hasAdditionalInvoiceInfo ||
+        hasRetention
+}
+
 data class PosState(
     val items: List<Item> = listOf(),
     val visibleItems: List<Item> = listOf(),
@@ -75,11 +336,18 @@ data class PosState(
     val customer: CustomerListItem? = null,
     val customerQuery: String = "",
     val paymentsConfigured: Boolean = false,
-    val hasPaymentsBeta: Boolean = false,
+    val paymentProfileResolved: Boolean = false,
+    val paymentLinkConfigured: Boolean = false,
+    val yappyOnsiteConfigured: Boolean = false,
+    val yappyOnsiteDevices: List<YappyOnsiteDevice> = emptyList(),
+    val yappyOnsiteDevicesResolved: Boolean = false,
     val invoicingEnabled: Boolean = false,
     val canCreateInvoice: Boolean = false,
     val canCreateDraft: Boolean = false,
     val canCreatePaymentLink: Boolean = false,
+    val canConfigurePayments: Boolean = false,
+    val canConfigureYappyOnsite: Boolean = false,
+    val canCreateYappyOnsiteQr: Boolean = false,
     val canCreateQuote: Boolean = false,
     val canUpdateQuote: Boolean = false,
     val canUseCustomProduct: Boolean = false,
@@ -130,6 +398,12 @@ data class PosState(
     // Reference Note CUFE
     val referencedNoteCUFE: String = "",
     val referencedCreatedAt: String = "",
+    val maxCreditNoteAmountCents: Long? = null,
+    val sourceOrderNumber: String? = null,
+    val originalInvoiceNumber: String = "",
+    val originalInvoiceNumberError: String? = null,
+    val originalInvoiceEmissionDateIso: String = "",
+    val originalInvoiceEmissionDateError: String? = null,
 
     // === Additional Info Sheet ===
     val showAdditionalSheet: Boolean = false,
@@ -194,10 +468,33 @@ data class PosState(
     val invoiceStatus: InvoiceStatus = InvoiceStatus.NONE,
     val pdfDocument: String = "", // base64
     val paymentLink: String = "",
+    val createdOrderId: Int? = null,
+    val paymentLinkPolling: Boolean = false,
+    val paymentLinkPaymentDetected: Boolean = false,
+    val paymentLinkInvoicePrintAttemptedOrderId: Int? = null,
+    val paymentLinkManualPanelVisible: Boolean = false,
+    val paymentLinkManualErrorMessage: String? = null,
+    val pendingPaymentChangeSourceMethod: PendingPaymentIntentMethod? = null,
+    val pendingPaymentChangeSourceReleased: Boolean = false,
+    val pendingPaymentChangeOpen: Boolean = false,
+    val pendingPaymentChangeCompleted: Boolean = false,
+    val pendingPaymentChangeCancelDialogVisible: Boolean = false,
+    val pendingPaymentChangeCancelErrorMessage: String? = null,
+    val pendingPaymentChangeExitAction: PendingPaymentChangeExitAction? = null,
+    val onsitePayment: OnsitePaymentDto? = null,
+    val yappyOnsiteTransaction: YappyOnsiteTransactionPayload? = null,
+    val yappyOnsitePolling: Boolean = false,
+    val yappyOnsitePollingSuppressed: Boolean = false,
+    val yappyOnsiteInvoiceProcessingTimedOut: Boolean = false,
+    val yappyOnsitePrintAttemptedTransactionId: String? = null,
+    val yappyOnsiteExitCancelDialogVisible: Boolean = false,
+    val showYappyOnsitePendingConflictDialog: Boolean = false,
+    val yappyOnsitePendingConflict: YappyOnsitePendingTransactionDto? = null,
     val orderNumber: String = "",
     val postCreateInvoiceWarning: PostCreateInvoiceWarningState = PostCreateInvoiceWarningState(),
 
     val orderCreationFailed: Boolean = false,
+    val showOrderRestoreDialog: Boolean = false,
 
     override val loadingBottomSheet: LoadingBottomSheetState = LoadingBottomSheetState(),
 ) : LoadableState<PosState> {
@@ -208,6 +505,55 @@ data class PosState(
 
 enum class FlowMode {
     SALE, QUOTE
+}
+
+internal object PosNoteValidators {
+    const val ORIGINAL_INVOICE_NUMBER_REQUIRED_MESSAGE = "Ingresa el número de la factura original."
+    const val ORIGINAL_INVOICE_NUMBER_MAX_LENGTH_MESSAGE = "El número de la factura original no puede superar 22 caracteres."
+    const val ORIGINAL_INVOICE_DATE_REQUIRED_MESSAGE = "Selecciona la fecha de emisión de la factura original."
+
+    fun validateCreditNoteAmountLimit(
+        selectedDocType: String,
+        referencedNoteCUFE: String,
+        maxCreditNoteAmountCents: Long?,
+        requestedCreditNoteCents: Long,
+        sourceOrderNumber: String?
+    ): String? {
+        val isReferencedCreditNote = referencedNoteCUFE.isNotBlank() &&
+            selectedDocType in setOf("04", "06")
+        if (!isReferencedCreditNote) return null
+
+        val maxAmount = maxCreditNoteAmountCents ?: return null
+        if (requestedCreditNoteCents <= maxAmount) return null
+
+        val sourceLabel = sourceOrderNumber
+            ?.takeIf { it.isNotBlank() }
+            ?.let { " del pedido $it" }
+            .orEmpty()
+        return "El monto de la nota de crédito$sourceLabel no puede exceder el saldo disponible de $${maxAmount.toDecimalString()}."
+    }
+
+    fun validateOriginalInvoiceNumber(selectedDocType: String, value: String): String? {
+        if (selectedDocType != "06") return null
+        val normalized = value.trim()
+        return when {
+            normalized.isBlank() -> ORIGINAL_INVOICE_NUMBER_REQUIRED_MESSAGE
+            normalized.length > 22 -> ORIGINAL_INVOICE_NUMBER_MAX_LENGTH_MESSAGE
+            else -> null
+        }
+    }
+
+    fun validateOriginalInvoiceEmissionDate(selectedDocType: String, value: String): String? {
+        if (selectedDocType != "06") return null
+        return if (value.isBlank()) ORIGINAL_INVOICE_DATE_REQUIRED_MESSAGE else null
+    }
+
+    fun validateGenericCreditNoteReference(selectedDocType: String, number: String, emissionDateIso: String): List<String> {
+        return listOfNotNull(
+            validateOriginalInvoiceNumber(selectedDocType, number),
+            validateOriginalInvoiceEmissionDate(selectedDocType, emissionDateIso)
+        )
+    }
 }
 
 fun PosState.cartCustomerDisplay(): PosCartCustomerDisplay? {

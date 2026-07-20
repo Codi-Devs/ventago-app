@@ -142,6 +142,7 @@ import com.teco.ventago.features.orders.domain.models.OrderPaymentDto
 import com.teco.ventago.features.orders.domain.models.OrderStatus
 import com.teco.ventago.features.orders.domain.models.PaymentStatus
 import com.teco.ventago.features.orders.domain.models.ReceivableTermDto
+import com.teco.ventago.features.orders.domain.models.RelatedDocument
 import com.teco.ventago.features.orders.ui.order_details.viewModel.OrderDetailsState
 import com.teco.ventago.features.orders.ui.order_details.viewModel.OrderDetailsUiEvent
 import com.teco.ventago.features.orders.ui.order_details.viewModel.OrdersDetailsViewModel
@@ -153,6 +154,7 @@ import com.teco.ventago.features.orders.ui.order_details.viewModel.RescheduleSta
 import com.teco.ventago.features.orders.ui.order_details.viewModel.VoidPaymentState
 import com.teco.ventago.features.quotes.ui.preview.PdfPreview
 import com.teco.ventago.navigation.AchPaymentDetailsRoute
+import com.teco.ventago.navigation.OrdersScreenRoute
 import com.teco.ventago.navigation.PosNoteRoute
 import com.teco.ventago.navigation.PosScreens
 import com.teco.ventago.utils.DateFormat
@@ -277,8 +279,19 @@ fun OrderDetailsActions(backStackEntry: NavBackStackEntry?,  navigateAny: (Any) 
                     expanded = menuExpanded,
                     onDismissRequest = { menuExpanded = false }
                 ) {
+                    val remainingCreditNoteCents = order.remainingCreditNoteCapacityCents()
+                    val canCreateCreditNote = remainingCreditNoteCents > 0L
                     DropdownMenuItem(
-                        text = { Text("Generar nota de crédito") },
+                        text = {
+                            Text(
+                                if (canCreateCreditNote) {
+                                    "Generar nota de crédito"
+                                } else {
+                                    "Límite de notas de crédito alcanzado"
+                                }
+                            )
+                        },
+                        enabled = canCreateCreditNote,
                         onClick = {
                             menuExpanded = false
                             val cufe = order.externalInvoiceNumber ?: return@DropdownMenuItem
@@ -295,7 +308,9 @@ fun OrderDetailsActions(backStackEntry: NavBackStackEntry?,  navigateAny: (Any) 
                                     customerRuc = order.customer?.ruc,
                                     customerStatus = order.customer?.status ?: 1,
                                     customerInvoiceID = order.customer?.customerInvoiceID,
-                                    orderLinesJson = Json.encodeToString(order.lines)
+                                    orderLinesJson = Json.encodeToString(order.lines),
+                                    maxCreditNoteAmountCents = remainingCreditNoteCents,
+                                    sourceOrderNumber = order.internalNumber
                                 )
                             )
                         }
@@ -387,6 +402,9 @@ fun OrderDetailsScreen(
         }
         return
     }
+    LaunchedEffect(order.id) {
+        viewModel.hydrateSelectedOrderDetailsIfNeeded()
+    }
 
     val canShowCancelButton = order.invoiceStatus != InvoiceStatus.ISSUED.id &&
             viewModel.isOrderCancellable(order.status)
@@ -396,6 +414,13 @@ fun OrderDetailsScreen(
     val resolvedPaymentLink = PaymentLinkResolver.resolveCurrent(order)
     val canGeneratePaymentLink = viewModel.canGeneratePaymentLink(order)
     val canCopyOrSharePaymentLink = viewModel.canCopyOrSharePaymentLink(order)
+    val hasActiveYappyOnsiteIntent = (
+        order.paymentFlowType.equals("yappy_onsite", ignoreCase = true) ||
+            order.paymentFlowType.equals("in_place", ignoreCase = true)
+        ) &&
+        order.paymentStatus != PaymentStatus.PAID.id &&
+        order.paymentStatus != PaymentStatus.CANCELLED.id
+    val canManageReceivables = order.supportsReceivableActions()
 
     Column(
         modifier = Modifier
@@ -411,7 +436,7 @@ fun OrderDetailsScreen(
         OrderItemsCard(order = order)
 
         // Receivables card
-        if (order.status != OrderStatus.CANCELLED) {
+        if (order.status != OrderStatus.CANCELLED && canManageReceivables) {
             OrderReceivablesCard(
                 order = order,
                 pendingCents = pendingCents,
@@ -441,6 +466,13 @@ fun OrderDetailsScreen(
                 }
             )
         }
+
+        OrderRelatedDocumentsCard(
+            relatedDocuments = order.relatedDocuments,
+            onOpenOrder = { orderNumber ->
+                navigate(OrdersScreenRoute(orderNumber = orderNumber), null)
+            }
+        )
 
         // Customer card
         order.displayCustomerSnapshot()?.let { customer ->
@@ -498,11 +530,12 @@ fun OrderDetailsScreen(
 
             val hasIssuedAdditionalActions = order.invoiceStatus == InvoiceStatus.ISSUED.id &&
                     ((canShowReprintButton || uiState.reprintInFlight) ||
-                            (uiState.canMarkPaid && viewModel.totalOpenReceivableCents(order) > 0L))
+                            (canManageReceivables && uiState.canMarkPaid && viewModel.totalOpenReceivableCents(order) > 0L))
             val hasDraftAdditionalActions = (order.invoiceStatus == InvoiceStatus.NONE.id ||
                     order.invoiceStatus == InvoiceStatus.PENDING.id) && canShowCancelButton
-            val hasPaymentLinkActions = uiState.canCreatePaymentLink &&
-                    (canGeneratePaymentLink || canCopyOrSharePaymentLink)
+            val hasPaymentLinkActions = canManageReceivables &&
+                    uiState.canCreatePaymentLink &&
+                    (canGeneratePaymentLink || canCopyOrSharePaymentLink || hasActiveYappyOnsiteIntent)
             val hasAdditionalActions = hasIssuedAdditionalActions ||
                     hasDraftAdditionalActions ||
                     hasPaymentLinkActions ||
@@ -522,7 +555,7 @@ fun OrderDetailsScreen(
                         onClick = { viewModel.reprintTicket() }
                     )
                 }
-                if (uiState.canMarkPaid && viewModel.totalOpenReceivableCents(order) > 0L) {
+                if (canManageReceivables && uiState.canMarkPaid && viewModel.totalOpenReceivableCents(order) > 0L) {
                     OrderOutlinedActionButton(
                         label = "Registrar pago",
                         icon = Icons.Rounded.Payment,
@@ -546,7 +579,7 @@ fun OrderDetailsScreen(
                 )
             }
 
-            if (uiState.canCreatePaymentLink) {
+            if (canManageReceivables && uiState.canCreatePaymentLink) {
                 if (canGeneratePaymentLink) {
                     OrderOutlinedActionButton(
                         label = "Generar Link de Pago",
@@ -555,8 +588,40 @@ fun OrderDetailsScreen(
                         onClick = { viewModel.openGeneratePaymentLinkSheet() }
                     )
                 }
+                if (hasActiveYappyOnsiteIntent && !canCopyOrSharePaymentLink) {
+                    OrderOutlinedActionButton(
+                        label = "Cambiar a pago manual",
+                        icon = Icons.Rounded.Payment,
+                        color = MaterialTheme.colorScheme.primary,
+                        onClick = { viewModel.showManualPaymentSheet(true) }
+                    )
+                    OrderOutlinedActionButton(
+                        label = "Crear link de pago",
+                        icon = Icons.Rounded.Link,
+                        color = MaterialTheme.colorScheme.secondary,
+                        onClick = { viewModel.createReplacementPaymentLink() }
+                    )
+                }
                 if (canCopyOrSharePaymentLink) {
                     val linkUrl = resolvedPaymentLink?.url.orEmpty()
+                    OrderOutlinedActionButton(
+                        label = "Cambiar a pago manual",
+                        icon = Icons.Rounded.Payment,
+                        color = MaterialTheme.colorScheme.primary,
+                        onClick = { viewModel.showManualPaymentSheet(true) }
+                    )
+                    OrderOutlinedActionButton(
+                        label = "Crear nuevo link de pago",
+                        icon = Icons.Rounded.Link,
+                        color = MaterialTheme.colorScheme.secondary,
+                        onClick = { viewModel.createReplacementPaymentLink() }
+                    )
+                    OrderOutlinedActionButton(
+                        label = "Cambiar a Yappy en caja",
+                        icon = Icons.Rounded.Payment,
+                        color = MaterialTheme.colorScheme.secondary,
+                        onClick = { viewModel.createReplacementYappyOnsite() }
+                    )
                     OrderOutlinedActionButton(
                         label = "Copiar Link de Pago",
                         icon = Icons.Rounded.ContentCopy,
@@ -641,6 +706,95 @@ fun OrderDetailsScreen(
                     }
                 }
             }
+        }
+
+        uiState.replacementYappyOnsite?.let { onsite ->
+            val payload = uiState.replacementYappyOnsitePayload
+            val transaction = payload?.transaction
+            val invoice = payload?.invoice
+            val status = transaction?.status?.ifBlank { onsite.status } ?: onsite.status.ifBlank { "created" }
+            val invoiceStatus = invoice?.status?.takeIf { it != 0 } ?: payload?.order?.invoiceStatus ?: 0
+            val terminal = status.lowercase() in setOf("cancelled", "canceled", "expired", "returned") ||
+                invoiceStatus == 2 ||
+                invoiceStatus == 3
+
+            LaunchedEffect(onsite.transactionId) {
+                viewModel.startReplacementYappyOnsitePolling(onsite.transactionId)
+            }
+
+            ModalBottomSheet(
+                containerColor = MaterialTheme.colorScheme.background,
+                onDismissRequest = viewModel::dismissReplacementYappyOnsite,
+                sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
+            ) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(16.dp)
+                        .navigationBarsPadding(),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    Text("Yappy en caja", style = titleMediumBold())
+                    Text(
+                        "Muestra este QR al cliente para completar el pago.",
+                        style = bodyMedium(color = MaterialTheme.colorScheme.onSurfaceVariant),
+                        textAlign = TextAlign.Center,
+                    )
+                    val qrHash = transaction?.qrHash?.ifBlank { onsite.qrHash } ?: onsite.qrHash
+                    val bitmap = remember(qrHash) {
+                        generateQR(500, 500, qrHash)
+                    }
+                    bitmap.toImageBitmap()?.let {
+                        Image(
+                            painter = BitmapPainter(it),
+                            contentDescription = "QR Yappy en caja",
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(300.dp)
+                        )
+                    }
+                    InfoRow("Transacción", transaction?.transactionId?.ifBlank { onsite.transactionId } ?: onsite.transactionId.ifBlank { "-" })
+                    InfoRow("Monto", "${transaction?.currency?.ifBlank { onsite.currency } ?: onsite.currency.ifBlank { "USD" }} ${transaction?.amount?.ifBlank { onsite.amount } ?: onsite.amount}")
+                    InfoRow("Estado del pago", status)
+                    InfoRow("Factura", replacementInvoiceLabel(invoiceStatus))
+                    InfoRow("Factura POS", payload?.order?.orderNumber?.ifBlank { uiState.order?.internalNumber.orEmpty() } ?: uiState.order?.internalNumber.orEmpty().ifBlank { "-" })
+                    if (uiState.replacementYappyOnsitePolling) {
+                        Text(
+                            "Actualizando estado...",
+                            style = labelSmall(color = MaterialTheme.colorScheme.onSurfaceVariant),
+                        )
+                    }
+                    if (!terminal) {
+                        OutlinedButtonM(onClick = viewModel::requestCancelReplacementYappyOnsite) {
+                            Icon(Icons.Rounded.Close, contentDescription = null, modifier = Modifier.size(18.dp))
+                            Spacer(Modifier.width(8.dp))
+                            Text("Cancelar cobro")
+                        }
+                    }
+                    ButtonM(onClick = viewModel::dismissReplacementYappyOnsite) {
+                        Text("Cerrar")
+                    }
+                }
+            }
+        }
+
+        if (uiState.showReplacementYappyCancelDialog) {
+            AlertDialog(
+                onDismissRequest = viewModel::dismissCancelReplacementYappyOnsiteDialog,
+                title = { Text("Cancelar cobro") },
+                text = { Text("El QR quedará inactivo y el cliente ya no podrá completar este pago.") },
+                confirmButton = {
+                    TextButton(onClick = viewModel::cancelReplacementYappyOnsite) {
+                        Text("Cancelar cobro")
+                    }
+                },
+                dismissButton = {
+                    TextButton(onClick = viewModel::dismissCancelReplacementYappyOnsiteDialog) {
+                        Text("Mantener QR")
+                    }
+                },
+            )
         }
 
         if (uiState.generatePaymentLinkState.showSheet) {
@@ -1159,7 +1313,7 @@ fun OrderDetailsScreen(
             )
         }
 
-        if (uiState.registerPaymentState.showSheet) {
+        if (uiState.registerPaymentState.showSheet && canManageReceivables) {
             ModalBottomSheet(
                 containerColor = MaterialTheme.colorScheme.background,
                 onDismissRequest = {
@@ -1199,7 +1353,7 @@ fun OrderDetailsScreen(
             }
         }
 
-        if (uiState.rescheduleState.showSheet) {
+        if (uiState.rescheduleState.showSheet && canManageReceivables) {
             ModalBottomSheet(
                 containerColor = MaterialTheme.colorScheme.background,
                 onDismissRequest = { viewModel.closeRescheduleSheet() },
@@ -1407,6 +1561,104 @@ private fun OrderItemsCard(order: Order) {
                 }
             }
         }
+    }
+}
+
+@Composable
+private fun OrderRelatedDocumentsCard(
+    relatedDocuments: List<RelatedDocument>,
+    onOpenOrder: (String) -> Unit
+) {
+    if (relatedDocuments.isEmpty()) return
+
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        elevation = CardDefaults.cardElevation(2.dp),
+        colors = CardDefaults.cardColors(containerColor = cardContainerColor())
+    ) {
+        Column(modifier = Modifier.padding(16.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                CardSectionIcon(imageVector = Icons.Rounded.Receipt)
+                Spacer(modifier = Modifier.width(8.dp))
+                Text(
+                    text = "Documentos relacionados",
+                    style = bodyMediumBold()
+                )
+            }
+
+            Spacer(modifier = Modifier.height(10.dp))
+            RelatedDocumentsTableHeader()
+            Spacer(modifier = Modifier.height(6.dp))
+
+            relatedDocuments.forEachIndexed { index, document ->
+                RelatedDocumentRow(
+                    document = document,
+                    onOpenOrder = onOpenOrder
+                )
+                if (index < relatedDocuments.lastIndex) {
+                    Divider(modifier = Modifier.padding(vertical = 6.dp))
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun RelatedDocumentsTableHeader() {
+    Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+        Text(
+            text = "Pedido",
+            style = labelSmall(MaterialTheme.colorScheme.onSurfaceVariant),
+            modifier = Modifier.weight(1.4f)
+        )
+        Text(
+            text = "Tipo",
+            style = labelSmall(MaterialTheme.colorScheme.onSurfaceVariant),
+            modifier = Modifier.weight(1f)
+        )
+        Text(
+            text = "Monto",
+            style = labelSmall(MaterialTheme.colorScheme.onSurfaceVariant),
+            textAlign = TextAlign.End,
+            modifier = Modifier.weight(0.9f)
+        )
+    }
+}
+
+@Composable
+private fun RelatedDocumentRow(
+    document: RelatedDocument,
+    onOpenOrder: (String) -> Unit
+) {
+    Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+        Text(
+            text = document.orderNumber,
+            style = bodyMedium(color = MaterialTheme.colorScheme.secondary).copy(
+                textDecoration = TextDecoration.Underline
+            ),
+            maxLines = 2,
+            overflow = TextOverflow.Ellipsis,
+            modifier = Modifier
+                .weight(1.4f)
+                .clickable { onOpenOrder(document.orderNumber) }
+        )
+        Text(
+            text = document.displayOrderType(),
+            style = bodyMedium(),
+            maxLines = 2,
+            overflow = TextOverflow.Ellipsis,
+            modifier = Modifier
+                .weight(1f)
+                .padding(horizontal = 6.dp)
+        )
+        Text(
+            text = formatNumberToMoney(document.totalAmount),
+            style = bodyMediumBold(),
+            textAlign = TextAlign.End,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.weight(0.9f)
+        )
     }
 }
 
@@ -2006,6 +2258,16 @@ private fun OrderCustomerCard(customer: com.teco.ventago.features.orders.domain.
                 }
             }
         }
+    }
+}
+
+private fun replacementInvoiceLabel(status: Int): String {
+    return when (status) {
+        1 -> "Pendiente"
+        2 -> "Emitida"
+        3 -> "Fallida"
+        4 -> "Anulada"
+        else -> "Sin emitir"
     }
 }
 

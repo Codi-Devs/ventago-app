@@ -198,6 +198,8 @@
     <string name="paypal_charges">PayPal Charges</string>
     <string name="paypal">PayPal</string>
     <string name="yappy">Yappy</string>
+    <string name="yappy_onsite">Yappy onsite</string>
+    <string name="tilopay">TiloPay</string>
     <string name="domain">Web Domain</string>
     <string name="accept_payments_paypal">Accept payments from your customers directly with PayPal</string>
     <string name="fast_secure_professional">Fast, secure and professional</string>
@@ -227,6 +229,7 @@
 
     <string name="payment_methods">Payment Methods</string>
     <string name="commissions">Commissions</string>
+    <string name="commissions_fees">Comisiones fees</string>
     <string name="paypal_commissions">Note: Our platform charges a 2% fee for payments made through PayPal. This fee is independent and additional to PayPal’s own transaction fees, which are managed directly by PayPal.</string>
     <string name="check_paypal_commissions">Check PayPal fees</string>
     <string name="bank_transfer">Bank Transfer</string>
@@ -492,6 +495,9 @@
     <string name="email_not_found">The email %1$s do not exists in VentaGo app. Do you want to register instead of?</string>
     <string name="sign_out">Sign Out</string>
     <string name="delete_account">Delete Account</string>
+    <string name="delete_account_confirm_title">Delete account?</string>
+    <string name="delete_account_confirm_message">This will permanently delete your VentaGo account and remove access to your account data. This action cannot be undone.</string>
+    <string name="delete_account_failed">We could not delete your account. Please try again.</string>
     <string name="retry">Retry</string>
     <string name="authz_access_denied_title">Access restricted</string>
     <string name="authz_access_denied_message">Your account does not have permission to open any available screen in the app right now.</string>
@@ -666,4 +672,8 @@
     <string name="customers_delete_customer_confirm_message">Are you sure you want to delete this customer?</string>
     <string name="customers_delete_address_confirm_title">Delete address</string>
     <string name="customers_delete_address_confirm_message">Are you sure you want to delete this billing address?</string>
+    <string name="pos_order_restore_title">Unsaved order in progress</string>
+    <string name="pos_order_restore_message">You have an unsaved order in progress. Do you want to continue where you left off?</string>
+    <string name="pos_order_restore_confirm">Yes, restore</string>
+    <string name="pos_order_restore_dismiss">No, start over</string>
 </resources>

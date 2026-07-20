@@ -11,6 +11,7 @@ import androidx.navigation.NavBackStackEntry
 import com.teco.ventago.design_system.buttons.ButtonM
 import com.teco.ventago.design_system.organism.CartOrganism
 import com.teco.ventago.features.pos.ui.viewmodel.FlowMode
+import com.teco.ventago.features.pos.ui.viewmodel.OrderCreationStep
 import com.teco.ventago.features.pos.ui.viewmodel.PosViewModel
 import com.teco.ventago.navigation.PosScreens
 import org.jetbrains.compose.resources.stringResource
@@ -49,6 +50,7 @@ fun CartScreenBottomBar(backStackEntry: NavBackStackEntry?, navigate: (PosScreen
                     return@ButtonM
                 }
             }
+            viewModel.saveOrderCreationCheckpoint(OrderCreationStep.CART)
             navigate(if (isQuoteFlow) PosScreens.QuoteSummaryScreen else PosScreens.PaymentScreen)
         },
         modifier = Modifier.padding(start = 16.dp, end = 16.dp, bottom = 16.dp)

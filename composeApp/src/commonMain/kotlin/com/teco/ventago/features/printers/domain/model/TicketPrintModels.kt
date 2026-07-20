@@ -94,6 +94,8 @@ sealed class TicketBlock {
         val data: String,
         val size: Int = 8,
         val widthHintPercent: Int? = null,
+        val version: Int? = null,
+        val errorCorrection: String = "M",
         override val alignment: PrintAlignment = PrintAlignment.CENTER,
         override val style: TicketBlockStyle = TicketBlockStyle(),
     ) : TicketBlock()
@@ -117,11 +119,25 @@ enum class PrintAlignment {
 const val EXTRA_NARROW_PAPER_COLUMNS = 34
 const val NARROW_PAPER_COLUMNS = 32
 const val WIDE_PAPER_COLUMNS = 48
+const val EXTRA_NARROW_CANVAS_WIDTH_DOTS = 420
+const val NARROW_CANVAS_WIDTH_DOTS = 384
+const val WIDE_CANVAS_WIDTH_DOTS = 576
+
+data class TicketPaperProfile(
+    val lineChars: Int,
+    val canvasWidthDots: Int,
+)
 
 fun Int.toPaperColumns(): Int = when (this) {
     in Int.MIN_VALUE..57 -> EXTRA_NARROW_PAPER_COLUMNS
     58 -> NARROW_PAPER_COLUMNS
     else -> WIDE_PAPER_COLUMNS
+}
+
+fun Int.toTicketPaperProfile(): TicketPaperProfile = when (this) {
+    in Int.MIN_VALUE..57 -> TicketPaperProfile(EXTRA_NARROW_PAPER_COLUMNS, EXTRA_NARROW_CANVAS_WIDTH_DOTS)
+    58 -> TicketPaperProfile(NARROW_PAPER_COLUMNS, NARROW_CANVAS_WIDTH_DOTS)
+    else -> TicketPaperProfile(WIDE_PAPER_COLUMNS, WIDE_CANVAS_WIDTH_DOTS)
 }
 
 fun Int.isNarrowPaperWidth(): Boolean = this <= 58
@@ -141,8 +157,10 @@ sealed class PrintCommand {
     ) : PrintCommand()
     data class Qr(
         val data: String,
-        val alignment: PrintAlignment = PrintAlignment.CENTER,
+        val alignment: PrintAlignment = PrintAlignment.LEFT,
         val size: Int = 8,
+        val xPositionDots: Int = 0,
+        val errorCorrection: String = "M",
     ) : PrintCommand()
 
     data class Cut(val fullCut: Boolean = true) : PrintCommand()

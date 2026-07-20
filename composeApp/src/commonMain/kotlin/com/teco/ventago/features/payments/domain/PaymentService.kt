@@ -7,9 +7,22 @@ import com.teco.ventago.features.payments.data.repository.IYappyRepository
 import com.teco.ventago.features.payments.domain.models.AchAccount
 import com.teco.ventago.features.payments.domain.models.AchAccountConfigRequest
 import com.teco.ventago.features.payments.domain.models.AchStatus
+import com.teco.ventago.features.payments.domain.models.DirectCheckoutRequest
+import com.teco.ventago.features.payments.domain.models.DirectCheckoutResponse
 import com.teco.ventago.features.payments.domain.models.FeeBatchItem
 import com.teco.ventago.features.payments.domain.models.FeeSummary
 import com.teco.ventago.features.payments.domain.models.FeeTransactionItem
+import com.teco.ventago.features.payments.domain.models.TiloPayCredentialsRequest
+import com.teco.ventago.features.payments.domain.models.TiloPayStatus
+import com.teco.ventago.features.payments.domain.models.YappyOnsiteCancelPendingRequest
+import com.teco.ventago.features.payments.domain.models.YappyOnsiteCancelPendingResponse
+import com.teco.ventago.features.payments.domain.models.YappyOnsiteCancelRequest
+import com.teco.ventago.features.payments.domain.models.YappyOnsiteDevice
+import com.teco.ventago.features.payments.domain.models.YappyOnsiteDeviceConfigRequest
+import com.teco.ventago.features.payments.domain.models.YappyOnsiteGroup
+import com.teco.ventago.features.payments.domain.models.YappyOnsiteGroupConfigRequest
+import com.teco.ventago.features.payments.domain.models.YappyOnsiteTransactionPayload
+import com.teco.ventago.features.payments.domain.models.YappyOnsiteTransactionStatus
 
 
 class PaymentService(
@@ -40,6 +53,8 @@ class PaymentService(
                         paymentMethods = profile.paymentSummary.paymentMethods.copy(
                             paypal = profile.paymentSummary.paymentMethods.paypal.copy(
                                 linkedAccount = false,
+                                configured = false,
+                                enabled = false,
                                 email = ""
                             )
                         )
@@ -167,6 +182,34 @@ class PaymentService(
         return success
     }
 
+    suspend fun getTiloPayStatus(businessId: Int): TiloPayStatus {
+        return paymentsRepository.getTiloPayStatus(businessId)
+    }
+
+    suspend fun configureTiloPayCredentials(
+        businessId: Int,
+        apiUser: String,
+        password: String,
+        apiKey: String
+    ): TiloPayStatus {
+        val status = paymentsRepository.configureTiloPayCredentials(
+            businessId = businessId,
+            request = TiloPayCredentialsRequest(
+                apiUser = apiUser,
+                password = password,
+                apiKey = apiKey,
+            )
+        )
+        financialProfileService.refresh(businessId)
+        return status
+    }
+
+    suspend fun disconnectTiloPay(businessId: Int): TiloPayStatus {
+        val status = paymentsRepository.disconnectTiloPay(businessId)
+        financialProfileService.refresh(businessId)
+        return status
+    }
+
     suspend fun getFeesSummary(businessId: Int, currencyCode: String): FeeSummary {
         return paymentsRepository.getFeesSummary(businessId, currencyCode)
     }
@@ -177,6 +220,7 @@ class PaymentService(
         size: Int,
         status: String?,
         paymentMethod: String?,
+        batchId: Long? = null,
         currencyCode: String
     ): Pair<List<FeeTransactionItem>, Int> {
         return paymentsRepository.getFeeTransactions(
@@ -185,6 +229,7 @@ class PaymentService(
             size = size,
             status = status,
             paymentMethod = paymentMethod,
+            batchId = batchId,
             currencyCode = currencyCode
         )
     }
@@ -202,6 +247,137 @@ class PaymentService(
             size = size,
             status = status,
             currencyCode = currencyCode
+        )
+    }
+
+    suspend fun configureYappyOnsiteGroup(
+        businessId: Int,
+        groupId: String,
+        request: YappyOnsiteGroupConfigRequest
+    ): Boolean {
+        val success = paymentsRepository.configureYappyOnsiteGroup(businessId, groupId, request)
+        if (success) {
+            financialProfileService.refresh(businessId)
+        }
+        return success
+    }
+
+    suspend fun listYappyOnsiteGroups(businessId: Int): List<YappyOnsiteGroup> {
+        return paymentsRepository.listYappyOnsiteGroups(businessId)
+    }
+
+    suspend fun deleteYappyOnsiteGroup(businessId: Int, groupId: String): Boolean {
+        val success = paymentsRepository.deleteYappyOnsiteGroup(businessId, groupId)
+        if (success) {
+            financialProfileService.refresh(businessId)
+        }
+        return success
+    }
+
+    suspend fun registerYappyOnsiteDevice(
+        businessId: Int,
+        groupId: String,
+        request: YappyOnsiteDeviceConfigRequest
+    ): Boolean {
+        val success = paymentsRepository.registerYappyOnsiteDevice(businessId, groupId, request)
+        if (success) {
+            financialProfileService.refresh(businessId)
+        }
+        return success
+    }
+
+    suspend fun updateYappyOnsiteDevice(
+        businessId: Int,
+        groupId: String,
+        deviceId: String,
+        request: YappyOnsiteDeviceConfigRequest
+    ): Boolean {
+        val success = paymentsRepository.updateYappyOnsiteDevice(businessId, groupId, deviceId, request)
+        if (success) {
+            financialProfileService.refresh(businessId)
+        }
+        return success
+    }
+
+    suspend fun deleteYappyOnsiteDevice(
+        businessId: Int,
+        groupId: String,
+        deviceId: String
+    ): Boolean {
+        val success = paymentsRepository.deleteYappyOnsiteDevice(businessId, groupId, deviceId)
+        if (success) {
+            financialProfileService.refresh(businessId)
+        }
+        return success
+    }
+
+    suspend fun listYappyOnsiteDevices(businessId: Int, groupId: String): List<YappyOnsiteDevice> {
+        return paymentsRepository.listYappyOnsiteDevices(businessId, groupId)
+    }
+
+    suspend fun listAllYappyOnsiteDevices(businessId: Int, groups: List<YappyOnsiteGroup>): List<YappyOnsiteDevice> {
+        return groups.flatMap { group ->
+            group.groupId
+                .takeIf { it.isNotBlank() }
+                ?.let { groupId ->
+                    paymentsRepository.listYappyOnsiteDevices(businessId, groupId)
+                        .map { device ->
+                            device.copy(
+                                groupId = device.groupId.ifBlank { groupId },
+                                branchCode = device.branchCode.ifBlank { group.branchCode },
+                            )
+                        }
+                }
+                ?: emptyList()
+        }
+    }
+
+    suspend fun getYappyOnsiteTransaction(
+        businessId: Int,
+        transactionId: String
+    ): YappyOnsiteTransactionPayload {
+        return paymentsRepository.getYappyOnsiteTransaction(businessId, transactionId)
+    }
+
+    suspend fun cancelYappyOnsiteTransaction(
+        businessId: Int,
+        transactionId: String,
+        reason: String
+    ): YappyOnsiteTransactionStatus {
+        return paymentsRepository.cancelYappyOnsiteTransaction(
+            businessId = businessId,
+            transactionId = transactionId,
+            request = YappyOnsiteCancelRequest(reason = reason)
+        )
+    }
+
+    suspend fun cancelPendingYappyOnsiteTransaction(
+        businessId: Int,
+        branchCode: String,
+        billingPoint: String,
+        reason: String
+    ): YappyOnsiteCancelPendingResponse {
+        return paymentsRepository.cancelPendingYappyOnsiteTransaction(
+            businessId = businessId,
+            request = YappyOnsiteCancelPendingRequest(
+                branchCode = branchCode,
+                billingPoint = billingPoint,
+                reason = reason,
+            )
+        )
+    }
+
+    suspend fun createDirectCheckout(
+        businessId: Int,
+        successUrl: String,
+        cancelUrl: String
+    ): DirectCheckoutResponse {
+        return paymentsRepository.createDirectCheckout(
+            businessId = businessId,
+            request = DirectCheckoutRequest(
+                successUrl = successUrl,
+                cancelUrl = cancelUrl,
+            )
         )
     }
 

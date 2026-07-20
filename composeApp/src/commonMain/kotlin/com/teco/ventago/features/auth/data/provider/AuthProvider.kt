@@ -13,11 +13,15 @@ import io.ktor.client.request.post
 import io.ktor.client.request.setBody
 import io.ktor.http.ContentType
 import io.ktor.http.HttpHeaders
+import io.ktor.http.HttpStatusCode
 import io.ktor.http.contentType
 import io.ktor.http.isSuccess
+import kotlinx.serialization.SerialName
+import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.booleanOrNull
+import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.jsonPrimitive
 
 class AuthProvider(private val client: HttpClient): IAuthProvider {
@@ -97,17 +101,33 @@ class AuthProvider(private val client: HttpClient): IAuthProvider {
                 append(HttpHeaders.ContentType, "application/json")
             }
             contentType(ContentType.Application.Json)
-            setBody("{\"token\": \"$token\"}")
+            setBody(DeleteAccountRequest(token = token))
         }
-        if (!res.status.isSuccess()) {
-            return ApiResponse(false, JsonPrimitive(false), ApiError.NO_ERROR)
-        }
-
         val body = res.body<JsonObject>()
-        return if (body["status"]?.jsonPrimitive?.booleanOrNull == true) {
-            ApiResponse(true, JsonPrimitive(true), ApiError.NO_ERROR)
-        } else {
-            ApiResponse(false, JsonPrimitive(false), ApiError.NO_ERROR)
-        }
+        return parseDeleteAccountResponse(res.status, body)
     }
+}
+
+@Serializable
+private data class DeleteAccountRequest(
+    @SerialName("token") val token: String
+)
+
+internal fun parseDeleteAccountResponse(statusCode: HttpStatusCode, body: JsonObject): ApiResponse {
+    if (!statusCode.isSuccess()) {
+        return ApiResponse(
+            successful = false,
+            data = body,
+            error = ApiError.UNDEFINED,
+            errorCode = statusCode.value.toString(),
+            errorMessage = body["message"]?.jsonPrimitive?.contentOrNull
+        )
+    }
+
+    val deleted = body["status"]?.jsonPrimitive?.booleanOrNull == true
+    return ApiResponse(
+        successful = deleted,
+        data = JsonPrimitive(deleted),
+        error = ApiError.NO_ERROR
+    )
 }

@@ -126,6 +126,38 @@ class PaymentLinkResolverTest {
         assertFalse(PaymentLinkResolver.hasActiveLink(order))
     }
 
+    @Test
+    fun treatsPaidStatusesAsTerminal() {
+        val order = baseOrder(
+            paymentLinks = listOf(
+                OrderPaymentLinkDto(
+                    link = "https://paid",
+                    status = "succeeded",
+                    createdAt = "2026-04-23T22:37:39Z"
+                )
+            )
+        )
+
+        assertFalse(PaymentLinkResolver.hasOpenLink(order))
+        assertFalse(PaymentLinkResolver.hasActiveLink(order))
+    }
+
+    @Test
+    fun ignoresLinksForCancelledOrders() {
+        val order = baseOrder(
+            paymentLinks = listOf(
+                OrderPaymentLinkDto(
+                    link = "https://active",
+                    status = "active",
+                    createdAt = "2026-04-23T22:37:39Z"
+                )
+            )
+        ).copy(status = com.teco.ventago.features.orders.domain.models.OrderStatus.CANCELLED)
+
+        assertFalse(PaymentLinkResolver.hasOpenLink(order))
+        assertFalse(PaymentLinkResolver.hasActiveLink(order))
+    }
+
     private fun baseOrder(
         paymentLink: String? = null,
         paymentLinks: List<OrderPaymentLinkDto> = emptyList(),

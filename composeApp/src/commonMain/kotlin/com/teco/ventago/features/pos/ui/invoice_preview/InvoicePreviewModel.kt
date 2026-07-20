@@ -318,7 +318,6 @@ object InvoicePreviewBuilder {
             "04" -> "Nota de Crédito"
             "05" -> "Nota de Débito"
             "06" -> "Nota de Crédito Genérica"
-            "07" -> "Nota de Débito Genérica"
             "08" -> "Factura de Zona Franca"
             "09" -> "Reembolso"
             "10" -> "Factura de Operación Extranjera"

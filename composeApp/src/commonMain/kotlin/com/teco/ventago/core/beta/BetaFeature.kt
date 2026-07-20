@@ -5,7 +5,6 @@ package com.teco.ventago.core.beta
  */
 enum class BetaFeature(val key: String) {
     QUOTES("quotes"),
-    PAYMENTS("payments"),
     RECURRING_INVOICING("recurring_invoicing"),
     REAL_TIME_REPORTS("real_time_reports"),
     MULTI_USERS("multi_users"),

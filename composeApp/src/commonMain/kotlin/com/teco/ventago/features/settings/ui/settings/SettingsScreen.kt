@@ -91,7 +91,6 @@ import com.teco.ventago.features.invoicing.ui.settings.BottomNoteSettingsSheet
 import com.teco.ventago.features.settings.ui.settings.viewmodel.SettingsState
 import com.teco.ventago.features.settings.ui.settings.viewmodel.SettingsStateUiEvent
 import com.teco.ventago.features.settings.ui.settings.viewmodel.SettingsViewModel
-import com.teco.ventago.isIOS
 import com.teco.ventago.navigation.PosScreens
 import com.teco.ventago.features.quotes.ui.settings.QuoteSettingsSection
 import com.teco.ventago.features.printers.domain.PrinterService
@@ -113,6 +112,9 @@ import ventago.composeapp.generated.resources.cancel
 import ventago.composeapp.generated.resources.change_business_logo
 import ventago.composeapp.generated.resources.change_business_name
 import ventago.composeapp.generated.resources.delete_account
+import ventago.composeapp.generated.resources.delete_account_confirm_message
+import ventago.composeapp.generated.resources.delete_account_confirm_title
+import ventago.composeapp.generated.resources.delete_account_failed
 import ventago.composeapp.generated.resources.email
 import ventago.composeapp.generated.resources.ic_bank
 import ventago.composeapp.generated.resources.name
@@ -133,7 +135,9 @@ import kotlin.text.get
 @Composable
 fun SettingsScreen(
     viewModel: SettingsViewModel = koinViewModel<SettingsViewModel>(),
-    navigate: (Any) -> Unit) {
+    navigate: (Any) -> Unit,
+    onAccountDeleted: () -> Unit = {},
+) {
     val snackbarService: SnackbarService = koinInject()
     val printerService: PrinterService = koinInject()
     val uriHandler = LocalUriHandler.current
@@ -143,6 +147,7 @@ fun SettingsScreen(
     val printers by printerService.observe().collectAsState()
     val loadingSheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     val noAddressSelectedString = stringResource(Res.string.no_address_selected)
+    val deleteAccountFailedString = stringResource(Res.string.delete_account_failed)
 
     // Start of State for the upload image bottom sheet
     val uploadImageSheetState = rememberModalBottomSheetState()
@@ -199,6 +204,16 @@ fun SettingsScreen(
                 }
             }
             SettingsStateUiEvent.LaunchSettings -> permissionsManager.launchSettings()
+            SettingsStateUiEvent.AccountDeleted -> {
+                LaunchedEffect(Unit) {
+                    onAccountDeleted()
+                }
+            }
+            SettingsStateUiEvent.DeleteAccountFailed -> {
+                LaunchedEffect(Unit) {
+                    snackbarService.show(deleteAccountFailedString)
+                }
+            }
             else -> println("Unhandled event: $event")
         }
 
@@ -423,7 +438,7 @@ fun SettingsScreen(
                 shape = RoundedCornerShape(10.dp),
                 onClick = {})
             {
-                if (uiState.hasPaymentsAccess && !isIOS()) {
+                if (uiState.hasPaymentsAccess) {
                     SettingsTextButton(
                         label = "Pagos y cobros",
                         badgeText = "Nuevo",
@@ -488,6 +503,14 @@ fun SettingsScreen(
                     label = stringResource(Res.string.sign_out),
                     onClick = {
                         viewModel.signOut()
+                    },
+                    color = RedLight
+                )
+
+                SettingsTextButton(
+                    label = stringResource(Res.string.delete_account),
+                    onClick = {
+                        viewModel.showDeleteAccountDialog(true)
                     },
                     color = RedLight
                 )
@@ -605,6 +628,16 @@ fun SettingsScreen(
                 viewModel.showPermissionRationalDialog(false)
             },
             show = uiState.showPermissionRationalDialog
+        )
+
+        DMAlertDialog(
+            title = stringResource(Res.string.delete_account_confirm_title),
+            message = stringResource(Res.string.delete_account_confirm_message),
+            confirmText = stringResource(Res.string.delete_account),
+            dismissText = stringResource(Res.string.cancel),
+            onConfirm = viewModel::deleteAccount,
+            onDismiss = { viewModel.showDeleteAccountDialog(false) },
+            show = uiState.showDeleteAccountDialog
         )
     }
 

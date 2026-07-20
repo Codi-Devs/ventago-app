@@ -215,18 +215,53 @@ class SettingsViewModel(
         initialChanges()
     }
 
-    fun deleteAccount(token: String) {
-        viewModelScope.launch {
+    fun showDeleteAccountDialog(show: Boolean) {
+        updateState { copy(showDeleteAccountDialog = show) }
+    }
+
+    fun deleteAccount() {
+        viewModelScope.launch(Dispatchers.IO) {
+            val token = authService.getJwtToken()
+            if (token.isNullOrBlank()) {
+                withContext(Dispatchers.Main) {
+                    showError()
+                    emitEvent(SettingsStateUiEvent.DeleteAccountFailed)
+                }
+                return@launch
+            }
+
+            withContext(Dispatchers.Main) {
+                updateState { copy(showDeleteAccountDialog = false) }
+                showLoading()
+            }
+
             try {
 //                AnalyticsHelper.logEvent("account_removed")
                 val res = authService.deleteAccount(token)
                 if (res) {
-
+                    clearFeatureStateAfterSignOut()
+                    withContext(Dispatchers.Main) {
+                        showSuccess()
+                        emitEvent(SettingsStateUiEvent.AccountDeleted)
+                    }
                 } else {
-
+                    withContext(Dispatchers.Main) {
+                        showError()
+                        emitEvent(SettingsStateUiEvent.DeleteAccountFailed)
+                    }
                 }
             } catch (e: Exception) {
-//                callBack.onError(VolleyError(e))
+                logger.sendLog(
+                    Log(
+                        LogLevel.ERROR,
+                        "SettingsViewModel::deleteAccount",
+                        "Error deleting account. Error: ${e.message ?: "UNKNOWN"}"
+                    )
+                )
+                withContext(Dispatchers.Main) {
+                    showError()
+                    emitEvent(SettingsStateUiEvent.DeleteAccountFailed)
+                }
             }
         }
     }
@@ -236,28 +271,22 @@ class SettingsViewModel(
 //            AnalyticsHelper.logEvent("session_closed")
             // Sign out from auth service (handles listeners, cache, Firebase, tokens)
             authService.signOut()
-//
-//            val gso = GoogleSignInOptions.Builder(GoogleSignInOptions.DEFAULT_SIGN_IN)
-//                .requestIdToken(getApplication<MainApplication>().getString(R.string.default_web_client_ids))
-//                .requestEmail()
-//                .build()
-//
-//            val mGoogleSignInClient = GoogleSignIn.getClient(getApplication<MainApplication>(), gso)
-//            mGoogleSignInClient.signOut()
-
-            // Clear all service states
-            productService.signOut()
-            businessService.clear()
-            financialProfileService.clear()
-            customerService.clear()
-            branchService.clear()
-            orderService.clear()
-            printerService.clear()
-            invoicingSettingsService.clearBottomNoteSettings()
-            invoicingSettingsService.clearInvoicingSettings()
+            clearFeatureStateAfterSignOut()
 
         }
 //        state.signOut.value = true
+    }
+
+    private fun clearFeatureStateAfterSignOut() {
+        productService.signOut()
+        businessService.clear()
+        financialProfileService.clear()
+        customerService.clear()
+        branchService.clear()
+        orderService.clear()
+        printerService.clear()
+        invoicingSettingsService.clearBottomNoteSettings()
+        invoicingSettingsService.clearInvoicingSettings()
     }
 
 

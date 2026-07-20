@@ -80,6 +80,16 @@ interface IOrdersRepository {
 
     suspend fun getInvoiceDocsRaw(businessId: Int, cufe: String): InvoiceDocsDto
     suspend fun createPaymentLink(businessId: Int, request: CreatePaymentLinkRequest): String?
+    suspend fun releasePendingPaymentIntent(
+        businessId: Int,
+        orderId: Int,
+        request: com.teco.ventago.features.orders.domain.models.requests.PendingIntentReleaseRequest
+    ): com.teco.ventago.features.orders.domain.models.requests.PendingIntentReleaseResponse
+    suspend fun createPendingPaymentIntent(
+        businessId: Int,
+        orderId: Int,
+        request: com.teco.ventago.features.orders.domain.models.requests.PendingIntentCreateRequest
+    ): com.teco.ventago.features.orders.domain.models.requests.PendingIntentCreateResponse
     suspend fun getAchPaymentByIntent(businessId: Int, paymentIntentId: String): AchPaymentDetail
     suspend fun approveAchPayment(businessId: Int, paymentIntentId: String): String
     suspend fun rejectAchPayment(

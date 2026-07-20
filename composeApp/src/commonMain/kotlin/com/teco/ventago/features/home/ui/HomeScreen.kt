@@ -166,6 +166,8 @@ fun HomeScreen(
     val appState = appViewModel.mainState.collectAsState()
     var showQuotesWelcomeSheet by remember { mutableStateOf(false) }
     val quotesWelcomeSheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+    var showFeePromptSheet by remember { mutableStateOf(false) }
+    val feePromptSheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
 
     LaunchedEffect(Unit) {
         viewModel.onHomeVisible()
@@ -178,6 +180,26 @@ fun HomeScreen(
 
     val hasEnteredQuotes = storage.bool(QuotesOnboarding.KEY_HAS_ENTERED_QUOTES) == true
     val hasShownQuotesWelcome = storage.bool(QuotesOnboarding.KEY_WELCOME_SHEET_SHOWN) == true
+    val feeDueCents = uiState.feeBillingSummary.pendingDueAmount + uiState.feeBillingSummary.overdueAmount
+    val panamaDateKey = currentPanamaDateKey()
+    val feePromptStorageKey = remember(
+        uiState.business?.businessId,
+        uiState.feeBillingSummary.currencyCode,
+        panamaDateKey,
+    ) {
+        "payment_fee_prompt_shown_${uiState.business?.businessId ?: 0}_${uiState.feeBillingSummary.currencyCode}_$panamaDateKey"
+    }
+
+    LaunchedEffect(feeDueCents, feePromptStorageKey) {
+        if (
+            feeDueCents >= 100L &&
+            uiState.business?.businessId != null &&
+            storage.bool(feePromptStorageKey) != true
+        ) {
+            storage.set(feePromptStorageKey, true)
+            showFeePromptSheet = true
+        }
+    }
 
     Column(
         modifier = Modifier
@@ -206,16 +228,19 @@ fun HomeScreen(
         }
 
         if (uiState.invoicingEnabled && uiState.invoicingPlanState != null && uiState.showFolioPurchase) {
+            val buyStampsAction: (() -> Unit)? = if (isIOS()) {
+                null
+            } else {
+                { openWhatsappMessage("50763879477", "Hola, quiero renovar mi plan de folios.") }
+            }
             InvoicingPlanCard(
                 modifier = Modifier.padding(top = 16.dp),
                 initialQuota = uiState.invoicingPlanState?.totalDtes ?: 0,
                 remainingQuota = uiState.invoicingPlanState?.availableDtes ?: 0,
                 activationDate = uiState.invoicingPlanState?.activationDate ?: "-",
                 expirationDate = uiState.invoicingPlanState?.expirationDate ?: "-",
-                onSeeInvoices = { navigate(PosScreens.Orders) },           // or your invoices section
-                onBuyStamps = {
-                    openWhatsappMessage("50763879477", "Hola, quiero renovar mi plan de folios.")
-                }           // or a purchase flow
+                onSeeInvoices = { navigate(PosScreens.Orders) },
+                onBuyStamps = buyStampsAction
             )
         }
 
@@ -586,6 +611,28 @@ fun HomeScreen(
 
     }
 
+    if (showFeePromptSheet) {
+        ModalBottomSheet(
+            onDismissRequest = { showFeePromptSheet = false },
+            sheetState = feePromptSheetState,
+            containerColor = MaterialTheme.colorScheme.background,
+        ) {
+            PaymentFeePromptSheet(
+                amount = formatNumberToMoney(feeDueCents.toDecimalString()),
+                dueAt = uiState.feeBillingSummary.nextDueAt,
+                onDismiss = { showFeePromptSheet = false },
+                onOpenDetail = {
+                    showFeePromptSheet = false
+                    navigate(PosScreens.Payments)
+                },
+                onPay = {
+                    showFeePromptSheet = false
+                    navigate(PosScreens.Payments)
+                },
+            )
+        }
+    }
+
     if (showQuotesWelcomeSheet) {
         ModalBottomSheet(
             onDismissRequest = {
@@ -887,6 +934,93 @@ private fun HomeSummaryCards(
 
 private fun toMoney(value: Double): String {
     return formatNumberToMoney(value.toLongCents().toDecimalString())
+}
+
+@Composable
+private fun PaymentFeePromptSheet(
+    amount: String,
+    dueAt: String,
+    onDismiss: () -> Unit,
+    onOpenDetail: () -> Unit,
+    onPay: () -> Unit,
+) {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 24.dp, vertical = 24.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+    ) {
+        Box(
+            modifier = Modifier
+                .size(52.dp)
+                .clip(RoundedCornerShape(16.dp))
+                .background(MaterialTheme.colorScheme.secondary.copy(alpha = 0.12f)),
+            contentAlignment = Alignment.Center,
+        ) {
+            Icon(
+                imageVector = Icons.Rounded.Payment,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.secondary,
+            )
+        }
+        Spacer(Modifier.height(14.dp))
+        Text("Tienes comisiones pendientes", style = titleMediumBold(), textAlign = TextAlign.Center)
+        Spacer(Modifier.height(8.dp))
+        Text(
+            text = "Monto por pagar",
+            style = labelSmall(color = MaterialTheme.colorScheme.onSurfaceVariant),
+            textAlign = TextAlign.Center,
+        )
+        Text(
+            text = amount,
+            style = headlineLarge().copy(color = MaterialTheme.colorScheme.primary),
+            textAlign = TextAlign.Center,
+        )
+        if (dueAt.isNotBlank()) {
+            Spacer(Modifier.height(4.dp))
+            Text(
+                text = "Próximo vencimiento: ${dueAt.take(10)}",
+                style = labelSmall(color = MaterialTheme.colorScheme.onSurfaceVariant),
+                textAlign = TextAlign.Center,
+            )
+        }
+        Spacer(Modifier.height(20.dp))
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            TextButton(
+                modifier = Modifier.weight(1f),
+                onClick = onDismiss,
+            ) {
+                Text("Ahora no")
+            }
+            TextButton(
+                modifier = Modifier.weight(1f),
+                onClick = onOpenDetail,
+            ) {
+                Text("Ver detalle")
+            }
+        }
+        Button(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(top = 8.dp),
+            colors = ButtonDefaults.buttonColors(
+                containerColor = MaterialTheme.colorScheme.secondary,
+                contentColor = MaterialTheme.colorScheme.onSecondary,
+            ),
+            onClick = onPay,
+        ) {
+            Text("Pagar comisiones")
+        }
+    }
+}
+
+private fun currentPanamaDateKey(): String {
+    val date = Clock.System.now().toLocalDateTime(TimeZone.of("America/Panama")).date
+    return "${date.year.toString().padStart(4, '0')}-${date.monthNumber.toString().padStart(2, '0')}-${date.dayOfMonth.toString().padStart(2, '0')}"
 }
 
 private fun Double.toOneDecimal(): String {

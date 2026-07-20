@@ -2,10 +2,15 @@ package com.teco.ventago.features.printers
 
 import com.teco.ventago.features.printers.domain.TicketLayoutParser
 import com.teco.ventago.features.printers.domain.model.EXTRA_NARROW_PAPER_COLUMNS
+import com.teco.ventago.features.printers.domain.model.EXTRA_NARROW_CANVAS_WIDTH_DOTS
 import com.teco.ventago.features.printers.domain.model.NARROW_PAPER_COLUMNS
+import com.teco.ventago.features.printers.domain.model.NARROW_CANVAS_WIDTH_DOTS
 import com.teco.ventago.features.printers.domain.model.PrintCommand
 import com.teco.ventago.features.printers.domain.model.PrinterConfig
 import com.teco.ventago.features.printers.domain.model.UnknownTicketBlockException
+import com.teco.ventago.features.printers.domain.model.WIDE_CANVAS_WIDTH_DOTS
+import com.teco.ventago.features.printers.domain.model.WIDE_PAPER_COLUMNS
+import com.teco.ventago.features.printers.domain.model.toTicketPaperProfile
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
@@ -170,6 +175,128 @@ class TicketLayoutParserTest {
         assertTrue(textCommands.isNotEmpty())
         assertTrue(textCommands.all { it.text.length <= EXTRA_NARROW_PAPER_COLUMNS })
         assertEquals(EXTRA_NARROW_PAPER_COLUMNS, textCommands.last().text.length)
+    }
+
+    @Test
+    fun paperProfiles_matchWebEpsonTicketWidths() {
+        assertEquals(EXTRA_NARROW_PAPER_COLUMNS, 56.toTicketPaperProfile().lineChars)
+        assertEquals(EXTRA_NARROW_CANVAS_WIDTH_DOTS, 56.toTicketPaperProfile().canvasWidthDots)
+        assertEquals(EXTRA_NARROW_PAPER_COLUMNS, 57.toTicketPaperProfile().lineChars)
+        assertEquals(EXTRA_NARROW_CANVAS_WIDTH_DOTS, 57.toTicketPaperProfile().canvasWidthDots)
+        assertEquals(NARROW_PAPER_COLUMNS, 58.toTicketPaperProfile().lineChars)
+        assertEquals(NARROW_CANVAS_WIDTH_DOTS, 58.toTicketPaperProfile().canvasWidthDots)
+        assertEquals(WIDE_PAPER_COLUMNS, 80.toTicketPaperProfile().lineChars)
+        assertEquals(WIDE_CANVAS_WIDTH_DOTS, 80.toTicketPaperProfile().canvasWidthDots)
+    }
+
+    @Test
+    fun toCommands_rendersAuthorizationAsFullWidthWrappedTextEvenWhenBackendRequestsRightAlign() {
+        val printer = PrinterConfig(
+            branchCode = "001",
+            billingPointCode = "001",
+            printerModel = "TM-T20III",
+            host = "192.168.0.12",
+            paperWidthMm = 57,
+            supportsCutter = false,
+        )
+
+        val layout = parser.parse(
+            json.parseToJsonElement(
+                """
+                {
+                  "blocks": [
+                    {
+                      "type":"key_value",
+                      "section":"totals",
+                      "align_value_right":true,
+                      "key":"authorization",
+                      "value":"9876543210123456789012345678901234567890",
+                      "bold":true,
+                      "underline":true
+                    }
+                  ]
+                }
+                """.trimIndent()
+            )
+        )
+
+        val textCommands = parser.toCommands(layout, printer).filterIsInstance<PrintCommand.Text>()
+
+        assertTrue(textCommands.size > 1)
+        assertTrue(textCommands.first().text.startsWith("Autorización: 9876543210"))
+        assertTrue(textCommands.all { it.text.length == EXTRA_NARROW_PAPER_COLUMNS })
+        assertTrue(textCommands.none { it.text.trimEnd().contains("          ") })
+        assertTrue(textCommands.none { it.style.bold || it.style.underline || it.style.inverse })
+    }
+
+    @Test
+    fun toCommands_ignoresBackendQrHintsAndApplies57MmPositioningRules() {
+        val printer = PrinterConfig(
+            branchCode = "001",
+            billingPointCode = "001",
+            printerModel = "TM-T20III",
+            host = "192.168.0.12",
+            paperWidthMm = 57,
+            supportsCutter = false,
+        )
+        val layout = parser.parse(
+            json.parseToJsonElement(
+                """
+                {
+                  "blocks": [
+                    {
+                      "type":"qr",
+                      "data":"https://dgi.example/cufe/123",
+                      "version":2,
+                      "size":16,
+                      "size_hint":16,
+                      "width_hint":"100%",
+                      "level":"Q"
+                    }
+                  ]
+                }
+                """.trimIndent()
+            )
+        )
+
+        val qrCommand = parser.toCommands(layout, printer).filterIsInstance<PrintCommand.Qr>().single()
+
+        assertEquals(16, qrCommand.size)
+        assertEquals(30, qrCommand.xPositionDots)
+        assertEquals("Q", qrCommand.errorCorrection)
+    }
+
+    @Test
+    fun toCommands_ignoresBackendQrHintsAndAppliesNon57MmPositioningRules() {
+        val printer = PrinterConfig(
+            branchCode = "001",
+            billingPointCode = "001",
+            printerModel = "TM-T20III",
+            host = "192.168.0.12",
+            paperWidthMm = 80,
+            supportsCutter = false,
+        )
+        val layout = parser.parse(
+            json.parseToJsonElement(
+                """
+                {
+                  "blocks": [
+                    {
+                      "type":"qr",
+                      "data":"https://dgi.example/cufe/123",
+                      "qr":{"version":10,"size":3,"width_hint":"20%","error_correction":"H"}
+                    }
+                  ]
+                }
+                """.trimIndent()
+            )
+        )
+
+        val qrCommand = parser.toCommands(layout, printer).filterIsInstance<PrintCommand.Qr>().single()
+
+        assertEquals(8, qrCommand.size)
+        assertEquals(60, qrCommand.xPositionDots)
+        assertEquals("H", qrCommand.errorCorrection)
     }
 
     @Test

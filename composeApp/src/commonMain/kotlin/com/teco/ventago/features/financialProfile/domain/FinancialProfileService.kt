@@ -98,10 +98,31 @@ class FinancialProfileService(
     fun paymentsConfigured(): Boolean {
         val summary = state.value
         return summary?.let {
-            it.paymentSummary.onboardingCompleted && (it.paymentSummary.paymentMethods.paypal.linkedAccount || it.paymentSummary.paymentMethods.yappy.linkedAccount
-                    || (it.paymentSummary.paymentMethods.ach.configured && it.paymentSummary.paymentMethods.ach.enabled)
-                    || it.paymentSummary.paymentMethods.manualTransference.enabled)
+            val methods = it.paymentSummary.paymentMethods
+            it.paymentSummary.onboardingCompleted && (
+                methods.paypal.readyForPayments() ||
+                    methods.yappy.linkedAccount ||
+                    (methods.yappy.onsite.configured && methods.yappy.onsite.enabled) ||
+                    (methods.ach.configured && methods.ach.enabled && methods.ach.isActive) ||
+                    methods.card.readyForPayments() ||
+                    methods.manualTransference.enabled
+                )
         } ?: false
+    }
+
+    fun paymentLinkMethodsConfigured(): Boolean {
+        val summary = state.value ?: return false
+        if (!summary.paymentSummary.onboardingCompleted) return false
+        val methods = summary.paymentSummary.paymentMethods
+        return methods.paypal.readyForPayments() ||
+            methods.yappy.linkedAccount ||
+            (methods.ach.configured && methods.ach.enabled && methods.ach.isActive) ||
+            methods.card.readyForPayments()
+    }
+
+    fun yappyOnsiteConfigured(): Boolean {
+        val onsite = state.value?.paymentSummary?.paymentMethods?.yappy?.onsite ?: return false
+        return onsite.configured && onsite.enabled
     }
 
     fun invoicingEnabled(): Boolean {

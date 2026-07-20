@@ -30,5 +30,4 @@ sealed class LoginUiEvent {
     data object GenericError : LoginUiEvent()
     data object TryLater : LoginUiEvent()
     data object CanceledGoogleLogin : LoginUiEvent()
-    data object ShowRegisterDialog : LoginUiEvent()
 }

@@ -15,6 +15,10 @@ import com.teco.ventago.features.orders.domain.models.requests.CreatePaymentLink
 import com.teco.ventago.features.orders.domain.models.requests.DeleteOrderRequest
 import com.teco.ventago.features.orders.domain.models.requests.ManualPaymentItemRequest
 import com.teco.ventago.features.orders.domain.models.requests.ListOrdersRequest
+import com.teco.ventago.features.orders.domain.models.requests.PendingIntentCreateRequest
+import com.teco.ventago.features.orders.domain.models.requests.PendingIntentCreateResponse
+import com.teco.ventago.features.orders.domain.models.requests.PendingIntentReleaseRequest
+import com.teco.ventago.features.orders.domain.models.requests.PendingIntentReleaseResponse
 import com.teco.ventago.features.orders.domain.models.requests.PaymentApplicationRequest
 import com.teco.ventago.features.orders.domain.models.requests.RejectAchPaymentRequest
 import com.teco.ventago.features.orders.domain.models.requests.RescheduleReceivableTermRequest
@@ -53,6 +57,7 @@ data class OrderPaymentSubmission(
     val amountCents: Long,
     val paymentDateIso: String,
     val otherDescription: String? = null,
+    val dueDateIso: String? = null,
     val applications: List<ReceivableApplicationAllocation> = emptyList()
 )
 
@@ -266,6 +271,7 @@ class OrderService(private val repository: IOrdersRepository) {
                     type = payment.methodCode,
                     amount = payment.amountCents.toDecimalString(),
                     paymentDate = payment.paymentDateIso,
+                    dueDate = payment.dueDateIso,
                     description = if (
                         payment.methodCode == ManualPaymentMethodOption.OTHER_SPECIFY.id &&
                         !payment.otherDescription.isNullOrBlank()
@@ -419,6 +425,58 @@ class OrderService(private val repository: IOrdersRepository) {
                 orderId = orderId,
                 amount = amount?.takeIf { it.isNotBlank() },
                 expireInMinutes = expireInMinutes
+            )
+        )
+    }
+
+    suspend fun releasePendingPaymentIntent(
+        businessId: Int,
+        orderId: Int,
+        paymentMethod: String,
+        reason: String
+    ): PendingIntentReleaseResponse {
+        return repository.releasePendingPaymentIntent(
+            businessId = businessId,
+            orderId = orderId,
+            request = PendingIntentReleaseRequest(
+                paymentMethod = paymentMethod,
+                reason = reason,
+            )
+        )
+    }
+
+    suspend fun createReplacementPaymentLink(
+        businessId: Int,
+        orderId: Int,
+        amount: String,
+        note: String = "Customer selected online checkout"
+    ): PendingIntentCreateResponse {
+        return repository.createPendingPaymentIntent(
+            businessId = businessId,
+            orderId = orderId,
+            request = PendingIntentCreateRequest(
+                paymentMethod = "payment_link",
+                amount = amount,
+                expireInMinutes = 1440,
+                note = note,
+            )
+        )
+    }
+
+    suspend fun createReplacementYappyOnsite(
+        businessId: Int,
+        orderId: Int,
+        amount: String,
+        note: String = "POS payment"
+    ): PendingIntentCreateResponse {
+        return repository.createPendingPaymentIntent(
+            businessId = businessId,
+            orderId = orderId,
+            request = PendingIntentCreateRequest(
+                paymentMethod = "yappy_onsite",
+                amount = amount,
+                expireInMinutes = 5,
+                note = note,
             )
         )
     }

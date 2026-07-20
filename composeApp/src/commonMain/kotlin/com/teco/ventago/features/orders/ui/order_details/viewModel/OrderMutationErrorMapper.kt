@@ -20,6 +20,10 @@ internal object OrderMutationErrorMapper {
             return backendMessage
         }
 
+        if (parsed.code == "O_RP_005" && parsed.action == "manual_refund_required") {
+            return "El proveedor ya confirmó el pago o el estado cambió. No se puede cambiar el método; requiere reembolso o conciliación manual."
+        }
+
         return when (parsed.code) {
             "O_RP_001" -> codeOverrides["O_RP_001"] ?: "No tienes permisos para realizar esta accion."
             "O_RP_002" -> "La suma de los nuevos vencimientos debe coincidir exactamente con el saldo abierto total."
@@ -54,14 +58,24 @@ internal object OrderMutationErrorMapper {
         }.getOrNull()
             ?: payload?.get("errorMessage")?.jsonPrimitive?.contentOrNull
 
+        val action = runCatching {
+            payload?.get("data")
+                ?.jsonObject
+                ?.get("action")
+                ?.jsonPrimitive
+                ?.contentOrNull
+        }.getOrNull()
+
         return ParsedOrderMutationError(
             code = code,
-            backendMessage = backendMessage
+            backendMessage = backendMessage,
+            action = action
         )
     }
 }
 
 private data class ParsedOrderMutationError(
     val code: String? = null,
-    val backendMessage: String? = null
+    val backendMessage: String? = null,
+    val action: String? = null
 )

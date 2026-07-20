@@ -15,6 +15,10 @@ import com.teco.ventago.features.orders.domain.models.requests.CreatePaymentLink
 import com.teco.ventago.features.orders.domain.models.requests.CreateOrderRequest
 import com.teco.ventago.features.orders.domain.models.requests.DeleteOrderRequest
 import com.teco.ventago.features.orders.domain.models.requests.ListOrdersRequest
+import com.teco.ventago.features.orders.domain.models.requests.PendingIntentCreateRequest
+import com.teco.ventago.features.orders.domain.models.requests.PendingIntentCreateResponse
+import com.teco.ventago.features.orders.domain.models.requests.PendingIntentReleaseRequest
+import com.teco.ventago.features.orders.domain.models.requests.PendingIntentReleaseResponse
 import com.teco.ventago.features.orders.domain.models.requests.RejectAchPaymentRequest
 import com.teco.ventago.features.orders.domain.models.requests.RescheduleReceivablesRequest
 import com.teco.ventago.features.orders.domain.models.requests.RescheduleReceivablesResponse
@@ -25,6 +29,9 @@ import com.teco.ventago.features.orders.domain.models.requests.VoidOrderPaymentR
 import com.teco.ventago.features.orders.domain.models.requests.VoidOrderPaymentResponse
 import com.teco.ventago.features.orders.domain.models.responses.CreateOrderResponse
 import com.teco.ventago.features.orders.domain.models.responses.InvoiceDocsDto
+import com.teco.ventago.features.orders.domain.models.responses.YAPPY_ONSITE_PENDING_TRANSACTION_EXISTS
+import com.teco.ventago.features.orders.domain.models.responses.YappyOnsitePendingTransactionDto
+import com.teco.ventago.features.orders.domain.models.responses.YappyOnsitePendingTransactionExistsException
 import com.teco.ventago.core.Paged
 import com.teco.ventago.json
 import com.teco.ventago.utils.ApiResponse
@@ -214,7 +221,14 @@ class OrdersRepository(private val provider: IOrdersProvider, private val logger
         try {
             val response = provider.createOrder(businessId, createOrderRequest)
 
-            if (response.error.isError()) {
+            if (response.errorCode == YAPPY_ONSITE_PENDING_TRANSACTION_EXISTS) {
+                val pendingTransaction = (response.data as? JsonObject)
+                    ?.let { json.decodeFromJsonElement<YappyOnsitePendingTransactionDto>(it) }
+                    ?: YappyOnsitePendingTransactionDto()
+                throw YappyOnsitePendingTransactionExistsException(pendingTransaction)
+            }
+
+            if (!response.successful || response.error.isError()) {
                 throw BadRequestException(response.toJson())
             }
 
@@ -427,12 +441,61 @@ class OrdersRepository(private val provider: IOrdersProvider, private val logger
 
             val data = response.data?.jsonObject ?: return null
             return data["payment_link_url"]?.jsonPrimitive?.contentOrNull
+                ?: data["url"]?.jsonPrimitive?.contentOrNull
         } catch (e: Exception) {
             logger.sendLog(
                 Log(
                     LogLevel.ERROR,
                     "createPaymentLink",
                     "Error creating payment link. Error: ${e.message ?: "UNKNOWN"}, businessId: $businessId, orderId: ${request.orderId}"
+                )
+            )
+            throw e
+        }
+    }
+
+    override suspend fun releasePendingPaymentIntent(
+        businessId: Int,
+        orderId: Int,
+        request: PendingIntentReleaseRequest
+    ): PendingIntentReleaseResponse {
+        try {
+            val response = provider.releasePendingPaymentIntent(businessId, orderId, request)
+            if (response.error.isError()) {
+                throw BadRequestException(response.toJson())
+            }
+            val data = response.data as? JsonObject ?: JsonObject(emptyMap())
+            return json.decodeFromJsonElement<PendingIntentReleaseResponse>(data)
+        } catch (e: Exception) {
+            logger.sendLog(
+                Log(
+                    LogLevel.ERROR,
+                    "releasePendingPaymentIntent",
+                    "Error releasing pending payment intent. Error: ${e.message ?: "UNKNOWN"}, businessId: $businessId, orderId: $orderId, method: ${request.paymentMethod}"
+                )
+            )
+            throw e
+        }
+    }
+
+    override suspend fun createPendingPaymentIntent(
+        businessId: Int,
+        orderId: Int,
+        request: PendingIntentCreateRequest
+    ): PendingIntentCreateResponse {
+        try {
+            val response = provider.createPendingPaymentIntent(businessId, orderId, request)
+            if (response.error.isError()) {
+                throw BadRequestException(response.toJson())
+            }
+            val data = response.data as? JsonObject ?: JsonObject(emptyMap())
+            return json.decodeFromJsonElement<PendingIntentCreateResponse>(data)
+        } catch (e: Exception) {
+            logger.sendLog(
+                Log(
+                    LogLevel.ERROR,
+                    "createPendingPaymentIntent",
+                    "Error creating pending payment intent. Error: ${e.message ?: "UNKNOWN"}, businessId: $businessId, orderId: $orderId, method: ${request.paymentMethod}"
                 )
             )
             throw e

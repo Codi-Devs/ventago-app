@@ -1,8 +1,11 @@
 package com.teco.ventago.features.orders
 
 import com.teco.ventago.features.orders.domain.models.Order
+import com.teco.ventago.features.orders.domain.models.RelatedDocument
 import com.teco.ventago.features.orders.domain.models.requests.ManualPaymentItemRequest
 import com.teco.ventago.features.orders.domain.models.requests.PaymentApplicationRequest
+import com.teco.ventago.features.orders.domain.models.requests.PendingIntentCreateResponse
+import com.teco.ventago.features.orders.domain.models.requests.PendingIntentReleaseResponse
 import com.teco.ventago.features.orders.domain.models.requests.RegisterManualPaymentsRequest
 import com.teco.ventago.features.orders.domain.models.requests.RescheduleReceivableTermRequest
 import com.teco.ventago.features.orders.domain.models.requests.RescheduleReceivablesRequest
@@ -15,6 +18,7 @@ import kotlin.test.assertNull
 import kotlin.test.assertTrue
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.decodeFromJsonElement
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.decodeFromString
@@ -391,6 +395,55 @@ class CxcOrderDetailsContractTest {
     }
 
     @Test
+    fun pendingIntentReleaseParsesNextActionsArray() {
+        val payload = """
+            {
+              "released": true,
+              "payment_method": "payment_link",
+              "next_actions": ["manual_payment_allowed"],
+              "order_id": 123,
+              "order_number": "ORD-123",
+              "payment_status": 1,
+              "invoice_status": 0
+            }
+        """.trimIndent()
+
+        val parsed = json.decodeFromString<PendingIntentReleaseResponse>(payload)
+
+        assertTrue(parsed.released)
+        assertEquals("manual_payment_allowed", parsed.nextAction)
+        assertTrue(parsed.allowsNextAction("manual_payment_allowed"))
+    }
+
+    @Test
+    fun pendingIntentCreateResolvesNestedPaymentLinkUrl() {
+        val snakePayload = """
+            {
+              "payment_status": 1,
+              "invoice_status": 0,
+              "order_number": "ORD-123",
+              "payment_link": {
+                "payment_link_url": "https://pay.example/snake",
+                "amount": "25.00"
+              }
+            }
+        """.trimIndent()
+        val camelPayload = """
+            {
+              "paymentLink": {
+                "paymentLinkUrl": "https://pay.example/camel"
+              }
+            }
+        """.trimIndent()
+
+        val snake = json.decodeFromString<PendingIntentCreateResponse>(snakePayload)
+        val camel = json.decodeFromString<PendingIntentCreateResponse>(camelPayload)
+
+        assertEquals("https://pay.example/snake", snake.resolvedPaymentLinkUrl())
+        assertEquals("https://pay.example/camel", camel.resolvedPaymentLinkUrl())
+    }
+
+    @Test
     fun apiResponseMapsOrp002Code() {
         val envelope = json.decodeFromString<JsonObject>(
             """
@@ -405,5 +458,240 @@ class CxcOrderDetailsContractTest {
         val response = ApiResponse.fromJson(envelope)
         assertEquals("O_RP_002", response.errorCode)
         assertEquals(ApiError.O_RP_002, response.error)
+    }
+
+    @Test
+    fun orderParsesRelatedDocumentsAndCreditCapacity() {
+        val payload = """
+            {
+              "id": 7000,
+              "order_type": "01",
+              "business_id": 4,
+              "internal_number": "ORD-4-0000-865-0000000700",
+              "invoice_status": 2,
+              "currency_code": "USD",
+              "lines": [],
+              "subtotal": "10.00",
+              "discount_total": "0.00",
+              "taxable_base": "10.00",
+              "tax_total": "0.00",
+              "tips_total": "0.00",
+              "total_amount": "10.00",
+              "status": 2,
+              "payment_status": 2,
+              "order_histories": [],
+              "order_payments": [],
+              "related_documents": [
+                {
+                  "order_id": 7001,
+                  "order_number": "ORD-4-0000-865-0000000701",
+                  "document_type": "04",
+                  "relation_type": "credit_note",
+                  "total_amount": "3.00",
+                  "invoice_status": 1,
+                  "external_invoice_number": "FE0120",
+                  "emission_date": "2026-07-01T10:30:00-05:00"
+                },
+                {
+                  "order_id": 7002,
+                  "order_number": "ORD-4-0000-865-0000000702",
+                  "document_type": "06",
+                  "relation_type": "credit_note",
+                  "total_amount": "4.00",
+                  "invoice_status": 2
+                },
+                {
+                  "order_id": 7003,
+                  "order_number": "ORD-4-0000-865-0000000703",
+                  "document_type": "04",
+                  "relation_type": "credit_note",
+                  "total_amount": "8.00",
+                  "invoice_status": 3
+                },
+                {
+                  "order_id": 7004,
+                  "order_number": "ORD-4-0000-865-0000000704",
+                  "document_type": "05",
+                  "relation_type": "debit_note",
+                  "total_amount": "2.00",
+                  "invoice_status": 2
+                }
+              ],
+              "created_at": "2026-07-01T10:00:00Z"
+            }
+        """.trimIndent()
+
+        val parsed = json.decodeFromString(Order.serializer(), payload)
+
+        assertEquals(4, parsed.relatedDocuments.size)
+        assertEquals(7001L, parsed.relatedDocuments.first().orderId)
+        assertEquals("ORD-4-0000-865-0000000701", parsed.relatedDocuments.first().orderNumber)
+        assertEquals("04", parsed.relatedDocuments.first().documentType)
+        assertEquals("credit_note", parsed.relatedDocuments.first().relationType)
+        assertEquals("3.00", parsed.relatedDocuments.first().totalAmount)
+        assertEquals(1, parsed.relatedDocuments.first().invoiceStatus)
+        assertEquals("FE0120", parsed.relatedDocuments.first().externalInvoiceNumber)
+        assertEquals("2026-07-01T10:30:00-05:00", parsed.relatedDocuments.first().emissionDate)
+        assertEquals("Nota de crédito", parsed.relatedDocuments.first().displayType())
+        assertEquals("Nota de débito", parsed.relatedDocuments.last().displayType())
+        assertEquals(700L, parsed.activeCreditNoteTotalCents())
+        assertEquals(300L, parsed.remainingCreditNoteCapacityCents())
+    }
+
+    @Test
+    fun getOrdersResponseParsesRelatedDocumentsFromItems() {
+        val payload = """
+            {
+              "success": true,
+              "data": {
+                "total": 816,
+                "page": 1,
+                "size": 10,
+                "items": [
+                  {
+                    "id": 7776,
+                    "order_type": "01",
+                    "business_id": 4,
+                    "internal_number": "ORD-4-0000-001-0000000112",
+                    "payment_flow_type": "payment_link",
+                    "external_invoice_number": "FE0120000155704849-2-2021-3200002026071500000001120010320663966835",
+                    "external_invoice_id": "7600",
+                    "invoice_status": 2,
+                    "emission_date": "2026-07-15T11:00:00Z",
+                    "currency_code": "USD",
+                    "lines": [],
+                    "subtotal": "43.21",
+                    "discount_total": "0",
+                    "taxable_base": "43.21",
+                    "tax_total": "3.02",
+                    "tips_total": "0",
+                    "acarreo_total": "0",
+                    "insurance_total": "0",
+                    "other_charges_total": "0",
+                    "total_amount": "46.23",
+                    "status": 2,
+                    "receiver_name": "",
+                    "receiver_phone": "00000",
+                    "order_histories": [],
+                    "order_payments": [],
+                    "related_documents": [
+                      {
+                        "order_id": 7801,
+                        "order_number": "ORD-4-0000-001-0000000113",
+                        "document_type": "04",
+                        "relation_type": "credit_note",
+                        "total_amount": "46.23",
+                        "invoice_status": 2,
+                        "external_invoice_number": "FE0420000155704849-2-2021-3200002026071600000001130010320663966835",
+                        "emission_date": "2026-07-16T16:03:05Z"
+                      }
+                    ],
+                    "created_at": "2026-07-15T11:00:00Z"
+                  }
+                ]
+              },
+              "error": null
+            }
+        """.trimIndent()
+
+        val envelope = json.decodeFromString<JsonObject>(payload)
+        val items = envelope.jsonObject["data"]!!.jsonObject["items"]!!.jsonArray
+        val parsed = json.decodeFromJsonElement<Order>(items.first())
+        val relatedDocument = parsed.relatedDocuments.single()
+
+        assertEquals("ORD-4-0000-001-0000000113", relatedDocument.orderNumber)
+        assertEquals("04", relatedDocument.documentType)
+        assertEquals("04 - Nota de crédito", relatedDocument.displayOrderType())
+        assertEquals("46.23", relatedDocument.totalAmount)
+        assertEquals(4623L, parsed.activeCreditNoteTotalCents())
+        assertEquals(0L, parsed.remainingCreditNoteCapacityCents())
+    }
+
+    @Test
+    fun creditNoteDocumentTypesDoNotSupportReceivableActions() {
+        val regularInvoice = sampleOrderForDocumentType("01")
+        val referencedCreditNote = sampleOrderForDocumentType("04")
+        val genericCreditNote = sampleOrderForDocumentType("06")
+        val referencedDebitNote = sampleOrderForDocumentType("05")
+        val genericDebitNote = sampleOrderForDocumentType("07")
+
+        assertEquals(false, regularInvoice.isCreditNoteDocument())
+        assertEquals(true, regularInvoice.supportsReceivableActions())
+        assertEquals(true, referencedCreditNote.isCreditNoteDocument())
+        assertEquals(false, referencedCreditNote.supportsReceivableActions())
+        assertEquals(true, genericCreditNote.isCreditNoteDocument())
+        assertEquals(false, genericCreditNote.supportsReceivableActions())
+        assertEquals(false, referencedDebitNote.isCreditNoteDocument())
+        assertEquals(true, referencedDebitNote.supportsReceivableActions())
+        assertEquals(false, genericDebitNote.isCreditNoteDocument())
+        assertEquals(true, genericDebitNote.supportsReceivableActions())
+    }
+
+    @Test
+    fun orderDefaultsRelatedDocumentsAndClampsCreditCapacity() {
+        val payload = """
+            {
+              "id": 7010,
+              "order_type": "01",
+              "business_id": 4,
+              "internal_number": "ORD-4-0000-865-0000000710",
+              "invoice_status": 2,
+              "currency_code": "USD",
+              "lines": [],
+              "subtotal": "10.00",
+              "discount_total": "0.00",
+              "taxable_base": "10.00",
+              "tax_total": "0.00",
+              "tips_total": "0.00",
+              "total_amount": "10.00",
+              "status": 2,
+              "payment_status": 2,
+              "order_histories": [],
+              "order_payments": [],
+              "created_at": "2026-07-01T10:00:00Z"
+            }
+        """.trimIndent()
+
+        val parsed = json.decodeFromString(Order.serializer(), payload)
+
+        assertEquals(emptyList(), parsed.relatedDocuments)
+        assertEquals(0L, parsed.activeCreditNoteTotalCents())
+        assertEquals(1000L, parsed.remainingCreditNoteCapacityCents())
+
+        val overCredited = parsed.copy(
+            relatedDocuments = listOf(
+                RelatedDocument(
+                    orderId = 7011L,
+                    orderNumber = "ORD-4-0000-865-0000000711",
+                    documentType = "04",
+                    relationType = "credit_note",
+                    totalAmount = "11.00",
+                    invoiceStatus = 2
+                )
+            )
+        )
+
+        assertEquals(1100L, overCredited.activeCreditNoteTotalCents())
+        assertEquals(0L, overCredited.remainingCreditNoteCapacityCents())
+    }
+
+    private fun sampleOrderForDocumentType(orderType: String): Order {
+        return Order(
+            id = 7100,
+            orderType = orderType,
+            businessId = 4,
+            internalNumber = "ORD-4-0000-865-0000000710",
+            invoiceStatus = 2,
+            currencyCode = "USD",
+            subtotal = "10.00",
+            discountTotal = "0.00",
+            taxableBase = "10.00",
+            taxTotal = "0.00",
+            tipsTotal = "0.00",
+            totalAmount = "10.00",
+            status = 2,
+            paymentStatus = 1,
+            createdAt = "2026-07-01T10:00:00Z"
+        )
     }
 }

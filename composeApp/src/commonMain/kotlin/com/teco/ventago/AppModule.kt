@@ -249,7 +249,28 @@ internal val viewModels = module {
     viewModelOf(::AddItemViewModel)
     viewModelOf(::EditItemViewModel)
     viewModelOf(::ModifyCategoryViewModel)
-    viewModelOf(::PosViewModel)
+    viewModel {
+        PosViewModel(
+            authService = get(),
+            businessService = get(),
+            branchService = get(),
+            customerService = get(),
+            productService = get(),
+            posService = get(),
+            orderService = get(),
+            paymentService = get(),
+            financialProfileService = get(),
+            quotesService = get(),
+            invoicingSettingsService = get(),
+            pdfSharer = get(),
+            localStorage = get(),
+            betaService = get(),
+            printerService = get(),
+            snackbarService = get(),
+            analyticsService = get(),
+            appScope = get(named("AppScope")),
+        )
+    }
     viewModelOf(::QuotesListViewModel)
     viewModelOf(::QuoteDetailsViewModel)
     viewModelOf(::ExpensesListViewModel)

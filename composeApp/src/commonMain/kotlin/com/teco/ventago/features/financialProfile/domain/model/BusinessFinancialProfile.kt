@@ -70,20 +70,36 @@ data class PaymentMethods(
     @SerialName("paypal") val paypal: PaypalMethod = PaypalMethod(),
     @SerialName("yappy") val yappy: YappyMethod = YappyMethod(),
     @SerialName("ach") val ach: AchMethod = AchMethod(),
+    @SerialName("card") val card: CardMethod = CardMethod(),
     @SerialName("manual_transference") val manualTransference: ManualTransferenceMethod = ManualTransferenceMethod(),
 )
 
 @Serializable
 data class PaypalMethod(
     @SerialName("visible") val visible: Boolean = false,
+    @SerialName("configured") val configured: Boolean = false,
+    @SerialName("enabled") val enabled: Boolean = false,
     @SerialName("linked_account") val linkedAccount: Boolean = false,
     @SerialName("email") val email: String = "",
-)
+) {
+    fun readyForPayments(): Boolean = configured && enabled
+}
 
 @Serializable
 data class YappyMethod(
     @SerialName("visible") val visible: Boolean = false,
     @SerialName("linked_account") val linkedAccount: Boolean = false,
+    @SerialName("onsite") val onsite: YappyOnsiteSummary = YappyOnsiteSummary(),
+)
+
+@Serializable
+data class YappyOnsiteSummary(
+    @SerialName("configured") val configured: Boolean = false,
+    @SerialName("enabled") val enabled: Boolean = false,
+    @SerialName("groups_count") val groupsCount: Int = 0,
+    @SerialName("devices_count") val devicesCount: Int = 0,
+    @SerialName("open_sessions_count") val openSessionsCount: Int = 0,
+    @SerialName("has_open_session") val hasOpenSession: Boolean = false,
 )
 
 @Serializable
@@ -98,6 +114,7 @@ data class AchMethod(
     @SerialName("visible") val visible: Boolean = false,
     @SerialName("configured") val configured: Boolean = false,
     @SerialName("enabled") val enabled: Boolean = true,
+    @SerialName("is_active") val isActive: Boolean = true,
     @SerialName("pending_review_count") val pendingReviewCount: Int = 0,
     @SerialName("account") val account: AchAccountSummary? = null,
 )
@@ -111,6 +128,33 @@ data class AchAccountSummary(
     @SerialName("account_number_masked") val accountNumberMasked: String = "",
     @SerialName("account_holder_name") val accountHolderName: String = "",
 )
+
+@Serializable
+data class CardMethod(
+    @SerialName("visible") val visible: Boolean = false,
+    @SerialName("configured") val configured: Boolean = false,
+    @SerialName("enabled") val enabled: Boolean = false,
+    @SerialName("platform_allowed") val platformAllowed: Boolean = false,
+    @SerialName("business_enabled") val businessEnabled: Boolean = false,
+    @SerialName("providers") val providers: List<CardProviderStatus> = emptyList(),
+) {
+    fun readyForPayments(): Boolean {
+        val methodReady = configured && enabled && platformAllowed && businessEnabled
+        return methodReady || providers.any { it.readyForPayments() }
+    }
+}
+
+@Serializable
+data class CardProviderStatus(
+    @SerialName("provider") val provider: String = "",
+    @SerialName("payment_method") val paymentMethod: String = "",
+    @SerialName("configured") val configured: Boolean = false,
+    @SerialName("enabled") val enabled: Boolean = false,
+    @SerialName("platform_allowed") val platformAllowed: Boolean = false,
+    @SerialName("business_enabled") val businessEnabled: Boolean = false,
+) {
+    fun readyForPayments(): Boolean = configured && enabled && platformAllowed && businessEnabled
+}
 
 @Serializable
 data class FeeBillingSummary(

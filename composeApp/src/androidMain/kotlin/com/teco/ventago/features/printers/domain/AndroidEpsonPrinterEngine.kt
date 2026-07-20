@@ -22,8 +22,10 @@ import com.teco.ventago.features.printers.domain.model.PrintResultContext
 import com.teco.ventago.features.printers.domain.model.PrinterConfig
 import com.teco.ventago.features.printers.domain.model.PrinterConnectionException
 import com.teco.ventago.features.printers.domain.model.PrinterSendException
+import com.teco.ventago.features.printers.domain.model.toTicketPaperProfile
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.IO
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.TimeoutCancellationException
 import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.withTimeout
@@ -63,6 +65,8 @@ class AndroidEpsonPrinterEngine(
                             attempt = attempt,
                             maxAttempts = maxAttempts
                         )
+                    } catch (e: CancellationException) {
+                        throw e
                     } catch (e: Exception) {
                         lastError = e
                         logger.sendLog(
@@ -115,26 +119,27 @@ class AndroidEpsonPrinterEngine(
             }
 
             is PrintCommand.Qr -> {
-                printer.addTextAlign(command.alignment.toEpsonAlignment())
+                printer.addTextAlign(Printer.ALIGN_LEFT)
+                printer.addHPosition(command.xPositionDots)
                 printer.addSymbol(
                     command.data,
                     Printer.SYMBOL_QRCODE_MODEL_2,
-                    Printer.LEVEL_M,
+                    command.errorCorrection.toEpsonQrLevel(),
                     command.size,
                     command.size,
                     0
                 )
+                printer.addHPosition(0)
                 printer.addFeedLine(1)
             }
 
             is PrintCommand.Image -> {
-                printer.addTextAlign(command.alignment.toEpsonAlignment())
+                printer.addTextAlign(Printer.ALIGN_LEFT)
                 val bytes = command.source.loadImageBytes()
                 val sourceBitmap = BitmapFactory.decodeByteArray(bytes, 0, bytes.size)
                     ?: throw PrinterConnectionException("No se pudo decodificar la imagen del ticket")
                 val renderedBitmap = sourceBitmap.toPaperAwareBitmap(
                     paperWidthMm = printerConfig.paperWidthMm,
-                    alignment = command.alignment,
                     widthHintPercent = command.widthHintPercent
                 )
                 try {
@@ -357,10 +362,9 @@ private fun downloadImageBytes(url: String): ByteArray {
 
 private fun Bitmap.toPaperAwareBitmap(
     paperWidthMm: Int,
-    alignment: PrintAlignment,
     widthHintPercent: Int?,
 ): Bitmap {
-    val canvasWidth = paperWidthMm.toImageCanvasWidth()
+    val canvasWidth = paperWidthMm.toTicketPaperProfile().canvasWidthDots
     val fallbackWidth = width.coerceAtMost(canvasWidth)
     val targetWidth = widthHintPercent
         ?.coerceIn(1, 100)
@@ -380,11 +384,7 @@ private fun Bitmap.toPaperAwareBitmap(
     val output = Bitmap.createBitmap(canvasWidth, targetHeight, Bitmap.Config.ARGB_8888)
     val canvas = Canvas(output)
     canvas.drawColor(Color.WHITE)
-    val xOffset = when (alignment) {
-        PrintAlignment.CENTER -> ((canvasWidth - targetWidth) / 2).coerceAtLeast(0)
-        PrintAlignment.RIGHT -> (canvasWidth - targetWidth).coerceAtLeast(0)
-        PrintAlignment.LEFT -> 0
-    }
+    val xOffset = ((canvasWidth - targetWidth) / 2).coerceAtLeast(0)
 
     canvas.drawBitmap(scaled, xOffset.toFloat(), 0f, Paint(Paint.FILTER_BITMAP_FLAG))
     if (scaled !== this) {
@@ -394,10 +394,11 @@ private fun Bitmap.toPaperAwareBitmap(
     return output
 }
 
-private fun Int.toImageCanvasWidth(): Int = when {
-    this <= 57 -> IMAGE_CANVAS_WIDTH_EXTRA_NARROW
-    this == 58 -> IMAGE_CANVAS_WIDTH_NARROW
-    else -> IMAGE_CANVAS_WIDTH_WIDE
+private fun String.toEpsonQrLevel(): Int = when (trim().uppercase()) {
+    "L" -> Printer.LEVEL_L
+    "Q" -> Printer.LEVEL_Q
+    "H" -> Printer.LEVEL_H
+    else -> Printer.LEVEL_M
 }
 
 private fun epsonErrorName(code: Int): String = when (code) {
@@ -468,9 +469,6 @@ private fun PrinterStatusInfo?.summary(): String {
 private const val DEFAULT_RECEIVE_TIMEOUT_MS = 30_000L
 private const val DISCONNECT_RETRY_DELAY_MS = 200L
 private const val IMAGE_DOWNLOAD_TIMEOUT_MS = 10_000
-private const val IMAGE_CANVAS_WIDTH_EXTRA_NARROW = 420
-private const val IMAGE_CANVAS_WIDTH_NARROW = 384
-private const val IMAGE_CANVAS_WIDTH_WIDE = 576
 private const val MIN_IMAGE_TARGET_WIDTH_PX = 32
 private const val MAX_IMAGE_CANVAS_HEIGHT_PX = 1200
 

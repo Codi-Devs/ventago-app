@@ -333,12 +333,19 @@ class AuthService(
         val res = userRepository.deleteAccount(token)
         if (res) {
             try {
-                firebase.deleteAccount()
+                userChangesJob?.cancel()
+                userChangesJob = null
                 changesManager.removeListeners()
+                try {
+                    firebase.signOut()
+                } catch (_: Exception) {
+                }
                 cache.clearAllCache()
                 user.update {
                     null
                 }
+                store.deleteObject(SecureConstants.JWT_TOKEN)
+                store.deleteObject(SecureConstants.REFRESH_JWT_TOKEN)
             } finally {
                 sessionIdService.clearSession()
             }

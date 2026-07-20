@@ -45,6 +45,7 @@ import com.teco.ventago.design_system.theme.bodySmall
 import com.teco.ventago.design_system.theme.headlineSmall
 import com.teco.ventago.design_system.theme.labelLarge
 import com.teco.ventago.design_system.theme.titleMediumBold
+import com.teco.ventago.isIOS
 import com.teco.ventago.utils.openCustomTab
 import com.teco.ventago.utils.openWhatsappMessage
 
@@ -55,6 +56,7 @@ fun InvoiceLandingScreen(
     onViewPricing: () -> Unit = {}
 ) {
     val scrollState = rememberScrollState()
+    val isIosDevice = isIOS()
 
     Column(
         modifier = Modifier
@@ -163,54 +165,56 @@ fun InvoiceLandingScreen(
 
         Spacer(modifier = Modifier.height(32.dp))
 
-        // CTA Buttons
-        Column(
-            modifier = Modifier.fillMaxWidth(),
-            verticalArrangement = Arrangement.spacedBy(12.dp)
-        ) {
-            // WhatsApp Button (Primary action)
-            ButtonM(
-                onClick = {
-                    openWhatsappMessage(
-                        "50763879477",
-                        "Hola, quiero información sobre la facturación electrónica"
-                    )
-                },
-                containerColor = WhatsAppGreen
+        if (!isIosDevice) {
+            // CTA Buttons
+            Column(
+                modifier = Modifier.fillMaxWidth(),
+                verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {
-                Text(
-                    text = "Contactar por WhatsApp",
-                    style = labelLarge().copy(
-                        color = Color.White,
-                        fontWeight = FontWeight.SemiBold
-                    )
-                )
-            }
-
-            // View Pricing Button (Secondary action)
-            OutlinedButtonM(
-                onClick = {
-                    openCustomTab("https://tecodigi.com/facturacion-electronica-en-panama-firma-digital/")
-                }
-            ) {
-                Row(
-                    horizontalArrangement = Arrangement.Center,
-                    verticalAlignment = Alignment.CenterVertically
+                // WhatsApp Button (Primary action)
+                ButtonM(
+                    onClick = {
+                        openWhatsappMessage(
+                            "50763879477",
+                            "Hola, quiero información sobre la facturación electrónica"
+                        )
+                    },
+                    containerColor = WhatsAppGreen
                 ) {
-                    Icon(
-                        imageVector = Icons.Outlined.AttachMoney,
-                        contentDescription = null,
-                        modifier = Modifier.size(20.dp),
-                        tint = MaterialTheme.colorScheme.primary
-                    )
                     Text(
-                        text = "Ver Precios",
+                        text = "Contactar por WhatsApp",
                         style = labelLarge().copy(
-                            color = MaterialTheme.colorScheme.primary,
+                            color = Color.White,
                             fontWeight = FontWeight.SemiBold
-                        ),
-                        modifier = Modifier.padding(start = 8.dp)
+                        )
                     )
+                }
+
+                // View Pricing Button (Secondary action)
+                OutlinedButtonM(
+                    onClick = {
+                        openCustomTab("https://tecodigi.com/facturacion-electronica-en-panama-firma-digital/")
+                    }
+                ) {
+                    Row(
+                        horizontalArrangement = Arrangement.Center,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(
+                            imageVector = Icons.Outlined.AttachMoney,
+                            contentDescription = null,
+                            modifier = Modifier.size(20.dp),
+                            tint = MaterialTheme.colorScheme.primary
+                        )
+                        Text(
+                            text = "Ver Precios",
+                            style = labelLarge().copy(
+                                color = MaterialTheme.colorScheme.primary,
+                                fontWeight = FontWeight.SemiBold
+                            ),
+                            modifier = Modifier.padding(start = 8.dp)
+                        )
+                    }
                 }
             }
         }

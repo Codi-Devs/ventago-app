@@ -1,4 +1,4 @@
-@file:OptIn(kotlinx.cinterop.ExperimentalForeignApi::class)
+@file:OptIn(kotlinx.cinterop.BetaInteropApi::class, kotlinx.cinterop.ExperimentalForeignApi::class)
 
 package com.teco.ventago.features.printers.domain
 
@@ -13,6 +13,7 @@ import com.teco.ventago.features.printers.domain.model.PrintResultContext
 import com.teco.ventago.features.printers.domain.model.PrinterConfig
 import com.teco.ventago.features.printers.domain.model.PrinterConnectionException
 import com.teco.ventago.features.printers.domain.model.PrinterSendException
+import com.teco.ventago.features.printers.domain.model.toTicketPaperProfile
 import com.teco.ventago.vendor.epson.EPOS2_ALIGN_CENTER
 import com.teco.ventago.vendor.epson.EPOS2_ALIGN_LEFT
 import com.teco.ventago.vendor.epson.EPOS2_ALIGN_RIGHT
@@ -24,7 +25,10 @@ import com.teco.ventago.vendor.epson.EPOS2_ERR_PARAM
 import com.teco.ventago.vendor.epson.EPOS2_ERR_UNSUPPORTED
 import com.teco.ventago.vendor.epson.EPOS2_FULL_CUT_FEED
 import com.teco.ventago.vendor.epson.EPOS2_HALFTONE_DITHER
+import com.teco.ventago.vendor.epson.EPOS2_LEVEL_H
+import com.teco.ventago.vendor.epson.EPOS2_LEVEL_L
 import com.teco.ventago.vendor.epson.EPOS2_LEVEL_M
+import com.teco.ventago.vendor.epson.EPOS2_LEVEL_Q
 import com.teco.ventago.vendor.epson.EPOS2_MODE_MONO
 import com.teco.ventago.vendor.epson.EPOS2_MODEL_ANK
 import com.teco.ventago.vendor.epson.EPOS2_SUCCESS
@@ -50,13 +54,21 @@ import kotlinx.cinterop.usePinned
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.IO
 import kotlinx.coroutines.withContext
+import platform.CoreGraphics.CGRectMake
+import platform.CoreGraphics.CGSizeMake
 import platform.Foundation.NSData
 import platform.Foundation.create
 import platform.Foundation.dataWithContentsOfURL
 import platform.Foundation.NSURL
+import platform.UIKit.UIColor
 import platform.UIKit.UIImage
+import platform.UIKit.UIGraphicsBeginImageContextWithOptions
+import platform.UIKit.UIGraphicsEndImageContext
+import platform.UIKit.UIGraphicsGetImageFromCurrentImageContext
+import platform.UIKit.UIRectFill
 import kotlin.io.encoding.Base64
 import kotlin.io.encoding.ExperimentalEncodingApi
+import kotlin.math.roundToLong
 
 class IosEpsonPrinterEngine(
     private val logger: ILoggerService,
@@ -77,7 +89,7 @@ class IosEpsonPrinterEngine(
                     printer.connect(printerConfig.connectionTarget(), printerConfig.timeoutMs.toLong()).toInt(),
                     "connect"
                 )
-                commands.forEach { command -> applyCommand(printer, command) }
+                commands.forEach { command -> applyCommand(printer, command, printerConfig) }
                 ensureSuccess(printer.sendData(printerConfig.timeoutMs.toLong()).toInt(), "sendData")
                 return@withContext PrintResult(
                     success = true,
@@ -106,7 +118,7 @@ class IosEpsonPrinterEngine(
     }
 
     @OptIn(ExperimentalEncodingApi::class)
-    private fun applyCommand(printer: Epos2Printer, command: PrintCommand) {
+    private fun applyCommand(printer: Epos2Printer, command: PrintCommand, printerConfig: PrinterConfig) {
         when (command) {
             is PrintCommand.Text -> {
                 ensureSuccess(printer.addTextAlign(command.alignment.toEpsonAlignment()).toInt(), "addTextAlign")
@@ -135,30 +147,36 @@ class IosEpsonPrinterEngine(
             }
 
             is PrintCommand.Qr -> {
-                ensureSuccess(printer.addTextAlign(command.alignment.toEpsonAlignment()).toInt(), "addTextAlign")
+                ensureSuccess(printer.addTextAlign(EPOS2_ALIGN_LEFT.toInt()).toInt(), "addTextAlign")
+                ensureSuccess(printer.addHPosition(command.xPositionDots.toLong()).toInt(), "addHPosition")
                 ensureSuccess(
                     printer.addSymbol(
                         command.data,
                         EPOS2_SYMBOL_QRCODE_MODEL_2.toInt(),
-                        EPOS2_LEVEL_M.toInt(),
+                        command.errorCorrection.toEpsonQrLevel(),
                         command.size.toLong(),
                         command.size.toLong(),
                         0
                     ).toInt(),
                     "addSymbol"
                 )
+                ensureSuccess(printer.addHPosition(0).toInt(), "resetHPosition")
                 ensureSuccess(printer.addFeedLine(1).toInt(), "addFeedLine")
             }
 
             is PrintCommand.Image -> {
-                ensureSuccess(printer.addTextAlign(command.alignment.toEpsonAlignment()).toInt(), "addTextAlign")
+                ensureSuccess(printer.addTextAlign(EPOS2_ALIGN_LEFT.toInt()).toInt(), "addTextAlign")
                 val image = command.source.toUiImage()
                     ?: throw PrinterConnectionException("No se pudo decodificar la imagen del ticket")
-                val width = image.size.useContents { this.width.toLong() }
-                val height = image.size.useContents { this.height.toLong() }
+                val renderedImage = image.toPaperAwareImage(
+                    paperWidthMm = printerConfig.paperWidthMm,
+                    widthHintPercent = command.widthHintPercent
+                )
+                val width = renderedImage.size.useContents { this.width.toLong() }
+                val height = renderedImage.size.useContents { this.height.toLong() }
                 ensureSuccess(
                     printer.addImage(
-                        image,
+                        renderedImage,
                         0,
                         0,
                         width,
@@ -233,6 +251,13 @@ private fun PrintAlignment.toEpsonAlignment(): Int = when (this) {
     PrintAlignment.RIGHT -> EPOS2_ALIGN_RIGHT.toInt()
 }
 
+private fun String.toEpsonQrLevel(): Int = when (trim().uppercase()) {
+    "L" -> EPOS2_LEVEL_L.toInt()
+    "Q" -> EPOS2_LEVEL_Q.toInt()
+    "H" -> EPOS2_LEVEL_H.toInt()
+    else -> EPOS2_LEVEL_M.toInt()
+}
+
 private fun String.ensureLineEnding(): String = if (endsWith('\n')) this else "$this\n"
 
 @OptIn(ExperimentalEncodingApi::class)
@@ -254,3 +279,40 @@ private fun Int.isCutFallbackCompatible(): Boolean = this == EPOS2_ERR_PARAM.toI
 @OptIn(ExperimentalEncodingApi::class)
 private fun ByteArray.toNSData(): NSData =
     usePinned { pinned -> NSData.create(bytes = pinned.addressOf(0), length = size.toULong()) }
+
+private fun UIImage.toPaperAwareImage(
+    paperWidthMm: Int,
+    widthHintPercent: Int?,
+): UIImage {
+    val canvasWidth = paperWidthMm.toTicketPaperProfile().canvasWidthDots
+    val sourceWidth = size.useContents { this.width }.coerceAtLeast(1.0)
+    val sourceHeight = size.useContents { this.height }.coerceAtLeast(1.0)
+    val fallbackWidth = sourceWidth.coerceAtMost(canvasWidth.toDouble())
+    val targetWidth = widthHintPercent
+        ?.coerceIn(1, 100)
+        ?.let { hint -> ((canvasWidth * hint) / 100.0).roundToLong().toDouble() }
+        ?.coerceIn(MIN_IMAGE_TARGET_WIDTH_PX.toDouble(), canvasWidth.toDouble())
+        ?: fallbackWidth.coerceIn(MIN_IMAGE_TARGET_WIDTH_PX.toDouble(), canvasWidth.toDouble())
+    val targetHeight = (sourceHeight * (targetWidth / sourceWidth))
+        .roundToLong()
+        .coerceIn(1L, MAX_IMAGE_CANVAS_HEIGHT_PX.toLong())
+        .toDouble()
+    val xOffset = ((canvasWidth - targetWidth) / 2.0).coerceAtLeast(0.0)
+
+    UIGraphicsBeginImageContextWithOptions(
+        CGSizeMake(canvasWidth.toDouble(), targetHeight),
+        true,
+        1.0
+    )
+    try {
+        UIColor.whiteColor.setFill()
+        UIRectFill(CGRectMake(0.0, 0.0, canvasWidth.toDouble(), targetHeight))
+        drawInRect(CGRectMake(xOffset, 0.0, targetWidth, targetHeight))
+        return UIGraphicsGetImageFromCurrentImageContext() ?: this
+    } finally {
+        UIGraphicsEndImageContext()
+    }
+}
+
+private const val MIN_IMAGE_TARGET_WIDTH_PX = 32
+private const val MAX_IMAGE_CANVAS_HEIGHT_PX = 1200

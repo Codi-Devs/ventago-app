@@ -9,6 +9,8 @@ import com.teco.ventago.features.orders.domain.models.requests.CreateOrderReques
 import com.teco.ventago.features.orders.domain.models.requests.DeleteOrderRequest
 import com.teco.ventago.features.orders.domain.models.requests.FindOrderByIdRequest
 import com.teco.ventago.features.orders.domain.models.requests.ListOrdersRequest
+import com.teco.ventago.features.orders.domain.models.requests.PendingIntentCreateRequest
+import com.teco.ventago.features.orders.domain.models.requests.PendingIntentReleaseRequest
 import com.teco.ventago.features.orders.domain.models.requests.RejectAchPaymentRequest
 import com.teco.ventago.features.orders.domain.models.requests.RescheduleReceivablesRequest
 import com.teco.ventago.features.orders.domain.models.requests.RegisterManualPaymentsRequest
@@ -274,6 +276,64 @@ class OrdersProvider(private val client: HttpClient, private val authService: IA
             return try {
                 authService.refreshToken(client)
                 createPaymentLink(businessId, request)
+            } catch (e: Exception) {
+                response
+            }
+        }
+        return response
+    }
+
+    override suspend fun releasePendingPaymentIntent(
+        businessId: Int,
+        orderId: Int,
+        request: PendingIntentReleaseRequest
+    ): ApiResponse {
+        val res = client.post(Configs.ordersBasePath + "/api/v1/orders/$orderId/payments/pending-intent/release") {
+            headers {
+                append(HttpHeaders.Accept, "*/*")
+                append(HttpHeaders.Authorization, "Bearer ${authService.getJwtToken()}")
+                append(HttpHeaders.ContentType, "application/json")
+                append("X-Business-ID", "$businessId")
+            }
+            contentType(ContentType.Application.Json)
+            setBody(json.encodeToString(PendingIntentReleaseRequest.serializer(), request))
+        }
+
+        val body = res.body<JsonObject>()
+        val response = ApiResponse.fromJson(body)
+        if (response.error == ApiError.AUTH_001) {
+            return try {
+                authService.refreshToken(client)
+                releasePendingPaymentIntent(businessId, orderId, request)
+            } catch (e: Exception) {
+                response
+            }
+        }
+        return response
+    }
+
+    override suspend fun createPendingPaymentIntent(
+        businessId: Int,
+        orderId: Int,
+        request: PendingIntentCreateRequest
+    ): ApiResponse {
+        val res = client.post(Configs.ordersBasePath + "/api/v1/orders/$orderId/payments/pending-intent") {
+            headers {
+                append(HttpHeaders.Accept, "*/*")
+                append(HttpHeaders.Authorization, "Bearer ${authService.getJwtToken()}")
+                append(HttpHeaders.ContentType, "application/json")
+                append("X-Business-ID", "$businessId")
+            }
+            contentType(ContentType.Application.Json)
+            setBody(json.encodeToString(PendingIntentCreateRequest.serializer(), request))
+        }
+
+        val body = res.body<JsonObject>()
+        val response = ApiResponse.fromJson(body)
+        if (response.error == ApiError.AUTH_001) {
+            return try {
+                authService.refreshToken(client)
+                createPendingPaymentIntent(businessId, orderId, request)
             } catch (e: Exception) {
                 response
             }

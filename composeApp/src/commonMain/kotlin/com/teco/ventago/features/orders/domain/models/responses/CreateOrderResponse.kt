@@ -6,6 +6,26 @@ import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.JsonNames
 
+const val YAPPY_ONSITE_PENDING_TRANSACTION_EXISTS = "yappy_onsite_pending_transaction_exists"
+
+@Serializable
+data class YappyOnsitePendingTransactionDto(
+    @SerialName("billing_point")
+    val billingPoint: String = "",
+    @SerialName("branch_code")
+    val branchCode: String = "",
+    @SerialName("expires_at")
+    val expiresAt: String = "",
+    @SerialName("session_id")
+    val sessionId: String = "",
+    @SerialName("transaction_id")
+    val transactionId: String = "",
+)
+
+class YappyOnsitePendingTransactionExistsException(
+    val pendingTransaction: YappyOnsitePendingTransactionDto,
+) : Exception(YAPPY_ONSITE_PENDING_TRANSACTION_EXISTS)
+
 @OptIn(ExperimentalSerializationApi::class)
 @Serializable
 data class CreateOrderResponse(
@@ -23,6 +43,9 @@ data class CreateOrderResponse(
 
     @SerialName("tax_amount")
     val taxAmount: String,
+
+    @SerialName("payment_flow_type")
+    val paymentFlowType: String? = null,
 
     @SerialName("payment_status")
     val paymentStatus: Int,
@@ -42,7 +65,10 @@ data class CreateOrderResponse(
     val links: List<CreateOrderLinkDto>? = null,
 
     @SerialName("invoice_files")
-    val invoiceFiles: InvoiceFilesDto? = null
+    val invoiceFiles: InvoiceFilesDto? = null,
+
+    @SerialName("onsite_payment")
+    val onsitePayment: OnsitePaymentDto? = null,
 )
 
 
@@ -62,6 +88,9 @@ data class CreateOrderLinkDto(
 
     @SerialName("created_at")
     val createdAt: String? = null,
+
+    @SerialName("expires_at")
+    val expiresAt: String? = null,
 )
 
 @Serializable
@@ -74,4 +103,19 @@ data class InvoiceFilesDto(
 
     @SerialName("TICKET")
     val ticket: TicketDocumentPayload? = null
+)
+
+@Serializable
+data class OnsitePaymentDto(
+    @SerialName("id") val id: String? = null,
+    @SerialName("transaction_id") val transactionId: String = "",
+    @SerialName("order_id") val orderId: Int? = null,
+    @SerialName("session_id") val sessionId: String = "",
+    @SerialName("qr_hash") val qrHash: String = "",
+    @SerialName("qr_type") val qrType: String = "",
+    @SerialName("status") val status: String = "",
+    @SerialName("provider_status") val providerStatus: String = "",
+    @SerialName("amount") val amount: String = "",
+    @SerialName("currency") val currency: String = "USD",
+    @SerialName("expires_at") val expiresAt: String? = null,
 )

@@ -11,9 +11,14 @@ object ScopeKey {
     const val INVOICE_CREDIT_NOTES = "invoice:credit_notes"
     const val INVOICE_CUSTOM_PRODUCT = "invoice:custom_product"
     const val INVOICE_EDIT_PRODUCT = "invoice:edit_product"
+    const val INVOICE_YAPPY_ONSITE = "invoice:yappy_onsite"
     const val ACH_PAYMENT_VIEW = "ach_payment:view"
     const val ACH_PAYMENT_APPROVE = "ach_payment:approve"
     const val ACH_PAYMENT_REJECT = "ach_payment:reject"
+
+    const val PAYMENTS_CONFIGURE = "payments:configure"
+    const val PAYMENTS_VIEW = "payments:view"
+    const val PAYMENTS_PAY = "payments:pay"
 
     const val CUSTOMER_VIEW = "customer:view"
     const val CUSTOMER_CREATE = "customer:create"
