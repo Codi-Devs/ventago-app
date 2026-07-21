@@ -79,7 +79,6 @@ class RoomCache (private val cacheDatabase: CacheDatabase,  private val changesM
             is BusinessFinancialProfile -> {
                 cacheDatabase.getFinancialProfileCacheDao().deleteProfile()
                 data.toCache()?.let { cacheDatabase.getFinancialProfileCacheDao().insert(it) }
-                changesManager.financialChanged()
             }
             is Products -> {
                 cacheDatabase.getProductsCacheDao().deleteProducts()

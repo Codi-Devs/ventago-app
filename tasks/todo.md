@@ -1,3 +1,87 @@
+# Config Summary And Branch Refresh Storm TODO
+
+## Plan
+- [x] Confirm the repeated backend calls from the provided GIN log sample.
+- [x] Trace `config-summary` and `invoicing/branches` refresh paths to their cache/change listeners.
+- [x] Stop backend refreshes from publishing their own realtime invalidations.
+- [x] Add focused regression coverage for silent backend refresh caching.
+- [x] Run focused tests and compile verification, then record results.
+
+## Verification Gates
+- [x] `./gradlew --no-build-cache --no-configuration-cache :composeApp:testAndroidHostTest --tests com.teco.ventago.features.branches.BranchServiceRefreshTest --tests com.teco.ventago.features.financialProfile.FinancialProfileServiceTest`
+- [x] `./gradlew --no-build-cache --no-configuration-cache :composeApp:compileCommonMainKotlinMetadata`
+
+## Review Notes
+- Provided log sample contained 34 `GET /api/v1/invoicing/branches` calls and 5 `GET /api/v1/business/config-summary` calls between `09:49:20` and `09:49:59`.
+- `BranchService.refresh()` now caches backend branch refreshes with `ignoreChange = true`, so its own realtime branch listener does not immediately trigger another `/invoicing/branches` request.
+- `FinancialProfileService.refresh()` now writes backend profile data through a synchronous silent cache path, and `RoomCache` no longer emits `financialChanged()` just because a `BusinessFinancialProfile` was cached.
+- Added regression coverage for silent backend branch/profile refreshes while keeping branch local mutations able to publish invalidations.
+- Focused Android host tests and common metadata compilation passed. Existing project warnings remain unrelated.
+
+# Home Payment Banner Profile Resolution TODO
+
+## Plan
+- [x] Add a Home state flag for payment profile/config-summary resolution.
+- [x] Gate the payment promotional banner until the backend financial profile has resolved.
+- [x] Run focused compile verification and record results.
+
+## Verification Gates
+- [x] `./gradlew --no-build-cache --no-configuration-cache :composeApp:compileCommonMainKotlinMetadata`
+
+## Review Notes
+- Home now tracks when the payment profile/config summary has resolved.
+- The payment promotional banner only evaluates after that backend-backed state is available, preventing a false post-login flash for businesses that already have payments configured.
+- Common metadata compilation passed. Existing project warnings remain unrelated.
+
+# POS Yappy Onsite Configuration Routing TODO
+
+## Plan
+- [x] Add explicit POS state for whether payments onboarding/account creation is completed.
+- [x] Route Yappy onsite configuration to Payments home when onboarding is not completed, otherwise route directly to Yappy onsite setup.
+- [x] Update the configuration dialog copy/confirm navigation to match the resolved destination.
+- [x] Run focused compile verification and record results.
+
+## Verification Gates
+- [x] `./gradlew --no-build-cache --no-configuration-cache :composeApp:compileCommonMainKotlinMetadata`
+
+## Review Notes
+- POS now tracks `paymentsOnboardingCompleted` from the financial profile instead of inferring initial setup from configured payment methods.
+- Yappy onsite configuration routes to Payments home when payments onboarding/account creation is not completed, and routes directly to Yappy onsite setup once onboarding is completed.
+- The configuration dialog copy now tells first-time payment users to accept terms/create the payments account before Yappy onsite setup.
+- Common metadata compilation passed. Existing project warnings remain unrelated.
+
+# Home Empty Sales Chart TODO
+
+## Plan
+- [x] Hide the Home sales chart section when chart data is empty.
+- [x] Keep the chart visible when any sale exists in the selected range data.
+- [x] Run focused compile verification and record results.
+
+## Verification Gates
+- [x] `./gradlew --no-build-cache --no-configuration-cache :composeApp:compileCommonMainKotlinMetadata`
+
+## Review Notes
+- Home now skips the sales title, range selector, and line chart when the sales chart data is empty.
+- The section returns automatically when `salesChart` contains non-zero sales data.
+- Common metadata compilation passed. Existing project warnings remain unrelated.
+
+# Home Payment Setup Banner TODO
+
+## Plan
+- [x] Add a Home state flag derived from the financial profile for whether payment methods are configured.
+- [x] Render a dismissible payment setup banner below the Home action cards and above support.
+- [x] Persist the dismissal locally per business.
+- [x] Run focused compile verification and record results.
+
+## Verification Gates
+- [x] `./gradlew --no-build-cache --no-configuration-cache :composeApp:compileCommonMainKotlinMetadata`
+
+## Review Notes
+- Added a Home payment setup banner below the action cards and above support.
+- The banner uses the real-time reports dark gradient style, includes the Yappy logo, opens payment settings from the CTA, and persists dismissal in `LocalStorage` per business.
+- Banner visibility is driven by the observed financial profile and hides once the business has configured payment methods.
+- Common metadata compilation passed. Existing project warnings remain unrelated.
+
 # Yappy QR Exit Cancellation Guard TODO
 
 ## Plan

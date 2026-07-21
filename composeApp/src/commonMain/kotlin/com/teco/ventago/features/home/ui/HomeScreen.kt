@@ -30,6 +30,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.Chat
 import androidx.compose.material.icons.outlined.NotificationsNone
 import androidx.compose.material.icons.rounded.AddShoppingCart
+import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material.icons.rounded.Redeem
 import androidx.compose.material.icons.rounded.Description
 import androidx.compose.material.icons.rounded.EventAvailable
@@ -73,6 +74,7 @@ import androidx.compose.ui.modifier.modifierLocalConsumer
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.teco.ventago.AppViewModel
@@ -148,6 +150,7 @@ import ventago.composeapp.generated.resources.home_year_sales
 import ventago.composeapp.generated.resources.yappy_logo
 import ventago.composeapp.generated.resources.yappy_logo_portrait
 
+private const val HOME_PAYMENT_SETUP_DISMISSED_PREFIX = "home_payment_setup_banner_dismissed"
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -180,6 +183,16 @@ fun HomeScreen(
 
     val hasEnteredQuotes = storage.bool(QuotesOnboarding.KEY_HAS_ENTERED_QUOTES) == true
     val hasShownQuotesWelcome = storage.bool(QuotesOnboarding.KEY_WELCOME_SHEET_SHOWN) == true
+    val paymentSetupBannerDismissedKey = remember(uiState.business?.businessId) {
+        "${HOME_PAYMENT_SETUP_DISMISSED_PREFIX}_${uiState.business?.businessId ?: 0}"
+    }
+    var paymentSetupBannerDismissed by remember(paymentSetupBannerDismissedKey) {
+        mutableStateOf(storage.bool(paymentSetupBannerDismissedKey) == true)
+    }
+    val showPaymentSetupBanner = uiState.business?.businessId != null &&
+        uiState.paymentProfileResolved &&
+        !uiState.hasConfiguredPaymentMethods &&
+        !paymentSetupBannerDismissed
     val feeDueCents = uiState.feeBillingSummary.pendingDueAmount + uiState.feeBillingSummary.overdueAmount
     val panamaDateKey = currentPanamaDateKey()
     val feePromptStorageKey = remember(
@@ -245,31 +258,33 @@ fun HomeScreen(
         }
 
         val salesData = uiState.salesChart
-        Text(
-            stringResource(Res.string.sales),
-            modifier = Modifier.padding(start = 16.dp, end = 16.dp, top = 16.dp),
-            style = TextStyle(
-                fontSize = 16.sp,
-                lineHeight = 24.sp,
-                fontFamily = latoFontFamily(),
-                fontWeight = FontWeight(500),
-                letterSpacing = 0.15.sp,
+        if (salesData.isNotEmpty()) {
+            Text(
+                stringResource(Res.string.sales),
+                modifier = Modifier.padding(start = 16.dp, end = 16.dp, top = 16.dp),
+                style = TextStyle(
+                    fontSize = 16.sp,
+                    lineHeight = 24.sp,
+                    fontFamily = latoFontFamily(),
+                    fontWeight = FontWeight(500),
+                    letterSpacing = 0.15.sp,
+                )
             )
-        )
 
-        HomeSalesRangeSelector(
-            selectedRange = uiState.selectedRange,
-            onRangeSelected = viewModel::setSalesRange,
-            modifier = Modifier.padding(start = 16.dp, end = 16.dp, top = 12.dp)
-        )
+            HomeSalesRangeSelector(
+                selectedRange = uiState.selectedRange,
+                onRangeSelected = viewModel::setSalesRange,
+                modifier = Modifier.padding(start = 16.dp, end = 16.dp, top = 12.dp)
+            )
 
-        SalesLineGraphic(
-            modifier = Modifier.padding(start = 16.dp, end = 16.dp, top = 16.dp),
-            data = salesData,
-            selectedIndex = uiState.selectedSalesIndex,
-            chartHeight = 220.dp,
-            onItemClick = viewModel::setSelectedSalesIndex
-        )
+            SalesLineGraphic(
+                modifier = Modifier.padding(start = 16.dp, end = 16.dp, top = 16.dp),
+                data = salesData,
+                selectedIndex = uiState.selectedSalesIndex,
+                chartHeight = 220.dp,
+                onItemClick = viewModel::setSelectedSalesIndex
+            )
+        }
 
 
         val actionRowPadding = Modifier.padding(top = 16.dp, start = 16.dp, end = 16.dp)
@@ -598,10 +613,16 @@ fun HomeScreen(
             }
         }
 
-        // HIDDEN: Yappy/payment methods configuration card temporarily disabled (backend bug)
-        // See tasks/restore-payment-links.md for full restore instructions
-
-
+        if (showPaymentSetupBanner) {
+            PaymentSetupBanner(
+                modifier = Modifier.padding(top = 16.dp, start = 16.dp, end = 16.dp),
+                onConfigure = { navigate(PosScreens.Payments) },
+                onDismiss = {
+                    storage.set(paymentSetupBannerDismissedKey, true)
+                    paymentSetupBannerDismissed = true
+                }
+            )
+        }
 
         if (uiState.showSupportCard) {
             SupportCard(uiState.unreadCount) {
@@ -691,6 +712,116 @@ fun HomeScreen(
                     Text(stringResource(Res.string.action_continue), style = bodyMediumBold(color = MaterialTheme.colorScheme.onSecondary))
                 }
                 Spacer(Modifier.height(12.dp))
+            }
+        }
+    }
+}
+
+@Composable
+private fun PaymentSetupBanner(
+    onConfigure: () -> Unit,
+    onDismiss: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val gradient = Brush.linearGradient(
+        colors = listOf(
+            Color(0xFF06305F),
+            MaterialTheme.colorScheme.primary.copy(alpha = 0.96f),
+            MaterialTheme.colorScheme.secondary.copy(alpha = 0.92f)
+        )
+    )
+
+    Card(
+        modifier = modifier
+            .fillMaxWidth()
+            .height(132.dp),
+        shape = RoundedCornerShape(18.dp),
+        elevation = CardDefaults.cardElevation(2.dp),
+        colors = CardDefaults.cardColors(containerColor = Color.Transparent),
+    ) {
+        Box(
+            modifier = Modifier
+                .background(gradient)
+                .fillMaxSize()
+                .padding(16.dp)
+        ) {
+            IconButton(
+                onClick = onDismiss,
+                modifier = Modifier
+                    .align(Alignment.TopEnd)
+                    .size(32.dp)
+            ) {
+                Icon(
+                    imageVector = Icons.Rounded.Close,
+                    contentDescription = "Cerrar",
+                    tint = MaterialTheme.colorScheme.onPrimary,
+                    modifier = Modifier.size(18.dp)
+                )
+            }
+
+            Row(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(end = 28.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Box(
+                    modifier = Modifier
+                        .size(46.dp)
+                        .clip(RoundedCornerShape(14.dp))
+                        .background(MaterialTheme.colorScheme.onPrimary.copy(alpha = 0.16f)),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        imageVector = Icons.Rounded.Payment,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.onPrimary,
+                        modifier = Modifier.size(26.dp)
+                    )
+                }
+                Spacer(Modifier.width(12.dp))
+                Column(
+                    modifier = Modifier.weight(1f),
+                    verticalArrangement = Arrangement.Center
+                ) {
+                    Text(
+                        text = "Factura y cobra desde un solo lugar",
+                        style = bodyMediumBold(color = MaterialTheme.colorScheme.onPrimary),
+                        maxLines = 2,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                    Spacer(Modifier.height(4.dp))
+                    Text(
+                        text = "Acepta Yappy y tarjetas desde tus órdenes y facturas",
+                        style = labelSmall(color = MaterialTheme.colorScheme.onPrimary.copy(alpha = 0.86f)),
+                        maxLines = 2,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                    Spacer(Modifier.height(10.dp))
+                    Button(
+                        onClick = onConfigure,
+                        modifier = Modifier.height(34.dp),
+                        shape = RoundedCornerShape(10.dp),
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = MaterialTheme.colorScheme.onPrimary,
+                            contentColor = MaterialTheme.colorScheme.primary
+                        ),
+                        contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 14.dp)
+                    ) {
+                        Image(
+                            painter = painterResource(Res.drawable.yappy_logo),
+                            contentDescription = "Yappy",
+                            modifier = Modifier
+                                .width(48.dp)
+                                .height(16.dp)
+                        )
+                        Spacer(Modifier.width(8.dp))
+                        Text(
+                            text = "Configurar pagos",
+                            style = labelSmall(color = MaterialTheme.colorScheme.primary)
+                        )
+                    }
+                }
             }
         }
     }

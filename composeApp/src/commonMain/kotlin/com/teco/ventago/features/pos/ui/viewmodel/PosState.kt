@@ -336,6 +336,7 @@ data class PosState(
     val customer: CustomerListItem? = null,
     val customerQuery: String = "",
     val paymentsConfigured: Boolean = false,
+    val paymentsOnboardingCompleted: Boolean = false,
     val paymentProfileResolved: Boolean = false,
     val paymentLinkConfigured: Boolean = false,
     val yappyOnsiteConfigured: Boolean = false,

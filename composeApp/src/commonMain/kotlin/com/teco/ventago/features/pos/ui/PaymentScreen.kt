@@ -357,7 +357,13 @@ fun PaymentScreenContent(
             viewModel.savePaymentLinkCheckpointForResume()
             val screen = when (target) {
                 PaymentConfigurationTarget.PaymentLinks -> PosScreens.Payments
-                PaymentConfigurationTarget.YappyOnsite -> PosScreens.PaymentsYappyOnsiteScreen
+                PaymentConfigurationTarget.YappyOnsite -> {
+                    if (ui.paymentsOnboardingCompleted) {
+                        PosScreens.PaymentsYappyOnsiteScreen
+                    } else {
+                        PosScreens.Payments
+                    }
+                }
             }
             navigate(screen, null)
         }
@@ -579,14 +585,21 @@ fun PaymentScreenContent(
             PaymentConfigurationTarget.PaymentLinks -> ui.canConfigurePayments
             PaymentConfigurationTarget.YappyOnsite -> ui.canConfigureYappyOnsite
         }
+        val yappyOnsiteRequiresPaymentsOnboarding =
+            paymentConfigurationTarget == PaymentConfigurationTarget.YappyOnsite &&
+                !ui.paymentsOnboardingCompleted
         DMAlertDialog(
             title = when {
+                canConfigureTarget && yappyOnsiteRequiresPaymentsOnboarding ->
+                    "Configura tus pagos"
                 canConfigureTarget && paymentConfigurationTarget == PaymentConfigurationTarget.YappyOnsite ->
                     "Configura Yappy en caja"
                 canConfigureTarget -> "Configura tus links de pago"
                 else -> "Canal no configurado"
             },
             message = when {
+                canConfigureTarget && yappyOnsiteRequiresPaymentsOnboarding ->
+                    "Primero debes aceptar los términos y crear tu cuenta de pagos. Luego podrás configurar Yappy en caja."
                 canConfigureTarget && paymentConfigurationTarget == PaymentConfigurationTarget.YappyOnsite ->
                     "Para usar Yappy en caja primero debes configurar las sucursales y unidades de cobro."
                 canConfigureTarget ->
@@ -604,7 +617,13 @@ fun PaymentScreenContent(
                     viewModel.savePaymentLinkCheckpointForResume()
                     val screen = when (paymentConfigurationTarget) {
                         PaymentConfigurationTarget.PaymentLinks -> PosScreens.Payments
-                        PaymentConfigurationTarget.YappyOnsite -> PosScreens.PaymentsYappyOnsiteScreen
+                        PaymentConfigurationTarget.YappyOnsite -> {
+                            if (ui.paymentsOnboardingCompleted) {
+                                PosScreens.PaymentsYappyOnsiteScreen
+                            } else {
+                                PosScreens.Payments
+                            }
+                        }
                     }
                     navigate(screen, null)
                 }

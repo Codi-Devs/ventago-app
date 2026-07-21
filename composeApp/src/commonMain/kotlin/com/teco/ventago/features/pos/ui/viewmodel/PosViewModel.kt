@@ -299,6 +299,7 @@ class PosViewModel(
                     updateState {
                         copy(
                             paymentsConfigured = financialProfileService.paymentsConfigured(),
+                            paymentsOnboardingCompleted = financialProfileService.paymentsOnboardingCompleted(),
                             paymentProfileResolved = true,
                             paymentLinkConfigured = financialProfileService.paymentLinkMethodsConfigured(),
                             yappyOnsiteConfigured = onsiteConfigured,
@@ -4760,6 +4761,7 @@ class PosViewModel(
             updateState {
                 copy(
                     paymentsConfigured = financialProfileService.paymentsConfigured(),
+                    paymentsOnboardingCompleted = financialProfileService.paymentsOnboardingCompleted(),
                     paymentProfileResolved = financialProfileService.hasLoadedProfile(),
                     paymentLinkConfigured = financialProfileService.paymentLinkMethodsConfigured(),
                     yappyOnsiteConfigured = financialProfileService.yappyOnsiteConfigured(),

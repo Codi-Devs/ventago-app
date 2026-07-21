@@ -25,6 +25,8 @@ data class HomeState(
     val invoicingEnabled: Boolean = false,
     val invoicingPlanState: InvoicingPlanState? = null,
     val feeBillingSummary: FeeBillingSummary = FeeBillingSummary(),
+    val paymentProfileResolved: Boolean = false,
+    val hasConfiguredPaymentMethods: Boolean = false,
     val hasQuotesAccess: Boolean = false,
     val canCreateOrderEntry: Boolean = false,
     val canCreateExpense: Boolean = false,

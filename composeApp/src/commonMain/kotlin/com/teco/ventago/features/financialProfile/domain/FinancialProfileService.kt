@@ -81,7 +81,7 @@ class FinancialProfileService(
             runCatching { repo.getFinancialProfile(businessId) }
                 .onSuccess { profile ->
                     state.value = profile
-                    saveCache(profile, ignoreChange = true)
+                    saveCacheNow(profile, ignoreChange = true)
                 }
                 .onFailure {
                     loggerService.sendLog(
@@ -108,6 +108,10 @@ class FinancialProfileService(
                     methods.manualTransference.enabled
                 )
         } ?: false
+    }
+
+    fun paymentsOnboardingCompleted(): Boolean {
+        return state.value?.paymentSummary?.onboardingCompleted == true
     }
 
     fun paymentLinkMethodsConfigured(): Boolean {
@@ -155,12 +159,16 @@ class FinancialProfileService(
     private suspend fun cacheGet(): BusinessFinancialProfile? =
         runCatching { cache.getCache(BusinessFinancialProfile::class) }.getOrNull()
 
+    private suspend fun saveCacheNow(value: BusinessFinancialProfile, ignoreChange: Boolean = false) {
+        runCatching { cache.saveCache(value) }
+        if (!ignoreChange) {
+            changesManager.financialChanged()
+        }
+    }
+
     private fun saveCache(value: BusinessFinancialProfile, ignoreChange: Boolean = false) {
         appScope.launch(Dispatchers.IO) {
-            runCatching { cache.saveCache(value) }
-            if (!ignoreChange) {
-                changesManager.financialChanged()
-            }
+            saveCacheNow(value, ignoreChange)
         }
     }
 

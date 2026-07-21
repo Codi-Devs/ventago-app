@@ -14,9 +14,11 @@ import kotlin.test.assertEquals
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.emptyFlow
 import kotlinx.coroutines.test.runTest
+import kotlinx.coroutines.withTimeout
 
 class FinancialProfileServiceTest {
 
@@ -59,14 +61,29 @@ class FinancialProfileServiceTest {
         assertTrue(repository.calls.isEmpty())
     }
 
+    @Test
+    fun refreshCachesProfileWithoutPublishingFinancialInvalidation() = runTest {
+        val changesManager = FakeChangesManager()
+        val cache = FakeCacheService()
+        val repository = FakeFinancialProfileRepository(profile(businessId = 7, invoicingActive = true))
+        val service = createService(cache, repository, this, changesManager)
+
+        service.refresh(businessIdOpt = 7)
+        cache.awaitSave()
+
+        assertEquals(listOf(7), repository.calls)
+        assertEquals(0, changesManager.financialChangedCalls)
+    }
+
     private fun createService(
         cache: FakeCacheService,
         repository: FakeFinancialProfileRepository,
         appScope: CoroutineScope,
+        changesManager: FakeChangesManager = FakeChangesManager(),
     ): FinancialProfileService =
         FinancialProfileService(
             cache = cache,
-            changesManager = FakeChangesManager(),
+            changesManager = changesManager,
             repo = repository,
             loggerService = NoopLoggerService(),
             appScope = appScope,
@@ -98,6 +115,14 @@ class FinancialProfileServiceTest {
     private class FakeCacheService(
         private var financialProfile: BusinessFinancialProfile? = null,
     ) : ICacheService {
+        private val saves = Channel<Unit>(capacity = Channel.UNLIMITED)
+
+        suspend fun awaitSave() {
+            withTimeout(2_000) {
+                saves.receive()
+            }
+        }
+
         @Suppress("UNCHECKED_CAST")
         override suspend fun <T : Any> getCache(klass: KClass<T>): T? =
             if (klass == BusinessFinancialProfile::class) financialProfile as T? else null
@@ -107,6 +132,7 @@ class FinancialProfileServiceTest {
         override suspend fun <T> saveCache(data: T) {
             if (data is BusinessFinancialProfile) {
                 financialProfile = data
+                saves.trySend(Unit)
             }
         }
 
@@ -122,6 +148,8 @@ class FinancialProfileServiceTest {
     }
 
     private class FakeChangesManager : IChangesManager {
+        var financialChangedCalls = 0
+
         override fun productsListener(): Flow<Int> = emptyFlow()
         override fun businessListener(): Flow<Int> = emptyFlow()
         override fun financialListener(): Flow<Int> = emptyFlow()
@@ -133,7 +161,9 @@ class FinancialProfileServiceTest {
         override suspend fun productsChanged() = Unit
         override suspend fun businessChanged() = Unit
         override suspend fun branchesChanged() = Unit
-        override suspend fun financialChanged() = Unit
+        override suspend fun financialChanged() {
+            financialChangedCalls += 1
+        }
         override suspend fun customersChanged() = Unit
         override suspend fun userChanged() = Unit
         override fun removeListeners() = Unit

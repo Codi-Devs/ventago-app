@@ -57,7 +57,7 @@ class BranchService(
         loadMutex.withLock {
             val branches = branchRepository.getBranches(businessId)
             state.value = branches
-            saveCache(branches)
+            saveCache(branches, ignoreChange = true)
         }
     }
 
@@ -156,12 +156,10 @@ class BranchService(
             .launchIn(appScope)
     }
 
-    private fun saveCache(value: List<Branch>, ignoreChange: Boolean = false) {
-        appScope.launch(Dispatchers.IO) {
-            runCatching { cache.saveCache(CacheUtils.BRANCHES, value) }
-            if (!ignoreChange) {
-                changesManager.branchesChanged()
-            }
+    private suspend fun saveCache(value: List<Branch>, ignoreChange: Boolean = false) {
+        runCatching { cache.saveCache(CacheUtils.BRANCHES, value) }
+        if (!ignoreChange) {
+            changesManager.branchesChanged()
         }
     }
 

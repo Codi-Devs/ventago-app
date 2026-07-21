@@ -141,7 +141,9 @@ class HomeViewModel(
                         copy(
                             invoicingEnabled = it.invoicingActive,
                             invoicingPlanState = invoicingPlanState,
-                            feeBillingSummary = it.paymentSummary.feeBilling
+                            feeBillingSummary = it.paymentSummary.feeBilling,
+                            paymentProfileResolved = true,
+                            hasConfiguredPaymentMethods = financialProfileService.paymentsConfigured()
                         )
                     }
                 }
