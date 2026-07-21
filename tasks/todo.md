@@ -1,3 +1,36 @@
+# iOS Export Compliance Encryption Review TODO
+
+## Plan
+- [x] Review current iOS/KMP source for app-implemented encryption or hashing algorithms.
+- [x] Verify iOS networking and secure storage implementation paths.
+- [x] Check iOS project configuration and linked dependencies for explicit crypto libraries.
+- [x] Add `ITSAppUsesNonExemptEncryption=false` to the iOS app `Info.plist`.
+
+## Review Notes
+- iOS HTTP traffic uses Ktor's Darwin engine, so HTTPS/TLS encryption is delegated to Apple's networking stack.
+- iOS sensitive storage uses the Keychain/Security framework through `SecureStorage`.
+- The only direct `HmacSHA256` implementation is in `androidMain`; the iOS actual returns an empty string.
+- No proprietary, non-standard, or app-owned standard encryption implementation was found in iOS app source.
+- `iosApp/iosApp/Info.plist` now declares `ITSAppUsesNonExemptEncryption` as `false` for App Store Connect export-compliance handling.
+
+# Android 16 Target SDK Verification TODO
+
+## Plan
+- [x] Inspect Android/KMP Gradle target SDK configuration.
+- [x] Verify the generated release manifest target SDK.
+- [x] Build the release AAB for artifact-level validation.
+- [x] Record result.
+
+## Verification Gates
+- [x] `./gradlew --no-build-cache --no-configuration-cache :androidApp:processReleaseManifest --info`
+- [x] `./gradlew --no-build-cache --no-configuration-cache :androidApp:bundleRelease`
+
+## Review Notes
+- The app already targets API 37 through `android-targetSdk = "37"` in `gradle/libs.versions.toml`, which satisfies Google Play's Android 16/API 36+ requirement.
+- The generated release bundle manifest contains `<uses-sdk android:minSdkVersion="24" android:targetSdkVersion="37" />`.
+- Release bundle generation succeeded and produced `androidApp/build/outputs/bundle/release/androidApp-release.aab`.
+- The Play Console warning is likely from an older uploaded artifact; upload a new release bundle built from this codebase/version.
+
 # Yappy Onsite Payment Description TODO
 
 - [x] Trace the Yappy onsite payload field that sends the payment description.
