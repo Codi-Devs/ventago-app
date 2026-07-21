@@ -12,6 +12,8 @@
 	<string>VentaGo necesita acceso a Bluetooth para descubrir y conectarse a impresoras térmicas compatibles.</string>
 	<key>NSPhotoLibraryUsageDescription</key>
 	<string>VentaGo necesita acceso a tu galería para seleccionar imágenes de productos y comprobantes.</string>
+	<key>ITSAppUsesNonExemptEncryption</key>
+	<false/>
 	<key>NSAppTransportSecurity</key>
 	<dict/>
 </dict>
