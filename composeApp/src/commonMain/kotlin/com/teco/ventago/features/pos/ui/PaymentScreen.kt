@@ -238,6 +238,7 @@ fun PaymentScreenContent(
     var showPaymentMethodsConfigDialog by remember { mutableStateOf(false) }
     var paymentConfigurationTarget by remember { mutableStateOf(PaymentConfigurationTarget.PaymentLinks) }
     var selectorHeightPx by remember { mutableStateOf(0) }
+    var selectedPaymentMode by remember { mutableStateOf<PaymentFlowMode?>(null) }
     val density = LocalDensity.current
 
     fun requestGovernmentWarningOrProceed(action: () -> Unit) {
@@ -308,6 +309,11 @@ fun PaymentScreenContent(
                 else -> yappyOnsiteNeedsConfiguration
             },
         )
+        val effectivePaymentMode = if (isCreditOrDebitNote || isReplacementMode) {
+            ui.paymentFlowMode
+        } else {
+            selectedPaymentMode
+        }
 
         LaunchedEffect(
             ui.paymentFlowMode,
@@ -340,7 +346,25 @@ fun PaymentScreenContent(
             }
         }
 
+        LaunchedEffect(
+            selectedPaymentMode,
+            isCreditOrDebitNote,
+            isReplacementMode,
+            showDraftOption,
+            paymentLinkReady,
+            yappyOnsiteReady,
+        ) {
+            if (isCreditOrDebitNote || isReplacementMode) return@LaunchedEffect
+            when (selectedPaymentMode) {
+                PaymentFlowMode.PAYMENT_LINK -> if (!paymentLinkReady) selectedPaymentMode = null
+                PaymentFlowMode.YAPPY_ONSITE -> if (!yappyOnsiteReady) selectedPaymentMode = null
+                PaymentFlowMode.DRAFT -> if (!showDraftOption) selectedPaymentMode = null
+                else -> Unit
+            }
+        }
+
         fun selectManualPayment() {
+            selectedPaymentMode = PaymentFlowMode.MANUAL_OR_INSTALLMENTS
             viewModel.setPaymentFlow(PaymentFlowMode.MANUAL_OR_INSTALLMENTS)
         }
 
@@ -374,6 +398,7 @@ fun PaymentScreenContent(
                 if (!configured) {
                     navigateToPaymentConfiguration(PaymentConfigurationTarget.PaymentLinks)
                 } else {
+                    selectedPaymentMode = PaymentFlowMode.PAYMENT_LINK
                     viewModel.setPaymentFlow(PaymentFlowMode.PAYMENT_LINK)
                 }
             }
@@ -387,10 +412,12 @@ fun PaymentScreenContent(
             if (!yappyOnsiteReady) {
                 return
             }
+            selectedPaymentMode = PaymentFlowMode.YAPPY_ONSITE
             viewModel.setPaymentFlow(PaymentFlowMode.YAPPY_ONSITE)
         }
 
         fun selectDraft() {
+            selectedPaymentMode = PaymentFlowMode.DRAFT
             viewModel.setPaymentFlow(PaymentFlowMode.DRAFT)
         }
 
@@ -399,7 +426,7 @@ fun PaymentScreenContent(
             ) {
                 if (!isCreditOrDebitNote) {
                     PaymentMethodSelector(
-                        selectedMode = ui.paymentFlowMode,
+                        selectedMode = effectivePaymentMode,
                         showDraftOption = showDraftOption,
                         showPaymentLinkOption = showPaymentLinkOption,
                         linkEnabled = paymentLinkReady,
@@ -427,7 +454,7 @@ fun PaymentScreenContent(
 
         Spacer(Modifier.height(12.dp))
 
-        if (ui.paymentFlowMode == PaymentFlowMode.MANUAL_OR_INSTALLMENTS || isCreditOrDebitNote) {
+        if (effectivePaymentMode == PaymentFlowMode.MANUAL_OR_INSTALLMENTS || isCreditOrDebitNote) {
             ManualAndInstallmentsSection(
                 viewModel = viewModel,
                 totalToCharge = totalToCharge,
@@ -466,7 +493,7 @@ fun PaymentScreenContent(
                 minHeight = manualSectionMinHeight,
                 createInvoiceLabelOverride = if (isReplacementMode) "Registrar pago" else null,
             )
-        } else if (ui.paymentFlowMode == PaymentFlowMode.PAYMENT_LINK) {
+        } else if (effectivePaymentMode == PaymentFlowMode.PAYMENT_LINK) {
             PaymentLinkSection(
                 totalToCharge = totalToCharge,
                 enabled = hasPositiveAmount && ui.canCreateInvoice,
@@ -494,7 +521,7 @@ fun PaymentScreenContent(
                     }
                 }
             )
-        } else if (ui.paymentFlowMode == PaymentFlowMode.YAPPY_ONSITE) {
+        } else if (effectivePaymentMode == PaymentFlowMode.YAPPY_ONSITE) {
             YappyOnsiteCreateSection(
                 totalToCharge = totalToCharge,
                 enabled = hasPositiveAmount && yappyOnsiteReady,
@@ -510,7 +537,7 @@ fun PaymentScreenContent(
                     }
                 }
             )
-        } else {
+        } else if (effectivePaymentMode == PaymentFlowMode.DRAFT) {
             DraftPaymentSection(
                 enabled = hasPositiveAmount && ui.canCreateDraft,
                 canPreviewInvoice = canPreviewInvoice,
@@ -551,7 +578,7 @@ fun PaymentScreenContent(
 
     if (showGovernmentWarning) {
         val warningMessage = buildString {
-            append("El RUC del cliente parece de gobierno. ")
+            append("El cliente seleccionado está registrado como gobierno. ")
             append("Las facturas para gobierno requieren que cada producto tenga configurado:\n")
             append("- Código de bienes/servicios de Panamá\n")
             append("- Unidad de bienes/servicios de Panamá\n\n")
@@ -562,7 +589,7 @@ fun PaymentScreenContent(
         }.trimEnd()
 
         DMAlertDialog(
-            title = "Advertencia: Posible factura de gobierno",
+            title = "Advertencia: factura de gobierno",
             message = warningMessage,
             show = showGovernmentWarning,
             onDismiss = {
@@ -647,7 +674,7 @@ fun PaymentScreenContent(
 
 @Composable
 private fun PaymentMethodSelector(
-    selectedMode: PaymentFlowMode,
+    selectedMode: PaymentFlowMode?,
     showDraftOption: Boolean,
     showPaymentLinkOption: Boolean,
     linkEnabled: Boolean,
@@ -682,7 +709,7 @@ private fun PaymentMethodSelector(
         if (showPaymentLinkOption) {
             Spacer(Modifier.height(10.dp))
             PaymentMethodOptionCard(
-                title = "Crear enlace de pago",
+                title = "Crear enlace de pago con QR",
                 subtitle = if (linkEnabled) "Yappy, tarjeta, ACH o PayPal" else "Configura un canal antes de cobrar con links",
                 icon = Icons.Rounded.Link,
                 selected = selectedMode == PaymentFlowMode.PAYMENT_LINK,

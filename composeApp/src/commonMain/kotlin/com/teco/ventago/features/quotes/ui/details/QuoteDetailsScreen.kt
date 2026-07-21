@@ -70,6 +70,7 @@ import com.teco.ventago.features.quotes.domain.QuoteSelectionStore
 import com.teco.ventago.features.quotes.domain.models.Quote
 import com.teco.ventago.features.quotes.domain.models.QuoteLine
 import com.teco.ventago.features.quotes.domain.models.QuoteStatus
+import com.teco.ventago.features.quotes.domain.models.compactDisplayNumber
 import com.teco.ventago.utils.DateFormat
 import com.teco.ventago.utils.formatNumberToMoney
 import org.jetbrains.compose.resources.stringResource
@@ -407,7 +408,7 @@ private fun QuoteHeaderCard(
                     )
                     Spacer(modifier = Modifier.width(8.dp))
                     Text(
-                        text = quote.displayNumberOrQuoteNumber,
+                        text = quote.compactDisplayNumber(),
                         style = titleMediumBold()
                     )
                 }

@@ -23,6 +23,7 @@ import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.decodeFromJsonElement
 import kotlinx.serialization.json.doubleOrNull
+import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
@@ -43,11 +44,12 @@ class QuotesRepository(
         val quotes = itemsArray?.map { item ->
             val obj = item.jsonObject
             val quote = json.decodeFromJsonElement<Quote>(item)
-            if (quote.totals != null) {
-                quote
+            val quoteWithCustomer = mergeNestedCustomer(quote, obj)
+            if (quoteWithCustomer.totals != null) {
+                quoteWithCustomer
             } else {
                 val totals = buildTotalsFromFlatFields(obj)
-                if (totals != null) quote.copy(totals = totals) else quote
+                if (totals != null) quoteWithCustomer.copy(totals = totals) else quoteWithCustomer
             }
         } ?: emptyList()
         val total = dataObj["total"]?.jsonPrimitive?.longOrNull
@@ -134,24 +136,33 @@ class QuotesRepository(
         val baseQuote = json.decodeFromJsonElement(Quote.serializer(), sanitized)
         val totals = baseQuote.totals ?: buildTotalsFromFlatFields(dataObj)
         val lines = buildQuoteLines(dataObj["lines"])
-        val customerObj = dataObj["customer"]?.jsonObject
-        val mergedCustomerName = baseQuote.customerName
-            ?.takeIf { it.isNotBlank() }
-            ?: customerObj?.get("name")?.jsonPrimitive?.content
-        val mergedCustomerEmail = baseQuote.customerEmail
-            ?.takeIf { it.isNotBlank() }
-            ?: customerObj?.get("email")?.jsonPrimitive?.content
-        val mergedCustomerPhone = baseQuote.customerPhone
-            ?.takeIf { it.isNotBlank() }
-            ?: customerObj?.get("phone")?.jsonPrimitive?.content
-        val mergedCustomerRuc = baseQuote.customerRuc
-            ?.takeIf { it.isNotBlank() }
-            ?: customerObj?.get("ruc")?.jsonPrimitive?.content
-        val mergedCustomerId = baseQuote.customerId ?: customerObj?.get("id").toLongOrNull()
+        val quoteWithCustomer = mergeNestedCustomer(baseQuote, dataObj)
 
-        return baseQuote.copy(
+        return quoteWithCustomer.copy(
             totals = totals,
-            lines = lines ?: baseQuote.lines,
+            lines = lines ?: quoteWithCustomer.lines
+        )
+    }
+
+    private fun mergeNestedCustomer(quote: Quote, obj: JsonObject): Quote {
+        val customerObj = obj["customer"]?.jsonObject
+        if (customerObj == null) return quote
+
+        val mergedCustomerName = quote.customerName
+            ?.takeIf { it.isNotBlank() }
+            ?: customerObj["name"]?.jsonPrimitive?.contentOrNull
+        val mergedCustomerEmail = quote.customerEmail
+            ?.takeIf { it.isNotBlank() }
+            ?: customerObj["email"]?.jsonPrimitive?.contentOrNull
+        val mergedCustomerPhone = quote.customerPhone
+            ?.takeIf { it.isNotBlank() }
+            ?: customerObj["phone"]?.jsonPrimitive?.contentOrNull
+        val mergedCustomerRuc = quote.customerRuc
+            ?.takeIf { it.isNotBlank() }
+            ?: customerObj["ruc"]?.jsonPrimitive?.contentOrNull
+        val mergedCustomerId = quote.customerId ?: customerObj["id"].toLongOrNull()
+
+        return quote.copy(
             customerId = mergedCustomerId,
             customerName = mergedCustomerName,
             customerEmail = mergedCustomerEmail,

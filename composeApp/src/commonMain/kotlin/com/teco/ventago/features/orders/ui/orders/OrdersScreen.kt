@@ -18,11 +18,6 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.animation.core.RepeatMode
-import androidx.compose.animation.core.animateFloat
-import androidx.compose.animation.core.infiniteRepeatable
-import androidx.compose.animation.core.rememberInfiniteTransition
-import androidx.compose.animation.core.tween
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.material.ExperimentalMaterialApi
@@ -30,6 +25,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Add
 import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material.icons.rounded.QrCodeScanner
+import androidx.compose.material.icons.rounded.Search
 import androidx.compose.material.icons.rounded.Tune
 import androidx.compose.material.pullrefresh.PullRefreshIndicator
 import androidx.compose.material.pullrefresh.pullRefresh
@@ -47,10 +43,6 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.SheetState
 import androidx.compose.material3.Surface
-import androidx.compose.material3.Tab
-import androidx.compose.material3.TabRow
-import androidx.compose.material3.TabRowDefaults
-import androidx.compose.material3.TabRowDefaults.tabIndicatorOffset
 import androidx.compose.material3.Text
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
@@ -59,7 +51,6 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -68,13 +59,13 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.navigation.NavBackStackEntry
 import androidx.navigation.NavOptionsBuilder
-import com.teco.ventago.core.LocalStorage
 import com.teco.ventago.core.camera.PermissionCallback
 import com.teco.ventago.core.camera.PermissionStatus
 import com.teco.ventago.core.camera.PermissionType
@@ -92,21 +83,21 @@ import com.teco.ventago.design_system.textfields.helpers.DMDropDownField
 import com.teco.ventago.design_system.theme.bodyMediumBold
 import com.teco.ventago.design_system.theme.labelSmall
 import com.teco.ventago.design_system.theme.latoFontFamily
+import com.teco.ventago.features.branches.domain.model.Branch
+import com.teco.ventago.features.branches.domain.model.FiscalBillingPoint
 import com.teco.ventago.features.customers.domain.models.CustomerListItem
 import com.teco.ventago.features.invoicing.domain.models.FEDocumentType
 import com.teco.ventago.features.orders.domain.models.PaymentStatus
-import com.teco.ventago.features.quotes.ui.list.QuotesListScreen
-import com.teco.ventago.features.quotes.ui.list.QuotesListViewModel
 import com.teco.ventago.features.orders.ui.orders.viewmodel.OrdersUiEvent
 import com.teco.ventago.features.orders.ui.orders.viewmodel.OrdersViewModel
 import com.teco.ventago.navigation.LocalNavController
 import com.teco.ventago.navigation.PosScreens
 import com.teco.ventago.utils.BarcodeScannerScreen
 import com.teco.ventago.utils.DateFormat.getFormattedDate
+import com.teco.ventago.utils.KmpBarcodeFormat
 import org.jetbrains.compose.resources.painterResource
 import org.jetbrains.compose.resources.stringResource
 import org.koin.compose.viewmodel.koinViewModel
-import org.koin.compose.koinInject
 import ventago.composeapp.generated.resources.Res
 import ventago.composeapp.generated.resources.all_invoice_types
 import ventago.composeapp.generated.resources.apply_filters
@@ -127,20 +118,16 @@ import ventago.composeapp.generated.resources.payment_status
 import ventago.composeapp.generated.resources.payment_status_partial
 import ventago.composeapp.generated.resources.payment_status_pending
 import ventago.composeapp.generated.resources.payment_status_refunded
-import ventago.composeapp.generated.resources.quotes
 import ventago.composeapp.generated.resources.see_more
 import ventago.composeapp.generated.resources.tax_empty
 import ventago.composeapp.generated.resources.this_month
 import ventago.composeapp.generated.resources.this_week
 import ventago.composeapp.generated.resources.today
 import ventago.composeapp.generated.resources.yesterday
-import kotlinx.coroutines.delay
 import kotlinx.datetime.Clock
 import kotlinx.datetime.LocalDate
 import kotlinx.datetime.TimeZone
 import kotlinx.datetime.toLocalDateTime
-
-private const val KEY_ORDERS_QUOTES_TAB_HINT_SHOWN = "orders_quotes_tab_hint_shown"
 
 @Composable
 fun OrdersScreenActions(backStackEntry: NavBackStackEntry?) {
@@ -151,6 +138,69 @@ fun OrdersScreenActions(backStackEntry: NavBackStackEntry?) {
     val viewModel: OrdersViewModel = koinViewModel(viewModelStoreOwner = ordersOwner)
 
     val uiState by viewModel.uiState.collectAsState()
+
+    if (uiState.canCreateOrderEntry) {
+        IconButton(onClick = {
+            navController.navigate(PosScreens.POS.name)
+        }) {
+            Icon(
+                imageVector = Icons.Rounded.Add,
+                contentDescription = "New order",
+                tint = MaterialTheme.colorScheme.primary
+            )
+        }
+    }
+
+    IconButton(onClick = { viewModel.showOrderSearchSheet(true) }) {
+        Icon(
+            imageVector = Icons.Rounded.Search,
+            contentDescription = "Buscar orden",
+            tint = MaterialTheme.colorScheme.primary
+        )
+    }
+
+    Box {
+        IconButton(onClick = { viewModel.showFiltersSheet(true) }) {
+            Icon(
+                imageVector = Icons.Rounded.Tune,
+                contentDescription = stringResource(Res.string.filters),
+                tint = MaterialTheme.colorScheme.primary
+            )
+        }
+        val activeFilterCount = viewModel.activeFilterCount()
+        if (activeFilterCount > 0) {
+            Surface(
+                modifier = Modifier
+                    .align(Alignment.TopEnd)
+                    .size(18.dp),
+                shape = CircleShape,
+                color = MaterialTheme.colorScheme.secondary,
+                contentColor = MaterialTheme.colorScheme.onSecondary
+            ) {
+                Box(contentAlignment = Alignment.Center) {
+                    Text(
+                        text = activeFilterCount.toString(),
+                        style = MaterialTheme.typography.labelSmall,
+                        textAlign = TextAlign.Center
+                    )
+                }
+            }
+        }
+    }
+}
+
+@OptIn(ExperimentalMaterialApi::class, ExperimentalMaterial3Api::class)
+@Composable
+fun OrdersScreen(
+    viewModel: OrdersViewModel,
+    navigate: (PosScreens, (NavOptionsBuilder.() -> Unit)?) -> Unit
+) {
+    val uiState by viewModel.uiState.collectAsState()
+    val filterSheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+    val orderSearchSheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+
+    val loadingSheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+    val pullRefreshState = rememberPullRefreshState(uiState.refreshingOrder, { viewModel.refreshOrders() })
     var launchCamera by remember { mutableStateOf(value = false) }
     var launchSetting by remember { mutableStateOf(value = false) }
 
@@ -178,7 +228,7 @@ fun OrdersScreenActions(backStackEntry: NavBackStackEntry?) {
 
     if (launchCamera) {
         if (permissionsManager.isPermissionGranted(PermissionType.CAMERA)) {
-            viewModel.showScanner(!uiState.showScanner)
+            viewModel.showScanner(true)
         } else {
             permissionsManager.askPermission(PermissionType.CAMERA)
         }
@@ -193,88 +243,10 @@ fun OrdersScreenActions(backStackEntry: NavBackStackEntry?) {
     LaunchedEffect(Unit) {
         viewModel.events.collect { event ->
             when (event) {
-                OrdersUiEvent.LaunchSettings -> launchSetting = true
-                else -> println("Event not handled here")
-            }
-        }
-    }
-
-    if (uiState.canCreateOrderEntry) {
-        IconButton(onClick = {
-            navController.navigate(PosScreens.POS.name)
-        }) {
-            Icon(
-                imageVector = Icons.Rounded.Add,
-                contentDescription = "New order",
-                tint = MaterialTheme.colorScheme.primary
-            )
-        }
-    }
-
-    IconButton(onClick = {
-        launchCamera = true
-    }) {
-        Icon(
-            imageVector = if(uiState.showScanner) Icons.Rounded.Close else Icons.Rounded.QrCodeScanner,
-            contentDescription = "",
-            tint = MaterialTheme.colorScheme.primary
-        )
-    }
-}
-
-@OptIn(ExperimentalMaterialApi::class, ExperimentalMaterial3Api::class)
-@Composable
-fun OrdersScreen(
-    viewModel: OrdersViewModel,
-    navigate: (PosScreens, (NavOptionsBuilder.() -> Unit)?) -> Unit
-) {
-    val uiState by viewModel.uiState.collectAsState()
-    val storage: LocalStorage = koinInject()
-    var selectedTabIndex by rememberSaveable { mutableStateOf(0) }
-    var showQuotesTabHint by remember { mutableStateOf(false) }
-    var showFilters by remember { mutableStateOf(false) }
-    val filterSheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
-
-    val hintPulseTransition = rememberInfiniteTransition(label = "quotes_tab_hint")
-    val hintPulse by hintPulseTransition.animateFloat(
-        initialValue = 0.25f,
-        targetValue = 0.85f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(durationMillis = 650),
-            repeatMode = RepeatMode.Reverse
-        ),
-        label = "quotes_tab_hint_pulse"
-    )
-//
-    LaunchedEffect(uiState.hasQuotesAccess) {
-        if (!uiState.hasQuotesAccess) {
-            selectedTabIndex = 0
-        }
-    }
-
-    LaunchedEffect(uiState.hasQuotesAccess) {
-        if (uiState.hasQuotesAccess) {
-            val shown = storage.bool(KEY_ORDERS_QUOTES_TAB_HINT_SHOWN) == true
-            if (!shown) {
-                showQuotesTabHint = true
-                delay(4500)
-                showQuotesTabHint = false
-                storage.set(KEY_ORDERS_QUOTES_TAB_HINT_SHOWN, true)
-            }
-        } else {
-            showQuotesTabHint = false
-        }
-    }
-
-    val loadingSheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
-    val pullRefreshState = rememberPullRefreshState(uiState.refreshingOrder, { viewModel.refreshOrders() })
-    LaunchedEffect(Unit) {
-        viewModel.events.collect { event ->
-            when (event) {
                 OrdersUiEvent.OpenOrderDetails -> navigate(PosScreens.OrderDetailsScreen, null)
                 OrdersUiEvent.LoadingOrdersConnectionError -> Unit
                 OrdersUiEvent.LoadingOrdersError -> Unit
-                OrdersUiEvent.LaunchSettings -> Unit
+                OrdersUiEvent.LaunchSettings -> launchSetting = true
             }
         }
     }
@@ -285,6 +257,7 @@ fun OrdersScreen(
                 .fillMaxSize(),
         ) {
             BarcodeScannerScreen(
+                format = KmpBarcodeFormat.QR_CODE,
                 onResult = { cufe ->
                     if (cufe.isEmpty() || cufe.length < 10 || !cufe.contains("-")) {
                         viewModel.showScanner(false)
@@ -304,83 +277,6 @@ fun OrdersScreen(
         modifier = Modifier
             .fillMaxSize(),
     ) {
-        if (uiState.hasQuotesAccess) {
-            TabRow(
-                selectedTabIndex = selectedTabIndex,
-                containerColor = MaterialTheme.colorScheme.background,
-                contentColor = MaterialTheme.colorScheme.secondary,
-                indicator = { tabPositions ->
-                    TabRowDefaults.SecondaryIndicator(
-                        modifier = Modifier.tabIndicatorOffset(tabPositions[selectedTabIndex]),
-                        color = MaterialTheme.colorScheme.secondary
-                    )
-                }
-            ) {
-                Tab(
-                    selected = selectedTabIndex == 0,
-                    onClick = { selectedTabIndex = 0 },
-                    selectedContentColor = MaterialTheme.colorScheme.secondary,
-                    unselectedContentColor = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.7f),
-                    text = { Text(text = stringResource(Res.string.orders)) }
-                )
-                Tab(
-                    selected = selectedTabIndex == 1,
-                    onClick = {
-                        selectedTabIndex = 1
-                        if (showQuotesTabHint) {
-                            showQuotesTabHint = false
-                            storage.set(KEY_ORDERS_QUOTES_TAB_HINT_SHOWN, true)
-                        }
-                    },
-                    selectedContentColor = MaterialTheme.colorScheme.secondary,
-                    unselectedContentColor = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.7f),
-                    text = {
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            modifier = if (showQuotesTabHint) {
-                                Modifier
-                                    .clip(RoundedCornerShape(999.dp))
-                                    .background(MaterialTheme.colorScheme.secondary.copy(alpha = hintPulse * 0.18f))
-                                    .padding(horizontal = 10.dp, vertical = 6.dp)
-                            } else {
-                                Modifier
-                            }
-                        ) {
-                            Text(text = stringResource(Res.string.quotes))
-                            if (showQuotesTabHint) {
-                                Spacer(modifier = Modifier.width(8.dp))
-                                Box(
-                                    modifier = Modifier
-                                        .size(8.dp)
-                                        .clip(CircleShape)
-                                        .background(MaterialTheme.colorScheme.secondary.copy(alpha = hintPulse))
-                                )
-                            }
-                        }
-                    }
-                )
-            }
-        }
-
-        if (uiState.hasQuotesAccess && selectedTabIndex == 1) {
-            val quotesViewModel: QuotesListViewModel = koinViewModel()
-            QuotesListScreen(
-                viewModel = quotesViewModel,
-                navigate = { route -> navigate(route, null) },
-                onBack = {}
-            )
-            return
-        }
-
-        OrdersFilterHeader(
-            paymentStatusFilter = uiState.paymentStatusFilter,
-            activeFilterCount = viewModel.activeFilterCount(),
-            onPaymentStatusSelected = { status ->
-                viewModel.applyPaymentStatusFilter(status)
-            },
-            onOpenFilters = { showFilters = true }
-        )
-
         if (uiState.isLoadingOrders && uiState.orders.isEmpty()) {
             LoadingOrdersView()
         } else if (uiState.orders.isEmpty()) {
@@ -512,93 +408,181 @@ fun OrdersScreen(
         )
     }
 
-    if (showFilters) {
+    if (uiState.showFiltersSheet) {
         OrdersFilterSheet(
             viewModel = viewModel,
-            onDismiss = { showFilters = false },
+            onDismiss = { viewModel.showFiltersSheet(false) },
             sheetState = filterSheetState
+        )
+    }
+
+    if (uiState.showOrderSearchSheet) {
+        OrderNumberSearchSheet(
+            businessId = viewModel.businessId,
+            branches = uiState.branches,
+            onDismiss = { viewModel.showOrderSearchSheet(false) },
+            onSearch = { orderNumber ->
+                viewModel.showOrderSearchSheet(false)
+                viewModel.findOrderByOrderNumber(orderNumber)
+            },
+            onScanQr = {
+                viewModel.showOrderSearchSheet(false)
+                launchCamera = true
+            },
+            sheetState = orderSearchSheetState
         )
     }
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun OrdersFilterHeader(
-    paymentStatusFilter: Int?,
-    activeFilterCount: Int,
-    onPaymentStatusSelected: (Int?) -> Unit,
-    onOpenFilters: () -> Unit,
+private fun OrderNumberSearchSheet(
+    businessId: Int,
+    branches: List<Branch>,
+    onDismiss: () -> Unit,
+    onSearch: (String) -> Unit,
+    onScanQr: () -> Unit,
+    sheetState: SheetState,
 ) {
-    val statusOptions = listOf(
-        null to stringResource(Res.string.filter_all),
-        PaymentStatus.UNPAID.id to stringResource(Res.string.payment_status_pending),
-        PaymentStatus.PARTIAL.id to stringResource(Res.string.payment_status_partial),
-        PaymentStatus.PAID.id to stringResource(Res.string.paid),
-        PaymentStatus.REFUNDED.id to stringResource(Res.string.payment_status_refunded),
-        PaymentStatus.CANCELLED.id to stringResource(Res.string.cancelled)
-    )
+    val selectableBranches = branches.filter { it.branchCode.isNotBlank() }
+    var selectedBranchIndex by remember(selectableBranches) { mutableStateOf(0) }
+    var selectedBillingPointIndex by remember(selectableBranches, selectedBranchIndex) { mutableStateOf(0) }
+    var orderSequenceInput by remember { mutableStateOf("") }
 
-    Column(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(top = 8.dp, bottom = 4.dp)
+    val selectedBranch = selectableBranches.getOrNull(selectedBranchIndex)
+    val billingPoints = selectedBranch?.fiscalBillingPoints.orEmpty()
+        .filter { it.billingPoint.isNotBlank() }
+    val selectedBillingPoint = billingPoints.getOrNull(selectedBillingPointIndex)
+    val sequenceDigits = orderSequenceInput.filter(Char::isDigit)
+    val fullOrderNumber = buildInternalOrderNumber(
+        businessId = businessId,
+        branchCode = selectedBranch?.branchCode.orEmpty(),
+        billingPointCode = selectedBillingPoint?.billingPoint.orEmpty(),
+        sequenceDigits = sequenceDigits
+    )
+    val canSearch = businessId > 0 &&
+        selectedBranch != null &&
+        selectedBillingPoint != null &&
+        sequenceDigits.isNotBlank()
+
+    ModalBottomSheet(
+        onDismissRequest = onDismiss,
+        sheetState = sheetState,
+        containerColor = MaterialTheme.colorScheme.background
     ) {
-        Row(
+        Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 16.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.SpaceBetween
+                .navigationBarsPadding()
+                .padding(24.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
             Text(
-                text = stringResource(Res.string.payment_status),
-                style = MaterialTheme.typography.titleSmall
+                text = "Buscar orden",
+                style = MaterialTheme.typography.titleMedium
             )
-            Box {
-                IconButton(onClick = onOpenFilters) {
-                    Icon(
-                        imageVector = Icons.Rounded.Tune,
-                        contentDescription = stringResource(Res.string.filters),
-                        tint = MaterialTheme.colorScheme.primary
-                    )
-                }
-                if (activeFilterCount > 0) {
-                    Surface(
-                        modifier = Modifier
-                            .align(Alignment.TopEnd)
-                            .size(18.dp),
-                        shape = CircleShape,
-                        color = MaterialTheme.colorScheme.secondary,
-                        contentColor = MaterialTheme.colorScheme.onSecondary
-                    ) {
-                        Box(contentAlignment = Alignment.Center) {
-                            Text(
-                                text = activeFilterCount.toString(),
-                                style = MaterialTheme.typography.labelSmall,
-                                textAlign = TextAlign.Center
-                            )
-                        }
-                    }
-                }
-            }
-        }
 
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .horizontalScroll(rememberScrollState())
-                .padding(horizontal = 16.dp),
-            horizontalArrangement = Arrangement.spacedBy(8.dp)
-        ) {
-            statusOptions.forEach { (value, label) ->
-                FilterChip(
-                    selected = paymentStatusFilter == value,
-                    onClick = { onPaymentStatusSelected(value) },
-                    label = { Text(label) },
-                    colors = FilterChipDefaults.filterChipColors()
+            if (selectableBranches.size > 1) {
+                DMDropDownField(
+                    label = "Sucursal",
+                    items = selectableBranches,
+                    selectedIndex = selectedBranchIndex,
+                    onItemSelected = { index, _ ->
+                        selectedBranchIndex = index
+                        selectedBillingPointIndex = 0
+                    },
+                    selectedItemToString = ::branchSearchLabel
                 )
+            }
+
+            if (billingPoints.size > 1) {
+                DMDropDownField(
+                    label = "Punto de facturación",
+                    items = billingPoints,
+                    selectedIndex = selectedBillingPointIndex,
+                    onItemSelected = { index, _ -> selectedBillingPointIndex = index },
+                    selectedItemToString = ::billingPointSearchLabel
+                )
+            }
+
+            DMOutlinedTextField(
+                text = orderSequenceInput,
+                label = "Número de orden",
+                onChange = { orderSequenceInput = it.filter(Char::isDigit) },
+                modifier = Modifier.fillMaxWidth(),
+                keyboardType = KeyboardType.Number
+            )
+
+            if (fullOrderNumber.isNotBlank()) {
+                Text(
+                    text = fullOrderNumber,
+                    style = labelSmall(color = MaterialTheme.colorScheme.onSurfaceVariant),
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+            }
+
+            Text(
+                text = "Escanea el QR de la factura para encontrarla por CUFE.",
+                style = labelSmall(color = MaterialTheme.colorScheme.onSurfaceVariant)
+            )
+
+            OutlinedButtonM(
+                modifier = Modifier.fillMaxWidth(),
+                onClick = onScanQr
+            ) {
+                Icon(
+                    imageVector = Icons.Rounded.QrCodeScanner,
+                    contentDescription = null
+                )
+                Spacer(modifier = Modifier.width(8.dp))
+                Text("Escanear QR")
+            }
+
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                OutlinedButtonM(
+                    modifier = Modifier.weight(1f),
+                    onClick = onDismiss
+                ) {
+                    Text("Cancelar")
+                }
+                ButtonM(
+                    modifier = Modifier.weight(1f),
+                    enabled = canSearch,
+                    onClick = { onSearch(fullOrderNumber) },
+                    containerColor = MaterialTheme.colorScheme.secondary,
+                    contentColor = MaterialTheme.colorScheme.onSecondary
+                ) {
+                    Text("Buscar")
+                }
             }
         }
     }
+}
+
+private fun buildInternalOrderNumber(
+    businessId: Int,
+    branchCode: String,
+    billingPointCode: String,
+    sequenceDigits: String
+): String {
+    if (businessId <= 0 || branchCode.isBlank() || billingPointCode.isBlank() || sequenceDigits.isBlank()) {
+        return ""
+    }
+    return "ORD-$businessId-$branchCode-$billingPointCode-${sequenceDigits.padStart(10, '0')}"
+}
+
+private fun branchSearchLabel(branch: Branch): String {
+    return branch.name.takeIf { it.isNotBlank() }?.let { "${branch.branchCode} - $it" }
+        ?: branch.branchCode
+}
+
+private fun billingPointSearchLabel(point: FiscalBillingPoint): String {
+    return point.description?.takeIf { it.isNotBlank() }?.let { "${point.billingPoint} - $it" }
+        ?: point.billingPoint
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -628,8 +612,14 @@ private fun OrdersFilterSheet(
         ) {
             item {
                 Text(
-                    text = stringResource(Res.string.apply_filters),
+                    text = stringResource(Res.string.filters),
                     style = MaterialTheme.typography.titleMedium
+                )
+            }
+            item {
+                PaymentStatusFilterChips(
+                    paymentStatusFilter = uiState.paymentStatusFilter,
+                    onPaymentStatusSelected = viewModel::setPaymentStatusFilter
                 )
             }
             item {
@@ -711,6 +701,44 @@ private fun OrdersFilterSheet(
                         Text(text = stringResource(Res.string.apply_filters))
                     }
                 }
+            }
+        }
+    }
+}
+
+@Composable
+private fun PaymentStatusFilterChips(
+    paymentStatusFilter: Int?,
+    onPaymentStatusSelected: (Int?) -> Unit,
+) {
+    val statusOptions = listOf(
+        null to stringResource(Res.string.filter_all),
+        PaymentStatus.UNPAID.id to stringResource(Res.string.payment_status_pending),
+        PaymentStatus.PARTIAL.id to stringResource(Res.string.payment_status_partial),
+        PaymentStatus.PAID.id to stringResource(Res.string.paid),
+        PaymentStatus.REFUNDED.id to stringResource(Res.string.payment_status_refunded),
+        PaymentStatus.CANCELLED.id to stringResource(Res.string.cancelled)
+    )
+
+    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        Text(
+            text = stringResource(Res.string.payment_status),
+            style = MaterialTheme.typography.titleSmall,
+            color = MaterialTheme.colorScheme.onSurface
+        )
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .horizontalScroll(rememberScrollState()),
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            statusOptions.forEach { (value, label) ->
+                FilterChip(
+                    selected = paymentStatusFilter == value,
+                    onClick = { onPaymentStatusSelected(value) },
+                    label = { Text(label) },
+                    colors = FilterChipDefaults.filterChipColors()
+                )
             }
         }
     }

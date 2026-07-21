@@ -259,6 +259,9 @@ private fun FriendlySuccessScreen(
 
     val isPaymentLink = uiState.paymentLink.isNotBlank() ||
             uiState.paymentFlowMode == PaymentFlowMode.PAYMENT_LINK
+    val isDraftOrder = uiState.paymentFlowMode == PaymentFlowMode.DRAFT &&
+        !isPaymentLink &&
+        !uiState.orderCreationFailed
     val isCreditNote = uiState.selectedDocType in setOf("04", "06")
     val completedDocumentTitle = if (isCreditNote) {
         "¡Nota de crédito completada!"
@@ -280,8 +283,9 @@ private fun FriendlySuccessScreen(
         !paymentLinkInvoiceIssued &&
         !paymentLinkInvoiceFailed
     val invoiceWarningState = uiState.postCreateInvoiceWarning
-    val showInvoiceWarning = !isPaymentLink && invoiceWarningState.isWarning
+    val showInvoiceWarning = !isPaymentLink && !isDraftOrder && invoiceWarningState.isWarning
     val canOpenInvoiceActions = !isPaymentLink &&
+        !isDraftOrder &&
         invoiceWarningState.invoiceActionsEnabled &&
         uiState.pdfDocument.isNotBlank()
     val paymentLinkInvoiceActionsEnabled = paymentLinkInvoiceIssued && uiState.pdfDocument.isNotBlank()
@@ -295,6 +299,7 @@ private fun FriendlySuccessScreen(
     val coroutineScope = rememberCoroutineScope()
     val scrollState = rememberScrollState()
     val loadingSheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+    var showPaymentLinkChangeMethodDialog by remember { mutableStateOf(false) }
 
     DisposableEffect(isPaymentLink, uiState.createdOrderId, uiState.paymentLink) {
         if (isPaymentLink) {
@@ -370,6 +375,7 @@ private fun FriendlySuccessScreen(
         ) {
             SuccessHero(
                 title = when {
+                    isDraftOrder -> "Orden guardada en borrador"
                     showReleasedPaymentLinkManualPanel -> "Registra el pago"
                     paymentLinkInvoiceIssued -> completedDocumentTitle
                     paymentLinkAwaitingInvoice -> "¡Pago recibido!"
@@ -379,6 +385,7 @@ private fun FriendlySuccessScreen(
                     else -> completedDocumentTitle
                 },
                 subtitle = when {
+                    isDraftOrder -> "Puedes completar la factura y el cobro más tarde."
                     showReleasedPaymentLinkManualPanel -> "El link fue cancelado. Completa el cobro manual."
                     paymentLinkInvoiceIssued -> "Tu pago fue procesado correctamente."
                     paymentLinkAwaitingInvoice -> "Estamos generando la factura."
@@ -397,7 +404,7 @@ private fun FriendlySuccessScreen(
             OrderSummaryCard(
                 uiState = uiState,
                 amount = amount,
-                paymentSummary = if (!isPaymentLink || paymentLinkInvoiceIssued) SuccessPaymentSummary(
+                paymentSummary = if (!isDraftOrder && (!isPaymentLink || paymentLinkInvoiceIssued)) SuccessPaymentSummary(
                     method = if (isPaymentLink) "Link de pago" else resolvePaymentMethodLabel(viewModel, uiState),
                     amount = amount,
                     paidColor = paidGreen
@@ -445,7 +452,7 @@ private fun FriendlySuccessScreen(
                 Spacer(modifier = Modifier.height(16.dp))
                 PaymentMethodChangeEntryCard(
                     onClick = {
-                        viewModel.confirmOpenPaymentLinkPaymentMethodChange()
+                        showPaymentLinkChangeMethodDialog = true
                     }
                 )
             } else if (showReleasedPaymentLinkManualPanel) {
@@ -490,6 +497,29 @@ private fun FriendlySuccessScreen(
 
             Spacer(modifier = Modifier.height(12.dp))
 
+            if (isDraftOrder && uiState.orderNumber.isNotBlank()) {
+                OutlinedButtonM(
+                    onClick = {
+                        navController.navigate(OrdersScreenRoute(orderNumber = uiState.orderNumber))
+                    },
+                    contentColor = secondary,
+                    border = BorderStroke(1.dp, secondary),
+                    modifier = Modifier.widthIn(max = 520.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Filled.Description,
+                        contentDescription = null,
+                        modifier = Modifier.size(20.dp)
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text(
+                        text = "Ver detalle de la orden",
+                        style = bodyMediumBold(color = secondary)
+                    )
+                }
+                Spacer(modifier = Modifier.height(12.dp))
+            }
+
             if (showPaymentLinkCard || canShareFinalInvoice) {
                 OutlinedButtonM(
                     onClick = {
@@ -526,6 +556,21 @@ private fun FriendlySuccessScreen(
             ) {
                 viewModel.hideLoading()
             }
+        }
+
+        if (showPaymentLinkChangeMethodDialog) {
+            DMAlertDialog(
+                title = "Cancelar link de pago",
+                message = "Para seleccionar otro método de pago, se cancelará el link actual. Si el cliente ya está pagando, espera a que la app detecte el pago automáticamente.",
+                show = true,
+                confirmText = "Cancelar link",
+                dismissText = "Mantener link",
+                onDismiss = { showPaymentLinkChangeMethodDialog = false },
+                onConfirm = {
+                    showPaymentLinkChangeMethodDialog = false
+                    viewModel.confirmOpenPaymentLinkPaymentMethodChange()
+                },
+            )
         }
 
         IconButton(
@@ -807,29 +852,38 @@ private fun PaymentLinkCard(
         )
         Spacer(modifier = Modifier.height(16.dp))
 
+        PaymentQr(
+            link = link,
+            modifier = Modifier
+                .fillMaxWidth()
+                .heightIn(min = 260.dp, max = 340.dp)
+        )
+
+        Spacer(modifier = Modifier.height(12.dp))
+
+        PaymentLinkScanBadge()
+
+        Spacer(modifier = Modifier.height(16.dp))
+
         Row(
             modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(14.dp),
+            horizontalArrangement = Arrangement.spacedBy(10.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Column(
-                verticalArrangement = Arrangement.spacedBy(12.dp),
-                modifier = Modifier.weight(0.92f)
-            ) {
-                CompactOutlinedAction(
-                    label = "Copiar enlace",
-                    icon = Icons.Filled.ContentCopy,
-                    color = MaterialTheme.colorScheme.secondary,
-                    onClick = onCopy
-                )
-                CompactOutlinedAction(
-                    label = "WhatsApp",
-                    icon = Icons.Filled.Share,
-                    color = Color(0xFF0A8F22),
-                    onClick = onWhatsapp
-                )
-            }
-            PaymentQr(link = link, modifier = Modifier.weight(1.08f))
+            CompactOutlinedAction(
+                label = "Copiar enlace",
+                icon = Icons.Filled.ContentCopy,
+                color = MaterialTheme.colorScheme.secondary,
+                onClick = onCopy,
+                modifier = Modifier.weight(1f)
+            )
+            CompactOutlinedAction(
+                label = "WhatsApp",
+                icon = Icons.Filled.Share,
+                color = Color(0xFF0A8F22),
+                onClick = onWhatsapp,
+                modifier = Modifier.weight(1f)
+            )
         }
 
         Spacer(modifier = Modifier.height(18.dp))
@@ -861,6 +915,34 @@ private fun PaymentLinkCard(
                     )
                 }
             }
+        }
+    }
+}
+
+@Composable
+private fun PaymentLinkScanBadge() {
+    Surface(
+        shape = RoundedCornerShape(50),
+        color = Color(0xFFD7F2D1),
+        modifier = Modifier.fillMaxWidth()
+    ) {
+        Row(
+            modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Icon(
+                imageVector = Icons.Filled.Check,
+                contentDescription = null,
+                tint = Color(0xFF087A16),
+                modifier = Modifier.size(18.dp)
+            )
+            Spacer(modifier = Modifier.width(8.dp))
+            Text(
+                text = "Cliente escanea el QR. La app detecta el pago automáticamente.",
+                style = labelSmall(color = Color(0xFF087A16)),
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis
+            )
         }
     }
 }
@@ -1081,8 +1163,9 @@ private fun PaymentQr(link: String, modifier: Modifier = Modifier) {
             painter = BitmapPainter(it),
             contentDescription = "QR de enlace de pago",
             modifier = modifier
-                .heightIn(min = 150.dp, max = 210.dp)
-                .clip(RoundedCornerShape(8.dp)),
+                .clip(RoundedCornerShape(10.dp))
+                .border(1.dp, MaterialTheme.colorScheme.outlineVariant, RoundedCornerShape(10.dp))
+                .padding(8.dp),
             contentScale = ContentScale.Fit
         )
     } ?: Box(
@@ -1098,10 +1181,11 @@ private fun CompactOutlinedAction(
     label: String,
     icon: ImageVector,
     color: Color,
-    onClick: () -> Unit
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier
 ) {
     Row(
-        modifier = Modifier
+        modifier = modifier
             .fillMaxWidth()
             .height(48.dp)
             .clip(RoundedCornerShape(8.dp))
@@ -1235,8 +1319,11 @@ private fun resolvePaymentMethodLabel(
 
 private fun String.toCompactOrderNumber(): String {
     if (isBlank()) return "#-"
-    val normalized = removePrefix("#")
-    return "#${normalized.substringAfterLast("-")}"
+    val orderNumber = removePrefix("#")
+        .substringAfterLast("-")
+        .trimStart('0')
+        .ifBlank { "0" }
+    return "#$orderNumber"
 }
 
 @Composable

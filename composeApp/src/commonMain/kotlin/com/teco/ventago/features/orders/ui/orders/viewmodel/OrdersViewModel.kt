@@ -8,6 +8,7 @@ import com.teco.ventago.core.authz.RouteKey
 import com.teco.ventago.core.beta.BetaFeature
 import com.teco.ventago.core.beta.BetaService
 import com.teco.ventago.features.auth.domain.IAuthService
+import com.teco.ventago.features.branches.domain.BranchService
 import com.teco.ventago.features.business.domain.BusinessService
 import com.teco.ventago.features.business.domain.model.Business
 import com.teco.ventago.features.customers.domain.CustomerService
@@ -36,6 +37,7 @@ class OrdersViewModel(
     private val orderService: OrderService,
     private val customerService: CustomerService,
     private val businessService: BusinessService,
+    private val branchService: BranchService,
     private val betaService: BetaService,
 ) : BaseViewModel<OrdersState, OrdersUiEvent>(OrdersState()) {
 
@@ -86,6 +88,12 @@ class OrdersViewModel(
                 }
         }
         viewModelScope.launch {
+            branchService.observe().onEach { branches ->
+                updateState {
+                    copy(branches = branches)
+                }
+            }.launchIn(this)
+
             orderService.observe().onEach { orders ->
                 if (orders.isNotEmpty()) {
                     updateState {
@@ -325,6 +333,14 @@ class OrdersViewModel(
 
     fun showScanner(showScanner: Boolean) {
         updateState { copy(showScanner = showScanner) }
+    }
+
+    fun showFiltersSheet(show: Boolean) {
+        updateState { copy(showFiltersSheet = show) }
+    }
+
+    fun showOrderSearchSheet(show: Boolean) {
+        updateState { copy(showOrderSearchSheet = show) }
     }
 
     fun applyPaymentStatusFilter(paymentStatus: Int?) {

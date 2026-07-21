@@ -62,6 +62,18 @@ class FinancialProfileServiceTest {
     }
 
     @Test
+    fun setBusinessRefreshFalseUsesMatchingCacheWithoutBackendCall() = runTest {
+        val cache = FakeCacheService(profile(businessId = 7, invoicingActive = true))
+        val repository = FakeFinancialProfileRepository(profile(businessId = 7, invoicingActive = false))
+        val service = createService(cache, repository, this)
+
+        service.setBusiness(7, refresh = false)
+
+        assertTrue(service.observe().value?.invoicingActive == true)
+        assertTrue(repository.calls.isEmpty())
+    }
+
+    @Test
     fun refreshCachesProfileWithoutPublishingFinancialInvalidation() = runTest {
         val changesManager = FakeChangesManager()
         val cache = FakeCacheService()

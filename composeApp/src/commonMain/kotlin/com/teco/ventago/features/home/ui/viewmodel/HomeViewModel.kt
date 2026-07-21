@@ -119,7 +119,7 @@ class HomeViewModel(
                     if (activeBusinessChanged || financialProfileBusinessId != businessId) {
                         runCatching {
                             withContext(ioDispatcher) {
-                                financialProfileService.setBusiness(businessId, refresh = true)
+                                financialProfileService.setBusiness(businessId, refresh = false)
                             }
                         }
                     }

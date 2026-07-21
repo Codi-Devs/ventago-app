@@ -243,7 +243,7 @@ fun PosScreen(
         ButtonM(
             onClick = {
                 if (viewModel.validateFinalCustomerSelection()) {
-                    viewModel.saveOrderCreationCheckpoint(OrderCreationStep.CUSTOMER)
+                    viewModel.saveOrderCreationCheckpoint(OrderCreationStep.PRODUCTS)
                     navigate(PosScreens.POSProductScreen)
                 }
             },

@@ -2,6 +2,7 @@ package com.teco.ventago.features.orders.ui.orders.viewmodel
 
 import com.teco.ventago.core.LoadableState
 import com.teco.ventago.design_system.organism.LoadingBottomSheetState
+import com.teco.ventago.features.branches.domain.model.Branch
 import com.teco.ventago.features.customers.domain.models.CustomerListItem
 import com.teco.ventago.features.orders.domain.models.Order
 
@@ -13,6 +14,7 @@ data class OrdersState(
     val selectedChip: Int = 0,
     val filterSelected: Int = 0,
     val ordersEnabled: Boolean = true,
+    val branches: List<Branch> = emptyList(),
     val hasQuotesAccess: Boolean = false,
     val canCreateOrderEntry: Boolean = false,
     val paymentStatusFilter: Int? = null,
@@ -23,6 +25,8 @@ data class OrdersState(
     val orderTypeFilter: String? = null,
     val emissionStartDate: String = "",
     val emissionEndDate: String = "",
+    val showFiltersSheet: Boolean = false,
+    val showOrderSearchSheet: Boolean = false,
     val showScanner: Boolean = false,
     val showPermissionRationalDialog: Boolean = false,
 

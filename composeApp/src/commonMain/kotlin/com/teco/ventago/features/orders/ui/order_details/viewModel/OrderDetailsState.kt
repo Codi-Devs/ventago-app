@@ -2,6 +2,7 @@ package com.teco.ventago.features.orders.ui.order_details.viewModel
 
 import com.teco.ventago.core.LoadableState
 import com.teco.ventago.design_system.organism.LoadingBottomSheetState
+import com.teco.ventago.features.branches.domain.model.Branch
 import com.teco.ventago.features.orders.domain.models.AchPaymentDetail
 import com.teco.ventago.features.orders.domain.models.ManualPaymentMethodOption
 import com.teco.ventago.features.orders.domain.models.Order
@@ -12,6 +13,7 @@ import com.teco.ventago.features.printers.domain.model.ReprintTicketState
 
 data class OrderDetailsState(
     val order: Order? = null,
+    val branches: List<Branch> = emptyList(),
     val showShareSheet: Boolean = false,
 
     val showMarkAsPaidAlertDialog: Boolean = false,

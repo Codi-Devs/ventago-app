@@ -13,7 +13,7 @@ enum class BottomNavKey(
     HOME(PosScreens.HomeScreen, PosScreens.HomeScreen),
     SUMMARY(PosScreens.SummaryScreen, PosScreens.SummaryScreen),
     ORDERS(PosScreens.OrdersScreen, PosScreens.Orders),
-    PRODUCTS(PosScreens.CategoriesManageScreen, PosScreens.ProductsManage),
+    MENU(PosScreens.MenuScreen, PosScreens.MenuScreen),
     SETTINGS(PosScreens.SettingsScreen, PosScreens.Settings),
 }
 
@@ -24,8 +24,27 @@ fun visibleBottomNavKeys(user: User?, betaSnapshot: Set<BetaFeature>): List<Bott
             add(BottomNavKey.SUMMARY)
         }
         if (AuthzEvaluator.canRoute(RouteKey.ORDERS_LIST, user, betaSnapshot)) add(BottomNavKey.ORDERS)
-        if (AuthzEvaluator.canRoute(RouteKey.PRODUCTS_LIST, user, betaSnapshot)) add(BottomNavKey.PRODUCTS)
+        if (canOpenAppMenu(user, betaSnapshot)) add(BottomNavKey.MENU)
         if (AuthzEvaluator.canRoute(RouteKey.SETTINGS_PAGE, user, betaSnapshot)) add(BottomNavKey.SETTINGS)
+    }
+}
+
+private fun canOpenAppMenu(user: User?, betaSnapshot: Set<BetaFeature>): Boolean {
+    return listOf(
+        RouteKey.PRODUCTS_LIST,
+        RouteKey.CUSTOMERS_LIST,
+        RouteKey.QUOTES_LIST,
+        RouteKey.QUOTE_NEW,
+        RouteKey.ORDERS_LIST,
+        RouteKey.ORDERS_NEW,
+        RouteKey.PRODUCT_ADD,
+        RouteKey.EXPENSES_LIST,
+        RouteKey.EXPENSE_NEW,
+        RouteKey.CUSTOMER_FORM,
+        RouteKey.SETTINGS_BRANCHES_OWNER,
+        RouteKey.PAYMENTS_PAGE,
+    ).any { routeKey ->
+        AuthzEvaluator.canRoute(routeKey, user, betaSnapshot)
     }
 }
 
@@ -44,6 +63,7 @@ fun routeKeyForScreen(screen: PosScreens): RouteKey? {
         PosScreens.CustomerEditScreen -> RouteKey.CUSTOMER_FORM
         PosScreens.CategoriesManageScreen -> RouteKey.PRODUCTS_LIST
         PosScreens.EditCategoryScreen -> RouteKey.PRODUCT_DETAILS
+        PosScreens.AddItemScreen -> RouteKey.PRODUCT_ADD
         PosScreens.AddCategoryScreen,
         PosScreens.ModifyCategoryScreen -> RouteKey.CATEGORY_MANAGE
         PosScreens.QuotesListScreen -> RouteKey.QUOTES_LIST

@@ -78,9 +78,9 @@
     <string name="understood">Entendido</string>
 
     <!-- Orders String -->
-    <string name="orders">Pedidos</string>
-    <string name="orders_empty">Aún no tienes pedidos</string>
-    <string name="orders_empty_desc">Cuando recibas pedidos de tus clientes, se mostrarán aquí</string>
+    <string name="orders">Órdenes</string>
+    <string name="orders_empty">Aún no tienes órdenes</string>
+    <string name="orders_empty_desc">Cuando recibas órdenes de tus clientes, se mostrarán aquí</string>
     <string name="order_details">Detalles</string>
     <string name="order_status_history">Historial del pedido</string>
     <string name="accept_terms_and_conditions">Aceptar términos y condiciones</string>

@@ -1,3 +1,230 @@
+# Yappy Onsite Payment Description TODO
+
+- [x] Trace the Yappy onsite payload field that sends the payment description.
+- [x] Replace `Factura POS` with the selected business name, falling back to `Pago Yappy`.
+- [x] Apply the same fallback to Yappy onsite replacement intents.
+- [x] Run compile verification and record results.
+
+## Verification Gates
+- [x] `./gradlew --no-build-cache --no-configuration-cache :composeApp:compileCommonMainKotlinMetadata`
+
+## Review Notes
+- Yappy onsite order creation now sends `links.note` as the current business name when available, with `Pago Yappy` as fallback.
+- Yappy onsite replacement pending intents from POS and Order Details pass the same business-name-first note.
+- The service default for replacement Yappy onsite intents is now `Pago Yappy` instead of `POS payment`.
+- Common metadata compilation passed. Existing project warnings remain unrelated.
+
+# Quotes List Search And Filters TODO
+
+## Correction
+- [x] Merge nested `customer` fields from quote list API responses into the `Quote` model.
+- [x] Add a regression test using the backend list response shape.
+- [x] Run common metadata compile.
+- [ ] Run focused quote repository test; currently blocked by unrelated `AuthzNavigationTest.kt:45` unresolved `PRODUCTS`.
+
+## Plan
+- [x] Add shared quote-number display formatter and use it in quote list/details.
+- [x] Update quote list subtitle to prefer customer/business name over item count.
+- [x] Move quote status chips into the filter bottom sheet and expose search/filter icons in the app bar.
+- [x] Add quote-number search bottom sheet that builds full backend quote numbers from prefix, branch, year, and padded sequence.
+- [x] Run compile verification and record results.
+
+## Verification Gates
+- [x] `./gradlew --no-build-cache --no-configuration-cache :composeApp:compileCommonMainKotlinMetadata`
+
+## Review Notes
+- Quote list customer names were missing because the backend list response sends nested `customer.name`, while the decoded `Quote` UI field is the flattened `customerName`.
+- Quote list and detail repository mapping now merge nested `customer` fields into `customerName`, `customerEmail`, `customerPhone`, `customerRuc`, and `customerId` when the flat fields are blank.
+- Added a regression test for the backend list shape with nested customer data.
+- Common metadata compilation passed. Focused quote repository test did not run because common tests currently fail to compile on unrelated `AuthzNavigationTest.kt:45:30 Unresolved reference 'PRODUCTS'`.
+- Quote numbers now render compactly as `2026-000031` for full values like `TEC-0000-2026-000031` in list and detail.
+- Quote list rows show customer/business name under the number when present; item count remains the fallback.
+- Quote status chips now live in the filter bottom sheet, and quote list top app bar exposes search and filter icons with active-filter badge.
+- Quote-number search now has branch selection, year selection from 2023 through 2026 with 2026 selected by default, numeric sequence input, quote-prefix fallback `COT`, and six-digit sequence padding.
+- Common metadata compilation passed. Existing project warnings remain unrelated.
+
+
+# Orders Search QR Action TODO
+
+## Correction
+- [x] Translate the new QR search helper/action labels to Spanish.
+- [x] Use QR scanner framing for invoice CUFE scans from Orders.
+- [x] Re-run compile verification.
+
+## Plan
+- [x] Move QR scanner launch from the Orders top app bar into the order search bottom sheet.
+- [x] Add a scan QR action with muted CUFE helper text in the search sheet.
+- [x] Run compile verification and record results.
+
+## Verification Gates
+- [x] `./gradlew --no-build-cache --no-configuration-cache :composeApp:compileCommonMainKotlinMetadata`
+
+## Review Notes
+- Removed the top-app-bar QR scanner icon from Orders.
+- The order search bottom sheet now includes muted CUFE guidance and a full-width `Scan QR` action.
+- The scanner permission/settings handling now lives in `OrdersScreen`, so both permission dialog and scanner launch continue to work from the sheet.
+- Common metadata compilation passed. Existing project warnings remain unrelated.
+
+## Correction Review Notes
+- Changed the search sheet copy to `Escanea el QR de la factura para encontrarla por CUFE.` and `Escanear QR`.
+- Orders CUFE scanning now calls `BarcodeScannerScreen(format = KmpBarcodeFormat.QR_CODE)`, so the scanner overlay uses the square QR frame instead of the default barcode frame.
+- Common metadata compilation passed after the correction. Existing project warnings remain unrelated.
+
+# POS Recover Invoice After First Step TODO
+
+## Plan
+- [x] Stop persisting recoverable checkpoints while the user is only on the customer/configuration step.
+- [x] Save the checkpoint as the products step when the user taps "Siguiente" and enters product selection.
+- [x] Ignore legacy customer-step checkpoints so they do not show a restore prompt.
+- [x] Run compile verification and record results.
+
+## Verification Gates
+- [x] `./gradlew --no-build-cache --no-configuration-cache :composeApp:compileCommonMainKotlinMetadata`
+
+## Review Notes
+- POS now saves the order creation checkpoint as `PRODUCTS` when "Siguiente" successfully moves the user past customer/configuration.
+- Customer/configuration-only saves are ignored by the ViewModel, so selecting a customer or changing invoice config does not create a recoverable invoice.
+- Legacy checkpoints saved at `CUSTOMER` are cleared instead of showing the recovery dialog.
+- Common metadata compilation passed. Existing project warnings remain unrelated.
+
+# POS Government Customer Detection TODO
+
+## Plan
+- [x] Add POS state for the selected registered customer's `fe_customer_type` from customer details.
+- [x] Populate that value from `GET /api/v1/customers/{ID}` when a registered customer is selected or restored.
+- [x] Stop using RUC text to infer government customers; require `fe_customer_type == "03"`.
+- [x] Clear the cached FE type when customer/final-customer state is cleared.
+- [x] Run compile verification and record results.
+
+## Verification Gates
+- [x] `./gradlew --no-build-cache --no-configuration-cache :composeApp:compileCommonMainKotlinMetadata`
+
+## Review Notes
+- POS now stores the selected registered customer's `fe_customer_type` from `GET /api/v1/customers/{ID}`.
+- Government product warnings now require `fe_customer_type == "03"` and no longer infer government status from RUC contents like `NT`.
+- Customer selection, quote restore, checkpoint restore, credit/debit-note initialization, and final-customer toggles clear or hydrate the cached FE type appropriately.
+- The government warning copy now says the selected customer is registered as government instead of saying the RUC looks government-like.
+- Common metadata compilation passed. Existing project warnings remain unrelated.
+
+# POS Success Compact Order Number TODO
+
+## Plan
+- [x] Update success order-number formatter to remove left zeroes.
+- [x] Preserve current fallback behavior for blank order numbers.
+- [x] Run compile verification and record results.
+
+## Verification Gates
+- [x] `./gradlew --no-build-cache --no-configuration-cache :composeApp:compileCommonMainKotlinMetadata`
+
+## Review Notes
+- Success order numbers now strip left zeroes after any dash-delimited prefix, so `#0000000868` renders as `#868`.
+- Blank order numbers still render as `#-`; all-zero values render as `#0`.
+- Common metadata compilation passed. Existing project warnings remain unrelated.
+
+# POS Draft Success Screen TODO
+
+## Plan
+- [x] Detect draft order success separately from invoice/payment success.
+- [x] Replace draft hero copy with saved-draft messaging.
+- [x] Suppress payment summary for drafts so it does not show "Pago registrado".
+- [x] Keep new-order action and add a visible order-details action for drafts.
+- [x] Run compile verification and record results.
+
+## Verification Gates
+- [x] `./gradlew --no-build-cache --no-configuration-cache :composeApp:compileCommonMainKotlinMetadata`
+
+## Review Notes
+- Draft order success now shows "Orden guardada en borrador" with copy explaining the invoice and payment can be completed later.
+- Draft success no longer renders the payment summary, so it does not claim "Pago registrado".
+- Draft success keeps the new-order CTA and adds a visible "Ver detalle de la orden" action.
+- Invoice warning/download/share actions stay disabled for draft success.
+- Common metadata compilation passed. Existing project warnings remain unrelated.
+
+# POS Payment Screen Default Selection TODO
+
+## Plan
+- [x] Add local PaymentScreen state so normal sales start with no selected payment option.
+- [x] Keep replacement and credit/debit-note flows on existing behavior where a method is already implied.
+- [x] Hide payment method content until the user selects an option.
+- [x] Rename the payment-link option to "Crear enlace de pago con QR".
+- [x] Run compile verification and record results.
+
+## Verification Gates
+- [x] `./gradlew --no-build-cache --no-configuration-cache :composeApp:compileCommonMainKotlinMetadata`
+
+## Review Notes
+- Normal POS payment entry now starts with no selected payment option and no payment content rendered below the selector.
+- Selecting manual, payment link, Yappy onsite, or draft stores a local selection and then renders that method's content.
+- Replacement mode and credit/debit-note flows continue using the existing ViewModel payment mode so implied payment handling is unchanged.
+- The payment-link selector title now reads "Crear enlace de pago con QR".
+- Common metadata compilation passed. Existing project warnings remain unrelated.
+
+# POS Payment Link Success Screen TODO
+
+## Plan
+- [x] Rework the payment-link card so the QR gets full-width vertical space and share actions sit below it.
+- [x] Add a small scan/status badge explaining automatic payment detection.
+- [x] Require confirmation before cancelling/releasing a payment link to choose another payment method.
+- [x] Change payment-link order refresh polling to wait 4 seconds after each response.
+- [x] Run compile verification and record results.
+
+## Verification Gates
+- [x] `./gradlew --no-build-cache --no-configuration-cache :composeApp:compileCommonMainKotlinMetadata`
+
+## Review Notes
+- Payment-link QR now renders full-width with a larger vertical range, and copy/WhatsApp actions sit below it.
+- Added a compact scan badge explaining that the customer can scan the QR and the app will detect completed payment automatically.
+- Selecting another payment method now opens a confirmation dialog before the payment link is cancelled/released.
+- Payment-link status polling now waits 4 seconds between completed order refresh attempts.
+- Common metadata compilation passed. Existing project warnings remain unrelated.
+
+# Yappy Onsite Cancel Order TODO
+
+## Plan
+- [x] Trace current QR cancel, change-payment, and order cancellation paths.
+- [x] Make explicit QR cancellation cancel the order with reason `yappy qr code cancelled` and show the cancelled/failed state.
+- [x] Style the cancel order button as destructive/red while preserving the change-payment action.
+- [x] Run compile verification and record results.
+
+## Verification Gates
+- [x] `./gradlew --no-build-cache --no-configuration-cache :composeApp:compileCommonMainKotlinMetadata`
+
+## Review Notes
+- The active Yappy onsite QR destructive action now uses the Yappy onsite transaction cancel endpoint with reason `yappy qr code cancelled`.
+- The change-payment action still uses the existing QR release/replacement flow and is not routed through order cancellation.
+- After successful cancellation, the screen renders the cancelled order state and offers a new sale instead of returning to the cancelled order checkout.
+- The cancel order button now uses `MaterialTheme.colorScheme.error` for text/icon/border.
+- Common metadata compilation passed. Existing project warnings remain unrelated.
+
+## Correction
+- [x] Route destructive Yappy onsite cancellation through the Yappy transaction cancel endpoint so the provider transaction is cancelled before backend order cancellation.
+- [x] Treat returned/cancelled transaction response as the cancelled-order success state.
+- [x] Run compile verification after the correction.
+
+## Correction Review Notes
+- `cancelYappyOnsiteOrder()` now calls `paymentService.cancelYappyOnsiteTransaction(...)`, which maps to `PUT /api/v1/payments/yappy/onsite/transactions/:transaction_id/cancel`.
+- The app accepts `cancelled`, `canceled`, or `returned` transaction responses as terminal order-cancelled success, then normalizes local display status to cancelled so the order-cancelled screen is shown.
+- Common metadata compilation passed after the correction. Existing project warnings remain unrelated.
+
+# Home Config Summary Re-entry Refresh TODO
+
+## Plan
+- [x] Confirm why bottom-bar Home re-entry calls `/business/config-summary`.
+- [x] Change Home route entry to use financial profile cache/listener context without forcing refresh.
+- [x] Add focused regression coverage for `setBusiness(refresh = false)` cache behavior.
+- [x] Run focused tests and common compile verification.
+
+## Verification Gates
+- [x] `./gradlew --no-build-cache --no-configuration-cache :composeApp:testAndroidHostTest --tests com.teco.ventago.features.financialProfile.FinancialProfileServiceTest`
+- [x] `./gradlew --no-build-cache --no-configuration-cache :composeApp:compileCommonMainKotlinMetadata`
+
+## Review Notes
+- Home re-entry from bottom-bar navigation recreated/ran `HomeViewModel` entry logic, which called `financialProfileService.setBusiness(businessId, refresh = true)` and forced `/api/v1/business/config-summary`.
+- Home now calls `setBusiness(businessId, refresh = false)`, so it uses the cached financial profile and the service's realtime financial listener instead of refreshing on each route entry.
+- Added coverage that `setBusiness(refresh = false)` uses a matching cached profile and does not call the financial profile repository.
+- Focused Android host tests and common metadata compilation passed. Existing project warnings remain unrelated.
+
+
 # Config Summary And Branch Refresh Storm TODO
 
 ## Plan
@@ -63,6 +290,105 @@
 ## Review Notes
 - Home now skips the sales title, range selector, and line chart when the sales chart data is empty.
 - The section returns automatically when `salesChart` contains non-zero sales data.
+
+# Bottom Bar App Menu TODO
+
+## Plan
+- [x] Add a neutral app menu route and menu screen using the Home quick-card visual style.
+- [x] Retarget the current products bottom-bar entry so it opens the menu instead of categories.
+- [x] Wire menu cards to existing destinations for products/services, clients, quotes, sales, add product, expenses, branches, and payment methods.
+- [x] Keep menu cards permission-aware so restricted routes are not exposed.
+- [x] Run compile verification and record results.
+
+## Verification Gates
+- [x] `./gradlew --no-build-cache --no-configuration-cache :composeApp:compileCommonMainKotlinMetadata`
+
+## Review Notes
+- The bottom bar now shows `Menú` with a menu icon instead of opening products/categories directly.
+- The new menu screen renders two-column Home-style white cards in the requested order.
+- Menu cards route to categories, clients, quotes, sales/orders, direct add product, expenses, branches, and payment methods using existing graph destinations.
+- Cards are hidden when the current user lacks the matching route permission; `AddItemScreen` is now guarded by `RouteKey.PRODUCT_ADD`.
+- Common metadata compilation passed. Existing project warnings remain unrelated.
+
+## Correction Plan
+- [x] Remove the menu title from the menu screen.
+- [x] Reorder menu cards into paired view/action rows.
+- [x] Style left-column cards as white with primary text/icons.
+- [x] Style action cards like the Home new-order card and payment methods as green filled.
+- [x] Keep quotes and new quote beta/permission gated.
+- [x] Run compile verification and record results.
+
+## Correction Review Notes
+- Removed the visible menu title so the screen starts directly with cards.
+- Reordered the cards into `[view][create/action]` rows: products/add product, clients/add client, orders/new order, quotes/new quote, expenses/new expense, branches/payment methods.
+- Left-column cards use the white card container with primary content; action cards use the Home new-order secondary background with `onSecondary`; payment methods uses a green filled card.
+- Quote cards remain gated by `RouteKey.QUOTES_LIST` and `RouteKey.QUOTE_NEW`, preserving the beta-feature check.
+- Common metadata compilation passed. Existing project warnings remain unrelated.
+
+## Color Correction
+- [x] Replace secondary action-card background with `vanishedBackgroundColor()`.
+- [x] Keep readable icon/text contrast after the background change.
+- [x] Run compile verification and record results.
+
+## Color Correction Review Notes
+- Menu action cards now use `vanishedBackgroundColor()` instead of `MaterialTheme.colorScheme.secondary`.
+- Because the new background is light, action-card icon/text color now uses primary for contrast.
+- Payment methods remains green filled.
+- Common metadata compilation passed. Existing project warnings remain unrelated.
+
+## Layout Revert
+- [x] Return the menu to the four-row layout: products/clients, quotes/sales, add product/expenses, branches/payment methods.
+- [x] Remove the extra create cards for client, order, quote, and expense.
+- [x] Run compile verification and record results.
+
+## Layout Revert Review Notes
+- Menu cards are back to the original white-card grid order requested for the menu.
+- Quotes remain beta-gated by `RouteKey.QUOTES_LIST`.
+- Common metadata compilation passed. Existing project warnings remain unrelated.
+
+## Primary Color Correction
+- [x] Set every menu card icon and label to primary.
+- [x] Run compile verification and record results.
+
+## Primary Color Correction Review Notes
+- All menu cards now use `MaterialTheme.colorScheme.primary` for icons and labels.
+- Common metadata compilation passed. Existing project warnings remain unrelated.
+
+## Quick Actions Redesign Plan
+- [x] Inspect Home quick-card style, quote beta gating, and create routes.
+- [x] Split the menu into quick actions and module sections.
+- [x] Add the quote quick action with add-customer fallback when quote beta access is unavailable.
+- [x] Keep the module grid white with primary text and icons.
+- [x] Include create-only permissions in bottom menu visibility.
+- [x] Run compile verification and record results.
+
+## Quick Actions Redesign Review Notes
+- Menu now renders an `Acciones rápidas` section with Nueva venta, Nueva cotización or Agregar cliente fallback, Registrar gasto, and Agregar producto.
+- Quote quick action stays beta/permission-gated through `RouteKey.QUOTE_NEW`; when unavailable, the second quick action uses `RouteKey.CUSTOMER_FORM`.
+- Quick actions use secondary-colored text/icons and a selected treatment for Nueva venta.
+- The `Módulos` grid uses white cards with primary-colored icons and labels.
+- Bottom menu visibility now considers create-only route permissions so users with direct actions can still open the menu.
+- Common metadata compilation passed. Existing project warnings remain unrelated.
+
+## Quick Actions Compact Correction
+- [x] Remove subtitles from quick action cards.
+- [x] Remove selected-state styling from Nueva venta.
+- [x] Reduce quick action icon size.
+- [x] Run compile verification and record results.
+
+## Quick Actions Compact Correction Review Notes
+- Quick actions now render title-only cards with secondary-colored 24dp icons.
+- All quick action cards use the same white card container; Nueva venta no longer has selected background or border.
+- Common metadata compilation passed. Existing project warnings remain unrelated.
+
+## Quick Action Icon Correction
+- [x] Use the same POS drawable icon as Home for Nueva venta.
+- [x] Change Agregar producto to an inventory/box icon.
+- [x] Run compile verification and record results.
+
+## Quick Action Icon Correction Review Notes
+- Nueva venta now renders `Res.drawable.pos` with the same tinting approach used by Home.
+- Agregar producto now uses the inventory/box Material icon instead of the cart icon.
 - Common metadata compilation passed. Existing project warnings remain unrelated.
 
 # Home Payment Setup Banner TODO
@@ -5844,3 +6170,91 @@
 - Replacement selectors now use existing POS config state and do not initiate config-summary refresh.
 - The `.165` Chrome log entries with `jwt_request_missing_fingerprint` / `invalid_token` are separate from the app `.124` POS flow and were not caused by this app-side replacement selector path.
 - Common metadata compilation passed. Existing warnings remain unrelated.
+
+# Order Details Status History Sheet TODO
+
+## Plan
+
+- [x] Wire the order details status badge click to local sheet state.
+- [x] Render a bottom-sheet timeline from `order.orderHistories` with status, note, actor, and date.
+- [x] Keep the empty-history state readable without adding a new API request.
+- [x] Run focused compile verification and record results.
+
+## Verification Gates
+
+- [x] `./gradlew --no-build-cache --no-configuration-cache :composeApp:compileCommonMainKotlinMetadata`
+
+## Review Notes
+
+- Tapping the status badge on order details now opens a bottom sheet backed by `order.orderHistories` from the existing order payload.
+- The sheet shows each history entry's status label, note, changed-by user, and formatted timestamp in a scrollable timeline.
+- Empty histories render a readable empty state and no new API request was added.
+- Common metadata compilation passed. Existing project warnings remain unrelated.
+
+# Order Details Compact Number And Location TODO
+
+## Plan
+
+- [x] Parse the internal order number into branch code, billing-point code, and sequence number.
+- [x] Show the compact sequence number in the order details header.
+- [x] Collect branch data in the order details ViewModel and resolve branch/billing-point display names.
+- [x] Add a detail card for branch and billing point using the existing card layout style.
+- [x] Run focused compile verification and record results.
+
+## Verification Gates
+
+- [x] `./gradlew --no-build-cache --no-configuration-cache :composeApp:compileCommonMainKotlinMetadata`
+
+## Review Notes
+
+- Order details now shows the compact order sequence, e.g. `#862`, instead of the full `ORD-business-branch-point-sequence` internal number.
+- Added a card below the header with resolved branch and billing-point names from `BranchService.observe()`.
+- The parser remains defensive and falls back to branch/billing-point codes or unavailable labels when names are not yet loaded.
+- The status history sheet also uses the compact order number for consistency.
+- Common metadata compilation passed. Existing project warnings remain unrelated.
+
+# Orders Screen Filter And Label Cleanup TODO
+
+## Plan
+
+- [x] Move filter sheet visibility into `OrdersState` so top-bar actions can open it.
+- [x] Move payment-status filter chips from the main list header into the filter bottom sheet.
+- [x] Move the filter button and active-filter badge into `OrdersScreenActions`.
+- [x] Remove the orders/quotes tab UI from `OrdersScreen`.
+- [x] Update Spanish orders labels used by this screen from `Pedidos` to `Órdenes`.
+- [x] Run focused compile verification and record results.
+
+## Verification Gates
+
+- [x] `./gradlew --no-build-cache --no-configuration-cache :composeApp:compileCommonMainKotlinMetadata`
+
+## Review Notes
+
+- Payment-status chips now live inside the filters bottom sheet and update the same `paymentStatusFilter` applied by the sheet action.
+- The top app bar actions now include the filter icon with the active-filter count badge beside add and QR scanner.
+- Removed the embedded orders/quotes tab UI and quotes list rendering from `OrdersScreen`.
+- Spanish `orders` empty-state labels now use `Órdenes`.
+- Common metadata compilation passed. Existing project warnings remain unrelated.
+
+# Orders Screen Order Number Search TODO
+
+## Plan
+
+- [x] Collect branch/billing-point data in `OrdersViewModel` for the search sheet.
+- [x] Add search-sheet visibility state and top-bar search icon before the filter icon.
+- [x] Build a bottom sheet with conditional branch and billing-point dropdowns plus order sequence input.
+- [x] Generate the full internal order number from business id, selected branch, selected billing point, and padded sequence.
+- [x] Submit to the existing `findOrderByOrderNumber` flow and open order details on success.
+- [x] Run focused compile verification and record results.
+
+## Verification Gates
+
+- [x] `./gradlew --no-build-cache --no-configuration-cache :composeApp:compileCommonMainKotlinMetadata`
+
+## Review Notes
+
+- Added a top-bar search icon before the filter icon on the orders screen.
+- Added an order-number search bottom sheet with conditional branch and billing-point selectors plus numeric sequence input.
+- The sheet builds full internal numbers like `ORD-4-0000-865-0000000870` from the selected branch, selected billing point, current business id, and zero-padded user input.
+- Search submits through the existing `findOrderByOrderNumber` flow and opens order details when found.
+- Common metadata compilation passed. Existing project warnings remain unrelated.

@@ -12,13 +12,12 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Assessment
 import androidx.compose.material.icons.filled.Home
-import androidx.compose.material.icons.filled.Inventory
+import androidx.compose.material.icons.filled.Menu
 import androidx.compose.material.icons.filled.ReceiptLong
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Shop
 import androidx.compose.material.icons.filled.ShoppingCartCheckout
 import androidx.compose.material.icons.outlined.Home
-import androidx.compose.material.icons.outlined.Inventory
 import androidx.compose.material.icons.outlined.Assessment
 import androidx.compose.material.icons.outlined.ReceiptLong
 import androidx.compose.material.icons.outlined.Settings
@@ -487,14 +486,10 @@ fun App(
                                                     contentDescription = "Facturas"
                                                 )
                                             }
-                                            BottomNavKey.PRODUCTS -> {
+                                            BottomNavKey.MENU -> {
                                                 Icon(
-                                                    imageVector = if (currentScreen == item.selectedScreen) {
-                                                        Icons.Filled.Inventory
-                                                    } else {
-                                                        Icons.Outlined.Inventory
-                                                    },
-                                                    contentDescription = "Productos"
+                                                    imageVector = Icons.Filled.Menu,
+                                                    contentDescription = "Menú"
                                                 )
                                             }
                                             BottomNavKey.SETTINGS -> {
@@ -515,7 +510,7 @@ fun App(
                                                 BottomNavKey.HOME -> "Home"
                                                 BottomNavKey.SUMMARY -> stringResource(Res.string.home_summary_tab)
                                                 BottomNavKey.ORDERS -> "Facturas"
-                                                BottomNavKey.PRODUCTS -> "Productos"
+                                                BottomNavKey.MENU -> "Menú"
                                                 BottomNavKey.SETTINGS -> "Opciones"
                                             }
                                         )

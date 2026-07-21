@@ -83,8 +83,8 @@ android {
         applicationId = "com.teco.ventago"
         minSdk = libs.versions.android.minSdk.get().toInt()
         targetSdk = libs.versions.android.targetSdk.get().toInt()
-        versionCode = 43
-        versionName = "1.6.0"
+        versionCode = 44
+        versionName = "1.6.1"
     }
 
     packaging {

@@ -334,6 +334,7 @@ data class PosState(
     // TODO Oscar check if needed
     val creatingOrderState: ViewState = ViewState(),
     val customer: CustomerListItem? = null,
+    val selectedCustomerFeCustomerType: String? = null,
     val customerQuery: String = "",
     val paymentsConfigured: Boolean = false,
     val paymentsOnboardingCompleted: Boolean = false,

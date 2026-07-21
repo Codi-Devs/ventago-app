@@ -12,6 +12,7 @@ import com.teco.ventago.core.beta.BetaFeature
 import com.teco.ventago.core.beta.BetaService
 import com.teco.ventago.core.firebase.AnalyticsService
 import com.teco.ventago.features.auth.domain.IAuthService
+import com.teco.ventago.features.branches.domain.BranchService
 import com.teco.ventago.features.business.domain.BusinessService
 import com.teco.ventago.features.business.domain.model.Business
 import com.teco.ventago.features.financialProfile.domain.FinancialProfileService
@@ -73,6 +74,7 @@ import kotlin.io.encoding.ExperimentalEncodingApi
 class OrdersDetailsViewModel(
     private val orderService: OrderService,
     private val paymentService: PaymentService,
+    private val branchService: BranchService,
     private val businessService: BusinessService,
     private val financialProfileService: FinancialProfileService,
     private val authService: IAuthService,
@@ -152,6 +154,12 @@ class OrdersDetailsViewModel(
                 businessData?.let {
                     business = businessData
 
+                }
+            }.launchIn(this)
+
+            branchService.observe().onEach { branches ->
+                updateState {
+                    copy(branches = branches)
                 }
             }.launchIn(this)
 
@@ -484,6 +492,7 @@ class OrdersDetailsViewModel(
                         businessId = businessId,
                         orderId = order.id,
                         amount = amount,
+                        note = yappyOnsitePaymentDescription(),
                     )
                 }
             }.onSuccess { replacement ->
@@ -629,6 +638,10 @@ class OrdersDetailsViewModel(
         return normalized in setOf("cancelled", "canceled", "expired", "returned") ||
             invoiceStatus == 2 ||
             invoiceStatus == 3
+    }
+
+    private fun yappyOnsitePaymentDescription(): String {
+        return business?.name?.trim()?.takeIf { it.isNotBlank() } ?: "Pago Yappy"
     }
 
     fun resetManualPaymentFields() {

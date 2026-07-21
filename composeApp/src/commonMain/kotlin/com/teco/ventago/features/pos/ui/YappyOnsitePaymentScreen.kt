@@ -209,7 +209,7 @@ fun YappyOnsitePaymentScreen(
                     onsite == null -> MissingQrState(onReturnToCheckout)
                     status.equals("expired", ignoreCase = true) -> ExpiredState(onReturnToCheckout)
                     status.equals("cancelled", ignoreCase = true) ||
-                        status.equals("canceled", ignoreCase = true) -> CancelledState(onReturnToCheckout)
+                        status.equals("canceled", ignoreCase = true) -> CancelledState(onNewSale)
                     status.equals("returned", ignoreCase = true) -> ReturnedState(onReturnToCheckout)
                     status.equals("succeeded", ignoreCase = true) && invoiceStatus == 3 -> InvoiceFailedState(
                         warning = invoice?.warningMessage,
@@ -259,7 +259,7 @@ fun YappyOnsitePaymentScreen(
             onDismiss = { showCancelConfirmation = false },
             onConfirm = {
                 showCancelConfirmation = false
-                viewModel.cancelYappyOnsiteTransaction()
+                viewModel.cancelYappyOnsiteOrder()
             },
         )
     }
@@ -409,13 +409,13 @@ private fun PendingQrState(
         Spacer(Modifier.height(10.dp))
         OutlinedButtonM(
             onClick = onCancel,
-            contentColor = MaterialTheme.colorScheme.secondary,
-            border = BorderStroke(1.dp, MaterialTheme.colorScheme.secondary),
+            contentColor = MaterialTheme.colorScheme.error,
+            border = BorderStroke(1.dp, MaterialTheme.colorScheme.error),
             modifier = Modifier.widthIn(max = 520.dp),
         ) {
             Icon(Icons.Filled.Close, contentDescription = null, modifier = Modifier.size(18.dp))
             Spacer(Modifier.width(8.dp))
-            Text("Cancelar cobro", style = bodyMediumBold(color = MaterialTheme.colorScheme.secondary))
+            Text("Cancelar orden", style = bodyMediumBold(color = MaterialTheme.colorScheme.error))
         }
     }
 }
@@ -649,15 +649,15 @@ private fun ExpiredState(onReturnToCheckout: () -> Unit) {
 }
 
 @Composable
-private fun CancelledState(onReturnToCheckout: () -> Unit) {
+private fun CancelledState(onNewSale: () -> Unit) {
     PaymentStatusCard(
         icon = Icons.Filled.Close,
         iconColor = MaterialTheme.colorScheme.error,
-        title = "Pago cancelado",
-        subtitle = "Puedes volver al checkout y elegir otro método.",
+        title = "Orden cancelada",
+        subtitle = "La orden fue cancelada y el QR de Yappy quedó inactivo.",
     ) {
-        ButtonM(onClick = onReturnToCheckout) {
-            Text("Volver al checkout")
+        ButtonM(onClick = onNewSale) {
+            Text("Nueva venta")
         }
     }
 }

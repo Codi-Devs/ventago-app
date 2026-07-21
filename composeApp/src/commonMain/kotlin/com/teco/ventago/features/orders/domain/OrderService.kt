@@ -467,7 +467,7 @@ class OrderService(private val repository: IOrdersRepository) {
         businessId: Int,
         orderId: Int,
         amount: String,
-        note: String = "POS payment"
+        note: String = "Pago Yappy"
     ): PendingIntentCreateResponse {
         return repository.createPendingPaymentIntent(
             businessId = businessId,

@@ -57,6 +57,7 @@ import com.teco.ventago.features.customers.ui.list.CustomersListScreen
 import com.teco.ventago.features.home.ui.HomeSummaryScreen
 import com.teco.ventago.features.home.ui.HomeScreen
 import com.teco.ventago.features.invoicing.ui.InvoicingLandingScreen
+import com.teco.ventago.features.menu.ui.MenuScreen
 import com.teco.ventago.features.notifications.ui.NotificationsScreen
 import com.teco.ventago.features.orders.domain.OrderService
 import com.teco.ventago.features.orders.domain.models.CustomerSnapshot
@@ -70,6 +71,7 @@ import com.teco.ventago.features.orders.ui.orders.OrdersScreen
 import com.teco.ventago.features.orders.ui.orders.OrdersScreenActions
 import com.teco.ventago.features.orders.ui.order_details.OrderDetailsActions
 import com.teco.ventago.features.quotes.ui.details.QuoteDetailsActions
+import com.teco.ventago.features.quotes.ui.list.QuotesListScreenActions
 import com.teco.ventago.features.orders.ui.order_details.viewModel.OrdersDetailsViewModel
 import com.teco.ventago.features.orders.ui.order_history.viewModel.OrderHistoryViewModel
 import com.teco.ventago.features.orders.ui.order_invoice.viewModel.OrderInvoiceViewModel
@@ -216,6 +218,7 @@ enum class PosScreens(
     Greetings(Res.string.pos),
     UnauthorizedScreen(Res.string.authz_access_denied_title, showBackButton = false),
     HomeScreen(Res.string.home, false, showBackButton = false),
+    MenuScreen(Res.string.home, false, showBackButton = false),
     NotificationsScreen(Res.string.notifications),
     SummaryScreen(Res.string.home_summary_tab, true, showBackButton = false),
     Reports(Res.string.reports),
@@ -226,7 +229,7 @@ enum class PosScreens(
     ProductsManage(Res.string.categories, false), CategoriesManageScreen(
         Res.string.categories,
         true,
-        showBackButton = false,
+        showBackButton = true,
         actions = { _, navigate, _ -> CategoriesManageActions(navigate) }),
     AddCategoryScreen(Res.string.add_new_category), EditCategoryScreen(
         Res.string.edit, true, actions = { _, navigate, _ -> EditCategoryActions(navigate) }),
@@ -262,7 +265,12 @@ enum class PosScreens(
     Quotes(Res.string.quotes),
     QuoteSummaryScreen(Res.string.quote_summary),
     QuoteSuccessScreen(Res.string.quote_success, showAppBar = false, showBackButton = false),
-    QuotesListScreen(Res.string.quotes, true, showBackButton = true),
+    QuotesListScreen(
+        Res.string.quotes,
+        true,
+        showBackButton = true,
+        actions = { backStackEntry, _, _ -> QuotesListScreenActions(backStackEntry) }
+    ),
     QuoteDetailsScreen(
         Res.string.quote_details,
         true,
@@ -398,6 +406,13 @@ fun Navigation(
                 appViewModel = appViewModel
             ) {
                 navController.navigate(it.name)
+            }
+        }
+
+        composable(route = PosScreens.MenuScreen.name) {
+            analyticsService.logScreenView("MenuScreen")
+            MenuScreen { route ->
+                navController.navigate(route.name)
             }
         }
 

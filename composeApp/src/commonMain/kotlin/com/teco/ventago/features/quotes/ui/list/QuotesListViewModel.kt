@@ -2,6 +2,7 @@ package com.teco.ventago.features.quotes.ui.list
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.teco.ventago.features.branches.domain.BranchService
 import com.teco.ventago.features.quotes.domain.QuotesService
 import com.teco.ventago.features.quotes.domain.models.Quote
 import com.teco.ventago.features.quotes.domain.models.requests.ListQuotesRequest
@@ -10,12 +11,15 @@ import kotlinx.coroutines.IO
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.launchIn
+import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import kotlin.collections.LinkedHashMap
 
 class QuotesListViewModel(
-    private val quotesService: QuotesService
+    private val quotesService: QuotesService,
+    private val branchService: BranchService,
 ) : ViewModel() {
 
     private companion object {
@@ -28,6 +32,21 @@ class QuotesListViewModel(
 
     init {
         loadQuotes(refresh = true)
+        branchService.observe()
+            .onEach { branches ->
+                _uiState.value = _uiState.value.copy(branches = branches.toList())
+            }
+            .launchIn(viewModelScope)
+        quotesService.quoteSettings()
+            .onEach { settings ->
+                _uiState.value = _uiState.value.copy(
+                    quotePrefix = settings?.quotePrefix?.takeIf { it.isNotBlank() } ?: "COT"
+                )
+            }
+            .launchIn(viewModelScope)
+        viewModelScope.launch {
+            quotesService.refreshQuoteSettings()
+        }
     }
 
     fun loadQuotes(refresh: Boolean = false) {
@@ -97,6 +116,24 @@ class QuotesListViewModel(
 
     fun setStatus(value: Int?) {
         _uiState.value = _uiState.value.copy(status = value)
+    }
+
+    fun showFiltersSheet(show: Boolean) {
+        _uiState.value = _uiState.value.copy(showFiltersSheet = show)
+    }
+
+    fun showQuoteSearchSheet(show: Boolean) {
+        _uiState.value = _uiState.value.copy(showQuoteSearchSheet = show)
+    }
+
+    fun activeFilterCount(): Int {
+        val state = _uiState.value
+        return listOf(
+            state.customerName.isNotBlank(),
+            state.customerRuc.isNotBlank(),
+            state.quoteNumber.isNotBlank(),
+            state.status != null,
+        ).count { it }
     }
 
     fun applyFilters() {

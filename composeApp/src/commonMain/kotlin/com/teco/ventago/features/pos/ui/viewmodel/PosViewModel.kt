@@ -168,7 +168,8 @@ class PosViewModel(
         const val ORDER_CREATION_CHECKPOINT_KEY_PREFIX = "pos.order_creation_checkpoint"
         const val YAPPY_ONSITE_DEVICES_CACHE_KEY_PREFIX = "pos.yappy_onsite_devices"
         const val PAYMENT_CONFIG_REFRESH_THROTTLE_SECONDS = 60L
-        const val PAYMENT_LINK_POLL_MS = 1_500L
+        const val PAYMENT_LINK_POLL_MS = 4_000L
+        const val GOVERNMENT_FE_CUSTOMER_TYPE = "03"
     }
 
     var business: Business? = null
@@ -407,6 +408,7 @@ class PosViewModel(
             updateState {
                 copy(
                     finalCustomer = true,
+                    selectedCustomerFeCustomerType = null,
                     customerAddresses = emptyList(),
                     selectedCustomerAddressId = null,
                     customerAddressesLoading = false
@@ -424,7 +426,8 @@ class PosViewModel(
                         status = args.customerStatus,
                         invoiceCustomer = args.customerInvoiceID ?: -1,
                         updatedAt = now().epochSeconds,
-                    )
+                    ),
+                    selectedCustomerFeCustomerType = null,
                 )
             }
             hydrateSelectedCustomerTaxSettings(
@@ -666,13 +669,20 @@ class PosViewModel(
         updateState {
             copy(
                 customer = customer,
+                selectedCustomerFeCustomerType = null,
                 customerAddresses = emptyList(),
                 selectedCustomerAddressId = null,
                 customerAddressesLoading = false
             )
         }
         when {
-            customer != null -> applySelectedCustomerTaxDefaults(customer)
+            customer != null -> {
+                applySelectedCustomerTaxDefaults(customer)
+                hydrateSelectedCustomerTaxSettings(
+                    customerId = customer.id,
+                    applyDefaultsOnlyWhenMissing = false,
+                )
+            }
             uiState.value.finalCustomer == false -> clearSelectedCustomerTaxDefaults()
         }
         fetchCustomerAddresses()
@@ -754,8 +764,7 @@ class PosViewModel(
         if (state.finalCustomer != false) {
             return false
         }
-        val ruc = state.customer?.ruc?.uppercase()?.trim().orEmpty()
-        return ruc.isNotEmpty() && ruc.contains("NT")
+        return state.selectedCustomerFeCustomerType == GOVERNMENT_FE_CUSTOMER_TYPE
     }
 
     private fun validateGovernmentInvoiceProducts(): List<String> {
@@ -1046,6 +1055,7 @@ class PosViewModel(
                 charged = mapOf(),
                 freeTrialAvailable = false,
                 customer = null,
+                selectedCustomerFeCustomerType = null,
                 customerQuery = "",
                 selectedBranchIndex = nextBranchIndex,
                 billingPoints = nextBillingPoints,
@@ -1201,6 +1211,11 @@ class PosViewModel(
             return
         }
 
+        if (!checkpoint.currentStep.isRecoverableOrderCreationStep()) {
+            clearOrderCreationCheckpoint()
+            return
+        }
+
         if (!checkpoint.data.hasMeaningfulUserData()) {
             clearOrderCreationCheckpoint()
             return
@@ -1234,6 +1249,7 @@ class PosViewModel(
                 enabledOperationNature = true,
                 invoiceIssueDateIso = data.invoiceIssueDateIso,
                 customer = data.customer,
+                selectedCustomerFeCustomerType = null,
                 finalCustomer = data.finalCustomer,
                 finalName = data.finalName,
                 finalEmail = data.finalEmail?.trim()?.takeIf { it.isNotEmpty() },
@@ -1352,6 +1368,7 @@ class PosViewModel(
 
     fun saveOrderCreationCheckpoint(step: OrderCreationStep) {
         if (suppressOrderCheckpointWrites) return
+        if (!step.isRecoverableOrderCreationStep()) return
         val businessId = business?.businessId ?: return
         val state = uiState.value
         if (!canUseOrderCreationCheckpoint(state)) return
@@ -1386,6 +1403,10 @@ class PosViewModel(
         if (state.selectedDocType in noteDocumentTypes()) return false
         if (state.referencedNoteCUFE.isNotBlank()) return false
         return true
+    }
+
+    private fun OrderCreationStep.isRecoverableOrderCreationStep(): Boolean {
+        return this != OrderCreationStep.CUSTOMER
     }
 
     private fun noteDocumentTypes(): Set<String> = setOf("04", "05", "06")
@@ -2078,7 +2099,7 @@ class PosViewModel(
             links = PaymentLinksBlock(
                 create = true,
                 expireInMinutes = if (createYappyOnsite) 5 else 140,
-                note = if (createYappyOnsite) "Factura POS" else "", // No note handled bu now
+                note = if (createYappyOnsite) yappyOnsitePaymentDescription() else "",
                 method = if (createYappyOnsite) "YAPPY_ONSITE" else "LINK"
             )
         } else if (!saveAsDraft) {
@@ -2288,6 +2309,10 @@ class PosViewModel(
             },
             saveAs = if (saveAsDraft) "draft" else "confirmed"
         )
+    }
+
+    private fun yappyOnsitePaymentDescription(): String {
+        return business?.name?.trim()?.takeIf { it.isNotBlank() } ?: "Pago Yappy"
     }
 
     fun startPaymentLinkStatusPolling() {
@@ -2712,6 +2737,7 @@ class PosViewModel(
                         businessId = businessId,
                         orderId = orderId,
                         amount = amount,
+                        note = yappyOnsitePaymentDescription(),
                     )
                 }
             }.onSuccess { replacement ->
@@ -2885,6 +2911,7 @@ class PosViewModel(
                         businessId = businessId,
                         orderId = orderId,
                         amount = amount,
+                        note = yappyOnsitePaymentDescription(),
                     )
                 }
             }.onSuccess { replacement ->
@@ -3379,6 +3406,58 @@ class PosViewModel(
         }
     }
 
+    fun cancelYappyOnsiteOrder() {
+        val state = uiState.value
+        val businessId = business?.businessId ?: return
+        val transactionId = state.onsitePayment?.transactionId
+            ?: state.yappyOnsiteTransaction?.transaction?.transactionId
+            ?: return
+
+        stopYappyOnsitePollingForRelease()
+        showLoading()
+        viewModelScope.launch(Dispatchers.IO) {
+            runCatching {
+                paymentService.cancelYappyOnsiteTransaction(
+                    businessId = businessId,
+                    transactionId = transactionId,
+                    reason = "yappy qr code cancelled",
+                )
+            }.onSuccess { transaction ->
+                withContext(Dispatchers.Main) {
+                    val orderCancelled = transaction.status.equals("cancelled", ignoreCase = true) ||
+                        transaction.status.equals("canceled", ignoreCase = true) ||
+                        transaction.status.equals("returned", ignoreCase = true)
+                    if (orderCancelled) {
+                        updateState {
+                            copy(
+                                onsitePayment = onsitePayment?.copy(
+                                    status = "cancelled",
+                                    providerStatus = transaction.providerStatus,
+                                ),
+                                yappyOnsiteTransaction = yappyOnsiteTransaction?.copy(
+                                    transaction = transaction.copy(status = "cancelled"),
+                                ),
+                                yappyOnsiteExitCancelDialogVisible = false,
+                                pendingPaymentChangeCancelDialogVisible = false,
+                            )
+                        }
+                        showSuccess()
+                    } else {
+                        updateState { copy(yappyOnsitePollingSuppressed = false) }
+                        snackbarService.show("No fue posible confirmar la cancelación de la orden.")
+                        showError()
+                    }
+                }
+            }.onFailure { error ->
+                withContext(Dispatchers.Main) {
+                    updateState { copy(yappyOnsitePollingSuppressed = false) }
+                    snackbarService.show(paymentLinkSwitchErrorMessage(error))
+                    showError()
+                }
+            }
+        }
+    }
+
     fun retryYappyOnsiteInvoice() {
         val businessId = business?.businessId ?: return
         val orderId = uiState.value.yappyOnsiteTransaction?.order?.id
@@ -3834,6 +3913,7 @@ class PosViewModel(
                         updatedAt = now().epochSeconds
                     )
                 },
+                selectedCustomerFeCustomerType = null,
                 finalName = if (isFinalCustomer) finalName else null,
                 finalEmail = if (isFinalCustomer) finalEmail else null,
                 finalPhone = if (isFinalCustomer) finalPhone else null,
@@ -3929,6 +4009,7 @@ class PosViewModel(
                         updatedAt = now().epochSeconds
                     )
                 },
+                selectedCustomerFeCustomerType = null,
                 finalName = if (isFinalCustomer) finalName else null,
                 finalEmail = if (isFinalCustomer) finalEmail else null,
                 finalPhone = if (isFinalCustomer) finalPhone else null,
@@ -4110,6 +4191,7 @@ class PosViewModel(
             copy(
                 finalCustomer = isFinal,
                 customer = if (isFinal) null else customer,
+                selectedCustomerFeCustomerType = if (isFinal) null else selectedCustomerFeCustomerType,
                 customerAddresses = if (isFinal) emptyList() else customerAddresses,
                 selectedCustomerAddressId = if (isFinal) null else selectedCustomerAddressId,
                 customerAddressesLoading = false,
@@ -4122,6 +4204,12 @@ class PosViewModel(
             )
         }
         if (!isFinal) {
+            uiState.value.customer?.id?.let {
+                hydrateSelectedCustomerTaxSettings(
+                    customerId = it,
+                    applyDefaultsOnlyWhenMissing = true,
+                )
+            }
             fetchCustomerAddresses()
         }
         saveOrderCreationCheckpoint(OrderCreationStep.CUSTOMER)
@@ -4555,7 +4643,12 @@ class PosViewModel(
         )
 
         val shouldApplyDefaults = !applyDefaultsOnlyWhenMissing || !hasConfiguredTaxSettings()
-        updateState { copy(customer = hydratedCustomer) }
+        updateState {
+            copy(
+                customer = hydratedCustomer,
+                selectedCustomerFeCustomerType = details.feCustomerType,
+            )
+        }
         if (shouldApplyDefaults) {
             applySelectedCustomerTaxDefaults(hydratedCustomer)
         }

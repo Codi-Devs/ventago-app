@@ -37,6 +37,8 @@ import androidx.compose.material.icons.filled.Whatsapp
 import androidx.compose.material.icons.outlined.CameraAlt
 import androidx.compose.material.icons.rounded.Business
 import androidx.compose.material.icons.rounded.Cancel
+import androidx.compose.material.icons.rounded.AccessTime
+import androidx.compose.material.icons.rounded.CheckCircle
 import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material.icons.rounded.ContentCopy
 import androidx.compose.material.icons.rounded.Delete
@@ -44,6 +46,7 @@ import androidx.compose.material.icons.rounded.Description
 import androidx.compose.material.icons.rounded.Download
 import androidx.compose.material.icons.rounded.ErrorOutline
 import androidx.compose.material.icons.rounded.HelpOutline
+import androidx.compose.material.icons.rounded.History
 import androidx.compose.material.icons.rounded.Inventory2
 import androidx.compose.material.icons.rounded.KeyboardArrowDown
 import androidx.compose.material.icons.rounded.KeyboardArrowUp
@@ -51,6 +54,7 @@ import androidx.compose.material.icons.rounded.Link
 import androidx.compose.material.icons.rounded.MoreVert
 import androidx.compose.material.icons.rounded.OpenInNew
 import androidx.compose.material.icons.rounded.Payment
+import androidx.compose.material.icons.rounded.Person
 import androidx.compose.material.icons.rounded.Receipt
 import androidx.compose.material.icons.rounded.Search
 import androidx.compose.material.icons.rounded.Share
@@ -133,11 +137,13 @@ import com.teco.ventago.design_system.theme.labelSmall
 import com.teco.ventago.design_system.theme.titleLarge
 import com.teco.ventago.design_system.theme.titleMediumBold
 import com.teco.ventago.design_system.theme.vanishedBackgroundColor
+import com.teco.ventago.features.branches.domain.model.Branch
 import com.teco.ventago.features.invoicing.domain.models.FEDocumentType
 import com.teco.ventago.features.invoicing.domain.models.InvoiceStatus
 import com.teco.ventago.features.orders.domain.PaymentLinkResolver
 import com.teco.ventago.features.orders.domain.models.ManualPaymentMethodOption
 import com.teco.ventago.features.orders.domain.models.Order
+import com.teco.ventago.features.orders.domain.models.OrderHistoryDto
 import com.teco.ventago.features.orders.domain.models.OrderPaymentDto
 import com.teco.ventago.features.orders.domain.models.OrderStatus
 import com.teco.ventago.features.orders.domain.models.PaymentStatus
@@ -356,6 +362,7 @@ fun OrderDetailsScreen(
     var cancelReason by remember { mutableStateOf("") }
     var showDeleteDialog by remember { mutableStateOf(false) }
     var deleteReason by remember { mutableStateOf("") }
+    var showStatusHistorySheet by remember { mutableStateOf(false) }
 
     val uiState by viewModel.uiState.collectAsState()
     val loadingSheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
@@ -365,6 +372,7 @@ fun OrderDetailsScreen(
     val rescheduleSheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     val voidPaymentSheetState = rememberModalBottomSheetState()
     val cancelOrderSheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+    val statusHistorySheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
 
     LaunchedEffect(Unit) {
         viewModel.events.collect { event ->
@@ -430,7 +438,16 @@ fun OrderDetailsScreen(
         verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
         // Header card
-        OrderHeaderCard(order = order, viewModel = viewModel)
+        OrderHeaderCard(
+            order = order,
+            viewModel = viewModel,
+            onStatusClick = { showStatusHistorySheet = true }
+        )
+
+        OrderLocationCard(
+            orderNumberParts = parseOrderNumberParts(order.internalNumber),
+            branches = uiState.branches
+        )
 
         // Items card
         OrderItemsCard(order = order)
@@ -662,7 +679,20 @@ fun OrderDetailsScreen(
 
         Spacer(modifier = Modifier.height(8.dp))
 
-        // --- Bottom sheets and dialogs (unchanged) ---
+        // --- Bottom sheets and dialogs ---
+
+        if (showStatusHistorySheet) {
+            ModalBottomSheet(
+                containerColor = MaterialTheme.colorScheme.background,
+                onDismissRequest = { showStatusHistorySheet = false },
+                sheetState = statusHistorySheetState,
+            ) {
+                OrderStatusHistoryBottomSheet(
+                    order = order,
+                    onDismiss = { showStatusHistorySheet = false }
+                )
+            }
+        }
 
         if (!uiState.paymentLink.isNullOrBlank()) {
             ModalBottomSheet(
@@ -1433,7 +1463,11 @@ private fun OrderDetailsLoadingSkeleton() {
 }
 
 @Composable
-private fun OrderHeaderCard(order: Order, viewModel: OrdersDetailsViewModel) {
+private fun OrderHeaderCard(
+    order: Order,
+    viewModel: OrdersDetailsViewModel,
+    onStatusClick: () -> Unit
+) {
     Card(
         modifier = Modifier.fillMaxWidth(),
         elevation = CardDefaults.cardElevation(2.dp),
@@ -1449,11 +1483,11 @@ private fun OrderHeaderCard(order: Order, viewModel: OrdersDetailsViewModel) {
                     CardSectionIcon(imageVector = Icons.Rounded.Receipt)
                     Spacer(modifier = Modifier.width(8.dp))
                     Text(
-                        text = "#${order.internalNumber}",
+                        text = "#${compactOrderNumber(order)}",
                         style = titleMediumBold()
                     )
                 }
-                OrderStatusChip(status = order.status) { }
+                OrderStatusChip(status = order.status, onClick = onStatusClick)
             }
             Spacer(modifier = Modifier.height(12.dp))
             InfoRow("Fecha", DateFormat.getOrdersFormattedDate(order.createdAt))
@@ -1484,6 +1518,280 @@ private fun OrderHeaderCard(order: Order, viewModel: OrdersDetailsViewModel) {
             }
         }
     }
+}
+
+@Composable
+private fun OrderLocationCard(
+    orderNumberParts: OrderNumberParts,
+    branches: List<Branch>
+) {
+    val branch = branches.firstOrNull { it.branchCode == orderNumberParts.branchCode }
+    val billingPoint = branch
+        ?.fiscalBillingPoints
+        ?.firstOrNull { it.billingPoint.sameCodeAs(orderNumberParts.billingPointCode) }
+
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        elevation = CardDefaults.cardElevation(2.dp),
+        colors = CardDefaults.cardColors(containerColor = cardContainerColor())
+    ) {
+        Column(
+            modifier = Modifier.padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp)
+        ) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                CardSectionIcon(imageVector = Icons.Rounded.Business)
+                Spacer(modifier = Modifier.width(8.dp))
+                Text(
+                    text = "Sucursal y punto",
+                    style = bodyMediumBold()
+                )
+            }
+
+            InfoRow(
+                label = "Sucursal",
+                value = branchDisplayName(branch, orderNumberParts.branchCode),
+                maxLines = 2
+            )
+            InfoRow(
+                label = "Punto de facturación",
+                value = billingPointDisplayName(billingPoint?.description, orderNumberParts.billingPointCode),
+                maxLines = 2
+            )
+        }
+    }
+}
+
+@Composable
+private fun OrderStatusHistoryBottomSheet(
+    order: Order,
+    onDismiss: () -> Unit
+) {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(start = 16.dp, end = 16.dp, bottom = 16.dp)
+            .navigationBarsPadding(),
+        verticalArrangement = Arrangement.spacedBy(14.dp)
+    ) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            CardSectionIcon(imageVector = Icons.Rounded.History)
+            Spacer(modifier = Modifier.width(8.dp))
+            Text(
+                text = "Historial del pedido",
+                style = titleMediumBold()
+            )
+        }
+
+        Text(
+            text = "#${compactOrderNumber(order)}",
+            style = labelSmall(color = MaterialTheme.colorScheme.onSurfaceVariant),
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis
+        )
+
+        if (order.orderHistories.isEmpty()) {
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(12.dp))
+                    .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.35f))
+                    .padding(16.dp),
+                contentAlignment = Alignment.Center
+            ) {
+                Text(
+                    text = "No hay historial disponible para este pedido.",
+                    style = bodyMedium(color = MaterialTheme.colorScheme.onSurfaceVariant),
+                    textAlign = TextAlign.Center
+                )
+            }
+        } else {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .heightIn(max = 420.dp)
+                    .verticalScroll(rememberScrollState()),
+                verticalArrangement = Arrangement.spacedBy(0.dp)
+            ) {
+                order.orderHistories.forEachIndexed { index, history ->
+                    OrderStatusHistoryTimelineItem(
+                        history = history,
+                        isLast = index == order.orderHistories.lastIndex
+                    )
+                }
+            }
+        }
+
+        ButtonM(onClick = onDismiss) {
+            Text("Cerrar")
+        }
+    }
+}
+
+@Composable
+private fun OrderStatusHistoryTimelineItem(
+    history: OrderHistoryDto,
+    isLast: Boolean
+) {
+    Row(modifier = Modifier.fillMaxWidth()) {
+        Column(
+            horizontalAlignment = Alignment.CenterHorizontally,
+            modifier = Modifier.width(34.dp)
+        ) {
+            Box(
+                modifier = Modifier
+                    .size(24.dp)
+                    .clip(CircleShape)
+                    .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.12f)),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    imageVector = Icons.Rounded.CheckCircle,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.size(16.dp)
+                )
+            }
+
+            if (!isLast) {
+                Box(
+                    modifier = Modifier
+                        .width(2.dp)
+                        .height(54.dp)
+                        .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.22f))
+                )
+            }
+        }
+
+        Column(
+            modifier = Modifier
+                .weight(1f)
+                .padding(start = 8.dp, bottom = if (isLast) 0.dp else 14.dp),
+            verticalArrangement = Arrangement.spacedBy(4.dp)
+        ) {
+            Text(
+                text = orderStatusHistoryLabel(history.statusId),
+                style = bodyMediumBold(),
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+
+            if (history.note.isNotBlank()) {
+                Text(
+                    text = history.note,
+                    style = bodySmall(),
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(12.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                OrderHistoryMeta(
+                    icon = Icons.Rounded.AccessTime,
+                    value = formatOrderHistoryDate(history.createdAt),
+                    modifier = Modifier.weight(1f)
+                )
+                if (history.changedBy.isNotBlank()) {
+                    OrderHistoryMeta(
+                        icon = Icons.Rounded.Person,
+                        value = history.changedBy,
+                        modifier = Modifier.weight(1f)
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun OrderHistoryMeta(
+    icon: ImageVector,
+    value: String,
+    modifier: Modifier = Modifier
+) {
+    Row(
+        modifier = modifier,
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Icon(
+            imageVector = icon,
+            contentDescription = null,
+            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.size(14.dp)
+        )
+        Spacer(modifier = Modifier.width(4.dp))
+        Text(
+            text = value,
+            style = labelSmall(color = MaterialTheme.colorScheme.onSurfaceVariant),
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis
+        )
+    }
+}
+
+private fun orderStatusHistoryLabel(statusId: Int): String {
+    return when (statusId) {
+        OrderStatus.DRAFT -> "Borrador"
+        OrderStatus.CONFIRMED -> "Confirmado"
+        OrderStatus.PROCESSING -> "En preparación"
+        OrderStatus.READY -> "Listo para entregar"
+        OrderStatus.COMPLETED -> "Completado"
+        OrderStatus.CANCELLED -> "Cancelado"
+        OrderStatus.REJECT -> "Rechazado"
+        OrderStatus.REFUNDED -> "Reembolsado"
+        else -> "Estado desconocido"
+    }
+}
+
+private fun formatOrderHistoryDate(createdAt: String): String {
+    if (createdAt.isBlank()) return "Fecha no disponible"
+
+    return runCatching {
+        DateFormat.getOrdersFormattedDate(createdAt)
+    }.getOrElse {
+        createdAt
+    }
+}
+
+private data class OrderNumberParts(
+    val branchCode: String,
+    val billingPointCode: String,
+    val sequenceNumber: String
+)
+
+private fun parseOrderNumberParts(internalNumber: String): OrderNumberParts {
+    val parts = internalNumber.split("-")
+    return OrderNumberParts(
+        branchCode = parts.getOrNull(2).orEmpty(),
+        billingPointCode = parts.getOrNull(3).orEmpty(),
+        sequenceNumber = parts.lastOrNull().orEmpty()
+    )
+}
+
+private fun compactOrderNumber(order: Order): String {
+    val sequence = parseOrderNumberParts(order.internalNumber).sequenceNumber
+        .ifBlank { order.formattedInternalNumber() }
+    return sequence.trimStart('0').ifBlank { "0" }
+}
+
+private fun branchDisplayName(branch: Branch?, branchCode: String): String {
+    return branch?.name?.trim()?.takeIf { it.isNotBlank() }
+        ?: branchCode.takeIf { it.isNotBlank() }?.let { "Sucursal $it" }
+        ?: "Sucursal no disponible"
+}
+
+private fun billingPointDisplayName(description: String?, billingPointCode: String): String {
+    return description?.trim()?.takeIf { it.isNotBlank() }
+        ?: billingPointCode.takeIf { it.isNotBlank() }?.let { "Punto $it" }
+        ?: "Punto no disponible"
+}
+
+private fun String.sameCodeAs(other: String): Boolean {
+    if (this == other) return true
+    return trimStart('0') == other.trimStart('0')
 }
 
 @Composable
