@@ -276,6 +276,10 @@ private fun FriendlySuccessScreen(
         uiState.paymentLinkPaymentDetected &&
         !paymentLinkInvoiceIssued &&
         !paymentLinkInvoiceFailed
+    val paymentLinkManualInvoiceRequired = paymentLinkAwaitingInvoice &&
+        !uiState.autoInvoiceOnPaymentSuccess
+    val paymentLinkInvoiceProcessing = paymentLinkAwaitingInvoice &&
+        uiState.autoInvoiceOnPaymentSuccess
     val showPaymentLinkCard = isPaymentLink &&
         !paymentMethodChangeOpen &&
         !showReleasedPaymentLinkManualPanel &&
@@ -388,7 +392,8 @@ private fun FriendlySuccessScreen(
                     isDraftOrder -> "Puedes completar la factura y el cobro más tarde."
                     showReleasedPaymentLinkManualPanel -> "El link fue cancelado. Completa el cobro manual."
                     paymentLinkInvoiceIssued -> "Tu pago fue procesado correctamente."
-                    paymentLinkAwaitingInvoice -> "Estamos generando la factura."
+                    paymentLinkManualInvoiceRequired -> "La factura debe realizarse manualmente."
+                    paymentLinkInvoiceProcessing -> "Estamos generando la factura."
                     paymentLinkInvoiceFailed -> "El pago fue recibido, pero la factura requiere atención."
                     isPaymentLink -> "Tu orden fue procesada correctamente."
                     showInvoiceWarning -> "La orden fue creada, pero la factura requiere atención."
@@ -404,7 +409,7 @@ private fun FriendlySuccessScreen(
             OrderSummaryCard(
                 uiState = uiState,
                 amount = amount,
-                paymentSummary = if (!isDraftOrder && (!isPaymentLink || paymentLinkInvoiceIssued)) SuccessPaymentSummary(
+                paymentSummary = if (!isDraftOrder && (!isPaymentLink || paymentLinkInvoiceIssued || uiState.paymentLinkPaymentDetected)) SuccessPaymentSummary(
                     method = if (isPaymentLink) "Link de pago" else resolvePaymentMethodLabel(viewModel, uiState),
                     amount = amount,
                     paidColor = paidGreen
@@ -425,7 +430,9 @@ private fun FriendlySuccessScreen(
                 Spacer(modifier = Modifier.height(16.dp))
             }
 
-            if (paymentLinkAwaitingInvoice) {
+            if (paymentLinkManualInvoiceRequired) {
+                PaymentLinkManualInvoiceCard()
+            } else if (paymentLinkInvoiceProcessing) {
                 PaymentLinkInvoiceProcessingCard()
             } else if (paymentLinkInvoiceFailed) {
                 InvoiceWarningCard(
@@ -695,6 +702,43 @@ private fun PaymentLinkInvoiceProcessingCard() {
                 strokeWidth = 2.5.dp,
                 color = MaterialTheme.colorScheme.secondary
             )
+        }
+    }
+}
+
+@Composable
+private fun PaymentLinkManualInvoiceCard() {
+    SuccessCard {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Box(
+                modifier = Modifier
+                    .size(44.dp)
+                    .clip(CircleShape)
+                    .background(Color(0xFFD7F2D1)),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    imageVector = Icons.Filled.Check,
+                    contentDescription = null,
+                    tint = Color(0xFF087A16),
+                    modifier = Modifier.size(26.dp)
+                )
+            }
+            Spacer(modifier = Modifier.width(14.dp))
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = "Pago recibido",
+                    style = bodyMediumBold(color = Color(0xFF087A16))
+                )
+                Spacer(modifier = Modifier.height(4.dp))
+                Text(
+                    text = "La factura debe realizarse manualmente.",
+                    style = bodyMedium(color = MaterialTheme.colorScheme.onSurfaceVariant)
+                )
+            }
         }
     }
 }

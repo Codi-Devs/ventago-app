@@ -344,6 +344,7 @@ data class PosState(
     val yappyOnsiteDevices: List<YappyOnsiteDevice> = emptyList(),
     val yappyOnsiteDevicesResolved: Boolean = false,
     val invoicingEnabled: Boolean = false,
+    val autoInvoiceOnPaymentSuccess: Boolean = false,
     val canCreateInvoice: Boolean = false,
     val canCreateDraft: Boolean = false,
     val canCreatePaymentLink: Boolean = false,

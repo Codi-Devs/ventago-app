@@ -1,3 +1,41 @@
+# Order Detail Paid Payment Link Invoice Action TODO
+
+## Plan
+- [x] Separate never-attempted manual invoice action from retry invoice action.
+- [x] Show `Facturar` for paid payment-link orders with no invoice generated.
+- [x] Keep `Reintentar facturación` for invoice statuses that represent a failed/pending invoice attempt.
+- [x] Run compile verification and record results.
+
+## Verification Gates
+- [x] `./gradlew --no-build-cache --no-configuration-cache :composeApp:compileCommonMainKotlinMetadata`
+
+## Review Notes
+- Paid payment-link orders with `invoice_status` absent/none and no CUFE now show a green `Facturar` button.
+- That `Facturar` action calls the existing invoice endpoint directly; it does not open the manual-payment sheet, because the order is already paid.
+- `Reintentar facturación` no longer appears for `InvoiceStatus.NONE`; it remains for paid orders in pending/failed invoice states.
+- Common metadata compilation passed. Existing project warnings remain unrelated.
+
+
+# Payment Link Manual Invoice And ACH Detail TODO
+
+## Plan
+- [x] Trace payment-link success invoice messaging and ACH detail loading conditions.
+- [x] Add financial-profile auto-invoice state to POS success decisions.
+- [x] Show manual-invoice-required copy when payment-link payment is detected and auto invoice is disabled.
+- [x] Stop classifying credit card automatic payments as ACH payments.
+- [x] Run compile verification and record results.
+
+## Verification Gates
+- [x] `./gradlew --no-build-cache --no-configuration-cache :composeApp:compileCommonMainKotlinMetadata`
+
+## Review Notes
+- Payment-link success now reads `auto_invoice_on_payment_success` from the financial profile.
+- When a payment-link payment is detected and auto invoice is disabled, the success screen shows `Pago recibido` with manual-invoice-required copy instead of the invoice generation loader.
+- Payment-link polling exits after paid detection when auto invoice is disabled, instead of waiting for an invoice status that will not be produced automatically.
+- Automatic credit card payments no longer trigger ACH detail loading; ACH classification now requires ACH in the payment method name or description.
+- Common metadata compilation passed. Existing project warnings remain unrelated.
+
+
 # iOS Export Compliance Encryption Review TODO
 
 ## Plan

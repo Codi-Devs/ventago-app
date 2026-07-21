@@ -310,7 +310,8 @@ class PosViewModel(
                             } else {
                                 true
                             },
-                            invoicingEnabled = it.invoicingActive
+                            invoicingEnabled = it.invoicingActive,
+                            autoInvoiceOnPaymentSuccess = it.paymentSummary.autoInvoiceOnPaymentSuccess
                         )
                     }
                     if (onsiteConfigured) {
@@ -2348,6 +2349,10 @@ class PosViewModel(
                             invoiceStatus = invoiceStatus,
                             orderNumber = freshOrder.internalNumber.ifBlank { orderNumber },
                         )
+                    }
+
+                    if (paymentDetected && !uiState.value.autoInvoiceOnPaymentSuccess) {
+                        return@launch
                     }
 
                     when (invoiceStatus) {

@@ -517,7 +517,18 @@ fun OrderDetailsScreen(
                 }
 
                 InvoiceStatus.NONE.id, InvoiceStatus.PENDING.id -> {
-                    if (viewModel.canInvoiceDraftOrder(order)) {
+                    if (viewModel.canShowPaidPaymentLinkInvoiceButton(order)) {
+                        ButtonM(
+                            onClick = { viewModel.retryElectronicInvoice() },
+                            containerColor = Color(0xFF2E7D32),
+                            contentColor = Color.White
+                        ) {
+                            OrderActionButtonContent(
+                                icon = Icons.Rounded.Description,
+                                label = "Facturar"
+                            )
+                        }
+                    } else if (viewModel.canInvoiceDraftOrder(order)) {
                         ButtonM(
                             onClick = { viewModel.showManualPaymentSheet(true) },
                             containerColor = Color(0xFF2E7D32),

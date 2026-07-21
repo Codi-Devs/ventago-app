@@ -825,6 +825,18 @@ class OrdersDetailsViewModel(
         return shouldShowRetryInvoiceButton(order)
     }
 
+    fun canShowPaidPaymentLinkInvoiceButton(order: Order? = uiState.value.order): Boolean {
+        val safeOrder = order ?: return false
+        if (!uiState.value.canMarkPaid) return false
+        if (!safeOrder.supportsReceivableActions()) return false
+        if (safeOrder.status == OrderStatus.CANCELLED) return false
+        if (!safeOrder.paymentFlowType.equals("payment_link", ignoreCase = true)) return false
+        if (safeOrder.paymentStatus != PaymentStatus.PAID.id) return false
+        if ((safeOrder.invoiceStatus ?: InvoiceStatus.NONE.id) != InvoiceStatus.NONE.id) return false
+        if (!safeOrder.externalInvoiceNumber.isNullOrBlank()) return false
+        return safeOrder.totalAmount.toLongCents() > 0L
+    }
+
     fun canGeneratePaymentLink(order: Order? = uiState.value.order): Boolean {
         if (!uiState.value.canCreatePaymentLink) return false
         if (!uiState.value.havePaymentsConfigured) return false
@@ -873,10 +885,8 @@ class OrdersDetailsViewModel(
         if (!payment.isAutomatic) return false
         val methodName = payment.paymentMethod.name.lowercase()
         val methodDescription = payment.paymentMethod.description.lowercase()
-        val methodId = payment.paymentMethod.id
         return methodName.contains("ach") ||
-            methodDescription.contains("ach") ||
-            methodId == 3
+            methodDescription.contains("ach")
     }
 
     fun achStatusLabel(rawStatus: String?): String {
@@ -2643,9 +2653,8 @@ internal fun shouldShowRetryInvoiceButton(order: Order?): Boolean {
 
     val isPaid = safeOrder.paymentStatus == PaymentStatus.PAID.id
     val invoiceStatus = safeOrder.invoiceStatus ?: InvoiceStatus.NONE.id
-    val isNotYetInvoiced = invoiceStatus == InvoiceStatus.NONE.id ||
-        invoiceStatus == InvoiceStatus.PENDING.id ||
+    val isInvoiceAttemptedButNotIssued = invoiceStatus == InvoiceStatus.PENDING.id ||
         invoiceStatus == InvoiceStatus.FAILED.id
 
-    return isPaid && isNotYetInvoiced
+    return isPaid && isInvoiceAttemptedButNotIssued
 }

@@ -1,5 +1,8 @@
 # Lessons Learned
 
+- En detalles de orden, no uses `paymentStatus=PAID` + `invoiceStatus=NONE` como caso de reintento; `NONE` significa factura no ejecutada y debe mostrarse como acción primaria `Facturar`, sin abrir formularios de pago si ya existe un pago automático confirmado.
+- En pantallas de éxito de link de pago, no asumir que `paymentStatus=PAID` implica facturación automática en progreso; leer `payment_summary.auto_invoice_on_payment_success` y, si está apagado, detener polling de factura y mostrar que la factura debe realizarse manualmente.
+- En detalles de orden, no clasificar métodos de pago por IDs hardcodeados compartidos sin validar contra payload real; ID `3` puede ser `Tarjeta Crédito`, así que ACH debe detectarse por contrato/nombre/descripción ACH o un campo específico del backend.
 - En descripciones/notas enviadas a proveedores de pago (ej. Yappy onsite), no usar etiquetas internas como `Factura POS`; preferir el nombre visible del negocio y dejar un fallback de negocio claro como `Pago Yappy`.
 - En respuestas de listas que traen objetos anidados (ej. `quote.customer.name`), no asumir que el DTO plano usado por UI (`customerName`) se hidrata solo; normalizar aliases anidados en el repository para lista y detalle.
 - En flujos que escanean QR fiscales, pasar explicitamente `KmpBarcodeFormat.QR_CODE` al scanner; el default compartido es `CODE_128` y renderiza una guia rectangular de barcode.
