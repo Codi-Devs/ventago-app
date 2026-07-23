@@ -1,6 +1,7 @@
 package com.teco.ventago.features.printers.ui.viewmodel
 
 import androidx.lifecycle.viewModelScope
+import com.teco.ventago.AppDistribution
 import com.teco.ventago.core.BaseViewModel
 import com.teco.ventago.core.firebase.AnalyticsService
 import com.teco.ventago.core.logger.ILoggerService
@@ -12,6 +13,8 @@ import com.teco.ventago.features.branches.domain.BranchService
 import com.teco.ventago.features.printers.domain.PrinterDiscoveryService
 import com.teco.ventago.features.printers.domain.PrinterService
 import com.teco.ventago.features.printers.domain.model.CreatePrinterRequest
+import com.teco.ventago.features.printers.domain.model.PRINTER_INTEGRATION_EPSON_EPOS
+import com.teco.ventago.features.printers.domain.model.PRINTER_INTEGRATION_H10P_INTERNAL
 import com.teco.ventago.features.printers.domain.model.PrinterDiscoveryStatus
 import com.teco.ventago.features.printers.domain.model.PrinterConfig
 import com.teco.ventago.features.printers.domain.model.UpdatePrinterRequest
@@ -30,6 +33,7 @@ class PrinterOnboardingViewModel(
     private val branchService: BranchService,
     private val logger: ILoggerService,
     private val analyticsService: AnalyticsService,
+    private val appDistribution: AppDistribution,
     entryContext: String = PrinterEntryContext.SETTINGS.name,
     private val preselectedBranchCode: String? = null,
     private val preselectedBillingPointCode: String? = null,
@@ -40,6 +44,13 @@ class PrinterOnboardingViewModel(
         entryContext = entryContext.toPrinterEntryContextValue(),
         selectionLocked = entryContext.toPrinterEntryContextValue() == PrinterEntryContext.BRANCH,
         showSuccessOnSave = !startAtConfig,
+        configMode = if (appDistribution.isPosBuild) PrinterConfigMode.MANUAL else PrinterConfigMode.AUTOMATIC,
+        useInternalPrinter = appDistribution.isPosBuild,
+        printerName = if (appDistribution.isPosBuild) "H10P Internal" else "TM-T20III",
+        port = if (appDistribution.isPosBuild) "0" else "443",
+        paperWidthMm = if (appDistribution.isPosBuild) 57 else 80,
+        supportsCutter = !appDistribution.isPosBuild,
+        timeoutMs = if (appDistribution.isPosBuild) 10_000 else 30_000,
     )
 ) {
     private var formSeeded = false
@@ -111,12 +122,16 @@ class PrinterOnboardingViewModel(
             }
         }
 
-        if (startAtConfig) {
+        if (startAtConfig && !appDistribution.isPosBuild) {
             startAutoDiscoveryIfNeeded()
         }
     }
 
     fun startSetupFlow() {
+        if (appDistribution.isPosBuild) {
+            updateState { copy(step = PrinterOnboardingStep.CONFIG, validationMessage = null) }
+            return
+        }
         updateState {
             copy(step = PrinterOnboardingStep.SETUP, validationMessage = null)
         }
@@ -157,10 +172,13 @@ class PrinterOnboardingViewModel(
 
     fun continueToConfig() {
         updateState { copy(step = PrinterOnboardingStep.CONFIG) }
-        startAutoDiscoveryIfNeeded()
+        if (!appDistribution.isPosBuild) {
+            startAutoDiscoveryIfNeeded()
+        }
     }
 
     fun setConfigMode(mode: PrinterConfigMode) {
+        if (appDistribution.isPosBuild) return
         if (mode == uiState.value.configMode) return
         updateState {
             copy(
@@ -546,6 +564,7 @@ class PrinterOnboardingViewModel(
                 printerName = when {
                     existingPrinter != null -> existingPrinter.printerModel
                     shouldKeepDiscoveredEndpoint -> selectedDiscovered?.displayName?.takeIf { it.isNotBlank() } ?: printerName
+                    appDistribution.isPosBuild -> "H10P Internal"
                     else -> "TM-T20III"
                 },
                 host = when {
@@ -556,14 +575,15 @@ class PrinterOnboardingViewModel(
                 port = when {
                     existingPrinter != null -> existingPrinter.port.toString()
                     shouldKeepDiscoveredEndpoint -> selectedDiscovered?.port?.toString() ?: "443"
+                    appDistribution.isPosBuild -> "0"
                     else -> "443"
                 },
-                paperWidthMm = existingPrinter?.paperWidthMm ?: 80,
+                paperWidthMm = existingPrinter?.paperWidthMm ?: if (appDistribution.isPosBuild) 57 else 80,
                 printByDefault = existingPrinter?.printByDefault ?: true,
                 isActive = existingPrinter?.isActive ?: true,
-                supportsCutter = existingPrinter?.supportsCutter ?: true,
+                supportsCutter = existingPrinter?.supportsCutter ?: !appDistribution.isPosBuild,
                 retryCount = existingPrinter?.retryCount ?: 1,
-                timeoutMs = existingPrinter?.timeoutMs ?: 30_000,
+                timeoutMs = existingPrinter?.timeoutMs ?: if (appDistribution.isPosBuild) 10_000 else 30_000,
                 lastTestStatus = existingPrinter?.lastTestStatus ?: "not_tested",
                 lastTestMessage = if (existingPrinter?.lastTestStatus == "success") "Prueba exitosa" else null,
                 validationMessage = null,
@@ -573,7 +593,8 @@ class PrinterOnboardingViewModel(
 
     private fun buildDraftPrinterConfig(): PrinterConfig? {
         val state = uiState.value
-        if (state.configMode == PrinterConfigMode.AUTOMATIC && state.selectedDiscoveredPrinter == null) {
+        val isInternalPrinter = state.useInternalPrinter
+        if (!isInternalPrinter && state.configMode == PrinterConfigMode.AUTOMATIC && state.selectedDiscoveredPrinter == null) {
             updateState {
                 copy(validationMessage = "Selecciona una impresora descubierta para continuar.")
             }
@@ -593,36 +614,46 @@ class PrinterOnboardingViewModel(
             updateState { copy(validationMessage = "Ingresa el nombre de la impresora.") }
             return null
         }
-        if (state.host.isBlank()) {
+        if (!isInternalPrinter && state.host.isBlank()) {
             updateState { copy(validationMessage = "Ingresa la IP exacta de la impresora.") }
             return null
         }
 
-        val port = state.port.toIntOrNull() ?: 443
+        val integrationType = if (isInternalPrinter) {
+            PRINTER_INTEGRATION_H10P_INTERNAL
+        } else {
+            state.currentPrinter?.integrationType ?: PRINTER_INTEGRATION_EPSON_EPOS
+        }
+        val port = if (isInternalPrinter) 0 else state.port.toIntOrNull() ?: 443
+        val host = if (isInternalPrinter) "" else state.host.trim()
         return (state.currentPrinter ?: PrinterConfig(
             branchCode = branchCode,
             billingPointCode = billingPointCode,
+            printerBrand = if (isInternalPrinter) "h10p" else "epson",
             printerModel = state.printerName.trim(),
-            host = state.host.trim(),
+            integrationType = integrationType,
+            host = host,
         )).copy(
             branchCode = branchCode,
             billingPointCode = billingPointCode,
+            printerBrand = if (isInternalPrinter) "h10p" else "epson",
             printerModel = state.printerName.trim(),
-            host = state.host.trim(),
+            integrationType = integrationType,
+            host = host,
             port = port,
             paperWidthMm = state.paperWidthMm,
             printByDefault = state.printByDefault,
             isActive = state.isActive,
-            supportsCutter = state.supportsCutter,
+            supportsCutter = if (isInternalPrinter) false else state.supportsCutter,
             retryCount = state.retryCount,
             timeoutMs = state.timeoutMs,
             lastTestStatus = if (lastSuccessfulTestFingerprint == fingerprintForValues(
                     branchCode = branchCode,
                     billingPointCode = billingPointCode,
                     printerModel = state.printerName.trim(),
-                    host = state.host.trim(),
+                    host = host,
                     port = port,
-                    integrationType = state.currentPrinter?.integrationType ?: "epson_epos",
+                    integrationType = integrationType,
                 )
             ) {
                 "success"
@@ -661,6 +692,7 @@ class PrinterOnboardingViewModel(
 
     private fun startAutoDiscoveryIfNeeded(force: Boolean = false) {
         val state = uiState.value
+        if (state.useInternalPrinter) return
         if (state.step != PrinterOnboardingStep.CONFIG) return
         if (state.configMode != PrinterConfigMode.AUTOMATIC) return
         if (!force && state.discoveryState.status == PrinterDiscoveryStatus.SCANNING) return

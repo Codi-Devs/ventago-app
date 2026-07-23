@@ -51,6 +51,7 @@ import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material.icons.rounded.ExpandLess
 import androidx.compose.material.icons.rounded.ExpandMore
 import androidx.compose.material.icons.rounded.FindReplace
+import androidx.compose.material.icons.rounded.QrCodeScanner
 import androidx.compose.material.icons.rounded.Search
 import androidx.compose.material3.BottomSheetDefaults
 import androidx.compose.material3.ButtonDefaults
@@ -804,7 +805,10 @@ fun CartOrganism(
 
 @Composable
 fun PosListOrganism(
-    viewModel: PosViewModel, modifier: Modifier = Modifier, navigate: (PosScreens) -> Unit
+    viewModel: PosViewModel,
+    modifier: Modifier = Modifier,
+    navigate: (PosScreens) -> Unit,
+    onOpenScanner: () -> Unit = {}
 ) {
     val uiState by viewModel.uiState.collectAsState()
     val productControlsHeight = 56.dp
@@ -855,6 +859,15 @@ fun PosListOrganism(
                         contentDescription = null,
                         tint = MaterialTheme.colorScheme.onSurfaceVariant
                     )
+                },
+                trailingIcon = {
+                    IconButton(onClick = onOpenScanner) {
+                        Icon(
+                            imageVector = Icons.Rounded.QrCodeScanner,
+                            contentDescription = "Escanear producto",
+                            tint = MaterialTheme.colorScheme.secondary
+                        )
+                    }
                 },
                 singleLine = true,
                 keyboardOptions = KeyboardOptions(

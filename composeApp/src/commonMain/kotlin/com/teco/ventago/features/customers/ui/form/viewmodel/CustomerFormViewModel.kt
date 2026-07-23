@@ -131,25 +131,135 @@ class CustomerFormViewModel(
         updateState {
             copy(
                 customerType = value,
+                customerTypeSelected = true,
                 ruc = "",
                 rucCheckDigit = "",
+                rucError = null,
                 legalName = "",
-                name = if (value.rucNeeded()) "" else name,
+                name = "",
+                nameError = null,
                 cedulaCF = if (value == FeCustomerType.FINAL_CONSUMER) cedulaCF else "",
                 cedulaError = null,
                 foreignIdNumber = if (value == FeCustomerType.FOREIGNER) foreignIdNumber else "",
+                foreignIdNumberError = null,
+                foreignIdType = CustomerForeignIdType.PASSPORT,
+                selectedCountryCode = DEFAULT_FOREIGN_CUSTOMER_COUNTRY,
+                addressLine = if (value == FeCustomerType.FOREIGNER) "" else DEFAULT_CUSTOMER_FORM_ADDRESS_LINE,
+                selectedProvince = if (value == FeCustomerType.FOREIGNER) null else DEFAULT_CUSTOMER_FORM_PROVINCE,
+                selectedDistrict = if (value == FeCustomerType.FOREIGNER) null else DEFAULT_CUSTOMER_FORM_DISTRICT,
+                selectedCorregimiento = if (value == FeCustomerType.FOREIGNER) null else DEFAULT_CUSTOMER_FORM_CORREGIMIENTO,
+                districtOptions = if (value == FeCustomerType.FOREIGNER) {
+                    emptyList()
+                } else {
+                    PanamaLocations.districts(DEFAULT_CUSTOMER_FORM_PROVINCE)
+                },
+                corregimientoOptions = if (value == FeCustomerType.FOREIGNER) {
+                    emptyList()
+                } else {
+                    PanamaLocations.corregimientos(DEFAULT_CUSTOMER_FORM_PROVINCE, DEFAULT_CUSTOMER_FORM_DISTRICT)
+                },
+                addressExpanded = false,
                 addressLineError = null,
                 provinceError = null,
                 districtError = null,
                 corregimientoError = null,
+                validationMessage = null,
             )
         }
     }
 
-    fun onNameChange(value: String) = updateState { copy(name = value, nameError = null) }
-    fun onEmailChange(value: String) = updateState { copy(email = value) }
-    fun onPhoneChange(value: String) = updateState { copy(phone = value) }
-    fun onRucChange(value: String) = updateState { copy(ruc = value) }
+    fun onCustomerTypeSelected(value: FeCustomerType) {
+        onCustomerTypeChange(value)
+        updateState { copy(currentStep = CustomerFormStep.MAIN_INFO) }
+    }
+
+    fun onStepBack() {
+        updateState {
+            copy(
+                currentStep = when (currentStep) {
+                    CustomerFormStep.TYPE -> CustomerFormStep.TYPE
+                    CustomerFormStep.MAIN_INFO -> CustomerFormStep.TYPE
+                    CustomerFormStep.OPTIONAL_INFO -> CustomerFormStep.MAIN_INFO
+                },
+                validationMessage = null,
+            )
+        }
+    }
+
+    fun toggleAddressExpanded() {
+        updateState { copy(addressExpanded = !addressExpanded) }
+    }
+
+    fun goToOptionalInfo() {
+        val current = uiState.value
+        val nameError = if (current.name.isBlank() && !current.customerType.rucNeeded()) {
+            "El nombre es requerido"
+        } else {
+            null
+        }
+        val rucError = if (current.customerType.rucNeeded() && current.ruc.isBlank()) {
+            "El RUC es requerido"
+        } else {
+            null
+        }
+        val foreignIdNumberError = if (current.customerType == FeCustomerType.FOREIGNER && current.foreignIdNumber.isBlank()) {
+            "El documento es requerido"
+        } else {
+            null
+        }
+        val normalizedCedula = normalizePanamaCedula(current.cedulaCF)
+        val cedulaError = getCedulaValidationError(
+            mode = current.mode,
+            customerType = current.customerType,
+            cedula = normalizedCedula
+        )
+
+        if (listOf(nameError, rucError, foreignIdNumberError, cedulaError).any { it != null }) {
+            updateState {
+                copy(
+                    nameError = nameError,
+                    rucError = rucError,
+                    foreignIdNumberError = foreignIdNumberError,
+                    cedulaCF = normalizedCedula,
+                    cedulaError = cedulaError,
+                    validationMessage = "Revisa los campos marcados en rojo para continuar.",
+                )
+            }
+            return
+        }
+
+        updateState {
+            copy(
+                nameError = null,
+                rucError = null,
+                foreignIdNumberError = null,
+                cedulaCF = normalizedCedula,
+                cedulaError = null,
+                validationMessage = null,
+            )
+        }
+
+        if (current.customerType.rucNeeded() && (current.legalName.isBlank() || current.rucCheckDigit.isBlank())) {
+            validateRucAndAdvance()
+            return
+        }
+
+        updateState { copy(currentStep = CustomerFormStep.OPTIONAL_INFO) }
+    }
+
+    fun onNameChange(value: String) = updateState { copy(name = value, nameError = null, validationMessage = null) }
+    fun onEmailChange(value: String) = updateState { copy(email = value, validationMessage = null) }
+    fun onPhoneChange(value: String) = updateState { copy(phone = value, validationMessage = null) }
+    fun onRucChange(value: String) = updateState {
+        copy(
+            ruc = value.uppercase(),
+            rucError = null,
+            rucCheckDigit = "",
+            legalName = "",
+            name = if (customerType.rucNeeded()) "" else name,
+            validationMessage = null,
+        )
+    }
     fun onCedulaChange(value: String) {
         val normalizedCedula = normalizePanamaCedula(value)
         updateState {
@@ -159,13 +269,16 @@ class CustomerFormViewModel(
                     mode = mode,
                     customerType = customerType,
                     cedula = normalizedCedula
-                )
+                ),
+                validationMessage = null,
             )
         }
     }
-    fun onAddressLineChange(value: String) = updateState { copy(addressLine = value, addressLineError = null) }
-    fun onForeignIdNumberChange(value: String) = updateState { copy(foreignIdNumber = value) }
-    fun onTaxExemptChange(value: Boolean) = updateState { copy(taxExempt = value) }
+    fun onAddressLineChange(value: String) = updateState { copy(addressLine = value, addressLineError = null, validationMessage = null) }
+    fun onForeignIdNumberChange(value: String) = updateState {
+        copy(foreignIdNumber = value, foreignIdNumberError = null, validationMessage = null)
+    }
+    fun onTaxExemptChange(value: Boolean) = updateState { copy(taxExempt = value, validationMessage = null) }
 
     fun taxRetentionLabels(): List<String> = CustomerTaxRetentionCatalog.options.map { it.label }
 
@@ -186,6 +299,8 @@ class CustomerFormViewModel(
             copy(
                 taxRetentionCode = option.code,
                 taxRetentionPercent = nextPercent,
+                taxRetentionPercentError = null,
+                validationMessage = null,
             )
         }
     }
@@ -197,7 +312,7 @@ class CustomerFormViewModel(
             (filtered.toIntOrNull() ?: 0) > 100 -> "100"
             else -> filtered
         }
-        updateState { copy(taxRetentionPercent = normalized) }
+        updateState { copy(taxRetentionPercent = normalized, taxRetentionPercentError = null, validationMessage = null) }
     }
 
     fun selectedTaxRetentionRequiresManualPercent(): Boolean {
@@ -205,11 +320,11 @@ class CustomerFormViewModel(
     }
 
     fun onForeignIdTypeChange(value: CustomerForeignIdType) {
-        updateState { copy(foreignIdType = value) }
+        updateState { copy(foreignIdType = value, validationMessage = null) }
     }
 
     fun onCountryCodeChange(value: String) {
-        updateState { copy(selectedCountryCode = value) }
+        updateState { copy(selectedCountryCode = value, validationMessage = null) }
     }
 
     fun onProvinceChange(province: String) {
@@ -224,6 +339,7 @@ class CustomerFormViewModel(
                 selectedCorregimiento = null,
                 districtOptions = districts,
                 corregimientoOptions = emptyList(),
+                validationMessage = null,
             )
         }
     }
@@ -237,17 +353,26 @@ class CustomerFormViewModel(
                 corregimientoError = null,
                 selectedCorregimiento = null,
                 corregimientoOptions = corregimientos,
+                validationMessage = null,
             )
         }
     }
 
     fun onCorregimientoChange(corregimiento: String) {
-        updateState { copy(selectedCorregimiento = corregimiento, corregimientoError = null) }
+        updateState { copy(selectedCorregimiento = corregimiento, corregimientoError = null, validationMessage = null) }
     }
 
     fun validateRuc() {
         val current = uiState.value
-        if (businessId <= 0 || current.ruc.isBlank() || !current.customerType.rucNeeded()) return
+        if (businessId <= 0 || current.ruc.isBlank() || !current.customerType.rucNeeded()) {
+            updateState {
+                copy(
+                    rucError = "Ingresa un RUC valido",
+                    validationMessage = "Revisa los campos marcados en rojo para continuar.",
+                )
+            }
+            return
+        }
 
         showLoading()
         viewModelScope.launch {
@@ -261,11 +386,61 @@ class CustomerFormViewModel(
                         rucCheckDigit = validated.dv,
                         legalName = validated.legalName,
                         name = validated.legalName,
+                        rucError = null,
+                        validationMessage = null,
                     )
                 }
                 showSuccess()
             }.onFailure {
                 showError()
+                updateState {
+                    copy(
+                        rucError = "No se pudo validar el RUC",
+                        validationMessage = "Verifica el RUC e intentalo nuevamente.",
+                    )
+                }
+            }
+        }
+    }
+
+    private fun validateRucAndAdvance() {
+        val current = uiState.value
+        if (businessId <= 0 || current.ruc.isBlank() || !current.customerType.rucNeeded()) {
+            updateState {
+                copy(
+                    rucError = "Ingresa un RUC valido",
+                    validationMessage = "Revisa los campos marcados en rojo para continuar.",
+                )
+            }
+            return
+        }
+
+        showLoading()
+        viewModelScope.launch {
+            runCatching {
+                withContext(Dispatchers.Default) {
+                    customerService.validateRUC(current.ruc, businessId)
+                }
+            }.onSuccess { validated ->
+                updateState {
+                    copy(
+                        rucCheckDigit = validated.dv,
+                        legalName = validated.legalName,
+                        name = validated.legalName,
+                        rucError = null,
+                        validationMessage = null,
+                        currentStep = CustomerFormStep.OPTIONAL_INFO,
+                    )
+                }
+                showSuccess()
+            }.onFailure {
+                showError()
+                updateState {
+                    copy(
+                        rucError = "No se pudo validar el RUC",
+                        validationMessage = "Verifica el RUC e intentalo nuevamente.",
+                    )
+                }
             }
         }
     }
@@ -273,6 +448,10 @@ class CustomerFormViewModel(
     fun saveCustomer() {
         if (businessId <= 0) return
         val current = uiState.value
+        if (current.mode == CustomerFormMode.CREATE && !current.customerTypeSelected) {
+            updateState { copy(validationMessage = "Selecciona un tipo de cliente para continuar.") }
+            return
+        }
         val normalizedCedula = normalizePanamaCedula(current.cedulaCF)
 
         if (current.mode == CustomerFormMode.CREATE && applyCreateFieldErrors(current)) {
@@ -337,7 +516,8 @@ class CustomerFormViewModel(
                             )
                         )
                     } else {
-                        val locationCode = if (current.customerType != FeCustomerType.FOREIGNER) {
+                        val isForeign = current.customerType == FeCustomerType.FOREIGNER
+                        val locationCode = if (!isForeign) {
                             PanamaLocations.codeFor(
                                 current.selectedProvince,
                                 current.selectedDistrict,
@@ -358,10 +538,10 @@ class CustomerFormViewModel(
                             tags = emptyList(),
                             customerType = current.customerType,
                             taxPayerType = current.taxPayerType,
-                            addressLine = current.addressLine.ifBlank { null },
-                            province = current.selectedProvince,
-                            district = current.selectedDistrict,
-                            corregimiento = current.selectedCorregimiento,
+                            addressLine = if (isForeign) null else current.addressLine.ifBlank { null },
+                            province = if (isForeign) null else current.selectedProvince,
+                            district = if (isForeign) null else current.selectedDistrict,
+                            corregimiento = if (isForeign) null else current.selectedCorregimiento,
                             locationCode = locationCode,
                             foreignIdType = if (current.customerType == FeCustomerType.FOREIGNER) {
                                 current.foreignIdType.code
@@ -443,6 +623,24 @@ class CustomerFormViewModel(
 
     private fun applyCreateFieldErrors(state: CustomerFormState): Boolean {
         val nameError = if (state.name.isBlank()) "El nombre es requerido" else null
+        val rucError = if (state.customerType.rucNeeded() && state.ruc.isBlank()) {
+            "El RUC es requerido"
+        } else {
+            null
+        }
+        val foreignIdNumberError = if (state.customerType == FeCustomerType.FOREIGNER && state.foreignIdNumber.isBlank()) {
+            "El documento es requerido"
+        } else {
+            null
+        }
+        val taxRetentionPercentError = if (
+            CustomerTaxRetentionCatalog.normalizeCode(state.taxRetentionCode) == "8" &&
+            state.taxRetentionPercent.toIntOrNull() == null
+        ) {
+            "Ingresa el porcentaje de retencion"
+        } else {
+            null
+        }
         val provinceError = if (state.customerType != FeCustomerType.FOREIGNER && state.selectedProvince.isNullOrBlank()) {
             "Selecciona una provincia"
         } else {
@@ -467,13 +665,41 @@ class CustomerFormViewModel(
         updateState {
             copy(
                 nameError = nameError,
+                rucError = rucError,
+                foreignIdNumberError = foreignIdNumberError,
+                taxRetentionPercentError = taxRetentionPercentError,
                 provinceError = provinceError,
                 districtError = districtError,
                 corregimientoError = corregimientoError,
                 addressLineError = addressLineError,
+                validationMessage = if (
+                    listOf(
+                        nameError,
+                        rucError,
+                        foreignIdNumberError,
+                        taxRetentionPercentError,
+                        provinceError,
+                        districtError,
+                        corregimientoError,
+                        addressLineError
+                    ).any { it != null }
+                ) {
+                    "Revisa los campos marcados en rojo para continuar."
+                } else {
+                    null
+                },
             )
         }
 
-        return listOf(nameError, provinceError, districtError, corregimientoError, addressLineError).any { it != null }
+        return listOf(
+            nameError,
+            rucError,
+            foreignIdNumberError,
+            taxRetentionPercentError,
+            provinceError,
+            districtError,
+            corregimientoError,
+            addressLineError
+        ).any { it != null }
     }
 }

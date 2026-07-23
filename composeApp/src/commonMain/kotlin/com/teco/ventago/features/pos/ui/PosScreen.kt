@@ -336,7 +336,7 @@ private fun InvoiceConfigurationCard(
                         modifier = Modifier.padding(vertical = 6.dp),
                         onItemSelected = { idx, _ -> onBranchSelected(idx) },
                         isError = false,
-                        enabled = uiState.branches.size > 1,
+                        enabled = !uiState.posProvisioningActive && uiState.branches.size > 1,
                     )
                 }
 
@@ -348,7 +348,7 @@ private fun InvoiceConfigurationCard(
                         modifier = Modifier.padding(vertical = 6.dp),
                         onItemSelected = { idx, _ -> onBillingPointSelected(idx) },
                         isError = false,
-                        enabled = uiState.billingPoints.size > 1,
+                        enabled = !uiState.posProvisioningActive && uiState.billingPoints.size > 1,
                     )
                 }
 
@@ -829,10 +829,13 @@ private fun AdditionalInfoCollapsibleCard(
                 )
 
                 if (shouldShowCountrySelector) {
+                    val selectedCountryCode = finalCustomerCountryCode
+                        ?.takeIf { code -> finalCustomerCountryOptions.any { it.code == code } }
+                        ?: "CO"
                     DMDropDownField(
                         label = "País del cliente",
                         items = finalCustomerCountryOptions.map { "${it.name} (${it.code})" },
-                        selectedIndex = finalCustomerCountryOptions.indexOfFirst { it.code == finalCustomerCountryCode },
+                        selectedIndex = finalCustomerCountryOptions.indexOfFirst { it.code == selectedCountryCode },
                         modifier = Modifier.padding(vertical = 6.dp),
                         onItemSelected = { index, _ ->
                             onCountrySelected(finalCustomerCountryOptions[index].code)

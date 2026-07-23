@@ -26,10 +26,26 @@ import com.teco.ventago.core.camera.SharedImage
 
 enum class KmpBarcodeFormat { CODE_128, QR_CODE /*, EAN_13 (Android only unless we add custom) */ }
 
+enum class BarcodeScanMode {
+    ALL,
+    RETAIL_PRODUCT
+}
+
 expect fun generateQR(width: Int, height: Int, url: String): SharedImage
 
 @Composable
-expect fun CameraPreview(modifier: Modifier = Modifier, onBarcode: (String) -> Unit)
+expect fun CameraPreview(
+    modifier: Modifier = Modifier,
+    singleShot: Boolean = true,
+    torchEnabled: Boolean = false,
+    scanMode: BarcodeScanMode = BarcodeScanMode.ALL,
+    stabilityMillis: Long = 300L,
+    requiredHits: Int = 3,
+    tapToFocus: Boolean = false,
+    centerAutoFocus: Boolean = false,
+    defaultZoomRatio: Float? = null,
+    onBarcode: (String) -> Unit
+)
 
 
 @kotlin.OptIn(ExperimentalMaterial3Api::class)

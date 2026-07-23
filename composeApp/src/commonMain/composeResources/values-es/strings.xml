@@ -667,4 +667,6 @@
     <string name="pos_order_restore_message">Tienes una orden sin guardar en progreso. ¿Deseas continuar donde la dejaste?</string>
     <string name="pos_order_restore_confirm">Sí, restaurar</string>
     <string name="pos_order_restore_dismiss">No, empezar de nuevo</string>
+    <string name="pos_devices">Dispositivos POS</string>
+    <string name="pos_device_details">Detalle de dispositivo POS</string>
 </resources>

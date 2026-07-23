@@ -107,6 +107,18 @@ import com.teco.ventago.features.payments.ui.home.viewmodel.PaymentMethodsViewMo
 import com.teco.ventago.features.payments.ui.paypal.viewmodel.PaypalViewModel
 import com.teco.ventago.features.payments.ui.yappy.viewmodel.YappyViewModel
 import com.teco.ventago.features.pos.domain.PosService
+import com.teco.ventago.features.pos.devices.data.provider.IPosDevicesProvider
+import com.teco.ventago.features.pos.devices.data.provider.PosDevicesProvider
+import com.teco.ventago.features.pos.devices.data.repository.IPosDevicesRepository
+import com.teco.ventago.features.pos.devices.data.repository.PosDevicesRepository
+import com.teco.ventago.features.pos.devices.domain.PosDevicesService
+import com.teco.ventago.features.pos.devices.ui.viewmodel.PosDevicesViewModel
+import com.teco.ventago.features.pos.provisioning.data.provider.IPosDeviceProvisioningProvider
+import com.teco.ventago.features.pos.provisioning.data.provider.PosDeviceProvisioningProvider
+import com.teco.ventago.features.pos.provisioning.data.repository.IPosDeviceProvisioningRepository
+import com.teco.ventago.features.pos.provisioning.data.repository.PosDeviceProvisioningRepository
+import com.teco.ventago.features.pos.provisioning.domain.IPosAgentConfigReader
+import com.teco.ventago.features.pos.provisioning.domain.PosDeviceProvisioningService
 import com.teco.ventago.features.pos.ui.customer.add.viewmodel.AddCustomerViewModel
 import com.teco.ventago.features.pos.ui.customer.list.viewmodel.ClientListViewModel
 import com.teco.ventago.features.pos.ui.customer.search.viewmodel.SearchCustomerViewModel
@@ -269,6 +281,7 @@ internal val viewModels = module {
             snackbarService = get(),
             analyticsService = get(),
             appScope = get(named("AppScope")),
+            posProvisioningService = get(),
         )
     }
     viewModelOf(::QuotesListViewModel)
@@ -291,6 +304,7 @@ internal val viewModels = module {
     viewModelOf(::OrderHistoryViewModel)
     viewModelOf(::BranchesManageViewModel)
     viewModelOf(::PrintersViewModel)
+    viewModelOf(::PosDevicesViewModel)
     viewModelOf(::AddCustomerViewModel)
     viewModelOf(::ClientListViewModel)
     viewModelOf(::SearchCustomerViewModel)
@@ -343,6 +357,7 @@ internal val viewModels = module {
             branchService = get(),
             logger = get(),
             analyticsService = get(),
+            appDistribution = get(),
             entryContext = entryContext,
             preselectedBranchCode = branchCode,
             preselectedBillingPointCode = billingPointCode,
@@ -493,7 +508,49 @@ internal fun appModule() = module {
             cache = get(),
             changesManager = get(),
             client = get(),
-            sessionIdService = get()
+            sessionIdService = get(),
+            posProvisioningService = get()
+        )
+    }
+
+    single<IPosDeviceProvisioningProvider> {
+        PosDeviceProvisioningProvider(client = get())
+    }
+
+    single<IPosDeviceProvisioningRepository> {
+        PosDeviceProvisioningRepository(
+            provider = get(),
+            logger = get()
+        )
+    }
+
+    single {
+        PosDeviceProvisioningService(
+            appDistribution = get(),
+            agentConfigReader = get<IPosAgentConfigReader>(),
+            repository = get(),
+            logger = get()
+        )
+    }
+
+    single<IPosDevicesProvider> {
+        PosDevicesProvider(
+            client = get(),
+            authService = get()
+        )
+    }
+
+    single<IPosDevicesRepository> {
+        PosDevicesRepository(
+            provider = get(),
+            logger = get()
+        )
+    }
+
+    single {
+        PosDevicesService(
+            repository = get(),
+            businessService = get()
         )
     }
 
@@ -517,7 +574,8 @@ internal fun appModule() = module {
                     authService = get()
                 ),
                 logger = get()
-            )
+            ),
+            posProvisioningService = get()
         )
     }
 
@@ -533,7 +591,8 @@ internal fun appModule() = module {
                 logger = get()
             ),
             loggerService = get(),
-            appScope = get(named("AppScope"))
+            appScope = get(named("AppScope")),
+            posProvisioningService = get()
         )
     }
 
@@ -733,7 +792,8 @@ internal fun appModule() = module {
             logger = get(),
             cacheSyncService = get(),
             json = json,
-            appScope = get(named("AppScope"))
+            appScope = get(named("AppScope")),
+            appDistribution = get()
         )
     }
 

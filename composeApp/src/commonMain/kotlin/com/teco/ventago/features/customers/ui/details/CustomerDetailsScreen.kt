@@ -46,12 +46,14 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import com.teco.ventago.core.location.PanamaLocations
 import com.teco.ventago.design_system.buttons.ButtonM
 import com.teco.ventago.design_system.buttons.OutlinedButtonM
 import com.teco.ventago.design_system.loaders.shimmerBrush
 import com.teco.ventago.design_system.molecules.DMAlertDialog
 import com.teco.ventago.design_system.organism.LoadingSheet
 import com.teco.ventago.design_system.textfields.DMOutlinedTextField
+import com.teco.ventago.design_system.textfields.helpers.DMDropDownField
 import com.teco.ventago.design_system.theme.bodyMedium
 import com.teco.ventago.design_system.theme.bodyMediumBold
 import com.teco.ventago.design_system.theme.cardContainerColor
@@ -67,7 +69,6 @@ import com.teco.ventago.utils.formatNumberToMoney
 import org.jetbrains.compose.resources.stringResource
 import org.koin.compose.viewmodel.koinViewModel
 import ventago.composeapp.generated.resources.Res
-import ventago.composeapp.generated.resources.active
 import ventago.composeapp.generated.resources.cancel
 import ventago.composeapp.generated.resources.customers_add_address
 import ventago.composeapp.generated.resources.customers_add_address_action
@@ -75,8 +76,6 @@ import ventago.composeapp.generated.resources.customers_address_country_code
 import ventago.composeapp.generated.resources.customers_address_district
 import ventago.composeapp.generated.resources.customers_address_email_optional
 import ventago.composeapp.generated.resources.customers_address_line_label
-import ventago.composeapp.generated.resources.customers_address_location_code_label
-import ventago.composeapp.generated.resources.customers_address_location_code_placeholder
 import ventago.composeapp.generated.resources.customers_address_province
 import ventago.composeapp.generated.resources.customers_address_sheet_add_title
 import ventago.composeapp.generated.resources.customers_address_sheet_edit_title
@@ -113,16 +112,18 @@ import ventago.composeapp.generated.resources.customers_legal_name
 import ventago.composeapp.generated.resources.customers_tax_exempt
 import ventago.composeapp.generated.resources.customers_tax_retention
 import ventago.composeapp.generated.resources.customers_retry
-import ventago.composeapp.generated.resources.customers_status
 import ventago.composeapp.generated.resources.customers_update_address_action
 import ventago.composeapp.generated.resources.customers_date
 import ventago.composeapp.generated.resources.delete
 import ventago.composeapp.generated.resources.edit
 import ventago.composeapp.generated.resources.email
-import ventago.composeapp.generated.resources.inactive
 import ventago.composeapp.generated.resources.invalid_email
 import ventago.composeapp.generated.resources.phone
 import ventago.composeapp.generated.resources.total
+
+private const val DEFAULT_ADDRESS_PROVINCE = "PANAMA"
+private const val DEFAULT_ADDRESS_DISTRICT = "PANAMA"
+private const val DEFAULT_ADDRESS_CORREGIMIENTO = "BELLA VISTA"
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -143,10 +144,26 @@ fun CustomerDetailsScreen(
 
     var showAddressSheet by remember { mutableStateOf(false) }
     var addressLineInput by remember { mutableStateOf("") }
-    var locationCodeInput by remember { mutableStateOf("") }
+    var addressProvinceInput by remember { mutableStateOf(DEFAULT_ADDRESS_PROVINCE) }
+    var addressDistrictInput by remember { mutableStateOf(DEFAULT_ADDRESS_DISTRICT) }
+    var addressCorregimientoInput by remember { mutableStateOf(DEFAULT_ADDRESS_CORREGIMIENTO) }
+    var addressDistrictOptions by remember {
+        mutableStateOf(PanamaLocations.districts(DEFAULT_ADDRESS_PROVINCE))
+    }
+    var addressCorregimientoOptions by remember {
+        mutableStateOf(PanamaLocations.corregimientos(DEFAULT_ADDRESS_PROVINCE, DEFAULT_ADDRESS_DISTRICT))
+    }
     var emailInput by remember { mutableStateOf("") }
     var emailError by remember { mutableStateOf(false) }
     var editingAddressId by remember { mutableStateOf<Long?>(null) }
+
+    fun resetAddressLocationInputs(selection: AddressLocationSelection = defaultAddressLocationSelection()) {
+        addressProvinceInput = selection.province
+        addressDistrictOptions = PanamaLocations.districts(selection.province)
+        addressDistrictInput = selection.district
+        addressCorregimientoOptions = PanamaLocations.corregimientos(selection.province, selection.district)
+        addressCorregimientoInput = selection.corregimiento
+    }
 
     LaunchedEffect(customerId) {
         viewModel.load(customerId)
@@ -160,7 +177,7 @@ fun CustomerDetailsScreen(
                     showAddressSheet = false
                     editingAddressId = null
                     addressLineInput = ""
-                    locationCodeInput = ""
+                    resetAddressLocationInputs()
                     emailInput = ""
                     emailError = false
                 }
@@ -201,30 +218,32 @@ fun CustomerDetailsScreen(
         ) {
             GeneralInfoCard(customer = customer, isForeignCustomer = isForeignCustomer)
 
-            BillingAddressesCard(
-                addresses = uiState.addresses,
-                canManageAddresses = uiState.canEditCustomerAction,
-                onAddAddress = {
-                    editingAddressId = null
-                    addressLineInput = ""
-                    locationCodeInput = ""
-                    emailInput = ""
-                    emailError = false
-                    showAddressSheet = true
-                },
-                onEditAddress = { address ->
-                    editingAddressId = address.id
-                    addressLineInput = address.addressLine
-                    locationCodeInput = address.locationCode.orEmpty()
-                    emailInput = address.email.orEmpty()
-                    emailError = false
-                    showAddressSheet = true
-                },
-                onDeleteAddress = { addressId ->
-                    selectedAddressId = addressId
-                    showAddressDeleteDialog = true
-                }
-            )
+            if (!isForeignCustomer) {
+                BillingAddressesCard(
+                    addresses = uiState.addresses,
+                    canManageAddresses = uiState.canEditCustomerAction,
+                    onAddAddress = {
+                        editingAddressId = null
+                        addressLineInput = ""
+                        resetAddressLocationInputs()
+                        emailInput = ""
+                        emailError = false
+                        showAddressSheet = true
+                    },
+                    onEditAddress = { address ->
+                        editingAddressId = address.id
+                        addressLineInput = address.addressLine
+                        resetAddressLocationInputs(addressLocationSelection(address))
+                        emailInput = address.email.orEmpty()
+                        emailError = false
+                        showAddressSheet = true
+                    },
+                    onDeleteAddress = { addressId ->
+                        selectedAddressId = addressId
+                        showAddressDeleteDialog = true
+                    }
+                )
+            }
 
             OrdersResumeCard(
                 ordersCount = uiState.ordersCount,
@@ -264,11 +283,30 @@ fun CustomerDetailsScreen(
             AddressFormSheet(
                 isEditMode = editingAddressId != null,
                 addressLine = addressLineInput,
-                locationCode = locationCodeInput,
+                provinceOptions = PanamaLocations.provinces,
+                selectedProvince = addressProvinceInput,
+                districtOptions = addressDistrictOptions,
+                selectedDistrict = addressDistrictInput,
+                corregimientoOptions = addressCorregimientoOptions,
+                selectedCorregimiento = addressCorregimientoInput,
                 email = emailInput,
                 emailError = emailError,
                 onAddressLineChange = { addressLineInput = it },
-                onLocationCodeChange = { locationCodeInput = it },
+                onProvinceChange = { province ->
+                    addressProvinceInput = province
+                    addressDistrictOptions = PanamaLocations.districts(province)
+                    addressDistrictInput = addressDistrictOptions.firstOrNull().orEmpty()
+                    addressCorregimientoOptions = PanamaLocations.corregimientos(province, addressDistrictInput)
+                    addressCorregimientoInput = addressCorregimientoOptions.firstOrNull().orEmpty()
+                },
+                onDistrictChange = { district ->
+                    addressDistrictInput = district
+                    addressCorregimientoOptions = PanamaLocations.corregimientos(addressProvinceInput, district)
+                    addressCorregimientoInput = addressCorregimientoOptions.firstOrNull().orEmpty()
+                },
+                onCorregimientoChange = { corregimientoInput ->
+                    addressCorregimientoInput = corregimientoInput
+                },
                 onEmailChange = {
                     emailInput = it
                     if (emailError) emailError = false
@@ -281,7 +319,11 @@ fun CustomerDetailsScreen(
                         return@AddressFormSheet
                     }
                     emailError = false
-                    val locationCode = locationCodeInput.ifBlank { null }
+                    val locationCode = PanamaLocations.codeFor(
+                        addressProvinceInput,
+                        addressDistrictInput,
+                        addressCorregimientoInput
+                    )
                     val addressId = editingAddressId
                     if (addressId == null) {
                         viewModel.createAddress(addressLineInput, locationCode, normalizedEmail)
@@ -355,7 +397,7 @@ private fun GeneralInfoCard(
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.SpaceBetween
+                horizontalArrangement = Arrangement.Start
             ) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Icon(
@@ -367,7 +409,6 @@ private fun GeneralInfoCard(
                     Spacer(modifier = Modifier.size(8.dp))
                     Text(stringResource(Res.string.customers_general_information), style = titleMediumBold())
                 }
-                StatusChip(status = customer.status)
             }
 
             InfoRow(stringResource(Res.string.customers_legal_name), customer.legalName ?: "-")
@@ -383,7 +424,9 @@ private fun GeneralInfoCard(
                 InfoRow(stringResource(Res.string.customers_dv_label), customer.rucCheckDigit ?: "-")
             }
             InfoRow(stringResource(Res.string.customers_fe_type), customerTypeLabel(customer.feCustomerType))
-            InfoRow(stringResource(Res.string.customers_taxpayer_type), taxpayerTypeLabel(customer.taxpayerType))
+            if (customer.feCustomerType != "04" && customer.feCustomerType != "02") {
+                InfoRow(stringResource(Res.string.customers_taxpayer_type), taxpayerTypeLabel(customer.taxpayerType))
+            }
             InfoRow(
                 stringResource(Res.string.customers_tax_exempt),
                 if (customer.taxExempt) "Si" else "No"
@@ -394,10 +437,6 @@ private fun GeneralInfoCard(
             )
             InfoRow(stringResource(Res.string.email), customer.email ?: "-")
             InfoRow(stringResource(Res.string.phone), customer.phone1 ?: "-")
-            InfoRow(
-                stringResource(Res.string.customers_status),
-                if (customer.status == 1) stringResource(Res.string.active) else stringResource(Res.string.inactive)
-            )
 
             Spacer(modifier = Modifier.height(4.dp))
             Divider()
@@ -421,6 +460,37 @@ private fun customerRetentionLabel(customer: CustomerDetails): String {
     if (code.isEmpty()) return "-"
     val rate = customer.taxRetentionPercent ?: CustomerTaxRetentionCatalog.defaultRateForCode(code)
     return if (rate != null) "$code ($rate%)" else code
+}
+
+private data class AddressLocationSelection(
+    val province: String,
+    val district: String,
+    val corregimiento: String,
+)
+
+private fun defaultAddressLocationSelection(): AddressLocationSelection {
+    return AddressLocationSelection(
+        province = DEFAULT_ADDRESS_PROVINCE,
+        district = DEFAULT_ADDRESS_DISTRICT,
+        corregimiento = DEFAULT_ADDRESS_CORREGIMIENTO,
+    )
+}
+
+private fun addressLocationSelection(address: CustomerAddress): AddressLocationSelection {
+    val exactMatch = PanamaLocations.LIST.firstOrNull { location ->
+        location.province == address.province &&
+            location.district == address.district &&
+            location.corregimiento == address.corregimiento
+    }
+    val codeMatch = PanamaLocations.LIST.firstOrNull { location ->
+        location.code == address.locationCode
+    }
+    val location = exactMatch ?: codeMatch ?: return defaultAddressLocationSelection()
+    return AddressLocationSelection(
+        province = location.province,
+        district = location.district,
+        corregimiento = location.corregimiento,
+    )
 }
 
 @Composable
@@ -493,32 +563,13 @@ private fun AddressRow(
             modifier = Modifier.weight(1f),
             verticalArrangement = Arrangement.spacedBy(4.dp)
         ) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Text(
-                    text = address.addressLine,
-                    style = bodyMedium(),
-                    maxLines = 2,
-                    overflow = TextOverflow.Ellipsis,
-                    modifier = Modifier.weight(1f)
-                )
-                if (address.isDefault) {
-                    Surface(
-                        shape = RoundedCornerShape(50),
-                        color = MaterialTheme.colorScheme.secondaryContainer,
-                        modifier = Modifier.padding(start = 8.dp)
-                    ) {
-                        Text(
-                            text = "Predeterminada",
-                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp),
-                            style = labelSmall(color = MaterialTheme.colorScheme.onSecondaryContainer)
-                        )
-                    }
-                }
-            }
+            Text(
+                text = address.addressLine,
+                style = bodyMedium(),
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.fillMaxWidth()
+            )
 
             val locationText = listOf(
                 address.province,
@@ -545,20 +596,37 @@ private fun AddressRow(
             }
         }
 
-        if (canManageAddresses) {
-            Row {
-                IconButton(onClick = onEdit) {
-                    Icon(
-                        imageVector = Icons.Rounded.Edit,
-                        contentDescription = stringResource(Res.string.edit)
-                    )
+        if (address.isDefault || canManageAddresses) {
+            Column(horizontalAlignment = Alignment.End) {
+                if (address.isDefault) {
+                    Surface(
+                        shape = RoundedCornerShape(50),
+                        color = MaterialTheme.colorScheme.secondaryContainer,
+                    ) {
+                        Text(
+                            text = "Predeterminada",
+                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp),
+                            style = labelSmall(color = MaterialTheme.colorScheme.onSecondaryContainer)
+                        )
+                    }
                 }
-                IconButton(onClick = onDelete) {
-                    Icon(
-                        imageVector = Icons.Rounded.Delete,
-                        contentDescription = stringResource(Res.string.delete),
-                        tint = MaterialTheme.colorScheme.error
-                    )
+
+                if (canManageAddresses) {
+                    Row {
+                        IconButton(onClick = onEdit) {
+                            Icon(
+                                imageVector = Icons.Rounded.Edit,
+                                contentDescription = stringResource(Res.string.edit)
+                            )
+                        }
+                        IconButton(onClick = onDelete) {
+                            Icon(
+                                imageVector = Icons.Rounded.Delete,
+                                contentDescription = stringResource(Res.string.delete),
+                                tint = MaterialTheme.colorScheme.error
+                            )
+                        }
+                    }
                 }
             }
         }
@@ -627,17 +695,25 @@ private fun OrdersResumeCard(
 private fun AddressFormSheet(
     isEditMode: Boolean,
     addressLine: String,
-    locationCode: String,
+    provinceOptions: List<String>,
+    selectedProvince: String,
+    districtOptions: List<String>,
+    selectedDistrict: String,
+    corregimientoOptions: List<String>,
+    selectedCorregimiento: String,
     email: String,
     emailError: Boolean,
     onAddressLineChange: (String) -> Unit,
-    onLocationCodeChange: (String) -> Unit,
+    onProvinceChange: (String) -> Unit,
+    onDistrictChange: (String) -> Unit,
+    onCorregimientoChange: (String) -> Unit,
     onEmailChange: (String) -> Unit,
     onSubmit: () -> Unit,
 ) {
     Column(
         modifier = Modifier
             .fillMaxWidth()
+            .verticalScroll(rememberScrollState())
             .padding(horizontal = 16.dp, vertical = 16.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
@@ -657,12 +733,30 @@ private fun AddressFormSheet(
             modifier = Modifier.fillMaxWidth()
         )
 
-        DMOutlinedTextField(
-            text = locationCode,
-            label = stringResource(Res.string.customers_address_location_code_label),
-            onChange = onLocationCodeChange,
+        DMDropDownField(
+            label = stringResource(Res.string.customers_address_province),
+            items = provinceOptions,
+            selectedIndex = provinceOptions.indexOfFirst { it == selectedProvince },
+            onItemSelected = { index, _ -> onProvinceChange(provinceOptions[index]) },
+            modifier = Modifier.fillMaxWidth()
+        )
+
+        DMDropDownField(
+            label = stringResource(Res.string.customers_address_district),
+            items = districtOptions,
+            selectedIndex = districtOptions.indexOfFirst { it == selectedDistrict },
+            onItemSelected = { index, _ -> onDistrictChange(districtOptions[index]) },
             modifier = Modifier.fillMaxWidth(),
-            supportingText = stringResource(Res.string.customers_address_location_code_placeholder)
+            enabled = selectedProvince.isNotBlank()
+        )
+
+        DMDropDownField(
+            label = stringResource(Res.string.customers_address_township),
+            items = corregimientoOptions,
+            selectedIndex = corregimientoOptions.indexOfFirst { it == selectedCorregimiento },
+            onItemSelected = { index, _ -> onCorregimientoChange(corregimientoOptions[index]) },
+            modifier = Modifier.fillMaxWidth(),
+            enabled = selectedDistrict.isNotBlank()
         )
 
         DMOutlinedTextField(
@@ -701,31 +795,6 @@ private fun isValidAddressEmail(email: String): Boolean {
     if (domain.isBlank()) return false
     if (domain.startsWith(".") || domain.endsWith(".")) return false
     return domain.contains(".")
-}
-
-@Composable
-private fun StatusChip(status: Int) {
-    val isActive = status == 1
-    Surface(
-        shape = RoundedCornerShape(50),
-        color = if (isActive) {
-            MaterialTheme.colorScheme.secondaryContainer
-        } else {
-            MaterialTheme.colorScheme.errorContainer
-        }
-    ) {
-        Text(
-            text = if (isActive) stringResource(Res.string.active) else stringResource(Res.string.inactive),
-            modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp),
-            style = labelSmall(
-                color = if (isActive) {
-                    MaterialTheme.colorScheme.onSecondaryContainer
-                } else {
-                    MaterialTheme.colorScheme.onErrorContainer
-                }
-            )
-        )
-    }
 }
 
 @Composable

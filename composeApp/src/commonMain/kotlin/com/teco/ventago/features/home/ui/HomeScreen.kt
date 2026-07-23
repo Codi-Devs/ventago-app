@@ -77,6 +77,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.teco.ventago.AppDistribution
 import com.teco.ventago.AppViewModel
 import com.teco.ventago.design_system.loaders.shimmerBrush
 import com.teco.ventago.design_system.molecules.flags.DgiDownAlertBanner
@@ -162,11 +163,13 @@ fun HomeScreen(
     val platformState = rememberPlatformState()
     val storage: LocalStorage = koinInject()
     val flagsService: IFlagsService = koinInject()
+    val appDistribution: AppDistribution = koinInject()
 
     val uiState by viewModel.uiState.collectAsState()
     val flagsState by flagsService.flags().collectAsState()
 
     val appState = appViewModel.mainState.collectAsState()
+    val isPosBuild = appDistribution.isPosBuild
     var showQuotesWelcomeSheet by remember { mutableStateOf(false) }
     val quotesWelcomeSheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     var showFeePromptSheet by remember { mutableStateOf(false) }
@@ -240,7 +243,7 @@ fun HomeScreen(
             )
         }
 
-        if (uiState.invoicingEnabled && uiState.invoicingPlanState != null && uiState.showFolioPurchase) {
+        if (!isPosBuild && uiState.invoicingEnabled && uiState.invoicingPlanState != null && uiState.showFolioPurchase) {
             val buyStampsAction: (() -> Unit)? = if (isIOS()) {
                 null
             } else {
@@ -258,7 +261,7 @@ fun HomeScreen(
         }
 
         val salesData = uiState.salesChart
-        if (salesData.isNotEmpty()) {
+        if (!isPosBuild && salesData.isNotEmpty()) {
             Text(
                 stringResource(Res.string.sales),
                 modifier = Modifier.padding(start = 16.dp, end = 16.dp, top = 16.dp),

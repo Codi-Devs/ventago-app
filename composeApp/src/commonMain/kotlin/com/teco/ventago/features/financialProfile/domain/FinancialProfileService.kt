@@ -7,6 +7,7 @@ import com.teco.ventago.core.logger.Log
 import com.teco.ventago.core.logger.LogLevel
 import com.teco.ventago.features.financialProfile.data.repository.IFinancialProfileRepository
 import com.teco.ventago.features.financialProfile.domain.model.BusinessFinancialProfile
+import com.teco.ventago.features.pos.provisioning.domain.PosDeviceProvisioningService
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.IO
@@ -26,7 +27,8 @@ class FinancialProfileService(
     private val changesManager: IChangesManager,
     private val repo: IFinancialProfileRepository,
     private val loggerService: ILoggerService,
-    private val appScope: CoroutineScope
+    private val appScope: CoroutineScope,
+    private val posProvisioningService: PosDeviceProvisioningService,
 ) {
 
     private val state = MutableStateFlow<BusinessFinancialProfile?>(null)
@@ -82,6 +84,7 @@ class FinancialProfileService(
                 .onSuccess { profile ->
                     state.value = profile
                     saveCacheNow(profile, ignoreChange = true)
+                    refreshPosDeviceConfig()
                 }
                 .onFailure {
                     loggerService.sendLog(
@@ -93,6 +96,20 @@ class FinancialProfileService(
                     )
                 }
         }
+    }
+
+    private suspend fun refreshPosDeviceConfig() {
+        if (!posProvisioningService.isRequired()) return
+        runCatching { posProvisioningService.refreshFromKnownDevice() }
+            .onFailure {
+                loggerService.sendLog(
+                    Log(
+                        LogLevel.ERROR,
+                        "FinancialProfileService::refreshPosDeviceConfig",
+                        "Error refreshing POS device config: ${it.message ?: "UNKNOWN"}"
+                    )
+                )
+            }
     }
 
     fun paymentsConfigured(): Boolean {

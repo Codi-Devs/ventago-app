@@ -70,6 +70,7 @@ abstract class ValidateReleaseOrdersBasePathTask : DefaultTask() {
             Regex("""^172\.(1[6-9]|2\d|3[01])\.""").containsMatchIn(host)
 }
 
+
 val validateReleaseOrdersBasePath by tasks.registering(ValidateReleaseOrdersBasePathTask::class) {
     platformConfig.set(project(":composeApp").layout.projectDirectory.file("src/commonMain/kotlin/com/teco/ventago/Platform.kt"))
     expectedOrdersBasePath.set(productionOrdersBasePath)
@@ -83,8 +84,25 @@ android {
         applicationId = "com.teco.ventago"
         minSdk = libs.versions.android.minSdk.get().toInt()
         targetSdk = libs.versions.android.targetSdk.get().toInt()
-        versionCode = 44
-        versionName = "1.6.1"
+        versionCode = 45
+        versionName = "1.6.2"
+        buildConfigField("boolean", "IS_POS_BUILD", "false")
+    }
+
+    flavorDimensions += "distribution"
+    productFlavors {
+        create("public") {
+            dimension = "distribution"
+            applicationId = "com.teco.ventago"
+            versionNameSuffix = ""
+            buildConfigField("boolean", "IS_POS_BUILD", "false")
+        }
+        create("pos") {
+            dimension = "distribution"
+            applicationId = "com.teco.ventago.pos"
+            versionNameSuffix = "-pos"
+            buildConfigField("boolean", "IS_POS_BUILD", "true")
+        }
     }
 
     packaging {
@@ -93,9 +111,19 @@ android {
         }
     }
 
+    buildFeatures {
+        buildConfig = true
+    }
+
     buildTypes {
         getByName("release") {
-            isMinifyEnabled = false
+            isMinifyEnabled = true
+            isShrinkResources = true
+            proguardFiles(
+                getDefaultProguardFile("proguard-android-optimize.txt"),
+                "proguard-rules.pro"
+            )
+            signingConfig = signingConfigs.getByName("debug")
         }
     }
 
@@ -121,11 +149,17 @@ dependencies {
     implementation(libs.android.firebase.messaging)
     implementation(project.dependencies.platform(libs.koin.bom))
     implementation(libs.koin.android)
+    add("posImplementation", project(":printer-h10p"))
     debugImplementation(compose.uiTooling)
 }
 
 tasks.configureEach {
     if (name == "preReleaseBuild" || name == "bundleRelease" || (name.startsWith("bundle") && name.endsWith("Release"))) {
         dependsOn(validateReleaseOrdersBasePath)
+    }
+
+    when (name) {
+        "bundlePublicRelease" -> finalizedBy("uploadCrashlyticsMappingFilePublicRelease")
+        "bundlePosRelease" -> finalizedBy("uploadCrashlyticsMappingFilePosRelease")
     }
 }

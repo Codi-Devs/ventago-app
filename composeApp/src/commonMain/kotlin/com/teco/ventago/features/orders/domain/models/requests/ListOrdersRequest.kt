@@ -17,6 +17,8 @@ data class ListOrdersRequest(
     @SerialName("customer_ruc") val customerRuc: String? = null,
     @SerialName("payment_status") val paymentStatus: Int? = null,
     @SerialName("customer_id") val customerId: Long? = null,
+    @SerialName("branch_code") val branchCode: String? = null,
+    @SerialName("billing_point_code") val billingPointCode: String? = null,
 )
 
 @OptIn(ExperimentalSerializationApi::class)

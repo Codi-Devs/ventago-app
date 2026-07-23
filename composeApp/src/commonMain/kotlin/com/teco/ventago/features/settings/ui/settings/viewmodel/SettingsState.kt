@@ -57,6 +57,7 @@ data class SettingsState(
     val hasQuotesAccess: Boolean = false,
     val hasPaymentsAccess: Boolean = false,
     val canModifySettings: Boolean = false,
+    val canModifyPosDevices: Boolean = false,
     val canModifyQuoteSettings: Boolean = false,
     val actualDefaultQuoteAdditionalInfo: String = "",
     val defaultQuoteAdditionalInfo: String = "",

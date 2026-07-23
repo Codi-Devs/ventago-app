@@ -2,10 +2,16 @@ package com.teco.ventago.utils
 
 import android.content.Context
 import android.media.Image
+import android.os.Handler
+import android.os.Looper
+import android.view.MotionEvent
+import android.view.View
 import android.view.ViewGroup
 import androidx.annotation.OptIn
+import androidx.camera.core.Camera
 import androidx.camera.core.CameraSelector
 import androidx.camera.core.ExperimentalGetImage
+import androidx.camera.core.FocusMeteringAction
 import androidx.camera.core.ImageAnalysis
 import androidx.camera.core.ImageProxy
 import androidx.camera.core.Preview
@@ -15,6 +21,7 @@ import androidx.camera.core.resolutionselector.ResolutionStrategy
 import androidx.camera.lifecycle.ProcessCameraProvider
 import androidx.camera.view.PreviewView
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.asImageBitmap
@@ -33,6 +40,7 @@ import net.glxn.qrgen.android.QRCode
 import androidx.core.graphics.createBitmap
 import androidx.core.graphics.set
 import java.util.concurrent.Executors
+import java.util.concurrent.TimeUnit
 import kotlin.getValue
 
 actual fun generateQR(width: Int, height: Int, url: String): SharedImage {
@@ -41,7 +49,20 @@ actual fun generateQR(width: Int, height: Int, url: String): SharedImage {
 
 private val cameraExecutor by lazy { Executors.newSingleThreadExecutor() }
 @Composable
-actual fun CameraPreview(modifier: Modifier, onBarcode: (String) -> Unit) {
+actual fun CameraPreview(
+    modifier: Modifier,
+    singleShot: Boolean,
+    torchEnabled: Boolean,
+    scanMode: BarcodeScanMode,
+    stabilityMillis: Long,
+    requiredHits: Int,
+    tapToFocus: Boolean,
+    centerAutoFocus: Boolean,
+    defaultZoomRatio: Float?,
+    onBarcode: (String) -> Unit
+) {
+    val controller = remember { CameraPreviewController() }
+
     AndroidView(
         modifier = modifier,
         factory = { ctx ->
@@ -50,16 +71,61 @@ actual fun CameraPreview(modifier: Modifier, onBarcode: (String) -> Unit) {
                     ViewGroup.LayoutParams.MATCH_PARENT,
                     ViewGroup.LayoutParams.MATCH_PARENT
                 )
-                this.scaleType = PreviewView.ScaleType.FILL_CENTER
+                implementationMode = PreviewView.ImplementationMode.COMPATIBLE
+                scaleType = PreviewView.ScaleType.FILL_CENTER
+                clipToOutline = true
+                setBackgroundColor(android.graphics.Color.BLACK)
             }
 
-            ctx.bindCameraUseCases(previewView, onBarcode)
+            if (tapToFocus) {
+                previewView.installTapToFocus(controller)
+            }
+            if (centerAutoFocus) {
+                previewView.startCenterAutoFocus(controller)
+            }
+            ctx.bindCameraUseCases(
+                previewView = previewView,
+                singleShot = singleShot,
+                torchEnabled = torchEnabled,
+                scanMode = scanMode,
+                stabilityMillis = stabilityMillis,
+                requiredHits = requiredHits,
+                defaultZoomRatio = defaultZoomRatio,
+                controller = controller,
+                onBarcode = onBarcode
+            )
             previewView
+        },
+        update = {
+            controller.setTorchEnabled(torchEnabled)
         }
     )
 }
 
-val resolutionSelector = ResolutionSelector.Builder()
+private class CameraPreviewController {
+    var camera: Camera? = null
+        private set
+    private var torchEnabled: Boolean = false
+
+    fun setCamera(value: Camera?) {
+        camera = value
+        applyTorch()
+    }
+
+    fun setTorchEnabled(value: Boolean) {
+        torchEnabled = value
+        applyTorch()
+    }
+
+    private fun applyTorch() {
+        val activeCamera = camera ?: return
+        if (activeCamera.cameraInfo.hasFlashUnit()) {
+            activeCamera.cameraControl.enableTorch(torchEnabled)
+        }
+    }
+}
+
+private val defaultResolutionSelector = ResolutionSelector.Builder()
     .setResolutionStrategy(
         ResolutionStrategy(
             android.util.Size(1280, 720),
@@ -71,8 +137,27 @@ val resolutionSelector = ResolutionSelector.Builder()
     )
     .build()
 
+private val retailProductResolutionSelector = ResolutionSelector.Builder()
+    .setResolutionStrategy(
+        ResolutionStrategy(
+            android.util.Size(960, 540),
+            ResolutionStrategy.FALLBACK_RULE_CLOSEST_HIGHER_THEN_LOWER
+        )
+    )
+    .setAspectRatioStrategy(
+        AspectRatioStrategy.RATIO_16_9_FALLBACK_AUTO_STRATEGY
+    )
+    .build()
+
 private fun Context.bindCameraUseCases(
     previewView: PreviewView,
+    singleShot: Boolean,
+    torchEnabled: Boolean,
+    scanMode: BarcodeScanMode,
+    stabilityMillis: Long,
+    requiredHits: Int,
+    defaultZoomRatio: Float?,
+    controller: CameraPreviewController,
     onBarcode: (String) -> Unit
 ) {
     val cameraProviderFuture = ProcessCameraProvider.getInstance(this)
@@ -85,23 +170,116 @@ private fun Context.bindCameraUseCases(
 
         val analyzer = ImageAnalysis.Builder()
             .setBackpressureStrategy(ImageAnalysis.STRATEGY_KEEP_ONLY_LATEST)
-            .setResolutionSelector(resolutionSelector)
+            .setResolutionSelector(
+                if (scanMode == BarcodeScanMode.RETAIL_PRODUCT) {
+                    retailProductResolutionSelector
+                } else {
+                    defaultResolutionSelector
+                }
+            )
             .build()
             .apply {
-                setAnalyzer(cameraExecutor, StableBarcodeAnalyzer(onBarcode))
+                setAnalyzer(
+                    cameraExecutor,
+                    StableBarcodeAnalyzer(
+                        onBarcode = onBarcode,
+                        singleShot = singleShot,
+                        scanMode = scanMode,
+                        stabilityMillis = stabilityMillis,
+                        requiredHits = requiredHits
+                    )
+                )
             }
 
         val selector = CameraSelector.DEFAULT_BACK_CAMERA
 
         cameraProvider.unbindAll()
-        cameraProvider.bindToLifecycle(
+        val camera = cameraProvider.bindToLifecycle(
             /* lifecycleOwner = */ getLifecycleOwner(previewView),
             selector,
             preview,
             analyzer
         )
+        controller.setCamera(camera)
+        controller.setTorchEnabled(torchEnabled)
+        defaultZoomRatio?.let { camera.applyZoomRatio(it) }
     }, ContextCompat.getMainExecutor(this))
 }
+
+private fun Camera.applyZoomRatio(zoomRatio: Float) {
+    val zoomState = cameraInfo.zoomState.value
+    val minZoomRatio = zoomState?.minZoomRatio ?: 1f
+    val maxZoomRatio = zoomState?.maxZoomRatio ?: zoomRatio
+    cameraControl.setZoomRatio(zoomRatio.coerceIn(minZoomRatio, maxZoomRatio))
+}
+
+@Suppress("ClickableViewAccessibility")
+private fun PreviewView.installTapToFocus(controller: CameraPreviewController) {
+    setOnTouchListener { view, event ->
+        if (event.action != MotionEvent.ACTION_UP) {
+            return@setOnTouchListener true
+        }
+        controller.camera?.let { camera ->
+            requestFocusAt(
+                camera = camera,
+                x = event.x,
+                y = event.y
+            )
+        }
+        view.performClick()
+        true
+    }
+}
+
+private fun PreviewView.startCenterAutoFocus(controller: CameraPreviewController) {
+    val handler = Handler(Looper.getMainLooper())
+    val focusRunnable = object : Runnable {
+        override fun run() {
+            controller.camera?.let { camera ->
+                requestFocusAt(
+                    camera = camera,
+                    x = width / 2f,
+                    y = height / 2f
+                )
+            }
+            if (isAttachedToWindow) {
+                handler.postDelayed(this, CENTER_AUTO_FOCUS_INTERVAL_MS)
+            }
+        }
+    }
+    addOnAttachStateChangeListener(object : View.OnAttachStateChangeListener {
+        override fun onViewAttachedToWindow(v: View) {
+            handler.removeCallbacks(focusRunnable)
+            handler.postDelayed(focusRunnable, CENTER_AUTO_FOCUS_INITIAL_DELAY_MS)
+        }
+
+        override fun onViewDetachedFromWindow(v: View) {
+            handler.removeCallbacks(focusRunnable)
+        }
+    })
+    postDelayed(focusRunnable, CENTER_AUTO_FOCUS_INITIAL_DELAY_MS)
+}
+
+private fun PreviewView.requestFocusAt(
+    camera: Camera,
+    x: Float,
+    y: Float
+) {
+    if (width <= 0 || height <= 0) return
+
+    val point = meteringPointFactory.createPoint(x, y)
+    val action = FocusMeteringAction.Builder(
+        point,
+        FocusMeteringAction.FLAG_AF or FocusMeteringAction.FLAG_AE
+    )
+        .setAutoCancelDuration(2, TimeUnit.SECONDS)
+        .build()
+
+    camera.cameraControl.startFocusAndMetering(action)
+}
+
+private const val CENTER_AUTO_FOCUS_INITIAL_DELAY_MS = 350L
+private const val CENTER_AUTO_FOCUS_INTERVAL_MS = 2_500L
 
 private fun getLifecycleOwner(view: PreviewView): androidx.lifecycle.LifecycleOwner {
     var ctx = view.context
@@ -114,14 +292,33 @@ private fun getLifecycleOwner(view: PreviewView): androidx.lifecycle.LifecycleOw
 
 class StableBarcodeAnalyzer(
     private val onBarcode: (String) -> Unit,
+    private val singleShot: Boolean = true,
+    private val scanMode: BarcodeScanMode = BarcodeScanMode.ALL,
     private val stabilityMillis: Long = 300L,     // ~1.2s to confirm
     private val requiredHits: Int = 3,             // at least 3 frames matching
-    private val centerTolerance: Float = 0.70f     // how close to center (0..1 of min dim)
+    private val centerTolerance: Float = 0.70f,    // how close to center (0..1 of min dim)
+    private val repeatCooldownMillis: Long = 900L
 ) : ImageAnalysis.Analyzer {
 
     private val options = BarcodeScannerOptions.Builder()
-        .setBarcodeFormats(Barcode.FORMAT_ALL_FORMATS)
-        .enableAllPotentialBarcodes()
+        .apply {
+            if (scanMode == BarcodeScanMode.RETAIL_PRODUCT) {
+                setBarcodeFormats(
+                    Barcode.FORMAT_EAN_13,
+                    Barcode.FORMAT_EAN_8,
+                    Barcode.FORMAT_UPC_A,
+                    Barcode.FORMAT_UPC_E,
+                    Barcode.FORMAT_CODE_128,
+                    Barcode.FORMAT_CODE_39,
+                    Barcode.FORMAT_CODE_93,
+                    Barcode.FORMAT_ITF,
+                    Barcode.FORMAT_CODABAR
+                )
+            } else {
+                setBarcodeFormats(Barcode.FORMAT_ALL_FORMATS)
+                enableAllPotentialBarcodes()
+            }
+        }
         .build()
     private val scanner = BarcodeScanning.getClient(options)
 
@@ -130,6 +327,8 @@ class StableBarcodeAnalyzer(
     private var candidateValue: String? = null
     private var firstSeenAt: Long = 0L
     private var hitCount: Int = 0
+    private var lastDeliveredValue: String? = null
+    private var lastDeliveredAt: Long = 0L
 
     @OptIn(ExperimentalGetImage::class)
     override fun analyze(imageProxy: ImageProxy) {
@@ -174,6 +373,14 @@ class StableBarcodeAnalyzer(
                     // no centered candidate → reset soft counters (but keep confirmed=false)
                     resetCandidate()
                 } else {
+                    if (
+                        !singleShot &&
+                        value == lastDeliveredValue &&
+                        now - lastDeliveredAt < repeatCooldownMillis
+                    ) {
+                        return@addOnSuccessListener
+                    }
+
                     if (candidateValue == null || candidateValue != value) {
                         // new candidate
                         candidateValue = value
@@ -189,8 +396,14 @@ class StableBarcodeAnalyzer(
                     val hitsStable = hitCount >= requiredHits
 
                     if (timeStable && hitsStable) {
-                        handled = true
+                        if (singleShot) {
+                            handled = true
+                        } else {
+                            lastDeliveredValue = value
+                            lastDeliveredAt = now
+                        }
                         onBarcode(value)
+                        resetCandidate()
                     }
                 }
             }
@@ -210,6 +423,8 @@ class StableBarcodeAnalyzer(
 
     fun reset() {
         handled = false
+        lastDeliveredValue = null
+        lastDeliveredAt = 0L
         resetCandidate()
     }
 }
@@ -274,4 +489,3 @@ actual fun generateBarcodeImage(
     }
     return bmp.asImageBitmap()
 }
-

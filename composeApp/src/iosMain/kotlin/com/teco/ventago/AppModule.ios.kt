@@ -12,6 +12,8 @@ import com.teco.ventago.features.printers.domain.IosEpsonPrinterDiscoveryEngine
 import com.teco.ventago.features.printers.domain.IosEpsonPrinterEngine
 import com.teco.ventago.features.printers.domain.PrinterDiscoveryEngine
 import com.teco.ventago.features.printers.domain.PrinterEngine
+import com.teco.ventago.features.pos.provisioning.domain.IPosAgentConfigReader
+import com.teco.ventago.features.pos.provisioning.domain.NoopPosAgentConfigReader
 import dev.gitlive.firebase.auth.FirebaseAuth
 import io.ktor.client.HttpClient
 import io.ktor.client.HttpClientConfig
@@ -44,6 +46,8 @@ actual val platformModule: Module = module {
         CoroutineScope(SupervisorJob() + Dispatchers.Default)
     }
     single<PdfSharer> { IosPdfSharer() }
+    single { AppDistribution(isPosBuild = false) }
+    single<IPosAgentConfigReader> { NoopPosAgentConfigReader() }
     single<PrinterEngine> { IosEpsonPrinterEngine(get()) }
     single<PrinterDiscoveryEngine> { IosEpsonPrinterDiscoveryEngine() }
 }

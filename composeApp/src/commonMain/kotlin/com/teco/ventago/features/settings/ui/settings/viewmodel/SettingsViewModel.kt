@@ -67,6 +67,7 @@ class SettingsViewModel(
         val hasQuotesAccess: Boolean,
         val hasPaymentsAccess: Boolean,
         val canModifySettings: Boolean,
+        val canModifyPosDevices: Boolean,
         val canModifyQuoteSettings: Boolean,
     )
 
@@ -119,6 +120,7 @@ class SettingsViewModel(
                         hasQuotesAccess = AuthzEvaluator.canRoute(RouteKey.QUOTES_LIST, user, betaSnapshot),
                         hasPaymentsAccess = AuthzEvaluator.canRoute(RouteKey.PAYMENTS_PAGE, user, betaSnapshot),
                         canModifySettings = AuthzEvaluator.canAction(ActionKey.SETTINGS_MODIFY, user, betaSnapshot),
+                        canModifyPosDevices = AuthzEvaluator.canAction(ActionKey.SETTINGS_MODIFY_POS_DEVICES, user, betaSnapshot),
                         canModifyQuoteSettings = AuthzEvaluator.canAction(ActionKey.QUOTES_UPDATE, user, betaSnapshot)
                     )
                 }
@@ -128,6 +130,7 @@ class SettingsViewModel(
                             hasQuotesAccess = authz.hasQuotesAccess,
                             hasPaymentsAccess = authz.hasPaymentsAccess,
                             canModifySettings = authz.canModifySettings,
+                            canModifyPosDevices = authz.canModifyPosDevices,
                             canModifyQuoteSettings = authz.canModifyQuoteSettings
                         )
                     }

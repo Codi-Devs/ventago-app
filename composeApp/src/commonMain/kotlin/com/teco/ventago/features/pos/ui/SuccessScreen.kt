@@ -33,6 +33,7 @@ import androidx.compose.material.icons.filled.Description
 import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Payments
+import androidx.compose.material.icons.filled.Print
 import androidx.compose.material.icons.filled.Share
 import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material.icons.outlined.Description
@@ -83,6 +84,7 @@ import androidx.navigation.NavController
 import androidx.navigation.NavOptionsBuilder
 import coil3.compose.AsyncImage
 import coil3.compose.LocalPlatformContext
+import com.teco.ventago.AppDistribution
 import com.teco.ventago.design_system.buttons.ButtonM
 import com.teco.ventago.design_system.buttons.OutlinedButtonM
 import com.teco.ventago.design_system.molecules.DMAlertDialog
@@ -300,10 +302,12 @@ private fun FriendlySuccessScreen(
     val secondary = MaterialTheme.colorScheme.secondary
     val amount = formatNumberToMoney(viewModel.amountToCharge().toDecimalString())
     val snackbarService: SnackbarService = koinInject()
+    val appDistribution: AppDistribution = koinInject()
     val coroutineScope = rememberCoroutineScope()
     val scrollState = rememberScrollState()
     val loadingSheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     var showPaymentLinkChangeMethodDialog by remember { mutableStateOf(false) }
+    val showSuccessReprintButton = appDistribution.isPosBuild && viewModel.canReprintSuccessTicket(uiState)
 
     DisposableEffect(isPaymentLink, uiState.createdOrderId, uiState.paymentLink) {
         if (isPaymentLink) {
@@ -457,11 +461,13 @@ private fun FriendlySuccessScreen(
                     }
                 )
                 Spacer(modifier = Modifier.height(16.dp))
-                PaymentMethodChangeEntryCard(
-                    onClick = {
-                        showPaymentLinkChangeMethodDialog = true
-                    }
-                )
+                if (viewModel.canSwitchPaymentLinkToManual()) {
+                    PaymentMethodChangeEntryCard(
+                        onClick = {
+                            showPaymentLinkChangeMethodDialog = true
+                        }
+                    )
+                }
             } else if (showReleasedPaymentLinkManualPanel) {
                 ReleasedPaymentLinkManualPanel(
                     uiState = uiState,
@@ -503,6 +509,36 @@ private fun FriendlySuccessScreen(
             }
 
             Spacer(modifier = Modifier.height(12.dp))
+
+            if (showSuccessReprintButton || uiState.successReprintInFlight) {
+                OutlinedButtonM(
+                    onClick = viewModel::reprintSuccessTicket,
+                    enabled = !uiState.successReprintInFlight,
+                    contentColor = secondary,
+                    border = BorderStroke(1.dp, secondary),
+                    modifier = Modifier.widthIn(max = 520.dp)
+                ) {
+                    if (uiState.successReprintInFlight) {
+                        CircularProgressIndicator(
+                            modifier = Modifier.size(18.dp),
+                            strokeWidth = 2.dp,
+                            color = secondary
+                        )
+                    } else {
+                        Icon(
+                            imageVector = Icons.Filled.Print,
+                            contentDescription = null,
+                            modifier = Modifier.size(20.dp)
+                        )
+                    }
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text(
+                        text = if (uiState.successReprintInFlight) "Reimprimiendo..." else "Reimprimir ticket",
+                        style = bodyMediumBold(color = secondary)
+                    )
+                }
+                Spacer(modifier = Modifier.height(12.dp))
+            }
 
             if (isDraftOrder && uiState.orderNumber.isNotBlank()) {
                 OutlinedButtonM(

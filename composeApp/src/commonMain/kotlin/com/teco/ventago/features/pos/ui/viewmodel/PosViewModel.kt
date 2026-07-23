@@ -76,6 +76,7 @@ import com.teco.ventago.features.pos.domain.models.CartLine
 import com.teco.ventago.features.pos.domain.models.Discount
 import com.teco.ventago.features.pos.domain.models.Money
 import com.teco.ventago.features.pos.domain.models.Tax
+import com.teco.ventago.features.pos.provisioning.domain.PosDeviceProvisioningService
 import com.teco.ventago.features.product.domain.ProductService
 import com.teco.ventago.features.product.domain.model.Item
 import com.teco.ventago.features.product.domain.model.ProductType
@@ -159,6 +160,7 @@ class PosViewModel(
     private val snackbarService: SnackbarService,
     private val analyticsService: AnalyticsService,
     private val appScope: CoroutineScope,
+    private val posProvisioningService: PosDeviceProvisioningService,
 ) : BaseViewModel<PosState, PosStateUiEvent>(PosState()) {
     private companion object {
         const val DEFAULT_QUOTE_BRANCH_CODE = "0000"
@@ -196,6 +198,7 @@ class PosViewModel(
         val canCreateInvoice: Boolean,
         val canCreateDraft: Boolean,
         val canCreatePaymentLink: Boolean,
+        val canUseManualPaymentMethods: Boolean,
         val canConfigurePayments: Boolean,
         val canConfigureYappyOnsite: Boolean,
         val canCreateYappyOnsiteQr: Boolean,
@@ -217,13 +220,16 @@ class PosViewModel(
                         ScopeKey.PAYMENTS_CONFIGURE,
                         ScopeKey.PAYMENTS_VIEW
                     )
+                    val canConfigurePayments = AuthzEvaluator.canAction(ActionKey.PAYMENTS_CONFIGURE, user, betaSnapshot)
                     PosAuthzState(
                         canCreateInvoice = AuthzEvaluator.canAction(ActionKey.ORDERS_CREATE, user, betaSnapshot),
                         canCreateDraft = AuthzEvaluator.canAction(ActionKey.ORDERS_CREATE_DRAFT, user, betaSnapshot),
                         canCreatePaymentLink = AuthzEvaluator.canAction(ActionKey.ORDERS_PAYMENT_LINK, user, betaSnapshot),
-                        canConfigurePayments = AuthzEvaluator.canAction(ActionKey.PAYMENTS_CONFIGURE, user, betaSnapshot),
-                        canConfigureYappyOnsite = user?.isOwnerMain == true ||
-                            user?.scopes?.containsAll(yappyOnsiteSetupScopes) == true,
+                        canUseManualPaymentMethods = AuthzEvaluator.canAction(ActionKey.ORDERS_MANUAL_PAYMENT, user, betaSnapshot),
+                        canConfigurePayments = canConfigurePayments,
+                        canConfigureYappyOnsite = canConfigurePayments && (
+                            user?.isOwnerMain == true || user?.scopes?.containsAll(yappyOnsiteSetupScopes) == true
+                        ),
                         canCreateYappyOnsiteQr = AuthzEvaluator.canAction(ActionKey.ORDERS_YAPPY_ONSITE, user, betaSnapshot),
                         canCreateQuote = AuthzEvaluator.canAction(ActionKey.QUOTES_CREATE, user, betaSnapshot),
                         canUpdateQuote = AuthzEvaluator.canAction(ActionKey.QUOTES_UPDATE, user, betaSnapshot),
@@ -237,6 +243,7 @@ class PosViewModel(
                             canCreateInvoice = authz.canCreateInvoice,
                             canCreateDraft = authz.canCreateDraft,
                             canCreatePaymentLink = authz.canCreatePaymentLink,
+                            canUseManualPaymentMethods = authz.canUseManualPaymentMethods,
                             canConfigurePayments = authz.canConfigurePayments,
                             canConfigureYappyOnsite = authz.canConfigureYappyOnsite,
                             canCreateYappyOnsiteQr = authz.canCreateYappyOnsiteQr,
@@ -248,6 +255,26 @@ class PosViewModel(
                     }
                 }
                 .launchIn(this)
+            posProvisioningService.observe().onEach { provisioning ->
+                val authz = currentPosAuthzState()
+                updateState {
+                    copy(
+                        posProvisioningActive = provisioning.required && provisioning.isProvisioned,
+                        canCreateInvoice = authz.canCreateInvoice,
+                        canCreateDraft = authz.canCreateDraft,
+                        canCreatePaymentLink = authz.canCreatePaymentLink,
+                        canUseManualPaymentMethods = authz.canUseManualPaymentMethods,
+                        canConfigurePayments = authz.canConfigurePayments,
+                        canConfigureYappyOnsite = authz.canConfigureYappyOnsite,
+                        canCreateYappyOnsiteQr = authz.canCreateYappyOnsiteQr,
+                        canCreateQuote = authz.canCreateQuote,
+                        canUpdateQuote = authz.canUpdateQuote,
+                        canUseCustomProduct = authz.canUseCustomProduct,
+                        canEditProduct = authz.canEditProduct
+                    )
+                }
+                applyProvisionedBranchBillingPointSelectionIfPossible()
+            }.launchIn(this)
             betaService.getFeatures()
 
             productService.observe().onEach { products ->
@@ -270,7 +297,8 @@ class PosViewModel(
                     currentState.flowMode == FlowMode.SALE &&
                     currentState.branches.isEmpty()
                 ) {
-                    resolvePersistedBranchBillingPointSelection(branches)
+                    resolveProvisionedBranchBillingPointSelection(branches)
+                        ?: resolvePersistedBranchBillingPointSelection(branches)
                 } else {
                     null
                 }
@@ -337,6 +365,7 @@ class PosViewModel(
                     refreshPaymentLinkBadge(it.businessId)
                     invoicingSettingsService.loadCachedBottomNoteSettingsForCurrentBusiness()
                     refreshBottomNoteSettingsInBackground()
+                    applyProvisionedBranchBillingPointSelectionIfPossible()
                     applyPersistedBranchBillingPointSelectionIfPossible()
                     fetchCustomerAddresses()
                     warmYappyOnsiteAvailabilityForNewOrder()
@@ -372,6 +401,32 @@ class PosViewModel(
 
     private fun canAction(actionKey: ActionKey): Boolean {
         return AuthzEvaluator.canAction(actionKey, authService.getUserSync(), betaSnapshot())
+    }
+
+    private fun currentPosAuthzState(): PosAuthzState {
+        val user = authService.getUserSync()
+        val betaSnapshot = betaSnapshot()
+        val canConfigurePayments = AuthzEvaluator.canAction(ActionKey.PAYMENTS_CONFIGURE, user, betaSnapshot)
+        val yappyOnsiteSetupScopes = setOf(
+            ScopeKey.INVOICE_YAPPY_ONSITE,
+            ScopeKey.PAYMENTS_CONFIGURE,
+            ScopeKey.PAYMENTS_VIEW
+        )
+        return PosAuthzState(
+            canCreateInvoice = AuthzEvaluator.canAction(ActionKey.ORDERS_CREATE, user, betaSnapshot),
+            canCreateDraft = AuthzEvaluator.canAction(ActionKey.ORDERS_CREATE_DRAFT, user, betaSnapshot),
+            canCreatePaymentLink = AuthzEvaluator.canAction(ActionKey.ORDERS_PAYMENT_LINK, user, betaSnapshot),
+            canUseManualPaymentMethods = AuthzEvaluator.canAction(ActionKey.ORDERS_MANUAL_PAYMENT, user, betaSnapshot),
+            canConfigurePayments = canConfigurePayments,
+            canConfigureYappyOnsite = canConfigurePayments && (
+                user?.isOwnerMain == true || user?.scopes?.containsAll(yappyOnsiteSetupScopes) == true
+            ),
+            canCreateYappyOnsiteQr = AuthzEvaluator.canAction(ActionKey.ORDERS_YAPPY_ONSITE, user, betaSnapshot),
+            canCreateQuote = AuthzEvaluator.canAction(ActionKey.QUOTES_CREATE, user, betaSnapshot),
+            canUpdateQuote = AuthzEvaluator.canAction(ActionKey.QUOTES_UPDATE, user, betaSnapshot),
+            canUseCustomProduct = AuthzEvaluator.canAction(ActionKey.ORDERS_CUSTOM_PRODUCT, user, betaSnapshot),
+            canEditProduct = AuthzEvaluator.canAction(ActionKey.ORDERS_EDIT_PRODUCT, user, betaSnapshot),
+        )
     }
 
     private fun canEditProduct(): Boolean {
@@ -627,7 +682,9 @@ class PosViewModel(
         val filteredItems = state.items.filter { item ->
             val matchesQuery = query.isBlank() ||
                 item.name.contains(query, ignoreCase = true) ||
-                item.description.contains(query, ignoreCase = true)
+                item.description.contains(query, ignoreCase = true) ||
+                item.barcode?.contains(query, ignoreCase = true) == true ||
+                item.sku?.contains(query, ignoreCase = true) == true
             val matchesCategory = selectedCategoryId == null ||
                 state.itemCategoryById[item.itemId] == selectedCategoryId
             matchesQuery && matchesCategory
@@ -1165,6 +1222,7 @@ class PosViewModel(
                 yappyOnsiteInvoiceProcessingTimedOut = false,
                 yappyOnsitePrintAttemptedTransactionId = null,
                 yappyOnsiteExitCancelDialogVisible = false,
+                successReprintInFlight = false,
                 orderNumber = "",
                 postCreateInvoiceWarning = com.teco.ventago.features.invoicing.domain.PostCreateInvoiceWarningState(),
                 orderCreationFailed = false,
@@ -1180,6 +1238,7 @@ class PosViewModel(
         val branches = state.branches
         if (branches.isEmpty()) return 0 to 0
 
+        resolveProvisionedBranchBillingPointSelection(branches)?.let { return it }
         resolvePersistedBranchBillingPointSelection(branches)?.let { return it }
 
         val safeBranchIndex = state.selectedBranchIndex.coerceIn(0, branches.lastIndex)
@@ -1199,6 +1258,11 @@ class PosViewModel(
         val businessId = business?.businessId ?: return
         val state = uiState.value
         if (!canUseOrderCreationCheckpoint(state)) return
+        if (state.toOrderCreationCheckpointData().hasMeaningfulUserData()) {
+            pendingOrderCreationCheckpoint = null
+            updateState { copy(showOrderRestoreDialog = false) }
+            return
+        }
 
         val raw = localStorage.string(orderCreationCheckpointKey(businessId))
         if (raw.isNullOrBlank()) return
@@ -1336,6 +1400,7 @@ class PosViewModel(
                 yappyOnsiteInvoiceProcessingTimedOut = false,
                 yappyOnsitePrintAttemptedTransactionId = null,
                 yappyOnsiteExitCancelDialogVisible = false,
+                successReprintInFlight = false,
                 orderNumber = "",
                 orderCreationFailed = false,
                 showOrderRestoreDialog = false,
@@ -1516,8 +1581,10 @@ class PosViewModel(
         }
         val hasPaymentLinkAccess = canAction(ActionKey.ORDERS_PAYMENT_LINK)
         val hasYappyOnsiteAccess = canAction(ActionKey.ORDERS_YAPPY_ONSITE)
+        val hasManualPaymentAccess = canAction(ActionKey.ORDERS_MANUAL_PAYMENT)
         val effectiveCreatePaymentLink = createPaymentLink && hasPaymentLinkAccess
         val effectiveCreateYappyOnsite = createYappyOnsite && hasYappyOnsiteAccess && selectedBillingPointHasYappyOnsiteDevice()
+        val isManualPayment = !saveAsDraft && !effectiveCreatePaymentLink && !effectiveCreateYappyOnsite
         if (createPaymentLink && !hasPaymentLinkAccess) {
             updateState { copy(paymentFlowMode = PaymentFlowMode.MANUAL_OR_INSTALLMENTS) }
             viewModelScope.launch {
@@ -1534,6 +1601,13 @@ class PosViewModel(
         if (createYappyOnsite && !effectiveCreateYappyOnsite) {
             viewModelScope.launch {
                 snackbarService.show("Yappy en caja no está configurado para esta sucursal y punto de facturación.")
+            }
+            return
+        }
+        if (isManualPayment && !hasManualPaymentAccess) {
+            showError()
+            viewModelScope.launch {
+                snackbarService.show("No tienes permisos para registrar cobros manuales.")
             }
             return
         }
@@ -1601,6 +1675,7 @@ class PosViewModel(
                           yappyOnsiteInvoiceProcessingTimedOut = false,
                           yappyOnsitePrintAttemptedTransactionId = null,
                           yappyOnsiteExitCancelDialogVisible = false,
+                          successReprintInFlight = false,
                           orderNumber = response.orderNumber,
                           postCreateInvoiceWarning = postCreateInvoiceWarning,
                           orderCreationFailed = !hasValidOrderNumber
@@ -1815,8 +1890,13 @@ class PosViewModel(
         }
 
         var finalCustomerInfo: FinalCustomerInfo? = null
-        val finalCustomerCountryCode = state.finalCustomerCountryCode
-            ?.takeIf { finalIdTypeRequiresCountry(state.finalIdType) }
+        val finalCustomerCountryCode = if (finalIdTypeRequiresCountry(state.finalIdType)) {
+            state.finalCustomerCountryCode
+                ?.takeIf { code -> state.finalCustomerCountryOptions.any { it.code == code } }
+                ?: "CO"
+        } else {
+            null
+        }
 
         if (
             isFinalCustomer &&
@@ -2387,7 +2467,8 @@ class PosViewModel(
 
     fun canSwitchPaymentLinkToManual(): Boolean {
         val state = uiState.value
-        return state.createdOrderId != null &&
+        return state.canUseManualPaymentMethods &&
+            state.createdOrderId != null &&
             state.paymentLink.isNotBlank() &&
             !state.paymentLinkPaymentDetected &&
             state.invoiceStatus != InvoiceStatus.ISSUED &&
@@ -2405,7 +2486,8 @@ class PosViewModel(
         val state = uiState.value
         return when (sourceMethod) {
             PendingPaymentIntentMethod.PAYMENT_LINK -> canSwitchPaymentLinkToManual()
-            PendingPaymentIntentMethod.YAPPY_ONSITE -> hasActiveYappyOnsitePendingIntent(state)
+            PendingPaymentIntentMethod.YAPPY_ONSITE -> state.canUseManualPaymentMethods &&
+                hasActiveYappyOnsitePendingIntent(state)
         }
     }
 
@@ -2599,6 +2681,7 @@ class PosViewModel(
 
     fun confirmPendingPaymentChangeManual(onCompleted: () -> Unit = {}) {
         val state = uiState.value
+        if (!state.canUseManualPaymentMethods) return
         val businessId = business?.businessId ?: return
         val orderId = state.createdOrderId ?: state.onsitePayment?.orderId ?: return
         val sourceMethod = state.pendingPaymentChangeSourceMethod ?: return
@@ -3556,6 +3639,70 @@ class PosViewModel(
         }
     }
 
+    fun canReprintSuccessTicket(state: PosState = uiState.value): Boolean {
+        val businessId = business?.businessId ?: return false
+        val orderId = state.createdOrderId ?: return false
+        return businessId > 0 &&
+            orderId > 0 &&
+            state.invoiceStatus == InvoiceStatus.ISSUED &&
+            state.orderNumber.isNotBlank() &&
+            !state.orderCreationFailed
+    }
+
+    fun reprintSuccessTicket() {
+        val state = uiState.value
+        if (state.successReprintInFlight || !canReprintSuccessTicket(state)) return
+
+        val businessId = business?.businessId ?: return
+        val orderId = state.createdOrderId ?: return
+        val orderNumber = state.orderNumber
+        val branchCode = state.branches.getOrNull(state.selectedBranchIndex)?.branchCode
+        val billingPoint = state.billingPoints.getOrNull(state.selectedBillingPointIndex)?.billingPoint
+        if (branchCode.isNullOrBlank() || billingPoint.isNullOrBlank()) return
+
+        val printer = printerService.resolveActivePrinter(branchCode, billingPoint)
+        if (printer == null) {
+            viewModelScope.launch {
+                snackbarService.show("No hay impresora activa disponible para reimprimir este ticket.")
+            }
+            return
+        }
+
+        showLoading()
+        updateState { copy(successReprintInFlight = true) }
+        viewModelScope.launch(Dispatchers.IO) {
+            runCatching {
+                val ticketPayload = printerService.fetchOrderTicketLayout(
+                    orderId = orderId,
+                    businessId = businessId
+                )
+                printerService.printTicketPayload(
+                    printerConfig = printer,
+                    ticketPayload = ticketPayload,
+                    context = PrintContext(
+                        source = "pos_success_reprint",
+                        orderId = orderId
+                    )
+                )
+            }.onSuccess {
+                withContext(Dispatchers.Main) {
+                    hideLoading()
+                    updateState { copy(successReprintInFlight = false) }
+                    snackbarService.show("Ticket reenviado a la impresora correctamente.")
+                }
+            }.onFailure { error ->
+                loggerPrintFailure(orderNumber, error, "success_reprint")
+                withContext(Dispatchers.Main) {
+                    hideLoading()
+                    updateState { copy(successReprintInFlight = false) }
+                    val detail = error.message?.takeIf { it.isNotBlank() }
+                        ?: "Verifica la conexión de la impresora."
+                    snackbarService.show("La reimpresión falló. $detail")
+                }
+            }
+        }
+    }
+
     fun setIncludeBottomNote(include: Boolean) {
         updateState {
             copy(
@@ -3589,12 +3736,14 @@ class PosViewModel(
     }
 
     fun onBranchSelected(index: Int) {
+        if (uiState.value.posProvisioningActive) return
         updateBranchSelection(index)
         persistCurrentBranchBillingPointSelection()
         saveOrderCreationCheckpoint(OrderCreationStep.CUSTOMER)
     }
 
     fun onBillingPointSelected(index: Int) {
+        if (uiState.value.posProvisioningActive) return
         updateState { copy(selectedBillingPointIndex = index) }
         persistCurrentBranchBillingPointSelection()
         saveOrderCreationCheckpoint(OrderCreationStep.CUSTOMER)
@@ -3646,9 +3795,39 @@ class PosViewModel(
 
     private fun applyPersistedBranchBillingPointSelectionIfPossible() {
         val state = uiState.value
+        if (state.posProvisioningActive) return
         if (state.flowMode != FlowMode.SALE) return
         if (state.branches.isEmpty()) return
         val (branchIndex, billingPointIndex) = resolvePersistedBranchBillingPointSelection(state.branches) ?: return
+        updateBranchSelection(
+            index = branchIndex,
+            branches = state.branches,
+            resetBillingPoint = true,
+            forcedBillingPointIndex = billingPointIndex
+        )
+    }
+
+    private fun resolveProvisionedBranchBillingPointSelection(
+        branches: List<BranchModel>
+    ): Pair<Int, Int>? {
+        val provisioning = posProvisioningService.currentState()
+        if (!provisioning.required || !provisioning.isProvisioned) return null
+        val branchCode = provisioning.fixedBranchCode?.takeIf { it.isNotBlank() } ?: return null
+        val billingPointCode = provisioning.fixedBillingPointCode?.takeIf { it.isNotBlank() } ?: return null
+        val branchIndex = branches.indexOfFirst { it.branchCode == branchCode }
+        if (branchIndex < 0) return null
+        val billingPoints = branches[branchIndex].fiscalBillingPoints
+        val billingPointIndex = billingPoints.indexOfFirst { it.billingPoint == billingPointCode }
+        if (billingPointIndex < 0) return null
+        return branchIndex to billingPointIndex
+    }
+
+    private fun applyProvisionedBranchBillingPointSelectionIfPossible() {
+        val state = uiState.value
+        if (!state.posProvisioningActive) return
+        if (state.flowMode != FlowMode.SALE) return
+        if (state.branches.isEmpty()) return
+        val (branchIndex, billingPointIndex) = resolveProvisionedBranchBillingPointSelection(state.branches) ?: return
         updateBranchSelection(
             index = branchIndex,
             branches = state.branches,
@@ -4280,7 +4459,7 @@ class PosViewModel(
                     finalIdNumber = normalizedIdNumber,
                     finalIdNumberError = validateFinalCustomerIdentification(selectedType, normalizedIdNumber),
                     finalCustomerCountryCode = if (finalIdTypeRequiresCountry(selectedType)) {
-                        finalCustomerCountryCode ?: "PA"
+                        finalCustomerCountryCode ?: "CO"
                     } else {
                         null
                     }
@@ -4679,6 +4858,7 @@ class PosViewModel(
     fun setPaymentFlow(mode: PaymentFlowMode) {
         val currentMode = uiState.value.paymentFlowMode
         if (mode == currentMode) return
+        if (mode == PaymentFlowMode.MANUAL_OR_INSTALLMENTS && !uiState.value.canUseManualPaymentMethods) return
         if (mode == PaymentFlowMode.PAYMENT_LINK && !uiState.value.canCreatePaymentLink) return
         if (mode == PaymentFlowMode.DRAFT && !uiState.value.canCreateDraft) return
         if (mode == PaymentFlowMode.YAPPY_ONSITE && !selectedBillingPointHasYappyOnsiteDevice()) {

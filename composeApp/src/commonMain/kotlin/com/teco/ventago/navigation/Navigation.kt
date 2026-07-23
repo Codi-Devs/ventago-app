@@ -13,6 +13,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Settings
+import androidx.compose.material.icons.rounded.Visibility
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -86,6 +87,9 @@ import com.teco.ventago.features.payments.ui.home.OnboardingPaymentScreen
 import com.teco.ventago.features.payments.ui.home.PaymentFeesScreen
 import com.teco.ventago.features.payments.ui.home.viewmodel.PaymentMethodType
 import com.teco.ventago.features.payments.ui.home.viewmodel.PaymentMethodsViewModel
+import com.teco.ventago.features.pos.devices.ui.PosDeviceAdminDetailsScreen
+import com.teco.ventago.features.pos.devices.ui.PosDevicesAdminScreen
+import com.teco.ventago.features.pos.devices.ui.viewmodel.PosDevicesViewModel
 import com.teco.ventago.features.pos.ui.CartScreen
 import com.teco.ventago.features.pos.ui.CartScreenBottomBar
 import com.teco.ventago.features.pos.ui.PaymentScreen
@@ -159,6 +163,8 @@ import ventago.composeapp.generated.resources.pos
 import ventago.composeapp.generated.resources.pos_add_client
 import ventago.composeapp.generated.resources.pos_cart
 import ventago.composeapp.generated.resources.pos_clients
+import ventago.composeapp.generated.resources.pos_device_details
+import ventago.composeapp.generated.resources.pos_devices
 import ventago.composeapp.generated.resources.pos_invoice
 import ventago.composeapp.generated.resources.pos_payment
 import ventago.composeapp.generated.resources.printer_config
@@ -253,7 +259,10 @@ enum class PosScreens(
         Res.string.pos_cart,
         bottomBar = { backStackEntry, navigate -> CartScreenBottomBar(backStackEntry, navigate) }),
     PaymentScreen(
-        Res.string.pos_payment
+        Res.string.pos_payment,
+        actions = { backStackEntry, navigate, _ ->
+            PaymentScreenActions(backStackEntry, navigate)
+        },
     ),
     InvoicePreviewScreen(Res.string.invoice_preview_title),
     YappyOnsitePaymentScreen(Res.string.yappy_onsite),
@@ -347,6 +356,8 @@ enum class PosScreens(
     ),
     BusinessAddressSettingsScreen(Res.string.add_address),
     ExpenseAccountsSettingsScreen(Res.string.expense_accounts_settings),
+    PosDevicesScreen(Res.string.pos_devices),
+    PosDeviceDetailsScreen(Res.string.pos_device_details),
 
     //Branches Screens
     Branches(Res.string.branch),
@@ -373,6 +384,33 @@ enum class PosScreens(
 
     fun isPosScreens(): Boolean {
         return this == POSProductScreen || this == CartScreen || this == PaymentScreen || this == InvoicePreviewScreen || this == SuccessScreen || this == CustomersScreen || this == AddCustomerScreen || this == PosInvoiceScreen
+    }
+}
+
+@Composable
+private fun PaymentScreenActions(
+    backStackEntry: NavBackStackEntry?,
+    navigate: (PosScreens) -> Unit,
+) {
+    val owner = backStackEntry ?: return
+    val viewModel: PosViewModel = koinViewModel(viewModelStoreOwner = owner)
+    val ui by viewModel.uiState.collectAsState()
+    val canPreviewInvoice = ui.cart.isNotEmpty() &&
+        ui.finalCustomer != null &&
+        (ui.finalCustomer == true || ui.customer != null)
+    IconButton(
+        enabled = canPreviewInvoice,
+        onClick = { navigate(PosScreens.InvoicePreviewScreen) },
+    ) {
+        Icon(
+            imageVector = Icons.Rounded.Visibility,
+            contentDescription = "Vista previa",
+            tint = if (canPreviewInvoice) {
+                MaterialTheme.colorScheme.secondary
+            } else {
+                MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.45f)
+            },
+        )
     }
 }
 
@@ -1440,6 +1478,33 @@ private fun NavGraphBuilder.addSettingsNavigation(
                     }
                 }
             )
+        }
+
+        composable(route = PosScreens.PosDevicesScreen.name) { backStackEntry ->
+            val owner = rememberSafeGraphOwner(
+                navController = navController,
+                graphRoute = PosScreens.Settings.name,
+                fallback = backStackEntry
+            )
+            val viewModel: PosDevicesViewModel = koinViewModel(viewModelStoreOwner = owner)
+            analyticsService.logScreenView("PosDevicesScreen")
+            PosDevicesAdminScreen(
+                viewModel = viewModel,
+                onOpenDevice = {
+                    navController.navigate(PosScreens.PosDeviceDetailsScreen.name)
+                }
+            )
+        }
+
+        composable(route = PosScreens.PosDeviceDetailsScreen.name) { backStackEntry ->
+            val owner = rememberSafeGraphOwner(
+                navController = navController,
+                graphRoute = PosScreens.Settings.name,
+                fallback = backStackEntry
+            )
+            val viewModel: PosDevicesViewModel = koinViewModel(viewModelStoreOwner = owner)
+            analyticsService.logScreenView("PosDeviceDetailsScreen")
+            PosDeviceAdminDetailsScreen(viewModel = viewModel)
         }
 
         composable(route = PosScreens.PrintersScreen.name) {

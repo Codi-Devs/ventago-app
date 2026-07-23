@@ -30,4 +30,8 @@ sealed class LoginUiEvent {
     data object GenericError : LoginUiEvent()
     data object TryLater : LoginUiEvent()
     data object CanceledGoogleLogin : LoginUiEvent()
+    data object PosNotActivated : LoginUiEvent()
+    data object PosBusinessMismatch : LoginUiEvent()
+    data object PosConfigError : LoginUiEvent()
+    data object PosProvisioningMissingContactSupport : LoginUiEvent()
 }

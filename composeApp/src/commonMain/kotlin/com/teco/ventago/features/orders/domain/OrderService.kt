@@ -30,6 +30,7 @@ import com.teco.ventago.features.orders.domain.models.requests.RetryInvoiceRespo
 import com.teco.ventago.features.orders.domain.models.requests.VoidOrderPaymentRequest
 import com.teco.ventago.features.orders.domain.models.requests.VoidOrderPaymentResponse
 import com.teco.ventago.features.orders.domain.models.responses.InvoiceDocsDto
+import com.teco.ventago.features.pos.provisioning.domain.PosDeviceProvisioningService
 import com.teco.ventago.utils.toDecimalString
 import com.teco.ventago.utils.toQuantityUiString
 import kotlinx.datetime.Clock
@@ -66,7 +67,10 @@ data class ReceivableRescheduleTerm(
     val amountCents: Long
 )
 
-class OrderService(private val repository: IOrdersRepository) {
+class OrderService(
+    private val repository: IOrdersRepository,
+    private val posProvisioningService: PosDeviceProvisioningService,
+) {
 
     private companion object {
         const val INITIAL_PAGE = 1
@@ -100,7 +104,7 @@ class OrderService(private val repository: IOrdersRepository) {
         orderType: String? = null,
         customerRuc: String? = null,
     ): List<Order> {
-        val newOrders = repository.loadOrders(
+        val request = withPosProvisioningFilters(
             ListOrdersRequest(
                 businessId = businessId,
                 pageSize = pageSize,
@@ -112,7 +116,8 @@ class OrderService(private val repository: IOrdersRepository) {
                 orderType = orderType,
                 customerRuc = customerRuc
             )
-        )
+        ) ?: return emptyOrdersForUnprovisionedPos()
+        val newOrders = repository.loadOrders(request)
         if (newOrders.isEmpty()) {
             return emptyList()
         }
@@ -160,14 +165,41 @@ class OrderService(private val repository: IOrdersRepository) {
         page: Int = 0
     ): Paged<Order> {
         return repository.loadOrdersPaged(
-            ListOrdersRequest(
-                businessId = businessId,
-                pageSize = pageSize,
-                page = page,
-                paymentStatus = null,
-                customerId = customerId
-            )
+            withPosProvisioningFilters(
+                ListOrdersRequest(
+                    businessId = businessId,
+                    pageSize = pageSize,
+                    page = page,
+                    paymentStatus = null,
+                    customerId = customerId
+                )
+            ) ?: return Paged(page = page, size = pageSize, total = 0, items = emptyList())
         )
+    }
+
+    private fun withPosProvisioningFilters(request: ListOrdersRequest): ListOrdersRequest? {
+        if (!posProvisioningService.isRequired()) return request
+
+        val state = posProvisioningService.currentState()
+        val branchCode = state.fixedBranchCode?.takeIf { it.isNotBlank() }
+        val billingPointCode = state.fixedBillingPointCode?.takeIf { it.isNotBlank() }
+        if (!state.isProvisioned || branchCode == null || billingPointCode == null) {
+            return null
+        }
+
+        return request.copy(
+            branchCode = branchCode,
+            billingPointCode = billingPointCode
+        )
+    }
+
+    private suspend fun emptyOrdersForUnprovisionedPos(): List<Order> {
+        mutex.withLock {
+            orders.clear()
+            ordersFlow.value = emptyList()
+            page = INITIAL_PAGE
+        }
+        return emptyList()
     }
 
     suspend fun cancelOrder(

@@ -42,7 +42,7 @@ class AuthzNavigationTest {
                 BottomNavKey.HOME,
                 BottomNavKey.SUMMARY,
                 BottomNavKey.ORDERS,
-                BottomNavKey.PRODUCTS,
+                BottomNavKey.MENU,
                 BottomNavKey.SETTINGS
             ),
             visibleBottomNavKeys(owner(), emptySet())
@@ -66,6 +66,7 @@ class AuthzNavigationTest {
             listOf(
                 BottomNavKey.HOME,
                 BottomNavKey.ORDERS,
+                BottomNavKey.MENU,
                 BottomNavKey.SETTINGS
             ),
             nav

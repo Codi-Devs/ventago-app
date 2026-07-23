@@ -11,6 +11,18 @@ enum class CustomerFormMode {
     EDIT
 }
 
+internal const val DEFAULT_CUSTOMER_FORM_PROVINCE = "PANAMA"
+internal const val DEFAULT_CUSTOMER_FORM_DISTRICT = "PANAMA"
+internal const val DEFAULT_CUSTOMER_FORM_CORREGIMIENTO = "BELLA VISTA"
+internal const val DEFAULT_CUSTOMER_FORM_ADDRESS_LINE = "Panama"
+internal const val DEFAULT_FOREIGN_CUSTOMER_COUNTRY = "CO"
+
+enum class CustomerFormStep {
+    TYPE,
+    MAIN_INFO,
+    OPTIONAL_INFO
+}
+
 enum class CustomerForeignIdType(val code: String, val description: String) {
     PASSPORT("PASAPORTE", "Pasaporte"),
     OTHER("OTRO", "Otro")
@@ -248,6 +260,9 @@ object CustomerCountries {
 data class CustomerFormState(
     val mode: CustomerFormMode = CustomerFormMode.CREATE,
     val customerId: Long? = null,
+    val currentStep: CustomerFormStep = CustomerFormStep.TYPE,
+    val customerTypeSelected: Boolean = false,
+    val addressExpanded: Boolean = false,
 
     val customerType: FeCustomerType = FeCustomerType.FINAL_CONSUMER,
     val customerTypeOptions: List<FeCustomerType> = listOf(
@@ -264,13 +279,16 @@ data class CustomerFormState(
     val ruc: String = "",
     val rucCheckDigit: String = "",
     val legalName: String = "",
+    val rucError: String? = null,
     val cedulaCF: String = "",
     val cedulaError: String? = null,
     val foreignIdType: CustomerForeignIdType = CustomerForeignIdType.PASSPORT,
     val foreignIdNumber: String = "",
+    val foreignIdNumberError: String? = null,
     val taxExempt: Boolean = false,
     val taxRetentionCode: String = "",
     val taxRetentionPercent: String = "",
+    val taxRetentionPercentError: String? = null,
 
     val addressLine: String = "",
     val nameError: String? = null,
@@ -281,15 +299,16 @@ data class CustomerFormState(
     val selectedProvince: String? = null,
     val selectedDistrict: String? = null,
     val selectedCorregimiento: String? = null,
-    val selectedCountryCode: String = "PA",
+    val selectedCountryCode: String = DEFAULT_FOREIGN_CUSTOMER_COUNTRY,
 
     val provinceOptions: List<String> = PanamaLocations.provinces,
     val districtOptions: List<String> = emptyList(),
     val corregimientoOptions: List<String> = emptyList(),
-    val countryOptions: List<CustomerCountryOption> = CustomerCountries.options,
+    val countryOptions: List<CustomerCountryOption> = CustomerCountries.options.filterNot { it.code == "PA" },
 
     val invoicingEnabled: Boolean = false,
     val isFetching: Boolean = false,
+    val validationMessage: String? = null,
     val errorMessage: String? = null,
 
     override val loadingBottomSheet: LoadingBottomSheetState = LoadingBottomSheetState(),

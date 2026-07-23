@@ -30,7 +30,7 @@ class MainApplication: Application() {
                     single<ComponentActivity> { get<MainActivityHolder>().activity }
                     single { MainActivityHolder() }
                 },
-            ),
+            ) + androidDistributionModules(),
         )
         CoroutineScope(Dispatchers.IO).launch {
             ImageKit.init(

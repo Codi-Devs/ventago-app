@@ -676,4 +676,6 @@
     <string name="pos_order_restore_message">You have an unsaved order in progress. Do you want to continue where you left off?</string>
     <string name="pos_order_restore_confirm">Yes, restore</string>
     <string name="pos_order_restore_dismiss">No, start over</string>
+    <string name="pos_devices">POS devices</string>
+    <string name="pos_device_details">POS device details</string>
 </resources>

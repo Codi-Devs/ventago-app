@@ -42,6 +42,7 @@ private fun canOpenAppMenu(user: User?, betaSnapshot: Set<BetaFeature>): Boolean
         RouteKey.EXPENSE_NEW,
         RouteKey.CUSTOMER_FORM,
         RouteKey.SETTINGS_BRANCHES_OWNER,
+        RouteKey.SETTINGS_POS_DEVICES,
         RouteKey.PAYMENTS_PAGE,
     ).any { routeKey ->
         AuthzEvaluator.canRoute(routeKey, user, betaSnapshot)
@@ -90,6 +91,8 @@ fun routeKeyForScreen(screen: PosScreens): RouteKey? {
         PosScreens.AddBillingPointScreen,
         PosScreens.EditBillingPointScreen -> RouteKey.SETTINGS_BRANCHES_OWNER
         PosScreens.ExpenseAccountsSettingsScreen -> RouteKey.SETTINGS_EXPENSE_ACCOUNTS_OWNER
+        PosScreens.PosDevicesScreen,
+        PosScreens.PosDeviceDetailsScreen -> RouteKey.SETTINGS_POS_DEVICES
         PosScreens.Reports,
         PosScreens.ReportsScreen,
         PosScreens.ReportDefinitionScreen -> RouteKey.REPORTS_PAGE

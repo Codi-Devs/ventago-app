@@ -6,6 +6,7 @@ import com.teco.ventago.core.firebase.AnalyticsService
 import com.teco.ventago.features.auth.data.provider.getGoogleAuthProvider
 import com.teco.ventago.features.auth.domain.IAuthService
 import com.teco.ventago.features.auth.domain.model.requests.EmailLoginRequest
+import com.teco.ventago.features.pos.provisioning.domain.PosProvisioningException
 import com.teco.ventago.utils.ApiError
 import com.teco.ventago.utils.AuthException
 import com.teco.ventago.utils.MustChangePasswordException
@@ -85,6 +86,9 @@ class LoginViewModel(
                 } catch (e: AuthException) {
                     handleAuthException(e)
                     showError()
+                } catch (e: PosProvisioningException) {
+                    handlePosProvisioningException(e)
+                    showError()
                 } catch (_: Throwable) {
                     withContext(Dispatchers.Main) {
                         emitEvent(LoginUiEvent.GenericError)
@@ -153,6 +157,9 @@ class LoginViewModel(
                     }
                 } catch (e: AuthException) {
                     handleAuthException(e)
+                    showError()
+                } catch (e: PosProvisioningException) {
+                    handlePosProvisioningException(e)
                     showError()
                 } catch (_: Throwable) {
                     withContext(Dispatchers.Main) {
@@ -246,6 +253,21 @@ class LoginViewModel(
                 withContext(Dispatchers.Main) {
                     emitEvent(LoginUiEvent.GenericError)
                 }
+            }
+        }
+    }
+
+    private suspend fun handlePosProvisioningException(e: PosProvisioningException) {
+        withContext(Dispatchers.Main) {
+            when (e) {
+                PosProvisioningException.AgentInactive,
+                PosProvisioningException.DeviceInactive -> emitEvent(LoginUiEvent.PosNotActivated)
+
+                PosProvisioningException.BusinessMismatch -> emitEvent(LoginUiEvent.PosBusinessMismatch)
+                PosProvisioningException.AgentUnavailable,
+                PosProvisioningException.DeviceConfigMismatch,
+                PosProvisioningException.DeviceConfigUnavailable,
+                PosProvisioningException.InvalidAgentConfig -> emitEvent(LoginUiEvent.PosProvisioningMissingContactSupport)
             }
         }
     }

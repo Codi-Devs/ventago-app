@@ -27,6 +27,11 @@ data class PrinterConfig(
 ) {
     fun hasEndpoint(): Boolean = normalizedHost().isNotBlank()
 
+    fun isInternalDevice(): Boolean =
+        integrationType.trim().equals(PRINTER_INTEGRATION_H10P_INTERNAL, ignoreCase = true)
+
+    fun isAvailableForPrint(): Boolean = isActive && (isInternalDevice() || hasEndpoint())
+
     fun connectionTarget(): String = "TCP:${normalizedHost()}"
 
     fun connectionTargets(): List<String> {
@@ -51,7 +56,8 @@ data class PrinterConfig(
 
     fun requiresRetestComparedTo(previous: PrinterConfig?): Boolean {
         if (previous == null) return true
-        return previous.normalizedHost() != normalizedHost() ||
+        return previous.isInternalDevice() != isInternalDevice() ||
+            previous.normalizedHost() != normalizedHost() ||
             previous.normalizedPort() != normalizedPort() ||
             previous.printerModel.trim() != printerModel.trim() ||
             previous.integrationType.trim() != integrationType.trim()
@@ -72,6 +78,8 @@ data class PrinterConfig(
 
 private const val DEFAULT_PRINTER_PORT = 443
 private const val DEFAULT_RAW_TCP_PORT = 9100
+const val PRINTER_INTEGRATION_EPSON_EPOS = "epson_epos"
+const val PRINTER_INTEGRATION_H10P_INTERNAL = "h10p_internal"
 
 private fun String.normalizePrinterHost(): String {
     if (isBlank()) return ""

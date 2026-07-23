@@ -44,6 +44,7 @@ data class PrinterOnboardingState(
     val selectedBillingPointCode: String? = null,
     val selectionLocked: Boolean = false,
     val configMode: PrinterConfigMode = PrinterConfigMode.AUTOMATIC,
+    val useInternalPrinter: Boolean = false,
     val discoveryState: PrinterDiscoveryState = PrinterDiscoveryState(),
     val selectedDiscoveredPrinterId: String? = null,
     val setupSlideIndex: Int = 0,

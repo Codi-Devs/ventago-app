@@ -80,6 +80,10 @@ fun LoginScreen(navigate: (PosScreens) -> Unit) {
     val invalidSignInMsg = stringResource(Res.string.invalid_sign_in)
     val genericErrorMsg = stringResource(Res.string.error_no_internet)
     val tryLaterMsg = stringResource(Res.string.error_try_later)
+    val posNotActivatedMsg = "Este POS no está activado"
+    val posBusinessMismatchMsg = "Este usuario no pertenece al negocio asignado a este POS"
+    val posConfigErrorMsg = "No se pudo validar la configuración de este POS"
+    val posProvisioningSupportMsg = "No encontramos datos de aprovisionamiento para este POS. Contacta a soporte para el manejo del dispositivo."
     val mustChangePasswordTitle = stringResource(Res.string.login_must_change_password_title)
     val mustChangePasswordDescription = stringResource(Res.string.login_must_change_password_description)
     val backToLoginLabel = stringResource(Res.string.login_back_to_login)
@@ -92,6 +96,10 @@ fun LoginScreen(navigate: (PosScreens) -> Unit) {
                 LoginUiEvent.MakingLoginError -> snackbarHostState.showSnackbar(invalidSignInMsg)
                 LoginUiEvent.TryLater -> snackbarHostState.showSnackbar(tryLaterMsg)
                 LoginUiEvent.MissingBusiness -> navigate(PosScreens.BusinessRegisterScreen)
+                LoginUiEvent.PosNotActivated -> snackbarHostState.showSnackbar(posNotActivatedMsg)
+                LoginUiEvent.PosBusinessMismatch -> snackbarHostState.showSnackbar(posBusinessMismatchMsg)
+                LoginUiEvent.PosConfigError -> snackbarHostState.showSnackbar(posConfigErrorMsg)
+                LoginUiEvent.PosProvisioningMissingContactSupport -> snackbarHostState.showSnackbar(posProvisioningSupportMsg)
                 else -> println("Unhandled event: $event")
             }
         }

@@ -6,11 +6,22 @@ import com.teco.ventago.design_system.organism.LoadingBottomSheetState
 import com.teco.ventago.features.invoicing.domain.models.FeCustomerType
 import com.teco.ventago.features.invoicing.domain.TaxPayerType
 
+internal const val DEFAULT_CUSTOMER_PROVINCE = "PANAMA"
+internal const val DEFAULT_CUSTOMER_DISTRICT = "PANAMA"
+internal const val DEFAULT_CUSTOMER_CORREGIMIENTO = "BELLA VISTA"
+internal const val DEFAULT_CUSTOMER_ADDRESS_LINE = "Panama"
+internal const val DEFAULT_FOREIGN_CUSTOMER_COUNTRY = "CO"
 
 data class CountryOption(
     val code: String, // e.g. "PA"
     val name: String  // e.g. "Panama"
 )
+
+enum class AddCustomerStep {
+    TYPE,
+    MAIN_INFO,
+    OPTIONAL_INFO
+}
 
 enum class ForeignIdType(val code: String, val description: String) {
     PASSPORT("passport", "Passport"),
@@ -28,13 +39,22 @@ data class AddCustomerState(
     val email: String = "",
     val ruc: String = "",
     val tags: List<String> = emptyList(),
+    val currentStep: AddCustomerStep = AddCustomerStep.TYPE,
+    val customerTypeSelected: Boolean = false,
+    val addressExpanded: Boolean = false,
 
     val customerType: FeCustomerType = FeCustomerType.FINAL_CONSUMER, // individual or business
     val taxPayerType: TaxPayerType = TaxPayerType.NATURAL, // final_consumer, registered_taxpayer, exempted_taxpayer
+    val taxExempt: Boolean = false,
+    val taxRetentionCode: String = "",
+    val taxRetentionPercent: String = "",
     val rucCheckDigit: String? = null,
     val legalName: String? = null,
     val addressLine: String? = null,
     val nameError: String? = null,
+    val rucError: String? = null,
+    val foreignIdNumberError: String? = null,
+    val taxRetentionPercentError: String? = null,
     val addressLineError: String? = null,
     val provinceError: String? = null,
     val districtError: String? = null,
@@ -63,7 +83,7 @@ data class AddCustomerState(
     val cfCedulaError: String? = null,
 
     val countryOptions: List<CountryOption> = emptyList(),
-    val selectedCountryCode: String = "PA", // default Panama
+    val selectedCountryCode: String = DEFAULT_FOREIGN_CUSTOMER_COUNTRY,
 
     val invoicingEnabled: Boolean = false,
     val validationMessage: String? = null,

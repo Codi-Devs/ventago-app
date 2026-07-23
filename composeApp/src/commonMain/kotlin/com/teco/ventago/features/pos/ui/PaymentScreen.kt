@@ -37,7 +37,6 @@ import androidx.compose.material.icons.rounded.Loyalty
 import androidx.compose.material.icons.rounded.Payments
 import androidx.compose.material.icons.rounded.RadioButtonUnchecked
 import androidx.compose.material.icons.rounded.Redeem
-import androidx.compose.material.icons.rounded.Visibility
 import androidx.compose.material3.Divider
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
@@ -68,7 +67,6 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
@@ -226,9 +224,6 @@ fun PaymentScreenContent(
     val totalToCharge = remember(ui) { viewModel.amountToCharge() }
     val remaining = remember(ui) { viewModel.remainingToAllocate() }
     val hasPositiveAmount = totalToCharge > 0L
-    val canPreviewInvoice = ui.cart.isNotEmpty() &&
-        ui.finalCustomer != null &&
-        (ui.finalCustomer == true || ui.customer != null)
 
     val loadingSheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
 
@@ -281,13 +276,18 @@ fun PaymentScreenContent(
             sourceMethod = replacementConfig?.sourceMethod,
             normallyVisible = ui.canCreatePaymentLink,
         )
+        val showManualOption = shouldShowPendingPaymentChangeOption(
+            mode = PaymentFlowMode.MANUAL_OR_INSTALLMENTS,
+            sourceMethod = replacementConfig?.sourceMethod,
+            normallyVisible = ui.canUseManualPaymentMethods,
+        )
         val paymentLinkReady = ui.canCreatePaymentLink && ui.paymentLinkConfigured
         val paymentLinkNeedsConfiguration = ui.canCreatePaymentLink && !ui.paymentLinkConfigured
         val selectedBillingPointHasYappyOnsite = viewModel.selectedBillingPointHasYappyOnsiteDevice()
         val yappyOnsiteReady = ui.canCreateYappyOnsiteQr &&
             ui.canCreateInvoice &&
             selectedBillingPointHasYappyOnsite
-        val canUseOrConfigureYappyOnsite = ui.canCreateYappyOnsiteQr || ui.canConfigureYappyOnsite
+        val canUseOrConfigureYappyOnsite = ui.canCreateYappyOnsiteQr
         val yappyOnsiteAvailabilityLoading = canUseOrConfigureYappyOnsite && (
             !ui.paymentProfileResolved ||
                 (
@@ -298,6 +298,7 @@ fun PaymentScreenContent(
                     )
             )
         val yappyOnsiteNeedsConfiguration = ui.paymentProfileResolved &&
+            ui.canCreateYappyOnsiteQr &&
             !ui.yappyOnsiteConfigured &&
             ui.canConfigureYappyOnsite
         val showYappyOnsiteOption = shouldShowPendingPaymentChangeOption(
@@ -319,6 +320,7 @@ fun PaymentScreenContent(
             ui.paymentFlowMode,
             isCreditOrDebitNote,
             showDraftOption,
+            showManualOption,
             paymentLinkReady,
             yappyOnsiteReady,
             replacementConfig?.sourceMethod,
@@ -344,6 +346,9 @@ fun PaymentScreenContent(
             if (ui.paymentFlowMode == PaymentFlowMode.DRAFT && !showDraftOption) {
                 viewModel.setPaymentFlow(PaymentFlowMode.MANUAL_OR_INSTALLMENTS)
             }
+            if (ui.paymentFlowMode == PaymentFlowMode.MANUAL_OR_INSTALLMENTS && !showManualOption) {
+                selectedPaymentMode = null
+            }
         }
 
         LaunchedEffect(
@@ -351,11 +356,13 @@ fun PaymentScreenContent(
             isCreditOrDebitNote,
             isReplacementMode,
             showDraftOption,
+            showManualOption,
             paymentLinkReady,
             yappyOnsiteReady,
         ) {
             if (isCreditOrDebitNote || isReplacementMode) return@LaunchedEffect
             when (selectedPaymentMode) {
+                PaymentFlowMode.MANUAL_OR_INSTALLMENTS -> if (!showManualOption) selectedPaymentMode = null
                 PaymentFlowMode.PAYMENT_LINK -> if (!paymentLinkReady) selectedPaymentMode = null
                 PaymentFlowMode.YAPPY_ONSITE -> if (!yappyOnsiteReady) selectedPaymentMode = null
                 PaymentFlowMode.DRAFT -> if (!showDraftOption) selectedPaymentMode = null
@@ -364,6 +371,7 @@ fun PaymentScreenContent(
         }
 
         fun selectManualPayment() {
+            if (!showManualOption) return
             selectedPaymentMode = PaymentFlowMode.MANUAL_OR_INSTALLMENTS
             viewModel.setPaymentFlow(PaymentFlowMode.MANUAL_OR_INSTALLMENTS)
         }
@@ -427,6 +435,7 @@ fun PaymentScreenContent(
                 if (!isCreditOrDebitNote) {
                     PaymentMethodSelector(
                         selectedMode = effectivePaymentMode,
+                        showManualOption = showManualOption,
                         showDraftOption = showDraftOption,
                         showPaymentLinkOption = showPaymentLinkOption,
                         linkEnabled = paymentLinkReady,
@@ -454,7 +463,7 @@ fun PaymentScreenContent(
 
         Spacer(Modifier.height(12.dp))
 
-        if (effectivePaymentMode == PaymentFlowMode.MANUAL_OR_INSTALLMENTS || isCreditOrDebitNote) {
+        if ((effectivePaymentMode == PaymentFlowMode.MANUAL_OR_INSTALLMENTS || isCreditOrDebitNote) && ui.canUseManualPaymentMethods) {
             ManualAndInstallmentsSection(
                 viewModel = viewModel,
                 totalToCharge = totalToCharge,
@@ -479,17 +488,8 @@ fun PaymentScreenContent(
                         }
                     }
                 },
-                onSaveDraft = {
-                    requestGovernmentWarningOrProceed {
-                        viewModel.createOrder(createPaymentLink = false, saveAsDraft = true)
-                    }
-                },
-                onPreviewInvoice = { navigate(PosScreens.InvoicePreviewScreen, null) },
                 // Disable save draft for credit/debit notes
-                saveDraftEnabled = hasPositiveAmount && !isCreditOrDebitNote,
-                canPreviewInvoice = canPreviewInvoice,
                 canCreateInvoice = ui.canCreateInvoice,
-                canCreateDraft = !isReplacementMode && ui.canCreateDraft,
                 minHeight = manualSectionMinHeight,
                 createInvoiceLabelOverride = if (isReplacementMode) "Registrar pago" else null,
             )
@@ -497,8 +497,6 @@ fun PaymentScreenContent(
             PaymentLinkSection(
                 totalToCharge = totalToCharge,
                 enabled = hasPositiveAmount && ui.canCreateInvoice,
-                canPreviewInvoice = canPreviewInvoice,
-                onPreviewInvoice = { navigate(PosScreens.InvoicePreviewScreen, null) },
                 onConfirm = {
                     if (replacementConfig != null) {
                         viewModel.checkPaymentMethodsConfigured { configured ->
@@ -525,8 +523,6 @@ fun PaymentScreenContent(
             YappyOnsiteCreateSection(
                 totalToCharge = totalToCharge,
                 enabled = hasPositiveAmount && yappyOnsiteReady,
-                canPreviewInvoice = canPreviewInvoice,
-                onPreviewInvoice = { navigate(PosScreens.InvoicePreviewScreen, null) },
                 onConfirm = {
                     if (replacementConfig != null) {
                         replacementConfig.onConfirmYappyOnsite()
@@ -540,8 +536,6 @@ fun PaymentScreenContent(
         } else if (effectivePaymentMode == PaymentFlowMode.DRAFT) {
             DraftPaymentSection(
                 enabled = hasPositiveAmount && ui.canCreateDraft,
-                canPreviewInvoice = canPreviewInvoice,
-                onPreviewInvoice = { navigate(PosScreens.InvoicePreviewScreen, null) },
                 onConfirm = {
                     requestGovernmentWarningOrProceed {
                         viewModel.createOrder(createPaymentLink = false, saveAsDraft = true)
@@ -675,6 +669,7 @@ fun PaymentScreenContent(
 @Composable
 private fun PaymentMethodSelector(
     selectedMode: PaymentFlowMode?,
+    showManualOption: Boolean,
     showDraftOption: Boolean,
     showPaymentLinkOption: Boolean,
     linkEnabled: Boolean,
@@ -693,21 +688,25 @@ private fun PaymentMethodSelector(
     onConfigureYappyOnsite: () -> Unit,
     onDraft: () -> Unit,
 ) {
+    var hasRenderedOption = false
     Column(
         Modifier
             .fillMaxWidth()
             .padding(horizontal = 16.dp)
     ) {
-        PaymentMethodOptionCard(
-            title = "Pago manual",
-            subtitle = "Efectivo, transferencia, cheque o mixto",
-            icon = Icons.Rounded.Payments,
-            selected = selectedMode == PaymentFlowMode.MANUAL_OR_INSTALLMENTS,
-            enabled = true,
-            onClick = onManual,
-        )
+        if (showManualOption) {
+            PaymentMethodOptionCard(
+                title = "Pago manual",
+                subtitle = "Efectivo, transferencia, cheque o mixto",
+                icon = Icons.Rounded.Payments,
+                selected = selectedMode == PaymentFlowMode.MANUAL_OR_INSTALLMENTS,
+                enabled = true,
+                onClick = onManual,
+            )
+            hasRenderedOption = true
+        }
         if (showPaymentLinkOption) {
-            Spacer(Modifier.height(10.dp))
+            if (hasRenderedOption) Spacer(Modifier.height(10.dp))
             PaymentMethodOptionCard(
                 title = "Crear enlace de pago con QR",
                 subtitle = if (linkEnabled) "Yappy, tarjeta, ACH o PayPal" else "Configura un canal antes de cobrar con links",
@@ -719,9 +718,10 @@ private fun PaymentMethodSelector(
                 onActionClick = onConfigurePaymentLinks,
                 onClick = onPaymentLink,
             )
+            hasRenderedOption = true
         }
         if (showYappyOnsiteOption) {
-            Spacer(Modifier.height(10.dp))
+            if (hasRenderedOption) Spacer(Modifier.height(10.dp))
             PaymentMethodOptionCard(
                 title = "Yappy en caja",
                 subtitle = when {
@@ -737,9 +737,10 @@ private fun PaymentMethodSelector(
                 onActionClick = onConfigureYappyOnsite,
                 onClick = onYappyOnsite,
             )
+            hasRenderedOption = true
         }
         if (showDraftOption) {
-            Spacer(Modifier.height(10.dp))
+            if (hasRenderedOption) Spacer(Modifier.height(10.dp))
             PaymentMethodOptionCard(
                 title = "Guardar sin facturar",
                 subtitle = "Crea un borrador para facturar más tarde",
@@ -874,12 +875,7 @@ private fun ManualAndInstallmentsSection(
     onInstallmentAmount: (Int, Long) -> Unit,
     onInstallmentDate: (Int, String) -> Unit,
     onConfirm: () -> Unit,
-    onSaveDraft: () -> Unit,
-    onPreviewInvoice: () -> Unit,
-    saveDraftEnabled: Boolean,
-    canPreviewInvoice: Boolean,
     canCreateInvoice: Boolean,
-    canCreateDraft: Boolean,
     minHeight: Dp = 0.dp,
     createInvoiceLabelOverride: String? = null,
 ) {
@@ -936,26 +932,9 @@ private fun ManualAndInstallmentsSection(
                         showCreateInvoice = true,
                         createInvoiceLabel = confirmButtonText,
                         createInvoiceEnabled = canConfirm,
-                        canPreviewInvoice = canPreviewInvoice,
-                        showSaveDraft = canCreateDraft && selectedDocType !in setOf("04", "05", "06"),
-                        saveDraftEnabled = saveDraftEnabled,
                         onCreateInvoice = onConfirm,
-                        onPreviewInvoice = onPreviewInvoice,
-                        onSaveDraft = onSaveDraft,
                     )
                 }
-            )
-        } else if (canCreateDraft && selectedDocType !in setOf("04", "05", "06")) {
-            PaymentInvoiceActions(
-                showCreateInvoice = false,
-                createInvoiceLabel = "",
-                createInvoiceEnabled = false,
-                canPreviewInvoice = false,
-                showSaveDraft = true,
-                saveDraftEnabled = saveDraftEnabled,
-                onCreateInvoice = {},
-                onPreviewInvoice = {},
-                onSaveDraft = onSaveDraft,
             )
         }
     }
@@ -1749,12 +1728,7 @@ private fun PaymentInvoiceActions(
     showCreateInvoice: Boolean,
     createInvoiceLabel: String,
     createInvoiceEnabled: Boolean,
-    canPreviewInvoice: Boolean,
-    showSaveDraft: Boolean,
-    saveDraftEnabled: Boolean,
     onCreateInvoice: () -> Unit,
-    onPreviewInvoice: () -> Unit,
-    onSaveDraft: () -> Unit,
 ) {
     Column(
         modifier = Modifier.fillMaxWidth(),
@@ -1766,26 +1740,6 @@ private fun PaymentInvoiceActions(
                 icon = Icons.Rounded.Description,
                 enabled = createInvoiceEnabled,
                 onClick = onCreateInvoice,
-            )
-
-            Spacer(Modifier.height(12.dp))
-
-            PaymentOutlinedActionButton(
-                label = "Vista previa",
-                icon = Icons.Rounded.Visibility,
-                enabled = canPreviewInvoice,
-                onClick = onPreviewInvoice,
-            )
-        }
-
-        if (showSaveDraft) {
-            if (showCreateInvoice) {
-                PaymentActionSeparator()
-            }
-
-            PaymentSaveDraftAction(
-                enabled = saveDraftEnabled,
-                onClick = onSaveDraft,
             )
         }
     }
@@ -1818,87 +1772,9 @@ private fun PaymentFilledActionButton(
 }
 
 @Composable
-private fun PaymentOutlinedActionButton(
-    label: String,
-    icon: ImageVector,
-    enabled: Boolean,
-    onClick: () -> Unit,
-) {
-    OutlinedButtonM(
-        onClick = onClick,
-        enabled = enabled,
-        contentColor = MaterialTheme.colorScheme.secondary,
-        border = BorderStroke(1.dp, MaterialTheme.colorScheme.secondary),
-    ) {
-        Icon(
-            imageVector = icon,
-            contentDescription = label,
-            modifier = Modifier.size(22.dp)
-        )
-        Spacer(Modifier.width(12.dp))
-        Text(
-            text = label,
-            style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.W800)
-        )
-    }
-}
-
-@Composable
-private fun PaymentActionSeparator() {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(vertical = 22.dp),
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        Divider(Modifier.weight(1f))
-        Text(
-            text = "o",
-            modifier = Modifier.padding(horizontal = 32.dp),
-            style = bodyMediumBold(color = MaterialTheme.colorScheme.onSurfaceVariant)
-        )
-        Divider(Modifier.weight(1f))
-    }
-}
-
-@Composable
-private fun PaymentSaveDraftAction(
-    enabled: Boolean,
-    onClick: () -> Unit,
-) {
-    Column(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clickable(enabled = enabled, onClick = onClick)
-            .padding(horizontal = 12.dp, vertical = 4.dp),
-        horizontalAlignment = Alignment.CenterHorizontally
-    ) {
-        val titleColor = if (enabled) {
-            MaterialTheme.colorScheme.secondary
-        } else {
-            MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.45f)
-        }
-        Text(
-            text = "Guardar sin facturar",
-            style = bodyMediumBold(),
-            color = titleColor,
-            textAlign = TextAlign.Center
-        )
-        Spacer(Modifier.height(6.dp))
-        Text(
-            text = "Puedes guardar esta factura como borrador y cobrar más tarde.",
-            style = bodySmall(color = MaterialTheme.colorScheme.onSurfaceVariant),
-            textAlign = TextAlign.Center
-        )
-    }
-}
-
-@Composable
 private fun PaymentLinkSection(
     totalToCharge: Long,
     enabled: Boolean,
-    canPreviewInvoice: Boolean,
-    onPreviewInvoice: () -> Unit,
     onConfirm: () -> Unit
 ) {
     Surface(
@@ -1943,13 +1819,6 @@ private fun PaymentLinkSection(
                 enabled = enabled,
                 onClick = onConfirm,
             )
-            Spacer(Modifier.height(12.dp))
-            PaymentOutlinedActionButton(
-                label = "Vista previa",
-                icon = Icons.Rounded.Visibility,
-                enabled = canPreviewInvoice,
-                onClick = onPreviewInvoice,
-            )
         }
     }
 }
@@ -1958,8 +1827,6 @@ private fun PaymentLinkSection(
 private fun YappyOnsiteCreateSection(
     totalToCharge: Long,
     enabled: Boolean,
-    canPreviewInvoice: Boolean,
-    onPreviewInvoice: () -> Unit,
     onConfirm: () -> Unit
 ) {
     Surface(
@@ -2004,13 +1871,6 @@ private fun YappyOnsiteCreateSection(
                 enabled = enabled,
                 onClick = onConfirm,
             )
-            Spacer(Modifier.height(12.dp))
-            PaymentOutlinedActionButton(
-                label = "Vista previa",
-                icon = Icons.Rounded.Visibility,
-                enabled = canPreviewInvoice,
-                onClick = onPreviewInvoice,
-            )
         }
     }
 }
@@ -2018,8 +1878,6 @@ private fun YappyOnsiteCreateSection(
 @Composable
 private fun DraftPaymentSection(
     enabled: Boolean,
-    canPreviewInvoice: Boolean,
-    onPreviewInvoice: () -> Unit,
     onConfirm: () -> Unit,
 ) {
     Surface(
@@ -2046,13 +1904,6 @@ private fun DraftPaymentSection(
                 icon = Icons.Rounded.Description,
                 enabled = enabled,
                 onClick = onConfirm,
-            )
-            Spacer(Modifier.height(12.dp))
-            PaymentOutlinedActionButton(
-                label = "Vista previa",
-                icon = Icons.Rounded.Visibility,
-                enabled = canPreviewInvoice,
-                onClick = onPreviewInvoice,
             )
         }
     }

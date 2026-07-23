@@ -13,6 +13,8 @@ import com.teco.ventago.features.auth.domain.model.requests.CreateUserRequest
 import com.teco.ventago.features.auth.domain.model.requests.EmailLoginRequest
 import com.teco.ventago.features.auth.domain.model.response.AuthResponse
 import com.teco.ventago.features.business.domain.model.Business
+import com.teco.ventago.features.pos.provisioning.domain.PosDeviceProvisioningService
+import com.teco.ventago.features.pos.provisioning.domain.PosProvisioningException
 import com.teco.ventago.features.product.domain.model.Products
 import com.teco.ventago.features.user.data.repository.IUserRepository
 import com.teco.ventago.utils.ApiError
@@ -58,7 +60,8 @@ class AuthService(
     private val cache: ICacheService,
     private val changesManager: IChangesManager,
     private val client: HttpClient,
-    private val sessionIdService: ISessionIdService
+    private val sessionIdService: ISessionIdService,
+    private val posProvisioningService: PosDeviceProvisioningService
 ) : IAuthService {
     var user = MutableStateFlow<User?>(null)
     private var userChangesJob: Job? = null
@@ -72,6 +75,17 @@ class AuthService(
                     user.tryEmit(null)
                     signOut()
                 } else {
+                    try {
+                        val accessToken = getValidAccessTokenForCachedSession()
+                        posProvisioningService.validateBusinessIds(
+                            businessIds = cachedUser.businessIds.map { it.businessId },
+                            accessToken = accessToken
+                        )
+                    } catch (_: PosProvisioningException) {
+                        user.tryEmit(null)
+                        signOut()
+                        return@launch
+                    }
                     user.tryEmit(cachedUser)
                     user = MutableStateFlow(cachedUser)
                     val business = cache.getCache(Business::class)
@@ -89,6 +103,15 @@ class AuthService(
             }
         }
 
+    }
+
+    private suspend fun getValidAccessTokenForCachedSession(): String? {
+        val accessToken = getJwtToken()
+        if (!accessToken.isNullOrBlank() && !isTokenExpired(accessToken)) {
+            return accessToken
+        }
+        refreshToken(client, accessToken)
+        return getJwtToken()
     }
 
     private suspend fun listenUserChanges() {
@@ -187,6 +210,7 @@ class AuthService(
                 throw AuthException(ApiError.F_AUTH_007)
             }
             validateAccessTokenClaimsBeforeLogin(res.accessToken)
+            posProvisioningService.validateLogin(res)
             val firebaseResponse = firebase.signInWithCustomToken(res.providerToken)
             if (firebaseResponse.success) {
                 saveJwt(res.accessToken)
@@ -204,6 +228,9 @@ class AuthService(
         } catch (e: Exception) {
             user.update {
                 null
+            }
+            if (e is PosProvisioningException) {
+                signOut()
             }
             throw e
         }
@@ -219,6 +246,7 @@ class AuthService(
                 throw AuthException(ApiError.F_AUTH_007)
             }
             validateAccessTokenClaimsBeforeLogin(res.accessToken)
+            posProvisioningService.validateLogin(res)
             val firebaseResponse = firebase.signInWithCustomToken(res.providerToken)
             if (firebaseResponse.success) {
                 saveJwt(res.accessToken)
@@ -235,6 +263,9 @@ class AuthService(
         } catch (e: Exception) {
             user.update {
                 null
+            }
+            if (e is PosProvisioningException) {
+                signOut()
             }
             throw e
         }
@@ -284,6 +315,7 @@ class AuthService(
             userChangesJob = null
             // Remove Firebase Realtime Database listeners
             changesManager.removeListeners()
+            posProvisioningService.clear()
             // Clear cache
             cache.clearAllCache()
             // Sign out from Firebase

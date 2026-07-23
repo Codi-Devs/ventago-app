@@ -112,6 +112,7 @@ object AuthzEvaluator {
         RouteKey.SETTINGS_BRANCHES_OWNER to AuthzPolicy(ownerOnly = true),
         RouteKey.SETTINGS_EXPENSE_ACCOUNTS_OWNER to AuthzPolicy(ownerOnly = true),
         RouteKey.SETTINGS_SUB_USERS to AuthzPolicy(ownerOnly = true, betaFeature = BetaFeature.MULTI_USERS),
+        RouteKey.SETTINGS_POS_DEVICES to AuthzPolicy(requiredAny = setOf(ScopeKey.SETTINGS_MODIFY_POS_DEVICES)),
         RouteKey.ACH_PAYMENT_DETAILS to AuthzPolicy(requiredAny = setOf(ScopeKey.ACH_PAYMENT_VIEW)),
         RouteKey.RECURRING_LIST to AuthzPolicy(
             requiredAny = setOf(ScopeKey.RECURRING_VIEW),
@@ -139,6 +140,7 @@ object AuthzEvaluator {
         ActionKey.ORDERS_CREATE to AuthzPolicy(requiredAny = setOf(ScopeKey.INVOICE_CREATE)),
         ActionKey.ORDERS_CREATE_DRAFT to AuthzPolicy(requiredAny = setOf(ScopeKey.INVOICE_CREATE_DRAFT)),
         ActionKey.ORDERS_PAYMENT_LINK to AuthzPolicy(requiredAny = setOf(ScopeKey.INVOICE_CREATE_PAYMENT_LINK)),
+        ActionKey.ORDERS_MANUAL_PAYMENT to AuthzPolicy(requiredAny = setOf(ScopeKey.INVOICE_CREATE)),
         ActionKey.ORDERS_MARK_PAID to AuthzPolicy(requiredAny = setOf(ScopeKey.INVOICE_CREATE)),
         ActionKey.ORDERS_CANCEL to AuthzPolicy(requiredAny = setOf(ScopeKey.INVOICE_CANCEL)),
         ActionKey.ORDERS_CREDIT_NOTE to AuthzPolicy(requiredAny = setOf(ScopeKey.INVOICE_CREDIT_NOTES)),
@@ -183,6 +185,9 @@ object AuthzEvaluator {
             betaFeature = BetaFeature.REAL_TIME_REPORTS
         ),
         ActionKey.SETTINGS_MODIFY to AuthzPolicy(ownerOnly = true),
+        ActionKey.SETTINGS_MODIFY_POS_DEVICES to AuthzPolicy(
+            requiredAny = setOf(ScopeKey.SETTINGS_MODIFY_POS_DEVICES)
+        ),
         ActionKey.RECURRING_CREATE to AuthzPolicy(
             requiredAny = setOf(ScopeKey.RECURRING_CREATE),
             betaFeature = BetaFeature.RECURRING_INVOICING
@@ -206,14 +211,17 @@ object AuthzEvaluator {
     )
 
     fun canRoute(routeKey: RouteKey, user: User?, betaSnapshot: Set<BetaFeature>): Boolean {
+        if (!PosDevicePermissionGate.canRoute(routeKey)) return false
         return evaluate(routePolicies.getValue(routeKey), user, betaSnapshot)
     }
 
     fun canMenu(menuKey: MenuKey, user: User?, betaSnapshot: Set<BetaFeature>): Boolean {
+        if (!PosDevicePermissionGate.canMenu(menuKey)) return false
         return evaluate(menuPolicies.getValue(menuKey), user, betaSnapshot)
     }
 
     fun canAction(actionKey: ActionKey, user: User?, betaSnapshot: Set<BetaFeature>): Boolean {
+        if (!PosDevicePermissionGate.canAction(actionKey)) return false
         return evaluate(actionPolicies.getValue(actionKey), user, betaSnapshot)
     }
 

@@ -1,5 +1,6 @@
 package com.teco.ventago.features.financialProfile
 
+import com.teco.ventago.AppDistribution
 import com.teco.ventago.core.cache.ICacheService
 import com.teco.ventago.core.changes.IChangesManager
 import com.teco.ventago.core.logger.ILoggerService
@@ -8,6 +9,12 @@ import com.teco.ventago.features.financialProfile.data.repository.IFinancialProf
 import com.teco.ventago.features.financialProfile.domain.FinancialProfileService
 import com.teco.ventago.features.financialProfile.domain.model.BusinessFinancialProfile
 import com.teco.ventago.features.financialProfile.domain.model.PaymentSummary
+import com.teco.ventago.features.pos.provisioning.data.repository.IPosDeviceProvisioningRepository
+import com.teco.ventago.features.pos.provisioning.domain.IPosAgentConfigReader
+import com.teco.ventago.features.pos.provisioning.domain.PosDeviceProvisioningService
+import com.teco.ventago.features.pos.provisioning.domain.model.PosAgentConfigResult
+import com.teco.ventago.features.pos.provisioning.domain.model.PosDeviceConfig
+import com.teco.ventago.features.pos.provisioning.domain.model.PosDevicePermissions
 import kotlin.reflect.KClass
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -87,11 +94,34 @@ class FinancialProfileServiceTest {
         assertEquals(0, changesManager.financialChangedCalls)
     }
 
+    @Test
+    fun refreshUpdatesPosDeviceConfigWithoutPublishingFinancialInvalidation() = runTest {
+        val changesManager = FakeChangesManager()
+        val cache = FakeCacheService()
+        val repository = FakeFinancialProfileRepository(profile(businessId = 7, invoicingActive = true))
+        val posRepository = FakePosDeviceProvisioningRepository()
+        val posService = PosDeviceProvisioningService(
+            appDistribution = AppDistribution(isPosBuild = true),
+            agentConfigReader = FakePosAgentConfigReader(),
+            repository = posRepository,
+            logger = NoopLoggerService(),
+        )
+        val service = createService(cache, repository, this, changesManager, posService)
+
+        service.refresh(businessIdOpt = 7)
+        cache.awaitSave()
+
+        assertEquals(listOf(7), repository.calls)
+        assertEquals(listOf("pos_123"), posRepository.calls)
+        assertEquals(0, changesManager.financialChangedCalls)
+    }
+
     private fun createService(
         cache: FakeCacheService,
         repository: FakeFinancialProfileRepository,
         appScope: CoroutineScope,
         changesManager: FakeChangesManager = FakeChangesManager(),
+        posProvisioningService: PosDeviceProvisioningService = noopPosProvisioningService(),
     ): FinancialProfileService =
         FinancialProfileService(
             cache = cache,
@@ -99,6 +129,15 @@ class FinancialProfileServiceTest {
             repo = repository,
             loggerService = NoopLoggerService(),
             appScope = appScope,
+            posProvisioningService = posProvisioningService,
+        )
+
+    private fun noopPosProvisioningService(): PosDeviceProvisioningService =
+        PosDeviceProvisioningService(
+            appDistribution = AppDistribution(isPosBuild = false),
+            agentConfigReader = FakePosAgentConfigReader(),
+            repository = FakePosDeviceProvisioningRepository(),
+            logger = NoopLoggerService(),
         )
 
     private fun profile(
@@ -184,5 +223,36 @@ class FinancialProfileServiceTest {
 
     private class NoopLoggerService : ILoggerService {
         override fun sendLog(log: Log) = Unit
+    }
+
+    private class FakePosAgentConfigReader : IPosAgentConfigReader {
+        override suspend fun getDeviceConfig(): PosAgentConfigResult =
+            PosAgentConfigResult(
+                activated = true,
+                configJson = """
+                    {
+                      "device_id": "pos_123",
+                      "business_id": 7,
+                      "branch_code": "0000",
+                      "billing_point_code": "865"
+                    }
+                """.trimIndent()
+            )
+    }
+
+    private class FakePosDeviceProvisioningRepository : IPosDeviceProvisioningRepository {
+        val calls = mutableListOf<String>()
+
+        override suspend fun getPosConfig(deviceId: String, accessToken: String?): PosDeviceConfig {
+            calls += deviceId
+            return PosDeviceConfig(
+                deviceId = deviceId,
+                businessId = 7,
+                branchCode = "0000",
+                billingPointCode = "865",
+                status = "active",
+                permissions = PosDevicePermissions(deviceId = deviceId)
+            )
+        }
     }
 }

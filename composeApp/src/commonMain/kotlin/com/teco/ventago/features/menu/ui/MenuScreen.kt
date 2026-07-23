@@ -38,10 +38,15 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ColorFilter
+import androidx.compose.ui.graphics.painter.ColorPainter
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import coil3.compose.AsyncImage
+import coil3.compose.LocalPlatformContext
+import com.teco.ventago.AppDistribution
 import com.teco.ventago.core.authz.AuthzEvaluator
 import com.teco.ventago.core.authz.RouteKey
 import com.teco.ventago.core.beta.BetaFeature
@@ -52,15 +57,23 @@ import com.teco.ventago.design_system.theme.titleMediumBold
 import com.teco.ventago.features.auth.domain.IAuthService
 import com.teco.ventago.features.quotes.domain.QuoteSelectionStore
 import com.teco.ventago.navigation.PosScreens
+import com.teco.ventago.utils.getImageRequest
 import org.jetbrains.compose.resources.DrawableResource
 import org.jetbrains.compose.resources.painterResource
 import org.koin.compose.koinInject
 import ventago.composeapp.generated.resources.Res
 import ventago.composeapp.generated.resources.pos
 
+private const val H10_POS_IMAGE_URL = "https://ventago.b-cdn.net/app/h10pos.png"
+
 private sealed class QuickActionIcon {
     data class Vector(val imageVector: ImageVector) : QuickActionIcon()
     data class Drawable(val resource: DrawableResource) : QuickActionIcon()
+}
+
+private sealed class ModuleIcon {
+    data class Vector(val imageVector: ImageVector) : ModuleIcon()
+    data class Url(val url: String) : ModuleIcon()
 }
 
 private data class MenuEntry(
@@ -73,7 +86,7 @@ private data class MenuEntry(
 
 private data class ModuleMenuItem(
     val label: String,
-    val icon: ImageVector,
+    val icon: ModuleIcon,
     val destination: PosScreens,
     val routeKey: RouteKey,
 )
@@ -84,6 +97,7 @@ fun MenuScreen(
 ) {
     val authService = koinInject<IAuthService>()
     val betaService = koinInject<BetaService>()
+    val appDistribution = koinInject<AppDistribution>()
     val currentUser by authService.getUser().collectAsState(initial = null)
     val betaResponse by betaService.features().collectAsState()
     val betaSnapshot = remember(betaResponse) {
@@ -115,74 +129,104 @@ fun MenuScreen(
         )
     }
 
-    val quickActions = listOf(
-        MenuEntry(
-            label = "Nueva venta",
-            icon = QuickActionIcon.Drawable(Res.drawable.pos),
-            destination = PosScreens.POS,
-            routeKey = RouteKey.ORDERS_NEW
-        ),
-        quoteOrCustomerQuickAction,
-        MenuEntry(
-            label = "Registrar gasto",
-            icon = QuickActionIcon.Vector(Icons.Rounded.Receipt),
-            destination = PosScreens.NewExpenseScreen,
-            routeKey = RouteKey.EXPENSE_NEW
-        ),
-        MenuEntry(
-            label = "Agregar producto",
-            icon = QuickActionIcon.Vector(Icons.Rounded.Inventory2),
-            destination = PosScreens.AddItemScreen,
-            routeKey = RouteKey.PRODUCT_ADD
-        ),
-    ).filter { item ->
+    val quickActions = buildList {
+        add(
+            MenuEntry(
+                label = "Nueva venta",
+                icon = QuickActionIcon.Drawable(Res.drawable.pos),
+                destination = PosScreens.POS,
+                routeKey = RouteKey.ORDERS_NEW
+            )
+        )
+        add(quoteOrCustomerQuickAction)
+        add(
+            MenuEntry(
+                label = "Registrar gasto",
+                icon = QuickActionIcon.Vector(Icons.Rounded.Receipt),
+                destination = PosScreens.NewExpenseScreen,
+                routeKey = RouteKey.EXPENSE_NEW
+            )
+        )
+        add(
+            MenuEntry(
+                label = "Agregar producto",
+                icon = QuickActionIcon.Vector(Icons.Rounded.Inventory2),
+                destination = PosScreens.AddItemScreen,
+                routeKey = RouteKey.PRODUCT_ADD
+            )
+        )
+    }.filter { item ->
         AuthzEvaluator.canRoute(item.routeKey, currentUser, betaSnapshot)
     }
 
-    val modules = listOf(
-        ModuleMenuItem(
-            label = "Productos/servicios",
-            icon = Icons.Rounded.Inventory2,
-            destination = PosScreens.ProductsManage,
-            routeKey = RouteKey.PRODUCTS_LIST
-        ),
-        ModuleMenuItem(
-            label = "Clientes",
-            icon = Icons.Rounded.Person,
-            destination = PosScreens.CustomersManage,
-            routeKey = RouteKey.CUSTOMERS_LIST
-        ),
-        ModuleMenuItem(
-            label = "Cotizaciones",
-            icon = Icons.Rounded.Description,
-            destination = PosScreens.Quotes,
-            routeKey = RouteKey.QUOTES_LIST
-        ),
-        ModuleMenuItem(
-            label = "Ventas",
-            icon = Icons.Rounded.ReceiptLong,
-            destination = PosScreens.Orders,
-            routeKey = RouteKey.ORDERS_LIST
-        ),
-        ModuleMenuItem(
-            label = "Gastos",
-            icon = Icons.Rounded.Receipt,
-            destination = PosScreens.Expenses,
-            routeKey = RouteKey.EXPENSES_LIST
-        ),
-        ModuleMenuItem(
-            label = "Sucursales",
-            icon = Icons.Rounded.Business,
-            destination = PosScreens.Branches,
-            routeKey = RouteKey.SETTINGS_BRANCHES_OWNER
-        ),
-        ModuleMenuItem(
-            label = "Métodos de pago",
-            icon = Icons.Rounded.Payments,
-            destination = PosScreens.Payments,
-            routeKey = RouteKey.PAYMENTS_PAGE
-        ),
-    ).filter { item ->
+    val modules = buildList {
+        add(
+            ModuleMenuItem(
+                label = "Productos/servicios",
+                icon = ModuleIcon.Vector(Icons.Rounded.Inventory2),
+                destination = PosScreens.ProductsManage,
+                routeKey = RouteKey.PRODUCTS_LIST
+            )
+        )
+        add(
+            ModuleMenuItem(
+                label = "Clientes",
+                icon = ModuleIcon.Vector(Icons.Rounded.Person),
+                destination = PosScreens.CustomersManage,
+                routeKey = RouteKey.CUSTOMERS_LIST
+            )
+        )
+        add(
+            ModuleMenuItem(
+                label = "Cotizaciones",
+                icon = ModuleIcon.Vector(Icons.Rounded.Description),
+                destination = PosScreens.Quotes,
+                routeKey = RouteKey.QUOTES_LIST
+            )
+        )
+        add(
+            ModuleMenuItem(
+                label = "Ventas",
+                icon = ModuleIcon.Vector(Icons.Rounded.ReceiptLong),
+                destination = PosScreens.Orders,
+                routeKey = RouteKey.ORDERS_LIST
+            )
+        )
+        add(
+            ModuleMenuItem(
+                label = "Gastos",
+                icon = ModuleIcon.Vector(Icons.Rounded.Receipt),
+                destination = PosScreens.Expenses,
+                routeKey = RouteKey.EXPENSES_LIST
+            )
+        )
+        add(
+            ModuleMenuItem(
+                label = "Sucursales",
+                icon = ModuleIcon.Vector(Icons.Rounded.Business),
+                destination = PosScreens.Branches,
+                routeKey = RouteKey.SETTINGS_BRANCHES_OWNER
+            )
+        )
+        add(
+            ModuleMenuItem(
+                label = "Métodos de pago",
+                icon = ModuleIcon.Vector(Icons.Rounded.Payments),
+                destination = PosScreens.Payments,
+                routeKey = RouteKey.PAYMENTS_PAGE
+            )
+        )
+        if (!appDistribution.isPosBuild) {
+            add(
+                ModuleMenuItem(
+                    label = "Dispositivos POS",
+                    icon = ModuleIcon.Url(H10_POS_IMAGE_URL),
+                    destination = PosScreens.PosDevicesScreen,
+                    routeKey = RouteKey.SETTINGS_POS_DEVICES
+                )
+            )
+        }
+    }.filter { item ->
         AuthzEvaluator.canRoute(item.routeKey, currentUser, betaSnapshot)
     }
 
@@ -350,12 +394,7 @@ private fun ModuleCard(
             verticalArrangement = Arrangement.Center,
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            Icon(
-                imageVector = item.icon,
-                contentDescription = null,
-                tint = tint,
-                modifier = Modifier.size(30.dp)
-            )
+            ModuleIconView(icon = item.icon, tint = tint)
             Spacer(modifier = Modifier.height(10.dp))
             Text(
                 text = item.label,
@@ -365,5 +404,29 @@ private fun ModuleCard(
                 textAlign = TextAlign.Center
             )
         }
+    }
+}
+
+@Composable
+private fun ModuleIconView(
+    icon: ModuleIcon,
+    tint: Color,
+) {
+    when (icon) {
+        is ModuleIcon.Vector -> Icon(
+            imageVector = icon.imageVector,
+            contentDescription = null,
+            tint = tint,
+            modifier = Modifier.size(30.dp)
+        )
+
+        is ModuleIcon.Url -> AsyncImage(
+            model = getImageRequest(LocalPlatformContext.current, icon.url),
+            contentDescription = null,
+            placeholder = ColorPainter(Color.Transparent),
+            error = ColorPainter(Color.Transparent),
+            contentScale = ContentScale.Fit,
+            modifier = Modifier.size(38.dp)
+        )
     }
 }

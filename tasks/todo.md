@@ -1,3 +1,568 @@
+# Crashlytics Mapping Upload Automation TODO
+
+## Plan
+- [x] Explicitly wire public/POS release bundle tasks to their Crashlytics mapping upload tasks.
+- [x] Verify Gradle task graph includes mapping upload when building both release AABs.
+- [x] Record the Crashlytics vs Firestore distinction.
+
+## Verification Gates
+- [x] `./gradlew --no-build-cache --no-configuration-cache :androidApp:bundlePublicRelease :androidApp:bundlePosRelease --dry-run`
+- [x] `git diff --check -- androidApp/build.gradle.kts tasks/todo.md`
+
+## Review Notes
+- R8 mappings are uploaded to Firebase Crashlytics, not Firestore. Firestore does not deobfuscate crash reports.
+- `bundlePublicRelease` now explicitly finalizes with `uploadCrashlyticsMappingFilePublicRelease`.
+- `bundlePosRelease` now explicitly finalizes with `uploadCrashlyticsMappingFilePosRelease`.
+- Dry-run verification showed both upload tasks in the task graph after their matching AAB bundle tasks.
+
+# Epson R8 Preservation Fix TODO
+
+## Plan
+- [x] Inspect Epson SDK sample ProGuard rules and package contents.
+- [x] Broaden app keep rules to match Epson's official sample guidance.
+- [x] Build optimized release bundles to verify R8 accepts the updated rules.
+- [x] Record the runtime validation requirement for Epson discovery/printing.
+
+## Verification Gates
+- [x] `./gradlew --no-build-cache --no-configuration-cache :androidApp:bundlePublicRelease :androidApp:bundlePosRelease`
+- [x] `git diff --check -- androidApp/proguard-rules.pro tasks/todo.md tasks/lessons.md`
+
+## Review Notes
+- Epson SDK sample projects all use `-keep class com.epson.** { *; }` and `-dontwarn com.epson.**`.
+- The SDK jar includes native/JNI-facing packages outside `com.epson.epos2`, including `com.epson.epsonio`, `com.epson.eposdevice`, and `com.epson.eposprint`; preserving only `com.epson.epos2.**` can allow R8 to remove classes used from `libepos2.so`.
+- Updated app rules to preserve the full Epson namespace while leaving R8 enabled for the rest of the release app.
+- `:androidApp:bundlePublicRelease` and `:androidApp:bundlePosRelease` pass with the broadened Epson rules. Real-device validation still needs Epson printer discovery and a print job from the optimized public release build.
+
+# Android R8 Release Optimization TODO
+
+## Plan
+- [x] Confirm current Android release optimization settings and AGP behavior.
+- [x] Enable R8 optimization with conservative keep rules for external printer integration boundaries.
+- [x] Build public and POS release bundles to catch R8/resource shrink failures.
+- [x] Record verification result and remaining runtime risks.
+
+## Verification Gates
+- [x] `./gradlew --no-build-cache --no-configuration-cache :androidApp:bundlePublicRelease :androidApp:bundlePosRelease`
+- [x] `git diff --check -- androidApp/build.gradle.kts androidApp/proguard-rules.pro tasks/todo.md`
+
+## Review Notes
+- Enabled R8 for Android release builds with `isMinifyEnabled = true`, `isShrinkResources = true`, Android's default `proguard-android-optimize.txt`, and app-specific keep rules.
+- Added conservative keep rules for `com.epson.epos2.**` and `recieptservice.com.recieptservice.**` because those packages cross native SDK and external Binder/service boundaries.
+- `:androidApp:bundlePublicRelease` and `:androidApp:bundlePosRelease` passed with R8 enabled. Generated release AABs are in `androidApp/build/outputs/bundle/publicRelease` and `androidApp/build/outputs/bundle/posRelease`.
+- Remaining risk is runtime-only: install a release build and smoke-test login, navigation, API serialization, camera scanning, Firebase messaging/deep links, file sharing, Epson printing, and H10P POS printing before rollout.
+
+# Android Compile SDK 37 Resolution TODO
+
+## Plan
+- [x] Confirm where the Android compile SDK value is defined and which SDK platforms are installed locally.
+- [x] Change only the compile SDK catalog value to a Gradle-resolvable installed platform.
+- [x] Run Android/KMP compile verification and diff checks.
+
+## Verification Gates
+- [x] `./gradlew --no-build-cache --no-configuration-cache :composeApp:compileAndroidMain`
+- [x] `./gradlew --no-build-cache --no-configuration-cache :androidApp:processPublicDebugManifest`
+- [x] `git diff --check -- gradle/libs.versions.toml tasks/todo.md`
+
+## Review Notes
+- `android-compileSdk` now uses API 36, which is installed as a standard Gradle-resolvable platform at `/Users/oscar/Library/Android/sdk/platforms/android-36`.
+- The previous API 37 SDK is installed locally as `android-37.0`, while Gradle was resolving integer compile SDK 37 to `android-37`, causing `Could not find compile target android-37`.
+- `android-targetSdk` remains 37, and the generated app manifest still contains `android:targetSdkVersion="37"`.
+- `composeApp:compileAndroidMain` and `androidApp:processPublicDebugManifest` passed with existing warnings only.
+
+# POS Invoice Branch Selection Public App TODO
+
+## Plan
+- [x] Restore branch and billing-point selectors in POS invoice configuration.
+- [x] Keep selectors disabled only while POS provisioning is active.
+- [x] Guard provisioned branch/billing selection so it applies only when POS provisioning is active.
+- [x] Run common metadata compile and diff verification.
+
+## Verification Gates
+- [x] `./gradlew --no-build-cache --no-configuration-cache :composeApp:compileCommonMainKotlinMetadata`
+- [x] `git diff --check`
+
+## Review Notes
+- POS invoice configuration shows `Sucursal` and `Punto de facturación` selectors again.
+- Those selectors are disabled only when `uiState.posProvisioningActive` is true, so public/non-POS builds can choose branch and billing point.
+- Provisioned branch/billing selection now returns early unless provisioning is required and provisioned, and application also requires `posProvisioningActive`.
+- Common metadata compilation passed with existing project warnings, and `git diff --check` passed.
+
+# POS Devices Module Card Rollback TODO
+
+## Plan
+- [x] Move `Dispositivos POS` back from quick actions to module cards for non-POS builds.
+- [x] Restore URL-image support on module cards and remove it from quick-action icons.
+- [x] Run common metadata compile and diff verification.
+
+## Verification Gates
+- [x] `./gradlew --no-build-cache --no-configuration-cache :composeApp:compileCommonMainKotlinMetadata`
+- [x] `git diff --check`
+
+## Review Notes
+- `Dispositivos POS` is back in the modules grid for non-POS builds and remains guarded by `RouteKey.SETTINGS_POS_DEVICES`.
+- Module cards again support URL-backed icons, and the H10 POS image uses `https://ventago.b-cdn.net/app/h10pos.png`.
+- Quick actions are back to vector/drawable icons only.
+- Common metadata compilation passed with existing project warnings, and `git diff --check` passed.
+
+# POS Payment Preview Navigation Crash TODO
+
+## Plan
+- [x] Switch Payment preview app-bar action from generic route navigation to PosScreens enum navigation.
+- [x] Verify metadata compile and diff check.
+
+## Verification Gates
+- [x] `./gradlew --no-build-cache --no-configuration-cache :composeApp:compileCommonMainKotlinMetadata`
+- [x] `git diff --check`
+
+## Review Notes
+- The Payment app-bar preview action now uses the `PosScreens` navigation callback, matching enum-route navigation through `destination.name`.
+- This prevents Compose Navigation from trying to resolve the generic route type `PosScreens`.
+- Common metadata compilation passed with existing project warnings, and `git diff --check` passed.
+
+# POS Devices Quick Action TODO
+
+## Plan
+- [x] Move `Dispositivos POS` from modules into quick actions for non-POS builds.
+- [x] Render the H10 POS URL image in the quick action left-icon style with a larger size.
+- [x] Run common metadata compile and diff verification.
+
+## Verification Gates
+- [x] `./gradlew --no-build-cache --no-configuration-cache :composeApp:compileCommonMainKotlinMetadata`
+- [x] `git diff --check`
+
+## Review Notes
+- `Dispositivos POS` now appears in quick actions for non-POS builds, still guarded by `RouteKey.SETTINGS_POS_DEVICES`.
+- The H10 POS image is loaded from `https://ventago.b-cdn.net/app/h10pos.png` in the left-icon shortcut layout at a larger 52dp size.
+- Module cards are back to vector-only icons.
+- Common metadata compilation passed with existing project warnings, and `git diff --check` passed.
+
+# POS Payment Preview Action TODO
+
+## Plan
+- [x] Move invoice preview from payment option body buttons into the Payment screen top app bar.
+- [x] Remove duplicate manual-payment draft action when the standalone draft option is already available.
+- [x] Remove repeated preview outlined buttons from payment sections.
+- [x] Run common metadata compile and diff verification.
+
+## Verification Gates
+- [x] `./gradlew --no-build-cache --no-configuration-cache :composeApp:compileCommonMainKotlinMetadata`
+- [x] `git diff --check`
+
+## Review Notes
+- The Payment route now exposes invoice preview through a secondary-colored eye icon in the existing global top app bar.
+- Manual payment content no longer shows the extra "Guardar sin facturar" action; users use the standalone draft payment mode instead.
+- Payment link, Yappy onsite, and draft sections no longer render duplicate "Vista previa" outlined buttons.
+- Common metadata compilation passed with existing project warnings, and `git diff --check` passed.
+
+# POS Devices Menu Image Icon TODO
+
+## Plan
+- [x] Let menu module cards render URL image icons.
+- [x] Use the H10 POS image URL for the non-POS `Dispositivos POS` menu item.
+- [x] Run common metadata compile verification.
+
+## Verification Gates
+- [x] `./gradlew --no-build-cache --no-configuration-cache :composeApp:compileCommonMainKotlinMetadata`
+
+## Review Notes
+- Menu module items now support vector and URL-backed icons.
+- The non-POS `Dispositivos POS` menu card now uses `https://ventago.b-cdn.net/app/h10pos.png` instead of the generic print icon.
+- Common metadata compilation passed with existing project warnings.
+
+# POS Devices Menu Entry TODO
+
+## Plan
+- [x] Add POS devices module item on menu for non-POS builds.
+- [x] Ensure POS device route can make the app menu visible for scoped users.
+- [x] Run common metadata compile verification.
+
+## Verification Gates
+- [x] `./gradlew --no-build-cache --no-configuration-cache :composeApp:compileCommonMainKotlinMetadata`
+
+## Review Notes
+- Non-POS builds now show a `Dispositivos POS` module card in the menu when the user is authorized for `RouteKey.SETTINGS_POS_DEVICES`.
+- The app menu visibility check now includes the POS devices settings route, so scoped users can reach the menu entry.
+- Common metadata compilation passed with existing project warnings.
+
+# POS Devices Landing WhatsApp CTA TODO
+
+## Plan
+- [x] Replace no-device landing refresh CTA with WhatsApp availability contact.
+- [x] Run common metadata compile verification.
+
+## Verification Gates
+- [x] `./gradlew --no-build-cache --no-configuration-cache :composeApp:compileCommonMainKotlinMetadata`
+
+## Review Notes
+- The no-device POS landing CTA now opens WhatsApp to Ventago support with a prefilled H10 POS availability message.
+- Common metadata compilation passed with existing project warnings.
+
+# POS Devices UI Adjustments TODO
+
+## Plan
+- [x] Map branch and billing point codes to display names in POS device list/detail/edit UI.
+- [x] Move location access into the first detail card as a map icon and remove the standalone location card.
+- [x] Apply secondary color to POS device card titles/icons, rename telemetry to device data, and remove last reboot.
+- [x] Normalize active permission switch colors.
+- [x] Run common metadata compile verification.
+
+## Verification Gates
+- [x] `./gradlew --no-build-cache --no-configuration-cache :composeApp:compileCommonMainKotlinMetadata`
+
+## Review Notes
+- POS device list/detail/edit UI now displays branch and billing point names from active branch options instead of raw codes.
+- The standalone location card was removed; the detail header shows only a secondary-colored map/location icon when coordinates are available.
+- Section titles and POS device action icons now use the secondary color, telemetry was renamed to "Datos del dispositivo", and last reboot was removed.
+- Permission switches now use secondary/on-secondary active colors with neutral inactive colors.
+- Common metadata compilation passed with existing project warnings.
+
+# POS Device H10 Image TODO
+
+## Plan
+- [x] Replace generic POS device visuals with the H10 POS CDN image.
+- [x] Run common metadata compile verification.
+
+## Verification Gates
+- [x] `./gradlew --no-build-cache --no-configuration-cache :composeApp:compileCommonMainKotlinMetadata`
+
+## Review Notes
+- POS device landing, list rows, and details header now use the H10 POS CDN image at `https://ventago.b-cdn.net/app/h10pos.png`.
+- Common metadata compilation passed with existing project warnings.
+
+# POS Device Config Permissions TODO
+
+## Plan
+- [x] Add POS config contract/provider/repository/service flow for `GET /api/v1/devices/{deviceId}/pos-config`.
+- [x] Load POS config when a device details screen opens and merge branch, billing point, status, and permissions into selected device state.
+- [x] Show skeleton loading on the details screen while POS config is loading.
+- [x] Update focused contract tests and run verification gates.
+
+## Verification Gates
+- [x] `./gradlew --no-build-cache --no-configuration-cache :composeApp:compileCommonMainKotlinMetadata`
+- [x] Focused Android host test for `PosDevicesContractsTest`
+
+## Review Notes
+- Device permissions now load from `GET /api/v1/devices/{deviceId}/pos-config` when the POS device details route opens.
+- The returned POS config is merged into the selected device for branch code, billing point code, status, and permissions while preserving list telemetry.
+- The detail screen shows shimmer skeleton cards while config permissions are loading; permission editing remains disabled when config loading fails or omits permissions.
+- Common metadata compilation and focused POS contract tests passed with existing project warnings.
+
+# POS Devices Settings TODO
+
+## Plan
+- [x] Add POS device admin contracts, provider, repository, service, and DI wiring.
+- [x] Add `settings:modify_pos_devices` authz scope, route/action policies, settings entry, and navigation routes.
+- [x] Build POS devices active-list, no-device landing, detail, branch/billing edit sheet, map action, and permissions editor UI.
+- [x] Add focused validation/serialization/parsing tests where the existing test setup supports it.
+- [x] Run compile verification and record results.
+
+## Verification Gates
+- [x] `./gradlew --no-build-cache --no-configuration-cache :composeApp:compileCommonMainKotlinMetadata`
+- [x] `./gradlew --no-build-cache --no-configuration-cache :composeApp:compileAndroidMain`
+- [x] `./gradlew --no-build-cache --no-configuration-cache :composeApp:compileKotlinIosSimulatorArm64`
+- [x] Focused Android host tests: `PosDevicesContractsTest`, `AuthzEvaluatorTest`, and `AuthzNavigationTest`
+- [ ] Full `./gradlew --no-build-cache --no-configuration-cache :composeApp:testAndroidHostTest`
+
+## Review Notes
+- Added POS devices settings administration for active business devices, including no-device landing, active list, detail telemetry, Google Maps action, branch/billing bottom sheet, and permission switches.
+- Added API contracts for device listing, branch/billing update, and permission update with selected-business `X-Business-ID` and token-refresh retry through existing provider patterns.
+- Added `settings:modify_pos_devices` authorization across scope constants, route/action policy, settings visibility, and navigation route mapping.
+- Common metadata, Android main, iOS simulator compilation, focused POS contract tests, and focused authz tests passed with existing project warnings.
+- Full Android host tests still fail on two unrelated existing assertions: `CustomerModelsAndOrdersRequestTest.customerFormStateUsesFullForeignCountryCatalog` and `OrdersDetailsViewModelCxcTest.shouldShowRetryInvoiceButtonRequiresPaidPendingOrFailedInvoiceAndNotCancelled`.
+
+# POS Scanner Low Quality Camera TODO
+
+## Plan
+- [x] Add optional camera-preview scan controls for product barcode optimization without changing default scanner behavior.
+- [x] Restrict POS scanner detection to retail/product barcode formats.
+- [x] Tune POS scanner stability thresholds for faster low-quality-camera reads.
+- [x] Add Android tap-to-focus, center auto-focus, torch control, and mild default zoom.
+- [x] Add POS scanner torch UI.
+- [x] Run common, Android, and iOS compile verification and record results.
+
+## Verification Gates
+- [x] `./gradlew --no-build-cache --no-configuration-cache :composeApp:compileCommonMainKotlinMetadata :composeApp:compileAndroidMain :composeApp:compileKotlinIosSimulatorArm64`
+
+## Review Notes
+- Added optional scanner controls to `CameraPreview` with defaults that preserve existing scanner behavior, including opt-in tap-to-focus.
+- POS scanner mode now opts into retail/product barcode formats, faster stability thresholds, center auto-focus, tap-to-focus, torch control, and a 1.4x default zoom on Android.
+- Android CameraX applies torch updates without remounting the preview and keeps continuous scanning active.
+- iOS actual was updated only to match the KMP signature; the requested POS optimizations remain Android-focused.
+- Common metadata, Android main, and iOS simulator compilation passed. Existing project warnings remain unrelated.
+
+# POS Scanner Android Preview Clip TODO
+
+## Plan
+- [x] Identify why the camera image can expand below the half-screen scanner region while Compose overlays stay fixed.
+- [x] Force Android CameraX preview into a clip-friendly implementation.
+- [x] Add explicit Compose clipping to the scanner camera half.
+- [x] Run Android-focused compile verification and record results.
+
+## Verification Gates
+- [x] `./gradlew --no-build-cache --no-configuration-cache :composeApp:compileCommonMainKotlinMetadata :composeApp:compileAndroidMain`
+
+## Review Notes
+- Android CameraX `PreviewView` now uses `ImplementationMode.COMPATIBLE` so it respects embedded Compose layout clipping instead of drawing below the scanner half after the surface initializes.
+- The POS scanner camera container and preview modifier now use explicit `clipToBounds()` while preserving the 50/50 camera/products layout.
+- Common metadata and Android main compilation passed. Existing project warnings remain unrelated.
+
+# POS Flavor Settings And Success Reprint TODO
+
+## Plan
+- [x] Hide the printer settings entry in POS builds while preserving it for public builds.
+- [x] Add POS success-screen ticket reprint state/action using the existing printer service.
+- [x] Add the success-screen reprint button only when a POS issued order can be reprinted.
+- [x] Run focused compile verification and record results.
+
+## Verification Gates
+- [x] `./gradlew --no-build-cache --no-configuration-cache :composeApp:compileCommonMainKotlinMetadata`
+- [x] `./gradlew --no-build-cache --no-configuration-cache :androidApp:assemblePosDebug`
+
+## Review Notes
+- POS builds hide the "Impresoras térmicas" settings entry; public builds keep the existing settings/onboarding navigation.
+- The POS success screen now shows "Reimprimir ticket" only for POS builds with an issued order id/order number.
+- Reprint fetches the order ticket through `PrinterService`, resolves the selected branch/billing point printer, shows loading/disabled state, and reports success/failure through the existing snackbar pattern.
+- Common metadata compilation and POS debug assembly passed. Existing project warnings remain unrelated.
+
+# POS Scanner Half Layout TODO
+
+## Plan
+- [x] Replace scanner camera/status weights with explicit 50/50 heights from the available viewport.
+- [x] Keep the existing route bottom cart button as the only cart CTA.
+- [x] Show scanner status and products being added in the lower half.
+- [x] Run Kotlin metadata compile verification and record results.
+
+## Verification Gates
+- [x] `./gradlew --no-build-cache --no-configuration-cache :composeApp:compileCommonMainKotlinMetadata`
+
+## Review Notes
+- Scanner mode now uses `BoxWithConstraints` and explicit `maxHeight / 2` heights for camera and lower activity panel.
+- The lower half shows scanner status/current scanned product plus a scrollable list of products already added to cart.
+- The scanner screen still does not render an extra cart CTA; it relies on the existing POS bottom cart button.
+- Common metadata compilation passed. Existing project warnings remain unrelated.
+
+# POS Scanner Multi Scan TODO
+
+## Plan
+- [x] Add a camera preview continuous-scanning option without changing existing one-shot scanner screens.
+- [x] Use continuous mode from POS scanner mode so different products and repeat same-barcode products can scan in one camera session.
+- [x] Keep duplicate protection scoped to POS scanner UI.
+- [x] Run Kotlin metadata, Android main, and iOS simulator compile verification and record results.
+
+## Verification Gates
+- [x] `./gradlew --no-build-cache --no-configuration-cache :composeApp:compileCommonMainKotlinMetadata`
+- [x] `./gradlew --no-build-cache --no-configuration-cache :composeApp:compileAndroidMain`
+- [x] `./gradlew --no-build-cache --no-configuration-cache :composeApp:compileKotlinIosSimulatorArm64`
+
+## Review Notes
+- `CameraPreview` now supports `singleShot`, defaulting to `true` so existing scanner screens keep one-shot behavior.
+- POS scanner mode passes `singleShot = false`, so the camera analyzer keeps emitting scans without remounting the preview.
+- Android `StableBarcodeAnalyzer` no longer sets `handled = true` in continuous mode and uses a short same-value cooldown instead.
+- iOS `CameraCoordinator` uses the same continuous-mode cooldown and no longer stops the session for POS scans.
+- POS UI same-barcode cooldown was lowered to 500 ms so a second unit with the same barcode is accepted promptly.
+- Common metadata, Android main, and iOS simulator Kotlin compilation passed. Existing project warnings remain unrelated.
+
+# POS Order Recovery Same Flow TODO
+
+## Plan
+- [x] Trace POS checkpoint restore prompt and product-back navigation behavior.
+- [x] Prevent restore prompt when the current POS ViewModel already has active invoice/order data.
+- [x] Run Kotlin metadata compile verification and record results.
+
+## Verification Gates
+- [x] `./gradlew --no-build-cache --no-configuration-cache :composeApp:compileCommonMainKotlinMetadata`
+
+## Review Notes
+- `checkOrderCreationCheckpointForRestore()` now skips recovery when current in-memory POS state already has meaningful user data.
+- Back navigation from products to invoice/customer information stays inside the same invoice session and no longer shows the restore dialog.
+- Fresh entries with no in-memory order data can still restore a persisted checkpoint after an interruption.
+- Common metadata compilation passed. Existing project warnings remain unrelated.
+
+# POS Product Search Barcode SKU TODO
+
+## Plan
+- [x] Extend POS product query matching to include product barcode.
+- [x] Extend POS product query matching to include product SKU.
+- [x] Run Kotlin metadata compile verification and record results.
+
+## Verification Gates
+- [x] `./gradlew --no-build-cache --no-configuration-cache :composeApp:compileCommonMainKotlinMetadata`
+
+## Review Notes
+- POS product search now matches name, description, barcode, and SKU.
+- Barcode and SKU checks are nullable-safe and use the same case-insensitive partial matching as name search.
+- Existing product category filtering remains unchanged.
+- Common metadata compilation passed. Existing project warnings remain unrelated.
+
+# POS Barcode Scanner Continuous Add TODO
+
+## Plan
+- [x] Remove duplicated scanner-mode cart CTA and keep only the bottom cart button.
+- [x] Remove the bottom close scanner action and keep the top X close control.
+- [x] Add scanned products to the cart immediately and make the product card cancel action undo one scanned unit.
+- [x] Keep the camera mounted continuously after successful scans instead of restarting scanner mode.
+- [x] Run Kotlin metadata compile verification and record results.
+
+## Verification Gates
+- [x] `./gradlew --no-build-cache --no-configuration-cache :composeApp:compileCommonMainKotlinMetadata`
+
+## Review Notes
+- Scanner mode no longer renders its own cart CTA; the existing POS bottom cart button remains the only cart action.
+- Scanner mode no longer renders the bottom "Cerrar scanner" button; the camera overlay X is the only close action.
+- A valid barcode now beeps and immediately adds one unit to cart through the existing `addItemToCart` path.
+- The scanned-product card now acts as an undo/cancel surface and removes one scanned unit through the matching cart path.
+- Successful scans no longer remount `CameraPreview`; a short same-barcode cooldown prevents duplicate callbacks while keeping different barcode scans immediate.
+- Common metadata compilation passed. Existing project warnings remain unrelated.
+
+# Guided POS Customer Creation TODO
+
+## Plan
+- [x] Add guided-flow state and ViewModel transitions for invoicing-enabled POS customer creation.
+- [x] Replace the full POS add-customer form with type, main info, and optional info steps.
+- [x] Include tax exempt/retention payload fields and domestic default address behavior.
+- [x] Apply guided create flow to clients-list customer creation.
+- [x] Remove initial customer type preselection and use secondary colors for selected type cards.
+- [x] Apply foreign/local customer UI follow-ups across creation, POS customer info, and details.
+- [x] Run compile verification and record results.
+
+## Verification Gates
+- [x] `./gradlew --no-build-cache --no-configuration-cache :composeApp:compileCommonMainKotlinMetadata`
+
+## Review Notes
+- Replaced only the invoicing-enabled POS add-customer path with a guided three-step flow.
+- Customer type cards advance into type-specific required fields; returning to step 1 preserves and highlights the selected type.
+- Domestic customer type selection defaults address to `PANAMA / PANAMA / BELLA VISTA` with address line `Panama`; foreign customers hide address UI and send address/location fields as `null`.
+- Creation now includes ITBMS exempt and tax retention fields using `CustomerTaxRetentionCatalog`.
+- Clients-list customer creation now uses the same guided create flow; edit mode keeps the existing edit form.
+- Customer type cards no longer preselect Final Consumer on first open and use secondary/secondaryContainer for the selected state.
+- Customer type cards now use `vanishedBackgroundColor()` as the selected background in both POS and clients-list add flows.
+- Foreign customer country dropdowns now exclude Panama and default to Colombia in guided creation and POS final-customer information.
+- Customer creation RUC inputs now uppercase typed letters before validation/fetching.
+- Customer details now hides billing addresses for foreign customers, removes the always-active status badge/status row, and suppresses taxpayer type for foreign/final-consumer FE types.
+- Common metadata compilation passed. Existing project warnings remain unrelated.
+- No focused `AddCustomerViewModel` tests were added because the repo has only validator coverage for this flow and no existing ViewModel fake harness for the required services.
+
+# Customer Details Billing Address Selector TODO
+
+## Plan
+- [x] Replace raw billing-address location code entry with province/district/corregimiento selectors.
+- [x] Prefill selectors when editing an existing billing address and derive `location_code` from `PanamaLocations`.
+- [x] Align the default billing-address badge with the trailing action area.
+- [x] Run common metadata compile verification.
+- [x] Record review notes and correction lesson.
+
+## Verification Gates
+- [x] `./gradlew --no-build-cache --no-configuration-cache :composeApp:compileCommonMainKotlinMetadata`
+
+## Review Notes
+- Billing address add/edit no longer asks the user to type `location_code`.
+- The sheet now uses province, district, and corregimiento dropdowns backed by `PanamaLocations`.
+- New addresses default to `PANAMA / PANAMA / BELLA VISTA`; edited addresses prefill from address province/district/corregimiento, with `location_code` fallback when names are missing.
+- Submit derives `location_code` via `PanamaLocations.codeFor(...)` before calling the existing create/update address ViewModel methods.
+- Billing-address default badges now render in the right-side action column above edit/delete icons.
+- Common metadata compilation passed. Existing project warnings remain unrelated.
+
+# POS Provisioning Login TODO
+
+## Plan
+- [x] Add POS device provisioning models, provider, repository, and service.
+- [x] Add Android ordered-broadcast agent reader with no-op behavior outside POS builds.
+- [x] Enforce POS provisioning during email/Google login and app bootstrap refreshes.
+- [x] Refresh POS device config after financial profile refreshes without publishing extra invalidations.
+- [x] Apply fixed branch/billing point and restrictive POS device permissions in POS flows.
+- [x] Filter POS order list requests by provisioned branch and billing point.
+- [x] Prevent POS provisioning bootstrap from publishing a transient invalid state before backend config validation finishes.
+- [x] Refresh expired cached access tokens before POS provisioning revalidation.
+- [x] Add focused tests and run verification gates.
+- [x] Pass the login JWT to the authenticated POS config endpoint.
+
+## Verification Gates
+- [x] `./gradlew --no-build-cache --no-configuration-cache :composeApp:compileCommonMainKotlinMetadata`
+- [x] `./gradlew --no-build-cache --no-configuration-cache :androidApp:assemblePosDebug`
+- [x] `./gradlew --no-build-cache --no-configuration-cache :androidApp:assemblePublicDebug`
+- [x] `./gradlew --no-build-cache --no-configuration-cache :composeApp:compileKotlinIosSimulatorArm64`
+- [ ] `./gradlew --no-build-cache --no-configuration-cache :composeApp:testAndroidHostTest --tests com.teco.ventago.features.pos.provisioning.PosDeviceProvisioningTest --tests com.teco.ventago.core.authz.AuthzEvaluatorTest --tests com.teco.ventago.features.financialProfile.FinancialProfileServiceTest` blocked by pre-existing unrelated `AuthzNavigationTest.kt:45` unresolved `PRODUCTS`.
+- [ ] `./gradlew --no-build-cache --no-configuration-cache :composeApp:testAndroidHostTest --tests com.teco.ventago.features.orders.ListOrdersRequestTest --tests com.teco.ventago.features.orders.OrderServiceProvisioningTest` blocked by pre-existing unrelated `AuthzNavigationTest.kt:45` unresolved `PRODUCTS`.
+
+## Review Notes
+- POS provisioning now reads the VentaGo Pos Agent ordered broadcast on Android and keeps public/iOS behavior as no-op via DI.
+- POS login validates the agent config, authenticated business, authenticated `/api/v1/devices/{deviceId}/pos-config` response, active status, and branch/billing match before persisting Firebase/tokens/cache.
+- POS config fetch now sends `Authorization: Bearer <login access token>` because the backend returns `AUTH_001` without the JWT; cached-session validation also forwards the stored JWT.
+- POS login now shows a support-contact message when no usable provisioning data is found, without opening an external app.
+- Cached POS sessions are revalidated on startup; provisioning invalidation after a financial profile refresh forces sign-out and clears in-memory business/product/profile/customer/branch state.
+- POS sale flow now uses the provisioned branch and billing point over the persisted local selection, reapplies it after reset, and disables branch/billing dropdown changes while active.
+- POS invoice configuration no longer renders branch or billing point dropdown selectors; fixed provisioned values remain applied by the ViewModel.
+- POS device payment permissions now decode and restrict `payment_yappy_onsite`, `payment_link`, and `payment_manual_methods`, hiding the corresponding POS payment actions and guarding ViewModel command paths.
+- POS order list requests now send `branch_code` and `billing_point_code` from active provisioning; POS builds without valid provisioning fail closed by returning no orders instead of making an unscoped list request.
+- POS provisioning validation no longer emits `agentConfig` with `valid=false` while the backend config request is still pending, preventing the app bootstrap observer from signing out a remembered user during cold start.
+- Cached-session POS revalidation now refreshes an expired access token before calling `/pos-config`, so normal JWT expiry does not force logout when a refresh token is still valid.
+- Device permissions now restrict existing JWT/authz permissions for products, customers, quotes, expenses, reports, and payment configuration without granting access by themselves.
+- Focused tests were added for provisioning parsing/validation, financial-profile-triggered POS refresh, POS authz restriction gate, order request serialization, and POS order-service filtering; Android host tests cannot run until the unrelated existing `AuthzNavigationTest.kt` compile error is fixed.
+
+# POS Barcode Scanner Mode TODO
+
+## Plan
+- [x] Trace current POS product search, scanner, cart, toast, and sound patterns.
+- [x] Add scanner entry point to the product search bar.
+- [x] Build POS scanner mode with half-screen camera, product pending panel, cancel/auto-add behavior, cart CTA, and close CTA.
+- [x] Add successful-scan beep feedback and product-not-found feedback.
+- [x] Verify common metadata compilation and update review notes.
+
+## Verification Gates
+- [x] `./gradlew --no-build-cache --no-configuration-cache :composeApp:compileCommonMainKotlinMetadata`
+- [x] `./gradlew --no-build-cache --no-configuration-cache :composeApp:compileAndroidMain`
+- [x] `./gradlew --no-build-cache --no-configuration-cache :composeApp:compileKotlinIosSimulatorArm64`
+
+## Review Notes
+- Added a QR/barcode scanner icon to the POS product search field.
+- Scanner mode requests camera permission, then shows a 50/50 camera/product-action layout.
+- Successful barcode matches play a beep and show the scanned product with a cancel action; if not canceled within 3 seconds, the item is added through the existing POS cart path.
+- Missing barcodes do not beep and show `Producto no encontrado`.
+- Scanner mode includes the existing-style cart CTA with line count and legal/tax-aware total, plus a close scanner action.
+- Common metadata, Android main, and iOS simulator Kotlin compilation passed. Existing project warnings remain unrelated.
+
+# POS Home Dashboard Cleanup TODO
+
+## Plan
+- [x] Gate Home invoice plan card behind non-POS distribution.
+- [x] Gate Home sales graph behind non-POS distribution.
+- [x] Run common compile verification and record results.
+
+## Verification Gates
+- [x] `./gradlew --no-build-cache --no-configuration-cache :composeApp:compileCommonMainKotlinMetadata`
+
+## Review Notes
+- POS builds now hide the invoice folio/plan card on Home.
+- POS builds now hide the Home sales range selector and line chart.
+- Public/non-POS builds keep the existing invoice plan and sales chart behavior.
+- Common metadata compilation passed. Existing project warnings remain unrelated.
+
+# POS Flavor H10P Printer Integration TODO
+
+## Plan
+- [x] Add Android `public` and `pos` product flavors with distinct app ids and build flags.
+- [x] Add POS-only H10P printer module and SDK AIDL wiring.
+- [x] Move Android printer DI to flavor-specific app modules.
+- [x] Implement H10P internal printer engine behind existing `PrinterEngine`.
+- [x] Update shared printer resolution so POS builds can use an internal printer without network endpoint config.
+- [x] Run public/POS build verification and dependency checks.
+- [x] Record review notes.
+
+## Verification Gates
+- [x] `./gradlew --no-build-cache --no-configuration-cache :androidApp:assemblePublicDebug`
+- [x] `./gradlew --no-build-cache --no-configuration-cache :androidApp:bundlePublicRelease`
+- [x] `./gradlew --no-build-cache --no-configuration-cache :androidApp:assemblePosDebug`
+- [x] `./gradlew --no-build-cache --no-configuration-cache :androidApp:bundlePosRelease`
+
+## Review Notes
+- Added `public` and `pos` Android flavors. Generated BuildConfig confirms public uses `com.teco.ventago` with `IS_POS_BUILD=false`; POS uses `com.teco.ventago.pos` with `IS_POS_BUILD=true`.
+- Added `:printer-h10p` as a POS-only Android library with SDK AIDL stubs and `H10pPrinterEngine`.
+- Public Android DI now binds the existing Epson engine/discovery; POS DI binds the H10P internal printer engine and unsupported discovery.
+- `PrinterService` now synthesizes an active `h10p_internal` printer only for POS builds when no backend printer exists for the selected branch/billing point.
+- Printer onboarding in POS builds skips network discovery/IP entry and saves/tests the internal printer config.
+- Runtime dependency checks confirmed public release includes `:composeApp` but not `:printer-h10p`; POS release includes `:printer-h10p`.
+- AABs were generated at `androidApp/build/outputs/bundle/publicRelease/androidApp-public-release.aab` and `androidApp/build/outputs/bundle/posRelease/androidApp-pos-release.aab`.
+
 # Order Detail Paid Payment Link Invoice Action TODO
 
 ## Plan

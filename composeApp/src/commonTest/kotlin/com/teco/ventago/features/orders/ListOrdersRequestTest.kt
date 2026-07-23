@@ -35,5 +35,23 @@ class ListOrdersRequestTest {
         assertFalse(encoded.containsKey("order_type"))
         assertFalse(encoded.containsKey("customer_ruc"))
         assertFalse(encoded.containsKey("customer_id"))
+        assertFalse(encoded.containsKey("branch_code"))
+        assertFalse(encoded.containsKey("billing_point_code"))
+    }
+
+    @Test
+    fun provisionedPosRequestIncludesExplicitFirestoreFilters() {
+        val request = ListOrdersRequest(
+            businessId = 4,
+            page = 1,
+            pageSize = 10,
+            branchCode = "0000",
+            billingPointCode = "865"
+        )
+
+        val encoded = Json.parseToJsonElement(request.toApiJsonString()).jsonObject
+
+        assertEquals("0000", encoded["branch_code"]?.jsonPrimitive?.content)
+        assertEquals("865", encoded["billing_point_code"]?.jsonPrimitive?.content)
     }
 }

@@ -8,10 +8,12 @@ import com.teco.ventago.core.logger.Log
 import com.teco.ventago.core.logger.LogLevel
 import com.teco.ventago.features.customers.domain.CustomerService
 import com.teco.ventago.features.customers.domain.models.Customer
+import com.teco.ventago.features.customers.domain.models.CustomerTaxRetentionCatalog
 import com.teco.ventago.features.customers.ui.form.viewmodel.CustomerCountries
 import com.teco.ventago.features.financialProfile.domain.FinancialProfileService
 import com.teco.ventago.features.invoicing.domain.TaxPayerType
 import com.teco.ventago.features.invoicing.domain.models.FeCustomerType
+import com.teco.ventago.features.invoicing.domain.models.rucNeeded
 import com.teco.ventago.utils.DuplicateCustomerException
 import com.teco.ventago.utils.InvalidRucException
 import com.teco.ventago.utils.isValidPanamaCedula
@@ -52,7 +54,7 @@ class AddCustomerViewModel(
     fun loadCountryList() {
         val countries = CustomerCountries.options.map { option ->
             CountryOption(option.code, option.name)
-        }
+        }.filterNot { it.code == "PA" }
 
         updateState { copy(countryOptions = countries) }
     }
@@ -64,6 +66,82 @@ class AddCustomerViewModel(
                 validationMessage = null,
             )
         }
+    }
+
+    fun onStepBack() {
+        updateState {
+            copy(
+                currentStep = when (currentStep) {
+                    AddCustomerStep.TYPE -> AddCustomerStep.TYPE
+                    AddCustomerStep.MAIN_INFO -> AddCustomerStep.TYPE
+                    AddCustomerStep.OPTIONAL_INFO -> AddCustomerStep.MAIN_INFO
+                },
+                validationMessage = null,
+            )
+        }
+    }
+
+    fun onCustomerTypeSelected(customerType: FeCustomerType) {
+        onCustomerTypeChange(customerType)
+        updateState { copy(currentStep = AddCustomerStep.MAIN_INFO) }
+    }
+
+    fun goToOptionalInfo() {
+        val state = uiState.value
+        val nameError = if (state.name.isBlank() && !state.customerType.rucNeeded()) {
+            "El nombre es requerido"
+        } else {
+            null
+        }
+        val rucError = if (state.customerType.rucNeeded() && state.ruc.isBlank()) {
+            "El RUC es requerido"
+        } else {
+            null
+        }
+        val foreignIdNumberError = if (
+            state.customerType == FeCustomerType.FOREIGNER && state.foreignIdNumber.isNullOrBlank()
+        ) {
+            "El documento es requerido"
+        } else {
+            null
+        }
+        val normalizedCedula = normalizePanamaCedula(state.cfCedula.orEmpty())
+        val cedulaError = getCedulaValidationError(
+            customerType = state.customerType,
+            cedula = normalizedCedula
+        )
+
+        if (listOf(nameError, rucError, foreignIdNumberError, cedulaError).any { it != null }) {
+            updateState {
+                copy(
+                    nameError = nameError,
+                    rucError = rucError,
+                    foreignIdNumberError = foreignIdNumberError,
+                    cfCedula = normalizedCedula,
+                    cfCedulaError = cedulaError,
+                    validationMessage = "Revisa los campos marcados en rojo para continuar.",
+                )
+            }
+            return
+        }
+
+        updateState {
+            copy(
+                nameError = null,
+                rucError = null,
+                foreignIdNumberError = null,
+                cfCedula = normalizedCedula,
+                cfCedulaError = null,
+                validationMessage = null,
+            )
+        }
+
+        if (state.customerType.rucNeeded() && (state.legalName.isNullOrBlank() || state.rucCheckDigit.isNullOrBlank())) {
+            validateRucAndAdvance()
+            return
+        }
+
+        updateState { copy(currentStep = AddCustomerStep.OPTIONAL_INFO) }
     }
 
 
@@ -129,7 +207,10 @@ class AddCustomerViewModel(
         updateState {
             copy(
                 customerType = customerType,
+                customerTypeSelected = true,
                 ruc = "",
+                rucError = null,
+                rucCheckDigit = "",
                 legalName = "",
                 name = "",
                 nameError = null,
@@ -137,17 +218,38 @@ class AddCustomerViewModel(
                 provinceError = null,
                 districtError = null,
                 corregimientoError = null,
+                selectedProvince = if (customerType == FeCustomerType.FOREIGNER) null else DEFAULT_CUSTOMER_PROVINCE,
+                selectedDistrict = if (customerType == FeCustomerType.FOREIGNER) null else DEFAULT_CUSTOMER_DISTRICT,
+                selectedCorreg = if (customerType == FeCustomerType.FOREIGNER) null else DEFAULT_CUSTOMER_CORREGIMIENTO,
+                districtOptions = if (customerType == FeCustomerType.FOREIGNER) {
+                    emptyList()
+                } else {
+                    PanamaLocations.districts(DEFAULT_CUSTOMER_PROVINCE)
+                },
+                corregOptions = if (customerType == FeCustomerType.FOREIGNER) {
+                    emptyList()
+                } else {
+                    PanamaLocations.corregimientos(DEFAULT_CUSTOMER_PROVINCE, DEFAULT_CUSTOMER_DISTRICT)
+                },
+                addressLine = if (customerType == FeCustomerType.FOREIGNER) null else DEFAULT_CUSTOMER_ADDRESS_LINE,
+                addressExpanded = false,
                 cfCedula = "",
                 cfCedulaError = null,
+                foreignIdNumber = "",
+                foreignIdNumberError = null,
+                selectedForeignIdType = ForeignIdType.PASSPORT,
+                selectedCountryCode = DEFAULT_FOREIGN_CUSTOMER_COUNTRY,
                 validationMessage = null,
             )
         }
     }
 
     fun onTaxIdChange(taxId: String) {
+        val normalizedTaxId = taxId.uppercase()
         updateState {
             copy(
-                ruc = taxId,
+                ruc = normalizedTaxId,
+                rucError = null,
                 validationMessage = null,
             )
         }
@@ -157,6 +259,7 @@ class AddCustomerViewModel(
                     legalName = "",
                     rucCheckDigit = "",
                     name = "",
+                    rucError = null,
                     validationMessage = null,
                 )
             }
@@ -178,7 +281,7 @@ class AddCustomerViewModel(
     }
 
     fun onForeignIdNumberChange(value: String) {
-        updateState { copy(foreignIdNumber = value, validationMessage = null) }
+        updateState { copy(foreignIdNumber = value, foreignIdNumberError = null, validationMessage = null) }
     }
 
     fun onCedulaChanges(cedula: String) {
@@ -220,10 +323,69 @@ class AddCustomerViewModel(
         updateState { copy(tags = tags, validationMessage = null) }
     }
 
+    fun toggleAddressExpanded() {
+        updateState { copy(addressExpanded = !addressExpanded) }
+    }
+
+    fun onTaxExemptChange(value: Boolean) {
+        updateState { copy(taxExempt = value, validationMessage = null) }
+    }
+
+    fun taxRetentionLabels(): List<String> = CustomerTaxRetentionCatalog.options.map { it.label }
+
+    fun selectedTaxRetentionIndex(): Int =
+        CustomerTaxRetentionCatalog.indexOfCode(uiState.value.taxRetentionCode)
+
+    fun onTaxRetentionSelected(index: Int) {
+        val option = CustomerTaxRetentionCatalog.options.getOrNull(index)
+            ?: CustomerTaxRetentionCatalog.options.first()
+        updateState {
+            val previousCode = CustomerTaxRetentionCatalog.normalizeCode(taxRetentionCode)
+            val nextPercent = when {
+                option.code.isEmpty() -> ""
+                option.defaultRate != null -> option.defaultRate.toString()
+                option.code == "8" && previousCode == "8" -> taxRetentionPercent
+                else -> ""
+            }
+            copy(
+                taxRetentionCode = option.code,
+                taxRetentionPercent = nextPercent,
+                taxRetentionPercentError = null,
+                validationMessage = null,
+            )
+        }
+    }
+
+    fun onTaxRetentionPercentChange(value: String) {
+        val filtered = value.filter { it.isDigit() }.take(3)
+        val normalized = when {
+            filtered.isEmpty() -> ""
+            (filtered.toIntOrNull() ?: 0) > 100 -> "100"
+            else -> filtered
+        }
+        updateState {
+            copy(
+                taxRetentionPercent = normalized,
+                taxRetentionPercentError = null,
+                validationMessage = null,
+            )
+        }
+    }
+
+    fun selectedTaxRetentionRequiresManualPercent(): Boolean {
+        return CustomerTaxRetentionCatalog.normalizeCode(uiState.value.taxRetentionCode) == "8"
+    }
+
 
     fun validateRUC() {
         val state = uiState.value
         if (state.ruc.isBlank() || state.ruc.length < 5 || businessId == -1) {
+            updateState {
+                copy(
+                    rucError = "Ingresa un RUC valido",
+                    validationMessage = "Revisa los campos marcados en rojo para continuar.",
+                )
+            }
             return
         }
         val businessId = businessId
@@ -236,6 +398,8 @@ class AddCustomerViewModel(
                         rucCheckDigit = response.dv,
                         legalName = response.legalName,
                         name = response.legalName,
+                        rucError = null,
+                        validationMessage = null,
                     )
                 }
                 showSuccess()
@@ -249,6 +413,58 @@ class AddCustomerViewModel(
                     )
                 )
                 showError()
+                updateState {
+                    copy(
+                        rucError = "No se pudo validar el RUC",
+                        validationMessage = "Verifica el RUC e intentalo nuevamente.",
+                    )
+                }
+            }
+        }
+    }
+
+    private fun validateRucAndAdvance() {
+        val state = uiState.value
+        if (state.ruc.isBlank() || state.ruc.length < 5 || businessId == -1) {
+            updateState {
+                copy(
+                    rucError = "Ingresa un RUC valido",
+                    validationMessage = "Revisa los campos marcados en rojo para continuar.",
+                )
+            }
+            return
+        }
+        val businessId = businessId
+        showLoading()
+        viewModelScope.launch(Dispatchers.IO) {
+            try {
+                val response = customerService.validateRUC(state.ruc, businessId)
+                updateState {
+                    copy(
+                        rucCheckDigit = response.dv,
+                        legalName = response.legalName,
+                        name = response.legalName,
+                        rucError = null,
+                        validationMessage = null,
+                        currentStep = AddCustomerStep.OPTIONAL_INFO,
+                    )
+                }
+                showSuccess()
+            } catch (e: Exception) {
+                logger.sendLog(
+                    Log(
+                        level = LogLevel.ERROR,
+                        flow = "AddClientViewModel::validateRucAndAdvance",
+                        message = "Error validating RUC before advancing. Error: ${e.message ?: "UNKNOWN"}"
+                    )
+                )
+                showError()
+                updateState {
+                    copy(
+                        rucError = "No se pudo validar el RUC",
+                        validationMessage = "Verifica el RUC e intentalo nuevamente.",
+                    )
+                }
             }
         }
     }
@@ -279,6 +495,7 @@ class AddCustomerViewModel(
             copy(
                 cfCedula = normalizedCedula,
                 cfCedulaError = null,
+                taxRetentionPercentError = null,
                 validationMessage = null,
                 errorMessage = null,
             )
@@ -292,6 +509,20 @@ class AddCustomerViewModel(
                 foreignIdType = state.selectedForeignIdType.code
             }
 
+            val retentionCode = CustomerTaxRetentionCatalog.normalizeCode(state.taxRetentionCode)
+            val retentionCodeInt = retentionCode.toIntOrNull()
+            val retentionPercent = resolveRetentionPercent(state)
+            val isForeign = state.customerType == FeCustomerType.FOREIGNER
+            val locationCode = if (isForeign) {
+                null
+            } else {
+                PanamaLocations.codeFor(
+                    state.selectedProvince,
+                    state.selectedDistrict,
+                    state.selectedCorreg
+                )
+            }
+
             val customer = Customer(
                 id = -1,
                 name = state.name,
@@ -303,23 +534,22 @@ class AddCustomerViewModel(
                 tags = state.tags.filter { it.isNotBlank() },
                 customerType = state.customerType,
                 taxPayerType = state.taxPayerType,
-                addressLine = state.addressLine?.ifBlank { null },
-                province = state.selectedProvince,
-                district = state.selectedDistrict,
-                corregimiento = state.selectedCorreg,
+                addressLine = if (isForeign) null else state.addressLine?.ifBlank { null },
+                province = if (isForeign) null else state.selectedProvince,
+                district = if (isForeign) null else state.selectedDistrict,
+                corregimiento = if (isForeign) null else state.selectedCorreg,
                 foreignIdType = foreignIdType,
-                foreignIdNumber = state.foreignIdNumber,
+                foreignIdNumber = if (isForeign) state.foreignIdNumber?.ifBlank { null } else null,
                 countryCode = state.selectedCountryCode,
                 cedulaCF = if (state.customerType == FeCustomerType.FINAL_CONSUMER) {
                     normalizedCedula.ifBlank { null }
                 } else {
                     null
                 },
-                locationCode = PanamaLocations.codeFor(
-                    state.selectedProvince,
-                    state.selectedDistrict,
-                    state.selectedCorreg
-                )
+                locationCode = locationCode,
+                taxExempt = state.taxExempt,
+                taxRetentionCode = retentionCodeInt,
+                taxRetentionPercent = retentionPercent,
             )
 
             try {
@@ -397,8 +627,35 @@ class AddCustomerViewModel(
         return "Ya existe un cliente con nombre \"$formattedName\" y RUC \"$formattedRuc\"."
     }
 
+    private fun resolveRetentionPercent(state: AddCustomerState): Int? {
+        val normalizedCode = CustomerTaxRetentionCatalog.normalizeCode(state.taxRetentionCode)
+        return when {
+            normalizedCode.isEmpty() -> null
+            normalizedCode == "8" -> state.taxRetentionPercent.toIntOrNull()
+            else -> CustomerTaxRetentionCatalog.defaultRateForCode(normalizedCode)
+        }
+    }
+
     private fun applyCreateFieldErrors(state: AddCustomerState): Boolean {
         val nameError = if (state.name.isBlank()) "El nombre es requerido" else null
+        val rucError = if (state.customerType.rucNeeded() && state.ruc.isBlank()) {
+            "El RUC es requerido"
+        } else {
+            null
+        }
+        val foreignIdNumberError = if (state.customerType == FeCustomerType.FOREIGNER && state.foreignIdNumber.isNullOrBlank()) {
+            "El documento es requerido"
+        } else {
+            null
+        }
+        val taxRetentionPercentError = if (
+            CustomerTaxRetentionCatalog.normalizeCode(state.taxRetentionCode) == "8" &&
+            state.taxRetentionPercent.toIntOrNull() == null
+        ) {
+            "Ingresa el porcentaje de retencion"
+        } else {
+            null
+        }
         val provinceError = if (state.customerType != FeCustomerType.FOREIGNER && state.selectedProvince.isNullOrBlank()) {
             "Selecciona una provincia"
         } else {
@@ -423,12 +680,24 @@ class AddCustomerViewModel(
         updateState {
             copy(
                 nameError = nameError,
+                rucError = rucError,
+                foreignIdNumberError = foreignIdNumberError,
+                taxRetentionPercentError = taxRetentionPercentError,
                 provinceError = provinceError,
                 districtError = districtError,
                 corregimientoError = corregimientoError,
                 addressLineError = addressLineError,
                 validationMessage = if (
-                    listOf(nameError, provinceError, districtError, corregimientoError, addressLineError).any { it != null }
+                    listOf(
+                        nameError,
+                        rucError,
+                        foreignIdNumberError,
+                        taxRetentionPercentError,
+                        provinceError,
+                        districtError,
+                        corregimientoError,
+                        addressLineError
+                    ).any { it != null }
                 ) {
                     "Revisa los campos marcados en rojo para continuar."
                 } else {
@@ -437,7 +706,16 @@ class AddCustomerViewModel(
             )
         }
 
-        return listOf(nameError, provinceError, districtError, corregimientoError, addressLineError).any { it != null }
+        return listOf(
+            nameError,
+            rucError,
+            foreignIdNumberError,
+            taxRetentionPercentError,
+            provinceError,
+            districtError,
+            corregimientoError,
+            addressLineError
+        ).any { it != null }
     }
 
 }

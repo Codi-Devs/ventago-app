@@ -348,6 +348,7 @@ data class PosState(
     val canCreateInvoice: Boolean = false,
     val canCreateDraft: Boolean = false,
     val canCreatePaymentLink: Boolean = false,
+    val canUseManualPaymentMethods: Boolean = false,
     val canConfigurePayments: Boolean = false,
     val canConfigureYappyOnsite: Boolean = false,
     val canCreateYappyOnsiteQr: Boolean = false,
@@ -355,6 +356,7 @@ data class PosState(
     val canUpdateQuote: Boolean = false,
     val canUseCustomProduct: Boolean = false,
     val canEditProduct: Boolean = false,
+    val posProvisioningActive: Boolean = false,
 
     val branches: List<Branch> = listOf(),
     val selectedBranchIndex: Int = 0,
@@ -386,7 +388,7 @@ data class PosState(
     val finalIdNumber: String? = null,
     val finalIdNumberError: String? = null,
     val finalCustomerCountryCode: String? = null,
-    val finalCustomerCountryOptions: List<CustomerCountryOption> = CustomerCountries.options,
+    val finalCustomerCountryOptions: List<CustomerCountryOption> = CustomerCountries.options.filterNot { it.code == "PA" },
 
 
     // === Global discounts / charges ===
@@ -491,6 +493,7 @@ data class PosState(
     val yappyOnsiteInvoiceProcessingTimedOut: Boolean = false,
     val yappyOnsitePrintAttemptedTransactionId: String? = null,
     val yappyOnsiteExitCancelDialogVisible: Boolean = false,
+    val successReprintInFlight: Boolean = false,
     val showYappyOnsitePendingConflictDialog: Boolean = false,
     val yappyOnsitePendingConflict: YappyOnsitePendingTransactionDto? = null,
     val orderNumber: String = "",

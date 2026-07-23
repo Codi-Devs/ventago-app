@@ -611,27 +611,37 @@ private fun PrinterConfigStep(
             .padding(20.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
-        Text("3. Configura tu impresora en VentaGo", style = titleMedium())
+        Text(
+            if (uiState.useInternalPrinter) "Configura la impresora interna" else "3. Configura tu impresora en VentaGo",
+            style = titleMedium()
+        )
 
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(12.dp)
-        ) {
-            ConfigModeOption(
-                label = "Automático",
-                selected = uiState.configMode == PrinterConfigMode.AUTOMATIC,
-                onClick = { onConfigModeChange(PrinterConfigMode.AUTOMATIC) },
-                modifier = Modifier.weight(1f)
-            )
-            ConfigModeOption(
-                label = "Manual",
-                selected = uiState.configMode == PrinterConfigMode.MANUAL,
-                onClick = { onConfigModeChange(PrinterConfigMode.MANUAL) },
-                modifier = Modifier.weight(1f)
+        if (!uiState.useInternalPrinter) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                ConfigModeOption(
+                    label = "Automático",
+                    selected = uiState.configMode == PrinterConfigMode.AUTOMATIC,
+                    onClick = { onConfigModeChange(PrinterConfigMode.AUTOMATIC) },
+                    modifier = Modifier.weight(1f)
+                )
+                ConfigModeOption(
+                    label = "Manual",
+                    selected = uiState.configMode == PrinterConfigMode.MANUAL,
+                    onClick = { onConfigModeChange(PrinterConfigMode.MANUAL) },
+                    modifier = Modifier.weight(1f)
+                )
+            }
+        } else {
+            Text(
+                "Este equipo usa la impresora térmica integrada del POS. Solo selecciona la sucursal y el punto de facturación.",
+                style = bodySmall(color = MaterialTheme.colorScheme.onSurfaceVariant)
             )
         }
 
-        if (uiState.isAutomaticMode) {
+        if (!uiState.useInternalPrinter && uiState.isAutomaticMode) {
             AutomaticDiscoverySection(
                 uiState = uiState,
                 onRescanPrinters = onRescanPrinters,
@@ -639,7 +649,9 @@ private fun PrinterConfigStep(
             )
         }
 
-        val shouldRenderForm = uiState.configMode == PrinterConfigMode.MANUAL || uiState.selectedDiscoveredPrinter != null
+        val shouldRenderForm = uiState.useInternalPrinter ||
+            uiState.configMode == PrinterConfigMode.MANUAL ||
+            uiState.selectedDiscoveredPrinter != null
         if (shouldRenderForm) {
             DMDropDownField(
                 label = "Sucursal",
@@ -675,17 +687,20 @@ private fun PrinterConfigStep(
                 text = uiState.printerName,
                 label = "Nombre de impresora",
                 modifier = Modifier.fillMaxWidth(),
-                supportingText = "Ej. TM-T20III",
+                enabled = !uiState.useInternalPrinter,
+                supportingText = if (uiState.useInternalPrinter) "Impresora interna del POS" else "Ej. TM-T20III",
                 onChange = onPrinterNameChange,
             )
 
-            DMOutlinedTextField(
-                text = uiState.host,
-                label = "IP exacta de la impresora",
-                modifier = Modifier.fillMaxWidth(),
-                supportingText = "Usa la IP que salió impresa en el papel de la red.",
-                onChange = onHostChange,
-            )
+            if (!uiState.useInternalPrinter) {
+                DMOutlinedTextField(
+                    text = uiState.host,
+                    label = "IP exacta de la impresora",
+                    modifier = Modifier.fillMaxWidth(),
+                    supportingText = "Usa la IP que salió impresa en el papel de la red.",
+                    onChange = onHostChange,
+                )
+            }
         }
 
         if (shouldRenderForm) {

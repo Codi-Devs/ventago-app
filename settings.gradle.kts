@@ -35,3 +35,4 @@ dependencyResolutionManagement {
 
 include(":androidApp")
 include(":composeApp")
+include(":printer-h10p")

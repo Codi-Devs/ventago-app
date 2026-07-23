@@ -62,6 +62,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.teco.ventago.core.SnackbarService
+import com.teco.ventago.AppDistribution
 import com.teco.ventago.core.camera.PermissionCallback
 import com.teco.ventago.core.camera.PermissionStatus
 import com.teco.ventago.core.camera.PermissionType
@@ -140,6 +141,7 @@ fun SettingsScreen(
 ) {
     val snackbarService: SnackbarService = koinInject()
     val printerService: PrinterService = koinInject()
+    val appDistribution: AppDistribution = koinInject()
     val uriHandler = LocalUriHandler.current
     val scope = rememberCoroutineScope()
 
@@ -449,6 +451,15 @@ fun SettingsScreen(
                     )
                 }
 
+                if (uiState.canModifyPosDevices) {
+                    SettingsTextButton(
+                        label = "Dispositivos POS",
+                        onClick = {
+                            navigate(PosScreens.PosDevicesScreen)
+                        }
+                    )
+                }
+
                 if (uiState.invoicingEnabled && uiState.canModifySettings) {
                     SettingsTextButton(
                         label = "Sucursales",
@@ -459,7 +470,7 @@ fun SettingsScreen(
                 }
 
 
-                if (uiState.canModifySettings) {
+                if (!appDistribution.isPosBuild && uiState.canModifySettings) {
                     SettingsTextButton(
                         label = "Impresoras térmicas",
                         onClick = {

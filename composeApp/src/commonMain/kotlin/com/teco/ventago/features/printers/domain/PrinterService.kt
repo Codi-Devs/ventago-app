@@ -1,5 +1,6 @@
 package com.teco.ventago.features.printers.domain
 
+import com.teco.ventago.AppDistribution
 import com.teco.ventago.core.LocalStorage
 import com.teco.ventago.core.logger.ILoggerService
 import com.teco.ventago.core.logger.Log
@@ -11,6 +12,7 @@ import com.teco.ventago.features.printers.domain.model.PrintCommand
 import com.teco.ventago.features.printers.domain.model.PrintContext
 import com.teco.ventago.features.printers.domain.model.PrintResult
 import com.teco.ventago.features.printers.domain.model.PrintResultContext
+import com.teco.ventago.features.printers.domain.model.PRINTER_INTEGRATION_H10P_INTERNAL
 import com.teco.ventago.features.printers.domain.model.PrinterConfig
 import com.teco.ventago.features.printers.domain.model.PrinterListFilters
 import com.teco.ventago.features.printers.domain.model.PrinterSelectionOption
@@ -46,6 +48,7 @@ class PrinterService(
     private val cacheSyncService: PrinterCacheSyncService,
     private val json: Json,
     private val appScope: CoroutineScope,
+    private val appDistribution: AppDistribution,
 ) {
     private val state = MutableStateFlow<List<PrinterConfig>>(emptyList())
     private val refreshMutex = Mutex()
@@ -135,26 +138,53 @@ class PrinterService(
         return state.value.firstOrNull {
             it.branchCode == branchCode &&
                 it.billingPointCode == billingPointCode &&
-                it.isActive &&
-                it.hasEndpoint()
-        }
+                it.isAvailableForPrint()
+        } ?: syntheticH10pPrinter(branchCode, billingPointCode)
     }
 
     fun resolveActivePrinters(): List<PrinterConfig> {
-        return state.value.filter { it.isActive && it.hasEndpoint() }
+        return state.value.filter { it.isAvailableForPrint() }
     }
 
     fun resolveSelectionOptions(): List<PrinterSelectionOption> {
-        return resolveActivePrinters().map { printer ->
+        val printers = resolveActivePrinters().ifEmpty {
+            syntheticH10pPrinter(branchCode = "", billingPointCode = "")?.let(::listOf).orEmpty()
+        }
+        return printers.map { printer ->
             PrinterSelectionOption(
                 printerConfig = printer,
-                displayLabel = "${printer.printerModel} - ${printer.branchCode} - ${printer.billingPointCode}"
+                displayLabel = if (printer.isInternalDevice()) {
+                    printer.printerModel
+                } else {
+                    "${printer.printerModel} - ${printer.branchCode} - ${printer.billingPointCode}"
+                }
             )
         }
     }
 
     fun shouldRequestTicket(branchCode: String, billingPointCode: String): Boolean {
         return resolveActivePrinter(branchCode, billingPointCode) != null
+    }
+
+    private fun syntheticH10pPrinter(branchCode: String, billingPointCode: String): PrinterConfig? {
+        if (!appDistribution.isPosBuild) return null
+        return PrinterConfig(
+            branchCode = branchCode,
+            billingPointCode = billingPointCode,
+            printerBrand = "h10p",
+            printerModel = "H10P Internal",
+            integrationType = PRINTER_INTEGRATION_H10P_INTERNAL,
+            host = "",
+            port = 0,
+            deviceId = "h10p_internal",
+            paperWidthMm = 57,
+            supportsCutter = false,
+            timeoutMs = 10_000,
+            retryCount = 1,
+            printByDefault = true,
+            isActive = true,
+            lastTestStatus = "not_tested",
+        )
     }
 
     suspend fun parseTicketLayout(payload: TicketDocumentPayload): TicketLayout = parser.parse(payload)

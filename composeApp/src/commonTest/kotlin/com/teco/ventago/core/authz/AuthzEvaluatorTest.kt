@@ -2,12 +2,18 @@ package com.teco.ventago.core.authz
 
 import com.teco.ventago.core.beta.BetaFeature
 import com.teco.ventago.features.auth.domain.model.User
+import com.teco.ventago.features.pos.provisioning.domain.model.PosDevicePermissions
+import kotlin.test.BeforeTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
 class AuthzEvaluatorTest {
+    @BeforeTest
+    fun clearPosPermissionGate() {
+        PosDevicePermissionGate.clear()
+    }
 
     private fun owner(scopes: Set<String> = emptySet()) = User(
         uid = "owner",
@@ -91,6 +97,17 @@ class AuthzEvaluatorTest {
     }
 
     @Test
+    fun posDevicesSettingsRequiresDedicatedScopeForSubUsers() {
+        assertFalse(AuthzEvaluator.canRoute(RouteKey.SETTINGS_POS_DEVICES, subUser(), emptySet()))
+        assertFalse(AuthzEvaluator.canAction(ActionKey.SETTINGS_MODIFY_POS_DEVICES, subUser(), emptySet()))
+
+        val scopedUser = subUser(setOf(ScopeKey.SETTINGS_MODIFY_POS_DEVICES))
+        assertTrue(AuthzEvaluator.canRoute(RouteKey.SETTINGS_POS_DEVICES, scopedUser, emptySet()))
+        assertTrue(AuthzEvaluator.canAction(ActionKey.SETTINGS_MODIFY_POS_DEVICES, scopedUser, emptySet()))
+        assertTrue(AuthzEvaluator.canRoute(RouteKey.SETTINGS_POS_DEVICES, owner(), emptySet()))
+    }
+
+    @Test
     fun paymentLinkAndAchPoliciesRequireScopesWithoutPaymentsBeta() {
         val scopedUser = subUser(
             setOf(
@@ -165,5 +182,40 @@ class AuthzEvaluatorTest {
                 emptySet()
             )
         )
+    }
+
+    @Test
+    fun posDevicePermissionsRestrictRoutesAndActionsWithoutGrantingAccess() {
+        val owner = owner()
+        PosDevicePermissionGate.update(
+            PosDevicePermissions(
+                deviceId = "pos_123",
+                expensesView = false,
+                expensesCreate = false,
+                productsView = true,
+                productsCreate = false,
+                clientsView = true,
+                clientsCreate = false,
+                quotesView = false,
+                quotesCreate = false,
+                paymentMethodsConfigure = false,
+                paymentYappyOnsite = true,
+                paymentLink = false,
+                paymentManualMethods = true,
+                reportsView = false,
+            )
+        )
+
+        assertTrue(AuthzEvaluator.canRoute(RouteKey.PRODUCTS_LIST, owner, emptySet()))
+        assertFalse(AuthzEvaluator.canAction(ActionKey.PRODUCTS_CREATE, owner, emptySet()))
+        assertFalse(AuthzEvaluator.canRoute(RouteKey.EXPENSES_LIST, owner, emptySet()))
+        assertFalse(AuthzEvaluator.canRoute(RouteKey.REPORTS_PAGE, owner, setOf(BetaFeature.REAL_TIME_REPORTS)))
+        assertFalse(AuthzEvaluator.canAction(ActionKey.PAYMENTS_CONFIGURE, owner, emptySet()))
+        assertFalse(AuthzEvaluator.canAction(ActionKey.ORDERS_PAYMENT_LINK, owner, emptySet()))
+        assertTrue(AuthzEvaluator.canAction(ActionKey.ORDERS_YAPPY_ONSITE, owner, emptySet()))
+        assertTrue(AuthzEvaluator.canAction(ActionKey.ORDERS_MANUAL_PAYMENT, owner, emptySet()))
+
+        val customerSubUserWithoutJwtScope = subUser()
+        assertFalse(AuthzEvaluator.canRoute(RouteKey.CUSTOMERS_LIST, customerSubUserWithoutJwtScope, emptySet()))
     }
 }

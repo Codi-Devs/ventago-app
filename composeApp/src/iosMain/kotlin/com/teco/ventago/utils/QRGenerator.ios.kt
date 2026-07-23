@@ -165,12 +165,24 @@ private fun makeCIImage_QR(
 @Composable
 actual fun CameraPreview(
     modifier: Modifier,
+    singleShot: Boolean,
+    torchEnabled: Boolean,
+    scanMode: BarcodeScanMode,
+    stabilityMillis: Long,
+    requiredHits: Int,
+    tapToFocus: Boolean,
+    centerAutoFocus: Boolean,
+    defaultZoomRatio: Float?,
     onBarcode: (String) -> Unit
 ) {
     UIKitView(
         factory = {
             val host = PreviewHostView(frame = CGRectZero.readValue())
-            val coordinator = CameraCoordinator(host, onBarcode)
+            val coordinator = CameraCoordinator(
+                hostView = host,
+                onBarcode = onBarcode,
+                singleShot = singleShot
+            )
             host.attach(coordinator)
             host
         },
@@ -231,6 +243,9 @@ private class CameraCoordinator(
     private var isConfigured = false
     private var isStarted = false
     private var hasDelivered = false
+    private var lastDeliveredValue: String? = null
+    private var lastDeliveredAt: Double = 0.0
+    private val repeatCooldownSeconds = 0.9
 
     fun start() {
         dispatch_async(sessionQueue) {
@@ -310,10 +325,25 @@ private class CameraCoordinator(
             .asSequence()
             .mapNotNull { (it as? AVMetadataMachineReadableCodeObject)?.stringValue }
             .firstOrNull { it.isNotBlank() }
-            ?: return
+        if (value == null) {
+            lastDeliveredValue = null
+            return
+        }
+
+        val now = NSDate().timeIntervalSince1970
+        if (
+            !singleShot &&
+            value == lastDeliveredValue &&
+            now - lastDeliveredAt < repeatCooldownSeconds
+        ) {
+            return
+        }
 
         if (singleShot) {
             hasDelivered = true
+        } else {
+            lastDeliveredValue = value
+            lastDeliveredAt = now
         }
 
         runOnMain {
