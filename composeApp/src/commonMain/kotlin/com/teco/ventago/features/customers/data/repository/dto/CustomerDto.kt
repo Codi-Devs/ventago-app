@@ -23,8 +23,8 @@ data class CreateCustomerDto(
 
     @SerialName("foreign_id_type") val foreignIdType: String?,
     @SerialName("foreign_id_number") val foreignIdNumber: String?,
-    @SerialName("country_other_name") val countryOtherName: String?,
     @SerialName("cedula_cf") val cedulaCF: String?,
+    @SerialName("country_other_name") val countryOtherName: String?,
     @SerialName("tax_exempt") val taxExempt: Boolean,
     @SerialName("tax_retention_code") val taxRetentionCode: Int? = null,
     @SerialName("tax_retention_percent") val taxRetentionPercent: Int? = null,

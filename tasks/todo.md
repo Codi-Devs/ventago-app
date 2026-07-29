@@ -1,3 +1,21 @@
+# Customer RUC Creation Request Shape TODO
+
+## Plan
+- [x] Trace customer creation payload from form/POS ViewModel through service/repository/provider.
+- [x] Align create-customer serialization with the backend's canonical RUC request shape.
+- [x] Add an exact serialization regression test for the provided RUC customer example.
+- [x] Run focused customer tests and diff verification.
+
+## Verification Gates
+- [x] `./gradlew --no-build-cache --no-configuration-cache :composeApp:testAndroidHostTest --tests com.teco.ventago.features.customers.CustomerModelsAndOrdersRequestTest`
+- [x] `git diff --check -- composeApp/src/commonMain/kotlin/com/teco/ventago/features/customers/data/provider/CustomerProvider.kt composeApp/src/commonMain/kotlin/com/teco/ventago/features/customers/data/repository/dto/CustomerDto.kt composeApp/src/commonTest/kotlin/com/teco/ventago/features/customers/CustomerModelsAndOrdersRequestTest.kt tasks/todo.md`
+
+## Review Notes
+- Root cause: POS and main customer form create flows passed `selectedCountryCode`, whose default is a foreign-country default, into local RUC customer creation. This could send non-Panama `country_code` for a Panama RUC customer and make backend validation require foreign ID fields.
+- `buildCreateCustomerDto` now forces `country_code = "PA"` for every non-foreign customer and only honors the selected country for `FeCustomerType.FOREIGNER`.
+- Added a regression test for the exact canonical RUC customer creation payload, including explicit nulls and request key order.
+- Updated a stale foreign-country catalog assertion to match current behavior: Panama is not offered in foreign customer country selectors.
+
 # Crashlytics Mapping Upload Automation TODO
 
 ## Plan

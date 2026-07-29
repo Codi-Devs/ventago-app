@@ -55,15 +55,15 @@ class CustomerModelsAndOrdersRequestTest {
     private val json = Json { ignoreUnknownKeys = true }
 
     @Test
-    fun customerFormStateUsesFullForeignCountryCatalog() {
+    fun customerFormStateUsesForeignCountryCatalogWithoutPanama() {
         val countries = CustomerFormState().countryOptions
         val countriesByCode = countries.associateBy { it.code }
 
-        assertEquals(219, countries.size)
+        assertEquals(218, countries.size)
         assertEquals("Afganistán", countries.first().name)
         assertEquals("Zimbabwe", countries.last().name)
         assertEquals("Anguilla", countriesByCode["AI"]?.name)
-        assertEquals("Panamá", countriesByCode["PA"]?.name)
+        assertNull(countriesByCode["PA"])
         assertEquals("Estados Unidos", countriesByCode["US"]?.name)
         assertEquals("Islas Turcas y Caicos", countriesByCode["TC"]?.name)
         assertEquals("Islas Vírgenes (EE. UU.)", countriesByCode["VI"]?.name)
@@ -355,6 +355,7 @@ class CustomerModelsAndOrdersRequestTest {
         assertEquals(JsonNull, body["email"])
         assertEquals(JsonNull, body["phone"])
         assertEquals(JsonNull, body["tax_id"])
+        assertEquals("\"PA\"", body["country_code"]?.toString())
         assertEquals(JsonNull, body["tags"])
         assertEquals("\"02\"", body["fe_customer_type"]?.toString())
         assertEquals("\"1\"", body["taxpayer_type"]?.toString())
@@ -370,6 +371,92 @@ class CustomerModelsAndOrdersRequestTest {
         assertEquals("false", body["tax_exempt"]?.toString())
         assertEquals(JsonNull, body["tax_retention_code"])
         assertEquals(JsonNull, body["tax_retention_percent"])
+    }
+
+    @Test
+    fun createCustomerRequestBodyMatchesCanonicalRucCustomerPayload() {
+        val expected = json.parseToJsonElement(
+            """
+            {
+                "name": "ATHA ADMINISTRACION Y SERVICIOS S A",
+                "email": "pedro@gmail.com",
+                "phone": null,
+                "tax_id": "27710-94-228868",
+                "country_code": "PA",
+                "tags": null,
+                "fe_customer_type": "01",
+                "taxpayer_type": "2",
+                "address_line": "Panama",
+                "location_code": "8-8-11",
+                "province": "PANAMA",
+                "district": "PANAMA",
+                "corregimiento": "RIO ABAJO",
+                "foreign_id_type": null,
+                "foreign_id_number": null,
+                "cedula_cf": null,
+                "country_other_name": null,
+                "tax_exempt": false,
+                "tax_retention_code": null,
+                "tax_retention_percent": null
+            }
+            """.trimIndent()
+        )
+
+        val actual = json.parseToJsonElement(
+            buildCreateCustomerRequestBody(
+                Customer(
+                    id = -1,
+                    name = "ATHA ADMINISTRACION Y SERVICIOS S A",
+                    phone = null,
+                    email = "pedro@gmail.com",
+                    ruc = "27710-94-228868",
+                    invoiceCustomer = true,
+                    rucCheckDigit = null,
+                    tags = emptyList(),
+                    customerType = FeCustomerType.CONTRIBUTING,
+                    taxPayerType = TaxPayerType.JURIDICAL,
+                    addressLine = "Panama",
+                    province = "PANAMA",
+                    district = "PANAMA",
+                    corregimiento = "RIO ABAJO",
+                    locationCode = "8-8-11",
+                    foreignIdType = null,
+                    foreignIdNumber = null,
+                    cedulaCF = null,
+                    countryCode = "CO",
+                    taxExempt = false,
+                    taxRetentionCode = null,
+                    taxRetentionPercent = null,
+                )
+            )
+        )
+
+        assertEquals(expected, actual)
+        assertEquals(
+            listOf(
+                "name",
+                "email",
+                "phone",
+                "tax_id",
+                "country_code",
+                "tags",
+                "fe_customer_type",
+                "taxpayer_type",
+                "address_line",
+                "location_code",
+                "province",
+                "district",
+                "corregimiento",
+                "foreign_id_type",
+                "foreign_id_number",
+                "cedula_cf",
+                "country_other_name",
+                "tax_exempt",
+                "tax_retention_code",
+                "tax_retention_percent",
+            ),
+            actual.jsonObject.keys.toList()
+        )
     }
 
     @Test

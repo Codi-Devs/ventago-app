@@ -9,6 +9,7 @@ import com.teco.ventago.features.customers.domain.models.nullIfBlank
 import com.teco.ventago.features.customers.domain.models.UpdateBillingAddressRequest
 import com.teco.ventago.features.customers.domain.models.UpdateCustomerDetailsRequest
 import com.teco.ventago.features.customers.domain.models.ValidateRucRequest
+import com.teco.ventago.features.invoicing.domain.models.FeCustomerType
 import com.teco.ventago.utils.ApiError
 import com.teco.ventago.utils.ApiResponse
 import io.ktor.client.HttpClient
@@ -407,12 +408,18 @@ internal fun buildCreateCustomerRequestBody(customer: Customer): String {
 }
 
 internal fun buildCreateCustomerDto(customer: Customer): CreateCustomerDto {
+    val countryCode = if (customer.customerType == FeCustomerType.FOREIGNER) {
+        customer.countryCode.nullIfBlank() ?: PANAMA_COUNTRY_CODE
+    } else {
+        PANAMA_COUNTRY_CODE
+    }
+
     return CreateCustomerDto(
         name = customer.name.trim(),
         email = customer.email.nullIfBlank(),
         phone = customer.phone.nullIfBlank(),
         ruc = customer.ruc.nullIfBlank(),
-        countryCode = customer.countryCode,
+        countryCode = countryCode,
         tags = customer.tags.mapNotNull { it.nullIfBlank() }.takeIf { it.isNotEmpty() }?.joinToString(","),
         customerType = customer.customerType?.code,
         taxPayerType = customer.taxPayerType?.code,
@@ -430,3 +437,5 @@ internal fun buildCreateCustomerDto(customer: Customer): CreateCustomerDto {
         taxRetentionPercent = customer.taxRetentionPercent,
     )
 }
+
+private const val PANAMA_COUNTRY_CODE = "PA"
