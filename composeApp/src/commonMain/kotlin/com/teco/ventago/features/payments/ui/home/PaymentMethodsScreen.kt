@@ -258,6 +258,7 @@ fun OnboardingPaymentScreen(
                 when (uiState.screenMode) {
                     PaymentScreenMode.Loading -> PaymentMethodsShimmerScreen()
                     PaymentScreenMode.BlockedNoPaymentsAccess -> PaymentAccessBlockedScreen()
+                    PaymentScreenMode.BlockedPaymentsModuleInactive -> PaymentModuleInactiveScreen()
                     else -> MethodDetailSection(
                         uiState = uiState,
                         viewModel = viewModel,
@@ -269,6 +270,7 @@ fun OnboardingPaymentScreen(
                 when (uiState.screenMode) {
                     PaymentScreenMode.Loading -> PaymentMethodsShimmerScreen()
                     PaymentScreenMode.BlockedNoPaymentsAccess -> PaymentAccessBlockedScreen()
+                    PaymentScreenMode.BlockedPaymentsModuleInactive -> PaymentModuleInactiveScreen()
                     PaymentScreenMode.GlobalOnboarding -> GlobalOnboardingSection(
                         uiState = uiState,
                         onStart = viewModel::onStartOnboarding,
@@ -430,7 +432,7 @@ fun PaymentFeesScreen(
             when (uiState.screenMode) {
                 PaymentScreenMode.Loading -> PaymentMethodsShimmerScreen()
                 PaymentScreenMode.BlockedNoPaymentsAccess -> PaymentAccessBlockedScreen()
-                else -> FeesDetailsSection(uiState = uiState, viewModel = viewModel)
+                else -> LegacyFeesDisabledScreen()
             }
         }
 
@@ -476,6 +478,76 @@ private fun PaymentAccessBlockedScreen() {
                 )
                 Text(
                     text = "No tienes permisos para esta sección.",
+                    style = bodyMedium(color = MaterialTheme.colorScheme.onSurfaceVariant),
+                    textAlign = TextAlign.Center,
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun PaymentModuleInactiveScreen() {
+    Box(
+        modifier = Modifier.fillMaxSize(),
+        contentAlignment = Alignment.Center,
+    ) {
+        Card(
+            colors = CardDefaults.cardColors(containerColor = cardContainerColor()),
+            shape = RoundedCornerShape(20.dp),
+            modifier = Modifier
+                .padding(16.dp)
+                .fillMaxWidth()
+        ) {
+            Column(
+                modifier = Modifier.padding(24.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp),
+                horizontalAlignment = Alignment.CenterHorizontally,
+            ) {
+                Icon(
+                    imageVector = Icons.Filled.Lock,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.size(28.dp)
+                )
+                Text("Módulo de pagos no activo", style = titleMediumBold(), textAlign = TextAlign.Center)
+                Text(
+                    "Actívalo desde VentaGo web o solicita acceso a tu asesor. La app móvil no permite comprar esta suscripción.",
+                    style = bodyMedium(color = MaterialTheme.colorScheme.onSurfaceVariant),
+                    textAlign = TextAlign.Center,
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun LegacyFeesDisabledScreen() {
+    Box(
+        modifier = Modifier.fillMaxSize(),
+        contentAlignment = Alignment.Center,
+    ) {
+        Card(
+            colors = CardDefaults.cardColors(containerColor = cardContainerColor()),
+            shape = RoundedCornerShape(20.dp),
+            modifier = Modifier
+                .padding(16.dp)
+                .fillMaxWidth()
+        ) {
+            Column(
+                modifier = Modifier.padding(24.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp),
+                horizontalAlignment = Alignment.CenterHorizontally,
+            ) {
+                Icon(
+                    imageVector = Icons.Filled.Info,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.size(28.dp)
+                )
+                Text("Comisiones deshabilitadas", style = titleMediumBold(), textAlign = TextAlign.Center)
+                Text(
+                    "VentaGo ya no cobra comisiones por transacción al cliente. Los cobros del módulo se administran por suscripción desde la web.",
                     style = bodyMedium(color = MaterialTheme.colorScheme.onSurfaceVariant),
                     textAlign = TextAlign.Center,
                 )
@@ -712,16 +784,11 @@ private fun ConfiguredPaymentsSection(
         verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
         Text(
-            text = "Administra tus canales y comisiones para cobros en línea.",
+            text = "Administra tus canales para cobros en línea.",
             style = bodyMedium(color = MaterialTheme.colorScheme.onSurfaceVariant)
         )
 
         GeneralConfigurationCard(uiState = uiState, viewModel = viewModel)
-        FeesNavigationCard(
-            uiState = uiState,
-            viewModel = viewModel,
-            onOpenFees = onOpenFees,
-        )
         ChannelsCard(uiState = uiState, viewModel = viewModel, onOpenMethod = onOpenMethod)
     }
 }
@@ -1796,7 +1863,7 @@ private fun MethodIntroCarousel(method: PaymentMethodType) {
         )
         PaymentMethodType.Paypal -> listOf(
             "Conecta tu cuenta PayPal empresarial.",
-            "Autoriza el acuerdo de facturación de comisiones.",
+            "Completa el flujo seguro de conexión de PayPal.",
             "Usa el estado conectado para completar el onboarding."
         )
         PaymentMethodType.Yappy -> listOf(
@@ -1995,7 +2062,7 @@ private fun TiloPayFeesStep() {
             modifier = Modifier.padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(14.dp),
         ) {
-            Text(text = "Comisiones por transacción", style = titleMediumBold())
+            Text(text = "Costos del procesador", style = titleMediumBold())
             Text(
                 text = "Estos cargos aplican cuando el pago con tarjeta se completa correctamente. TiloPay confirma las condiciones finales de tu afiliación.",
                 style = bodyMedium(color = MaterialTheme.colorScheme.onSurfaceVariant),
@@ -2015,7 +2082,7 @@ private fun TiloPayFeesStep() {
                 logo = { AmericanExpressLogo() },
             )
             Text(
-                text = "VentaGo cobra 0.50% como integrador tecnológico. No somos procesador de pagos; disputas, contracargos, liquidaciones y reclamos del cargo se gestionan directamente con TiloPay.",
+                text = "VentaGo habilita este canal con la suscripción del módulo de pagos y cobros. No somos procesador de pagos; disputas, contracargos, liquidaciones y reclamos del cargo se gestionan directamente con TiloPay.",
                 style = bodySmall(color = MaterialTheme.colorScheme.onSurfaceVariant),
             )
             Text(
@@ -2368,8 +2435,8 @@ private fun PaypalFeesStep() {
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
             Text(text = "Costos y cobros", style = titleMediumBold())
-            BulletItem("Comisión Ventago: 1% + 7% ITBMS por transacción exitosa.")
             BulletItem("PayPal puede aplicar sus propias tarifas de procesamiento.")
+            BulletItem("VentaGo habilita este canal con la suscripción del módulo de pagos y cobros.")
 
             Row(
                 modifier = Modifier
@@ -2552,21 +2619,11 @@ private fun AchFeesStep() {
         ) {
             Text(text = "Costos y cobros", style = titleMediumBold())
             Text(
-                text = buildAnnotatedString {
-                    append("Comisión Ventago: ")
-                    withStyle(SpanStyle(fontWeight = FontWeight.Bold)) {
-                        append("\$0.27")
-                    }
-                    append(" por transacción aceptada (")
-                    withStyle(SpanStyle(fontWeight = FontWeight.Bold)) {
-                        append("ITBMS incluido")
-                    }
-                    append(").")
-                },
+                text = "El banco puede aplicar sus propios costos operativos según la cuenta.",
                 style = bodyMedium(color = MaterialTheme.colorScheme.onSurfaceVariant),
             )
             Text(
-                text = "Cobro de plataforma en fechas periódicas (manual).",
+                text = "VentaGo habilita este canal con la suscripción del módulo de pagos y cobros.",
                 style = bodyMedium(color = MaterialTheme.colorScheme.onSurfaceVariant),
             )
             Row(
@@ -2745,28 +2802,8 @@ private fun YappyCostsStep() {
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
             Text(text = "Costos y cobros", style = titleMediumBold())
-            BulletItem(
-                buildAnnotatedString {
-                    append("Comisión de plataforma Ventago: ")
-                    withStyle(SpanStyle(fontWeight = FontWeight.Bold)) {
-                        append("1% + 7% ITBMS")
-                    }
-                    append(" sobre ese 1%.")
-                }
-            )
             BulletItem("Yappy Comercial puede aplicar su propia comisión.")
-            BulletItem("Cobro de plataforma en fechas periódicas (manual).")
-            BulletItem(
-                buildAnnotatedString {
-                    append("Ejemplo por ")
-                    withStyle(SpanStyle(fontWeight = FontWeight.Bold)) { append("\$100") }
-                    append(": comisión Ventago ")
-                    withStyle(SpanStyle(fontWeight = FontWeight.Bold)) { append("\$1.00") }
-                    append(" + ITBMS ")
-                    withStyle(SpanStyle(fontWeight = FontWeight.Bold)) { append("\$0.07 = \$1.07") }
-                    append(" (más la comisión de Yappy Comercial).")
-                }
-            )
+            BulletItem("VentaGo habilita este canal con la suscripción del módulo de pagos y cobros.")
 
             Row(
                 modifier = Modifier
@@ -2878,11 +2915,11 @@ private fun YappyOnsiteHowItWorksStep() {
             ) {
                 Column(modifier = Modifier.weight(1f)) {
                     Text(
-                        "Comisión Ventago 1%",
+                        "Módulo por suscripción",
                         style = bodyMediumBold(color = MaterialTheme.colorScheme.secondary),
                     )
                     Text(
-                        "Aplicable por transacción, adicional a cargos de Yappy Comercial.",
+                        "Sin comisión VentaGo adicional por transacción.",
                         style = bodySmall(color = MaterialTheme.colorScheme.onSurfaceVariant),
                     )
                 }
@@ -2903,7 +2940,7 @@ private fun YappyOnsiteHowItWorksStep() {
 
     DMAlertDialog(
         title = "Costos y cobros",
-        message = "Comisión de plataforma Ventago: 1% + 7% ITBMS sobre ese 1%.\n\nYappy Comercial puede aplicar su propia comisión.\n\nCobro de plataforma en fechas periódicas (manual).\n\nEjemplo por $100: comisión Ventago $1.00 + ITBMS $0.07 = $1.07 (más la comisión de Yappy Comercial).",
+        message = "Yappy Comercial puede aplicar su propia comisión.\n\nVentaGo habilita este canal con la suscripción del módulo de pagos y cobros.",
         show = showFeesDialog,
         onDismiss = { showFeesDialog = false },
         onConfirm = { showFeesDialog = false },

@@ -203,7 +203,7 @@
     <string name="domain">Web Domain</string>
     <string name="accept_payments_paypal">Accept payments from your customers directly with PayPal</string>
     <string name="fast_secure_professional">Fast, secure and professional</string>
-    <string name="commission_2_percent">2% commission per transaction</string>
+    <string name="commission_2_percent">Payments module subscription required</string>
     <string name="money_goes_to_paypal">The money goes directly to your PayPal account</string>
     <string name="by_continuing_accept">By continuing, you accept the </string>
     <string name="terms_conditions">Terms and Conditions</string>
@@ -230,7 +230,7 @@
     <string name="payment_methods">Payment Methods</string>
     <string name="commissions">Commissions</string>
     <string name="commissions_fees">Comisiones fees</string>
-    <string name="paypal_commissions">Note: Our platform charges a 2% fee for payments made through PayPal. This fee is independent and additional to PayPal’s own transaction fees, which are managed directly by PayPal.</string>
+    <string name="paypal_commissions">Note: PayPal may apply its own processing fees. VentaGo does not add a per-transaction platform fee.</string>
     <string name="check_paypal_commissions">Check PayPal fees</string>
     <string name="bank_transfer">Bank Transfer</string>
     <string name="ach_with_proof">ACH with proof</string>
@@ -256,7 +256,7 @@
     <string name="link_yappy">Link Yappy</string>
     <string name="connect_yappy">Connect your Yappy account</string>
     <string name="accept_yappy_payments">Accept payments from your clients using Yappy</string>
-    <string name="yappy_commission_info">1% commission per transaction, in addition to Yappy’s own commission.</string>
+    <string name="yappy_commission_info">Yappy may apply its own processing fee. VentaGo does not add a per-transaction platform fee.</string>
     <string name="funds_go_to_bank">Funds go directly to your bank account linked to Yappy.</string>
     <string name="confirm_unlink_yappy">Are you sure you want to unlink your Yappy account? You will not be able to receive payments via Yappy until you link your account again.</string>
     <string name="need_help_get_values">Need help obtaining these values?</string>
