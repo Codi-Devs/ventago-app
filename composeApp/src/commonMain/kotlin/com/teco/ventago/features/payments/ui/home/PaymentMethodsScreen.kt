@@ -1192,7 +1192,7 @@ private fun ChannelRow(
                 overflow = TextOverflow.Ellipsis,
             )
             if (configured) {
-                ChannelConfiguredFeeBadge(method = method)
+                ChannelConfiguredBadge()
             }
         }
 
@@ -1316,14 +1316,7 @@ private fun StatusPill(text: String, positive: Boolean) {
 }
 
 @Composable
-private fun ChannelConfiguredFeeBadge(method: PaymentMethodType) {
-    val value = when (method) {
-        PaymentMethodType.Yappy -> "1%"
-        PaymentMethodType.YappyOnsite -> "1%"
-        PaymentMethodType.Ach -> "$0.27"
-        PaymentMethodType.Paypal -> "1%"
-        PaymentMethodType.CardTilopay -> "0.50%"
-    }
+private fun ChannelConfiguredBadge() {
     Box(
         modifier = Modifier
             .clip(RoundedCornerShape(999.dp))
@@ -1331,7 +1324,7 @@ private fun ChannelConfiguredFeeBadge(method: PaymentMethodType) {
             .padding(horizontal = 10.dp, vertical = 4.dp)
     ) {
         Text(
-            text = "Configurado: $value",
+            text = "Configurado",
             style = labelSmall(color = MaterialTheme.colorScheme.onSecondary),
             fontWeight = FontWeight.SemiBold,
         )
