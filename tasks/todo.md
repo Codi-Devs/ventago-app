@@ -1,3 +1,21 @@
+# Mobile Payments Store Compliance TODO
+
+## Plan
+- [x] Hide the payments module entry when `payment_summary.module_access` is not enabled by subscription or beta.
+- [x] Remove mobile UI copy that mentions subscriptions for the payments module.
+- [x] Keep direct/deep-linked inactive module routes from showing a paywall or purchase instructions.
+- [x] Run KMP metadata compile and diff verification.
+
+## Verification Gates
+- [x] `./gradlew :composeApp:compileKotlinMetadata`
+- [x] `rg -n -i "suscrip|subscription|subscribe|m[oó]dulo por suscrip" composeApp/src/commonMain/kotlin/com/teco/ventago/features/payments composeApp/src/commonMain/composeResources/values*`
+- [x] `git diff --check`
+
+## Review Notes
+- The app menu now renders `Métodos de pago` only when cached `payment_summary.module_access.hasAccess()` is true, which covers enabled subscriptions and beta access without mentioning either path in the UI.
+- Direct access to payments while the module is inactive redirects back to settings instead of showing a blocked/paywall screen.
+- Payments method cost/cobro text now says channels are available when the payments module is active, with no subscription purchase messaging in mobile.
+
 # Customer RUC Creation Request Shape TODO
 
 ## Plan

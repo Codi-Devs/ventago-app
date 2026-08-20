@@ -88,7 +88,7 @@
     <string name="order_email_desc">This is your registered email, to this email will be sent notifications regarding new orders:</string>
     <string name="order_first_screen_support_text">Increase your income by receiving orders directly in your digital menu. To be able to use this section you must configure some aspects of your business.</string>
     <string name="setup_orders">Setup orders</string>
-    <string name="order_not_available">This feature is only available for premium users. Get your premium subscription and get access to this and much more. Free users can enable whatsapp orders for free</string>
+    <string name="order_not_available">This feature is only available for premium users. Access this and many other features. Free users can enable WhatsApp orders for free</string>
     <string name="order_not_available_banned">Sorry, at this moment this feature is not available. Try again later or contact support if problem persists, thanks.</string>
     <string name="orders_disabled">You have the orders disabled. Your customers will not be able to place orders on your digital menu.</string>
     <string name="order_address_not_available">The selected address cannot be used.</string>
@@ -203,7 +203,7 @@
     <string name="domain">Web Domain</string>
     <string name="accept_payments_paypal">Accept payments from your customers directly with PayPal</string>
     <string name="fast_secure_professional">Fast, secure and professional</string>
-    <string name="commission_2_percent">Payments module subscription required</string>
+    <string name="commission_2_percent">Payments module not active</string>
     <string name="money_goes_to_paypal">The money goes directly to your PayPal account</string>
     <string name="by_continuing_accept">By continuing, you accept the </string>
     <string name="terms_conditions">Terms and Conditions</string>

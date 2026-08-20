@@ -264,7 +264,7 @@ class PaymentMethodsViewModel(
 
     private fun canConfigurePaymentsOrWarn(): Boolean {
         if (summary != null && summary?.moduleAccess?.hasAccess() != true) {
-            emitWarning("El módulo de pagos y cobros no está activo para este negocio. Actívalo desde VentaGo web o solicita acceso a tu asesor.")
+            emitWarning("El módulo de pagos y cobros no está activo para este negocio.")
             return false
         }
         if (uiState.value.canConfigurePayments) return true
@@ -274,7 +274,7 @@ class PaymentMethodsViewModel(
 
     private fun canUsePaymentsModuleOrWarn(): Boolean {
         if (summary?.moduleAccess?.hasAccess() == true) return true
-        emitWarning("El módulo de pagos y cobros no está activo para este negocio. Actívalo desde VentaGo web o solicita acceso a tu asesor.")
+        emitWarning("El módulo de pagos y cobros no está activo para este negocio.")
         return false
     }
 

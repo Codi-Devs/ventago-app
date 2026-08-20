@@ -258,7 +258,7 @@ fun OnboardingPaymentScreen(
                 when (uiState.screenMode) {
                     PaymentScreenMode.Loading -> PaymentMethodsShimmerScreen()
                     PaymentScreenMode.BlockedNoPaymentsAccess -> PaymentAccessBlockedScreen()
-                    PaymentScreenMode.BlockedPaymentsModuleInactive -> PaymentModuleInactiveScreen()
+                    PaymentScreenMode.BlockedPaymentsModuleInactive -> HiddenPaymentsModuleRedirect(onNavigateSettingsRoot)
                     else -> MethodDetailSection(
                         uiState = uiState,
                         viewModel = viewModel,
@@ -270,7 +270,7 @@ fun OnboardingPaymentScreen(
                 when (uiState.screenMode) {
                     PaymentScreenMode.Loading -> PaymentMethodsShimmerScreen()
                     PaymentScreenMode.BlockedNoPaymentsAccess -> PaymentAccessBlockedScreen()
-                    PaymentScreenMode.BlockedPaymentsModuleInactive -> PaymentModuleInactiveScreen()
+                    PaymentScreenMode.BlockedPaymentsModuleInactive -> HiddenPaymentsModuleRedirect(onNavigateSettingsRoot)
                     PaymentScreenMode.GlobalOnboarding -> GlobalOnboardingSection(
                         uiState = uiState,
                         onStart = viewModel::onStartOnboarding,
@@ -487,37 +487,16 @@ private fun PaymentAccessBlockedScreen() {
 }
 
 @Composable
-private fun PaymentModuleInactiveScreen() {
+private fun HiddenPaymentsModuleRedirect(onNavigateSettingsRoot: () -> Unit) {
+    LaunchedEffect(Unit) {
+        onNavigateSettingsRoot()
+    }
+
     Box(
         modifier = Modifier.fillMaxSize(),
-        contentAlignment = Alignment.Center,
+        contentAlignment = Alignment.Center
     ) {
-        Card(
-            colors = CardDefaults.cardColors(containerColor = cardContainerColor()),
-            shape = RoundedCornerShape(20.dp),
-            modifier = Modifier
-                .padding(16.dp)
-                .fillMaxWidth()
-        ) {
-            Column(
-                modifier = Modifier.padding(24.dp),
-                verticalArrangement = Arrangement.spacedBy(8.dp),
-                horizontalAlignment = Alignment.CenterHorizontally,
-            ) {
-                Icon(
-                    imageVector = Icons.Filled.Lock,
-                    contentDescription = null,
-                    tint = MaterialTheme.colorScheme.primary,
-                    modifier = Modifier.size(28.dp)
-                )
-                Text("Módulo de pagos no activo", style = titleMediumBold(), textAlign = TextAlign.Center)
-                Text(
-                    "Actívalo desde VentaGo web o solicita acceso a tu asesor. La app móvil no permite comprar esta suscripción.",
-                    style = bodyMedium(color = MaterialTheme.colorScheme.onSurfaceVariant),
-                    textAlign = TextAlign.Center,
-                )
-            }
-        }
+        PaymentMethodsShimmerScreen()
     }
 }
 
@@ -547,7 +526,7 @@ private fun LegacyFeesDisabledScreen() {
                 )
                 Text("Comisiones deshabilitadas", style = titleMediumBold(), textAlign = TextAlign.Center)
                 Text(
-                    "VentaGo ya no cobra comisiones por transacción al cliente. Los cobros del módulo se administran por suscripción desde la web.",
+                    "VentaGo ya no cobra comisiones por transacción al cliente. Esta vista se conserva solo para referencia operativa.",
                     style = bodyMedium(color = MaterialTheme.colorScheme.onSurfaceVariant),
                     textAlign = TextAlign.Center,
                 )
@@ -2075,7 +2054,7 @@ private fun TiloPayFeesStep() {
                 logo = { AmericanExpressLogo() },
             )
             Text(
-                text = "VentaGo habilita este canal con la suscripción del módulo de pagos y cobros. No somos procesador de pagos; disputas, contracargos, liquidaciones y reclamos del cargo se gestionan directamente con TiloPay.",
+                text = "VentaGo habilita este canal cuando el módulo de pagos y cobros está activo. No somos procesador de pagos; disputas, contracargos, liquidaciones y reclamos del cargo se gestionan directamente con TiloPay.",
                 style = bodySmall(color = MaterialTheme.colorScheme.onSurfaceVariant),
             )
             Text(
@@ -2429,7 +2408,7 @@ private fun PaypalFeesStep() {
         ) {
             Text(text = "Costos y cobros", style = titleMediumBold())
             BulletItem("PayPal puede aplicar sus propias tarifas de procesamiento.")
-            BulletItem("VentaGo habilita este canal con la suscripción del módulo de pagos y cobros.")
+            BulletItem("VentaGo habilita este canal cuando el módulo de pagos y cobros está activo.")
 
             Row(
                 modifier = Modifier
@@ -2616,7 +2595,7 @@ private fun AchFeesStep() {
                 style = bodyMedium(color = MaterialTheme.colorScheme.onSurfaceVariant),
             )
             Text(
-                text = "VentaGo habilita este canal con la suscripción del módulo de pagos y cobros.",
+                text = "VentaGo habilita este canal cuando el módulo de pagos y cobros está activo.",
                 style = bodyMedium(color = MaterialTheme.colorScheme.onSurfaceVariant),
             )
             Row(
@@ -2796,7 +2775,7 @@ private fun YappyCostsStep() {
         ) {
             Text(text = "Costos y cobros", style = titleMediumBold())
             BulletItem("Yappy Comercial puede aplicar su propia comisión.")
-            BulletItem("VentaGo habilita este canal con la suscripción del módulo de pagos y cobros.")
+            BulletItem("VentaGo habilita este canal cuando el módulo de pagos y cobros está activo.")
 
             Row(
                 modifier = Modifier
@@ -2908,7 +2887,7 @@ private fun YappyOnsiteHowItWorksStep() {
             ) {
                 Column(modifier = Modifier.weight(1f)) {
                     Text(
-                        "Módulo por suscripción",
+                        "Módulo de pagos activo",
                         style = bodyMediumBold(color = MaterialTheme.colorScheme.secondary),
                     )
                     Text(
@@ -2933,7 +2912,7 @@ private fun YappyOnsiteHowItWorksStep() {
 
     DMAlertDialog(
         title = "Costos y cobros",
-        message = "Yappy Comercial puede aplicar su propia comisión.\n\nVentaGo habilita este canal con la suscripción del módulo de pagos y cobros.",
+        message = "Yappy Comercial puede aplicar su propia comisión.\n\nVentaGo habilita este canal cuando el módulo de pagos y cobros está activo.",
         show = showFeesDialog,
         onDismiss = { showFeesDialog = false },
         onConfirm = { showFeesDialog = false },
