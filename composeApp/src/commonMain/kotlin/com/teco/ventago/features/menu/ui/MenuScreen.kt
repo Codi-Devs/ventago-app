@@ -55,6 +55,7 @@ import com.teco.ventago.design_system.theme.bodyMediumBold
 import com.teco.ventago.design_system.theme.cardContainerColor
 import com.teco.ventago.design_system.theme.titleMediumBold
 import com.teco.ventago.features.auth.domain.IAuthService
+import com.teco.ventago.features.financialProfile.domain.FinancialProfileService
 import com.teco.ventago.features.quotes.domain.QuoteSelectionStore
 import com.teco.ventago.navigation.PosScreens
 import com.teco.ventago.utils.getImageRequest
@@ -97,14 +98,17 @@ fun MenuScreen(
 ) {
     val authService = koinInject<IAuthService>()
     val betaService = koinInject<BetaService>()
+    val financialProfileService = koinInject<FinancialProfileService>()
     val appDistribution = koinInject<AppDistribution>()
     val currentUser by authService.getUser().collectAsState(initial = null)
     val betaResponse by betaService.features().collectAsState()
+    val financialProfile by financialProfileService.observe().collectAsState(initial = null)
     val betaSnapshot = remember(betaResponse) {
         betaResponse?.features.orEmpty()
             .mapNotNull(BetaFeature::fromKey)
             .toSet()
     }
+    val canShowPaymentsModule = financialProfile?.paymentSummary?.moduleAccess?.hasAccess() == true
     val primary = MaterialTheme.colorScheme.primary
     val secondary = MaterialTheme.colorScheme.secondary
     val canCreateQuote = AuthzEvaluator.canRoute(RouteKey.QUOTE_NEW, currentUser, betaSnapshot)
@@ -208,14 +212,16 @@ fun MenuScreen(
                 routeKey = RouteKey.SETTINGS_BRANCHES_OWNER
             )
         )
-        add(
-            ModuleMenuItem(
-                label = "Métodos de pago",
-                icon = ModuleIcon.Vector(Icons.Rounded.Payments),
-                destination = PosScreens.Payments,
-                routeKey = RouteKey.PAYMENTS_PAGE
+        if (canShowPaymentsModule) {
+            add(
+                ModuleMenuItem(
+                    label = "Métodos de pago",
+                    icon = ModuleIcon.Vector(Icons.Rounded.Payments),
+                    destination = PosScreens.Payments,
+                    routeKey = RouteKey.PAYMENTS_PAGE
+                )
             )
-        )
+        }
         if (!appDistribution.isPosBuild) {
             add(
                 ModuleMenuItem(

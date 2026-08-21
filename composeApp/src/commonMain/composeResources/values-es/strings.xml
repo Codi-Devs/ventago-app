@@ -88,7 +88,7 @@
     <string name="order_email_desc">Este es tu correo registrado, a este correo se enviarán notificaciones sobre nuevos pedidos:</string>
     <string name="order_first_screen_support_text">Aumenta tus ingresos recibiendo pedidos directamente en tu menú digital. Para poder usar esta sección debes configurar algunos aspectos de tu negocio.</string>
     <string name="setup_orders">Configurar pedidos</string>
-    <string name="order_not_available">Esta función solo está disponible para usuarios premium. Obtén tu suscripción premium y accede a esta y muchas otras funciones. Los usuarios gratuitos pueden habilitar pedidos por WhatsApp sin costo</string>
+    <string name="order_not_available">Esta función solo está disponible para usuarios premium. Accede a esta y muchas otras funciones. Los usuarios gratuitos pueden habilitar pedidos por WhatsApp sin costo</string>
     <string name="order_not_available_banned">Lo sentimos, en este momento esta función no está disponible. Inténtalo de nuevo más tarde o contacta al soporte si el problema persiste. Gracias.</string>
     <string name="orders_disabled">Tienes los pedidos deshabilitados. Tus clientes no podrán realizar pedidos en tu menú digital.</string>
     <string name="order_address_not_available">La dirección seleccionada no se puede usar.</string>
@@ -201,7 +201,7 @@
     <string name="domain">Dominio web</string>
     <string name="accept_payments_paypal">Acepta pagos de tus clientes directamente con PayPal</string>
     <string name="fast_secure_professional">Rápido, seguro y profesional</string>
-    <string name="commission_2_percent">2% de comisión por transacción</string>
+    <string name="commission_2_percent">Módulo de pagos no activo</string>
     <string name="money_goes_to_paypal">El dinero va directamente a tu cuenta de PayPal</string>
     <string name="by_continuing_accept">Al continuar, aceptas los </string>
     <string name="terms_conditions">Términos y Condiciones</string>
@@ -245,7 +245,7 @@
     <string name="notifications_info_subtitle">Revisa aquí el estado de tus pagos y comprobantes.</string>
     <string name="commissions">Comisiones</string>
     <string name="commissions_fees">Comisiones fees</string>
-    <string name="paypal_commissions">Nota: Nuestra plataforma cobra una tarifa del 2% por pagos realizados a través de PayPal. Esta tarifa es independiente y adicional a las tarifas de transacción propias de PayPal, que son gestionadas directamente por PayPal.</string>
+    <string name="paypal_commissions">Nota: PayPal puede aplicar sus propias tarifas de procesamiento. VentaGo no agrega una comisión de plataforma por transacción.</string>
     <string name="check_paypal_commissions">Consultar tarifas de PayPal</string>
     <string name="bank_transfer">Transferencia bancaria</string>
     <string name="ach_with_proof">ACH con comprobante</string>
@@ -271,7 +271,7 @@
     <string name="link_yappy">Vincular Yappy</string>
     <string name="connect_yappy">Conecta tu cuenta de Yappy</string>
     <string name="accept_yappy_payments">Acepta pagos de tus clientes usando Yappy</string>
-    <string name="yappy_commission_info">1% de comisión por transacción, además de la comisión propia de Yappy.</string>
+    <string name="yappy_commission_info">Yappy puede aplicar su propia comisión de procesamiento. VentaGo no agrega una comisión de plataforma por transacción.</string>
     <string name="funds_go_to_bank">Los fondos se depositan directamente en tu cuenta bancaria vinculada a Yappy.</string>
     <string name="confirm_unlink_yappy">¿Estás seguro de que deseas desvincular tu cuenta de Yappy? No podrás recibir pagos por Yappy hasta que la vincules nuevamente.</string>
     <string name="need_help_get_values">¿Necesitas ayuda para obtener estos valores?</string>

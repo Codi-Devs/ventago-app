@@ -45,7 +45,6 @@ class PaymentMethodsViewModel(
 
     private var business: Business? = null
     private var summary: PaymentSummary? = null
-    private var commissionsBootstrappedForBusinessId: Int? = null
     private var paymentSettingsViewedLogged = false
     private var paymentOnboardingViewedLogged = false
     private var paymentOnboardingCompleted = false
@@ -120,10 +119,6 @@ class PaymentMethodsViewModel(
         viewModelScope.launch {
             businessService.business.onEach { newBusiness ->
                 business = newBusiness
-                val businessId = newBusiness?.businessId ?: -1
-                if (businessId > 0 && commissionsBootstrappedForBusinessId != businessId) {
-                    commissionsBootstrappedForBusinessId = null
-                }
                 recomputeStateMode()
                 refreshAchStatusIfReady()
             }.launchIn(this)
@@ -216,6 +211,21 @@ class PaymentMethodsViewModel(
         val paymentMethods = buildAvailableMethods(currentSummary, localAchStatus)
         val currentMode = uiState.value.screenMode
 
+        if (!currentSummary.moduleAccess.hasAccess()) {
+            updateState {
+                copy(
+                    screenMode = PaymentScreenMode.BlockedPaymentsModuleInactive,
+                    loadingSummaryData = false,
+                    activeMethod = null,
+                    activeStep = 1,
+                    paymentSummary = currentSummary,
+                    availablePaymentMethods = paymentMethods,
+                    autoInvoiceEnabled = currentSummary.autoInvoiceOnPaymentSuccess,
+                )
+            }
+            return
+        }
+
         val nextMode = when (currentMode) {
             PaymentScreenMode.MethodDetailConfigured,
             PaymentScreenMode.MethodDetailOnboarding -> currentMode
@@ -240,49 +250,36 @@ class PaymentMethodsViewModel(
             paymentOnboardingViewedLogged = true
             analyticsService.logPaymentOnboardingViewed(source = "settings")
         }
-
-        val businessId = business?.businessId ?: -1
-        if (nextMode == PaymentScreenMode.ConfiguredList && businessId > 0) {
-            maybeBootstrapCommissions(businessId)
-        }
     }
 
     private fun refreshAchStatusIfReady() {
         val businessId = business?.businessId ?: -1
         if (!uiState.value.canViewPayments || businessId <= 0 || summary == null) return
+        if (summary?.moduleAccess?.hasAccess() != true) return
 
         viewModelScope.launch(Dispatchers.IO) {
             runCatching { refreshAchStatus() }
         }
     }
 
-    private fun maybeBootstrapCommissions(businessId: Int) {
-        if (commissionsBootstrappedForBusinessId == businessId) return
-        commissionsBootstrappedForBusinessId = businessId
-        viewModelScope.launch(Dispatchers.IO) {
-            runCatching {
-                loadFeeSummaryInternal()
-                loadFeeTransactionsInternal(reset = true)
-                loadFeeBatchesInternal(reset = true)
-            }.onFailure {
-                commissionsBootstrappedForBusinessId = null
-            }
-        }
-    }
-
     private fun canConfigurePaymentsOrWarn(): Boolean {
+        if (summary != null && summary?.moduleAccess?.hasAccess() != true) {
+            emitWarning("El módulo de pagos y cobros no está activo para este negocio.")
+            return false
+        }
         if (uiState.value.canConfigurePayments) return true
         emitWarning("No tienes permisos para configurar métodos de pago.")
         return false
     }
 
-    private fun canPayFeesOrWarn(): Boolean {
-        if (uiState.value.canPayFees) return true
-        emitWarning("No tienes permisos para pagar comisiones.")
+    private fun canUsePaymentsModuleOrWarn(): Boolean {
+        if (summary?.moduleAccess?.hasAccess() == true) return true
+        emitWarning("El módulo de pagos y cobros no está activo para este negocio.")
         return false
     }
 
     fun onStartOnboarding() {
+        if (!canUsePaymentsModuleOrWarn()) return
         if (!canConfigurePaymentsOrWarn()) return
         analyticsService.logPaymentOnboardingStarted(source = "settings")
         if (isAddressMissing()) {
@@ -361,6 +358,7 @@ class PaymentMethodsViewModel(
 
     fun onOpenMethod(method: PaymentMethodType) {
         val currentSummary = summary ?: return
+        if (!canUsePaymentsModuleOrWarn()) return
         val configured = methodConfigured(method)
         if (!configured && !canConfigurePaymentsOrWarn()) return
         val achStatusAccount = uiState.value.achStatus?.account
@@ -411,10 +409,11 @@ class PaymentMethodsViewModel(
             copy(
                 activeMethod = null,
                 activeStep = 1,
-                screenMode = if (currentSummary?.onboardingCompleted == true) {
-                    PaymentScreenMode.ConfiguredList
-                } else {
-                    PaymentScreenMode.GlobalOnboarding
+                screenMode = when {
+                    currentSummary == null -> PaymentScreenMode.Loading
+                    !currentSummary.moduleAccess.hasAccess() -> PaymentScreenMode.BlockedPaymentsModuleInactive
+                    currentSummary.onboardingCompleted -> PaymentScreenMode.ConfiguredList
+                    else -> PaymentScreenMode.GlobalOnboarding
                 }
             )
         }
@@ -443,6 +442,7 @@ class PaymentMethodsViewModel(
         val state = uiState.value
         val method = state.activeMethod ?: return
         if (state.screenMode != PaymentScreenMode.MethodDetailOnboarding) return
+        if (!canUsePaymentsModuleOrWarn()) return
         if (!canConfigurePaymentsOrWarn()) return
 
         if (method == PaymentMethodType.Yappy) {
@@ -514,6 +514,7 @@ class PaymentMethodsViewModel(
     }
 
     fun onToggleAutoInvoice(enabled: Boolean) {
+        if (!canUsePaymentsModuleOrWarn()) return
         if (!canConfigurePaymentsOrWarn()) return
         val businessId = business?.businessId ?: -1
         if (businessId <= 0) {
@@ -2237,52 +2238,11 @@ class PaymentMethodsViewModel(
     }
 
     fun onPayCommissions() {
-        if (!canPayFeesOrWarn()) return
-        val businessId = business?.businessId ?: -1
-        if (businessId <= 0) {
-            emitWarning("No se pudo identificar el negocio para pagar comisiones.")
-            return
-        }
-        if (feesHeadlineCents() <= 0L) {
-            emitWarning("No tienes comisiones pendientes para pagar.")
-            return
-        }
-
-        showLoading()
-        viewModelScope.launch(Dispatchers.IO) {
-            runCatching {
-                paymentService.createDirectCheckout(
-                    businessId = businessId,
-                    successUrl = "https://tecodigi.com/payments/fees/success",
-                    cancelUrl = "https://tecodigi.com/settings/payment-fees?checkout=cancelled",
-                )
-            }.onSuccess { checkout ->
-                withContext(Dispatchers.Main) {
-                    if (checkout.paymentLinkUrl.isBlank()) {
-                        showError()
-                        emitWarning("No fue posible abrir el pago de comisiones.")
-                    } else {
-                        showSuccess()
-                        emitEvent(PaymentUiEvent.OpenExternalUrl(checkout.paymentLinkUrl))
-                    }
-                }
-            }.onFailure { error ->
-                withContext(Dispatchers.Main) {
-                    showError()
-                    emitWarning(warningFromError(error, "No fue posible crear el pago de comisiones."))
-                }
-            }
-        }
+        emitWarning("Las comisiones VentaGo por transacción ya no se cobran al cliente.")
     }
 
     fun refreshCommissions() {
-        viewModelScope.launch(Dispatchers.IO) {
-            runCatching {
-                loadFeeSummaryInternal()
-                loadFeeTransactionsInternal(reset = true)
-                loadFeeBatchesInternal(reset = true)
-            }
-        }
+        emitWarning("Las comisiones VentaGo por transacción ya no se cobran al cliente.")
     }
 
     fun loadMoreTransactions() {

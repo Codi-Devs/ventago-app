@@ -16,6 +16,7 @@ import com.teco.ventago.features.payments.domain.models.YappyOnsiteGroup
 enum class PaymentScreenMode {
     Loading,
     BlockedNoPaymentsAccess,
+    BlockedPaymentsModuleInactive,
     GlobalOnboarding,
     ConfiguredList,
     MethodDetailOnboarding,

@@ -63,6 +63,28 @@ data class PaymentSummary(
     @SerialName("linked_paypal_billing_agreement") val linkedPaypalBillingAgreement: Boolean = false,
     @SerialName("auto_invoice_on_payment_success") val autoInvoiceOnPaymentSuccess: Boolean = false,
     @SerialName("fee_billing") val feeBilling: FeeBillingSummary = FeeBillingSummary(),
+    @SerialName("module_access") val moduleAccess: PaymentModuleAccess = PaymentModuleAccess(),
+)
+
+@Serializable
+data class PaymentModuleAccess(
+    @SerialName("enabled") val enabled: Boolean = false,
+    @SerialName("source") val source: String = "none",
+    @SerialName("plan_code") val planCode: String = "payments_module",
+    @SerialName("entitlement_key") val entitlementKey: String = "payments_module",
+    @SerialName("subscription") val subscription: PaymentModuleAccessSubscription? = null,
+) {
+    fun hasAccess(): Boolean = enabled && (source == "subscription" || source == "beta")
+}
+
+@Serializable
+data class PaymentModuleAccessSubscription(
+    @SerialName("id") val id: String = "",
+    @SerialName("status") val status: String = "",
+    @SerialName("billing_period") val billingPeriod: String = "",
+    @SerialName("current_period_end") val currentPeriodEnd: String = "",
+    @SerialName("next_renewal_at") val nextRenewalAt: String = "",
+    @SerialName("cancel_at_period_end") val cancelAtPeriodEnd: Boolean = false,
 )
 
 @Serializable
