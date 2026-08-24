@@ -42,6 +42,7 @@ data class CartLine(
     val pharmaBatchQty: Int? = null,
 
     val costCents: Money? = null,         // cost from catalog (cents), used for margin display
+    val locationId: Int? = null,
 ) {
     fun unitPrice(): Money = overrideUnitPrice ?: baseUnitPrice
     fun normalizedQuantity(): Double = normalizeQuantity(quantity)

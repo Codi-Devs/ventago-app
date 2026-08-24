@@ -126,6 +126,8 @@ import com.teco.ventago.features.pos.ui.viewmodel.PosViewModel
 import com.teco.ventago.features.product.data.provider.category.CategoryProvider
 import com.teco.ventago.features.product.data.provider.item.ItemProvider
 import com.teco.ventago.features.product.data.provider.product.ProductProvider
+import com.teco.ventago.features.inventory.data.InventoryProvider
+import com.teco.ventago.features.inventory.domain.InventoryAvailabilityStore
 import com.teco.ventago.features.product.data.repository.ProductsRepository
 import com.teco.ventago.features.product.domain.ProductService
 import com.teco.ventago.features.quotes.data.provider.QuotesProvider
@@ -282,6 +284,7 @@ internal val viewModels = module {
             analyticsService = get(),
             appScope = get(named("AppScope")),
             posProvisioningService = get(),
+            inventoryAvailabilityStore = get(),
         )
     }
     viewModelOf(::QuotesListViewModel)
@@ -645,6 +648,20 @@ internal fun appModule() = module {
             ),
             cache = get(),
             changesManager = get(),
+            authService = get()
+        )
+    }
+
+    single {
+        InventoryProvider(
+            client = get(),
+            authService = get()
+        )
+    }
+
+    single {
+        InventoryAvailabilityStore(
+            provider = get(),
             authService = get()
         )
     }

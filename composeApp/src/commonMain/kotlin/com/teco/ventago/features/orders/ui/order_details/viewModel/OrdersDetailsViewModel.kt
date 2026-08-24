@@ -12,6 +12,8 @@ import com.teco.ventago.core.beta.BetaFeature
 import com.teco.ventago.core.beta.BetaService
 import com.teco.ventago.core.firebase.AnalyticsService
 import com.teco.ventago.features.auth.domain.IAuthService
+import com.teco.ventago.features.inventory.data.InventoryProvider
+import com.teco.ventago.features.inventory.domain.InventoryAvailabilityStore
 import com.teco.ventago.features.branches.domain.BranchService
 import com.teco.ventago.features.business.domain.BusinessService
 import com.teco.ventago.features.business.domain.model.Business
@@ -31,6 +33,7 @@ import com.teco.ventago.features.orders.domain.models.OrderPaymentDto
 import com.teco.ventago.features.orders.domain.models.PaymentStatus
 import com.teco.ventago.features.orders.domain.models.ReceivableTermDto
 import com.teco.ventago.features.orders.domain.models.OrderStatus
+import com.teco.ventago.features.orders.domain.models.OrderStatus
 import com.teco.ventago.features.orders.domain.models.requests.RetryInvoiceResponse
 import com.teco.ventago.features.payments.domain.PaymentService
 import com.teco.ventago.features.printers.domain.PrinterService
@@ -47,6 +50,9 @@ import kotlinx.coroutines.flow.launchIn
 import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import kotlinx.serialization.json.buildJsonArray
+import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.put
 import kotlinx.datetime.Clock
 import kotlinx.datetime.LocalDate
 import kotlinx.datetime.LocalDateTime
@@ -83,6 +89,8 @@ class OrdersDetailsViewModel(
     private val printerService: PrinterService,
     private val snackbarService: SnackbarService,
     private val analyticsService: AnalyticsService,
+    private val inventoryProvider: InventoryProvider,
+    private val inventoryAvailabilityStore: InventoryAvailabilityStore,
 ) : BaseViewModel<OrderDetailsState, OrderDetailsUiEvent>(OrderDetailsState()) {
 
     var business: Business? = null
@@ -134,6 +142,7 @@ class OrdersDetailsViewModel(
                             user,
                             beta
                         ),
+                        canPhysicalReturn = inventoryAvailabilityStore.canReceive(),
                     )
                 }
             }
@@ -177,6 +186,135 @@ class OrdersDetailsViewModel(
     fun showShareSheet(show: Boolean) {
         updateState {
             copy(showShareSheet = show)
+        }
+    }
+
+    fun dismissPhysicalReturn() {
+        updateState {
+            copy(
+                showPhysicalReturnSheet = false,
+                physicalReturnSubmitting = false,
+                physicalReturnLines = emptyList(),
+            )
+        }
+    }
+
+    fun openPhysicalReturn() {
+        val order = uiState.value.order ?: return
+        if (!uiState.value.canPhysicalReturn) return
+        val noteTypes = setOf("04", "4", "05", "5", "06", "6", "07", "7")
+        if (order.orderType in noteTypes) return
+        if (order.status == OrderStatus.DRAFT || order.status == OrderStatus.CANCELLED) return
+        viewModelScope.launch {
+            val businessId = business?.businessId ?: order.businessId
+            if (!inventoryAvailabilityStore.isModuleEnabled(businessId)) {
+                snackbarService.show("El módulo de inventario no está activo.")
+                return@launch
+            }
+            val match = Regex("^ORD-([^-]+)-([^-]+)-").find(order.internalNumber)
+            val branchCode = match?.groupValues?.getOrNull(1).orEmpty()
+            val billingPoint = match?.groupValues?.getOrNull(2).orEmpty()
+            inventoryAvailabilityStore.refresh(
+                businessId,
+                branchCode,
+                billingPoint,
+                order.lines.map { it.itemId }
+            )
+            val locationId = inventoryAvailabilityStore.snapshot.value.locationId
+            if (locationId == null || locationId <= 0) {
+                snackbarService.show("No hay una ubicación de inventario configurada para esta sucursal.")
+                return@launch
+            }
+            val lines = order.lines.filter { it.itemId > 0 }.map { line ->
+                PhysicalReturnLineState(
+                    itemId = line.itemId,
+                    itemName = line.itemName,
+                    maxQuantity = line.quantity,
+                    quantityInput = line.quantity.toString(),
+                    locationId = locationId,
+                )
+            }
+            if (lines.isEmpty()) {
+                snackbarService.show("Esta orden no tiene líneas inventariables para devolver.")
+                return@launch
+            }
+            updateState {
+                copy(
+                    showPhysicalReturnSheet = true,
+                    physicalReturnLines = lines,
+                )
+            }
+        }
+    }
+
+    fun updatePhysicalReturnQuantity(itemId: Int, quantity: String) {
+        updateState {
+            copy(
+                physicalReturnLines = physicalReturnLines.map { line ->
+                    if (line.itemId == itemId) line.copy(quantityInput = quantity) else line
+                }
+            )
+        }
+    }
+
+    fun updatePhysicalReturnDisposition(itemId: Int, disposition: String) {
+        updateState {
+            copy(
+                physicalReturnLines = physicalReturnLines.map { line ->
+                    if (line.itemId == itemId) line.copy(disposition = disposition) else line
+                }
+            )
+        }
+    }
+
+    fun submitPhysicalReturn() {
+        val order = uiState.value.order ?: return
+        val drafts = uiState.value.physicalReturnLines
+        val dispositions = setOf("available", "quarantine", "damaged")
+        val positive = drafts.mapNotNull { line ->
+            val qty = line.quantityInput.replace(",", ".").toDoubleOrNull() ?: 0.0
+            if (qty <= 0) null else line to qty
+        }
+        if (positive.isEmpty()) {
+            viewModelScope.launch { snackbarService.show("Indique al menos una cantidad a devolver.") }
+            return
+        }
+        if (positive.any { it.first.disposition !in dispositions }) {
+            viewModelScope.launch {
+                snackbarService.show("Cada línea a devolver requiere disposición: disponible, cuarentena o dañado.")
+            }
+            return
+        }
+        val rows = positive
+        updateState { copy(physicalReturnSubmitting = true) }
+        viewModelScope.launch {
+            val linesJson = buildJsonArray {
+                rows.forEach { (line, qty) ->
+                    add(
+                        buildJsonObject {
+                            put("item_id", line.itemId)
+                            put("location_id", line.locationId)
+                            put("disposition", line.disposition)
+                            put("quantity", ((qty * 1000.0).toLong() / 1000.0).toString())
+                        }
+                    )
+                }
+            }
+            val response = withContext(Dispatchers.IO) {
+                inventoryProvider.physicalReturn(
+                    businessId = business?.businessId ?: order.businessId,
+                    idempotencyKey = "return:order:${order.id}:${Clock.System.now().toEpochMilliseconds()}",
+                    sourceId = order.id.toString(),
+                    lines = linesJson,
+                )
+            }
+            updateState { copy(physicalReturnSubmitting = false) }
+            if (response.successful) {
+                dismissPhysicalReturn()
+                snackbarService.show("Devolución física registrada. El stock no se mueve con la nota de crédito.")
+            } else {
+                snackbarService.show(response.errorMessage ?: "No se pudo registrar la devolución física.")
+            }
         }
     }
 

@@ -85,6 +85,7 @@ fun PosItemRow(
     modifier: Modifier = Modifier,
     item: Item,
     currency: String = "USD",
+    availabilityLabel: String? = null,
     onClick: (Int) -> Unit = {},
 ) {
 
@@ -112,12 +113,22 @@ fun PosItemRow(
             }
         },
         contentSlot = {
-            Text(
-                text = item.name,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-                style = bodyMediumBold()
-            )
+            Column {
+                Text(
+                    text = item.name,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    style = bodyMediumBold()
+                )
+                if (!availabilityLabel.isNullOrBlank()) {
+                    Text(
+                        text = availabilityLabel,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        style = bodySmall(color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f))
+                    )
+                }
+            }
         },
         trailingSlot = {}
     )
@@ -128,12 +139,13 @@ fun PosItemGridCard(
     modifier: Modifier = Modifier,
     item: Item,
     currency: String = "USD",
+    availabilityLabel: String? = null,
     onClick: (Int) -> Unit = {},
 ) {
     Card(
         modifier = modifier
             .fillMaxWidth()
-            .height(104.dp),
+            .height(120.dp),
         onClick = { onClick(item.itemId) },
         elevation = CardDefaults.elevatedCardElevation(4.dp),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.background)
@@ -148,6 +160,14 @@ fun PosItemGridCard(
                 overflow = TextOverflow.Ellipsis,
                 style = bodyMediumBold()
             )
+            if (!availabilityLabel.isNullOrBlank()) {
+                Text(
+                    text = availabilityLabel,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    style = bodySmall(color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f))
+                )
+            }
             Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                 Text(
                     text = item.price.toString(),

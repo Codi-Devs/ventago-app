@@ -30,6 +30,7 @@ import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Message
 import androidx.compose.material.icons.filled.Share
@@ -235,6 +236,16 @@ fun OrderDetailsActions(backStackEntry: NavBackStackEntry?,  navigateAny: (Any) 
 
     val phoneNumber = uiState.order?.displayCustomerPhone()
 
+    if (uiState.canPhysicalReturn && order != null && order.orderType !in listOf("04", "4", "05", "5", "06", "6", "07", "7")) {
+        IconButton(onClick = { viewModel.openPhysicalReturn() }) {
+            Icon(
+                imageVector = Icons.Rounded.Inventory2,
+                contentDescription = "Devolución física",
+                tint = MaterialTheme.colorScheme.primary
+            )
+        }
+    }
+
     IconButton(onClick = {
         copyToClipboard("Order Details", viewModel.getOrderDetailsMessage())
     }) {
@@ -373,6 +384,7 @@ fun OrderDetailsScreen(
     val voidPaymentSheetState = rememberModalBottomSheetState()
     val cancelOrderSheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     val statusHistorySheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+    val physicalReturnSheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
 
     LaunchedEffect(Unit) {
         viewModel.events.collect { event ->
@@ -702,6 +714,68 @@ fun OrderDetailsScreen(
                     order = order,
                     onDismiss = { showStatusHistorySheet = false }
                 )
+            }
+        }
+
+        if (uiState.showPhysicalReturnSheet) {
+            ModalBottomSheet(
+                containerColor = MaterialTheme.colorScheme.background,
+                onDismissRequest = { viewModel.dismissPhysicalReturn() },
+                sheetState = physicalReturnSheetState,
+            ) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(start = 16.dp, end = 16.dp, bottom = 24.dp)
+                ) {
+                    Text(
+                        text = "Devolución física",
+                        style = titleLarge(),
+                        modifier = Modifier.padding(bottom = 8.dp)
+                    )
+                    Text(
+                        text = "La nota de crédito no mueve inventario. Esta devolución reingresa stock con una disposición obligatoria por línea.",
+                        style = bodySmall(),
+                        modifier = Modifier.padding(bottom = 16.dp)
+                    )
+                    uiState.physicalReturnLines.forEach { line ->
+                        Text(
+                            text = line.itemName,
+                            style = bodyMediumBold(),
+                            modifier = Modifier.padding(bottom = 8.dp)
+                        )
+                        OutlinedTextField(
+                            value = line.quantityInput,
+                            onValueChange = { viewModel.updatePhysicalReturnQuantity(line.itemId, it) },
+                            label = { Text("Cantidad") },
+                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                            modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp)
+                        )
+                        Row(
+                            modifier = Modifier.fillMaxWidth().padding(bottom = 16.dp),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            listOf(
+                                "available" to "Disponible",
+                                "quarantine" to "Cuarentena",
+                                "damaged" to "Dañado"
+                            ).forEach { (value, label) ->
+                                FilterChip(
+                                    selected = line.disposition == value,
+                                    onClick = { viewModel.updatePhysicalReturnDisposition(line.itemId, value) },
+                                    label = { Text(label) }
+                                )
+                            }
+                        }
+                    }
+                    Button(
+                        onClick = { viewModel.submitPhysicalReturn() },
+                        enabled = !uiState.physicalReturnSubmitting,
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Text(if (uiState.physicalReturnSubmitting) "Registrando..." else "Registrar devolución")
+                    }
+                }
             }
         }
 

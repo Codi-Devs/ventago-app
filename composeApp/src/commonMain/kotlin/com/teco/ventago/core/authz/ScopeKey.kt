@@ -42,6 +42,9 @@ object ScopeKey {
     const val SETTINGS_VIEW = "settings:view"
     const val SETTINGS_MODIFY_POS_DEVICES = "settings:modify_pos_devices"
 
+    const val INVENTORY_VIEW = "inventory:view"
+    const val INVENTORY_RECEIVE = "inventory:receive"
+
     const val RECURRING_VIEW = "recurring_invoice:view"
     const val RECURRING_CREATE = "recurring_invoice:create_invoice"
     const val RECURRING_CANCEL = "recurring_invoice:cancel"
