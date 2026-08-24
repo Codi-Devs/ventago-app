@@ -61,6 +61,18 @@ class InventoryAvailabilityStore(
         return ScopeKey.INVENTORY_RECEIVE in user.scopes
     }
 
+    fun canTransfer(): Boolean {
+        val user = authService.getUserSync() ?: return false
+        if (!user.isSubUser) return true
+        return ScopeKey.INVENTORY_TRANSFER in user.scopes
+    }
+
+    fun canCount(): Boolean {
+        val user = authService.getUserSync() ?: return false
+        if (!user.isSubUser) return true
+        return ScopeKey.INVENTORY_COUNT in user.scopes
+    }
+
     suspend fun isModuleEnabled(businessId: Int): Boolean {
         if (businessId <= 0) return false
         val response = runCatching { provider.getAccess(businessId) }.getOrNull() ?: return false

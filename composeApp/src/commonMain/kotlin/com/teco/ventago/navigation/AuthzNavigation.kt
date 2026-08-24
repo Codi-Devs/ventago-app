@@ -77,6 +77,8 @@ fun routeKeyForScreen(screen: PosScreens): RouteKey? {
         PosScreens.EditExpenseScreen,
         PosScreens.DuplicateExpenseScreen,
         PosScreens.CufeImportScreen -> RouteKey.EXPENSE_NEW
+        PosScreens.Inventory,
+        PosScreens.InventoryOpsScreen -> RouteKey.INVENTORY_OPS
         PosScreens.SettingsScreen -> RouteKey.SETTINGS_PAGE
         PosScreens.Payments,
         PosScreens.PaymentsHomeScreen,

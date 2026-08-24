@@ -1,0 +1,29 @@
+package com.teco.ventago.features.inventory.ui
+
+data class InventoryLocationOption(
+    val id: Int,
+    val name: String,
+)
+
+data class InventoryAlertRow(
+    val itemId: Int,
+    val available: String,
+    val minQty: String,
+    val suggestedQty: String,
+)
+
+data class InventoryOpsState(
+    val loading: Boolean = false,
+    val enabled: Boolean = false,
+    val canTransfer: Boolean = false,
+    val canCount: Boolean = false,
+    val message: String = "",
+    val locations: List<InventoryLocationOption> = emptyList(),
+    val fromLocationId: String = "",
+    val toLocationId: String = "",
+    val itemId: String = "",
+    val quantity: String = "",
+    val countLocationId: String = "",
+    val countedQty: String = "",
+    val alerts: List<InventoryAlertRow> = emptyList(),
+)

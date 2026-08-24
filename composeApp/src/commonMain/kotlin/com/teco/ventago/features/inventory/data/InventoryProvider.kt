@@ -86,6 +86,87 @@ class InventoryProvider(
         })
     }
 
+    suspend fun listLocations(businessId: Int): ApiResponse {
+        val res = client.post("${Configs.serverBasePath}inventory/locations") {
+            authHeaders(businessId)
+            contentType(ContentType.Application.Json)
+            setBody(buildJsonObject { put("business_id", businessId) })
+        }
+        return parse(res.status, res.body(), retry = { listLocations(businessId) })
+    }
+
+    suspend fun transfer(
+        businessId: Int,
+        idempotencyKey: String,
+        fromLocationId: Int,
+        toLocationId: Int,
+        itemId: Int,
+        quantity: String,
+        reason: String,
+    ): ApiResponse {
+        val res = client.post("${Configs.serverBasePath}inventory/transfer") {
+            authHeaders(businessId)
+            contentType(ContentType.Application.Json)
+            setBody(buildJsonObject {
+                put("business_id", businessId)
+                put("idempotency_key", idempotencyKey)
+                put("from_location_id", fromLocationId)
+                put("to_location_id", toLocationId)
+                put("reason", reason)
+                put("lines", buildJsonArray {
+                    add(buildJsonObject {
+                        put("item_id", itemId)
+                        put("quantity", quantity)
+                    })
+                })
+            })
+        }
+        return parse(res.status, res.body(), retry = {
+            transfer(businessId, idempotencyKey, fromLocationId, toLocationId, itemId, quantity, reason)
+        })
+    }
+
+    suspend fun countCommit(
+        businessId: Int,
+        idempotencyKey: String,
+        locationId: Int,
+        itemId: Int,
+        countedQty: String,
+    ): ApiResponse {
+        val res = client.post("${Configs.serverBasePath}inventory/count-commit") {
+            authHeaders(businessId)
+            contentType(ContentType.Application.Json)
+            setBody(buildJsonObject {
+                put("business_id", businessId)
+                put("idempotency_key", idempotencyKey)
+                put("location_id", locationId)
+                put("lines", buildJsonArray {
+                    add(buildJsonObject {
+                        put("item_id", itemId)
+                        put("counted_qty", countedQty)
+                    })
+                })
+            })
+        }
+        return parse(res.status, res.body(), retry = {
+            countCommit(businessId, idempotencyKey, locationId, itemId, countedQty)
+        })
+    }
+
+    suspend fun belowMin(businessId: Int, locationId: Int?): ApiResponse {
+        val res = client.post("${Configs.serverBasePath}inventory/below-min") {
+            authHeaders(businessId)
+            contentType(ContentType.Application.Json)
+            setBody(buildJsonObject {
+                put("business_id", businessId)
+                if (locationId != null && locationId > 0) {
+                    put("location_id", locationId)
+                }
+            })
+        }
+        return parse(res.status, res.body(), retry = { belowMin(businessId, locationId) })
+    }
+
     private fun io.ktor.client.request.HttpRequestBuilder.authHeaders(businessId: Int) {
         headers {
             append(HttpHeaders.Accept, "*/*")

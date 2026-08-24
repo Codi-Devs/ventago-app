@@ -128,6 +128,7 @@ import com.teco.ventago.features.product.data.provider.item.ItemProvider
 import com.teco.ventago.features.product.data.provider.product.ProductProvider
 import com.teco.ventago.features.inventory.data.InventoryProvider
 import com.teco.ventago.features.inventory.domain.InventoryAvailabilityStore
+import com.teco.ventago.features.inventory.ui.InventoryOpsViewModel
 import com.teco.ventago.features.product.data.repository.ProductsRepository
 import com.teco.ventago.features.product.domain.ProductService
 import com.teco.ventago.features.quotes.data.provider.QuotesProvider
@@ -292,6 +293,7 @@ internal val viewModels = module {
     viewModelOf(::ExpensesListViewModel)
     viewModelOf(::ExpenseDetailsViewModel)
     viewModelOf(::NewExpenseViewModel)
+    viewModelOf(::InventoryOpsViewModel)
     viewModelOf(::CufeImportViewModel)
     viewModelOf(::ExpenseAccountsViewModel)
     viewModelOf(::OrdersViewModel)
