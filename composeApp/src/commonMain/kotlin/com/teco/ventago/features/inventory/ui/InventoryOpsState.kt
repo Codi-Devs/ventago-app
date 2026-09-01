@@ -12,12 +12,22 @@ data class InventoryAlertRow(
     val suggestedQty: String,
 )
 
+data class InventoryDashboardSummary(
+    val availableUnits: String = "0",
+    val stockValue: String = "0",
+    val averageUnitCost: String? = null,
+    val salesUnits30d: String = "0",
+    val salesAmount30d: String = "0",
+)
+
 data class InventoryOpsState(
     val loading: Boolean = false,
     val enabled: Boolean = false,
+    val canView: Boolean = false,
     val canTransfer: Boolean = false,
     val canCount: Boolean = false,
     val message: String = "",
+    val dashboard: InventoryDashboardSummary? = null,
     val locations: List<InventoryLocationOption> = emptyList(),
     val fromLocationId: String = "",
     val toLocationId: String = "",

@@ -7,6 +7,8 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.datetime.Clock
+import kotlinx.serialization.json.JsonArray
+import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.booleanOrNull
 import kotlinx.serialization.json.contentOrNull
@@ -19,6 +21,8 @@ data class InventoryAvailabilityRow(
     val itemId: Int,
     val tracked: Boolean,
     val available: String?,
+    val allowNegativeStock: Boolean = false,
+    val movingAverageUnitCost: String? = null,
 )
 
 data class InventoryAvailabilitySnapshot(
@@ -39,6 +43,26 @@ data class InventoryAvailabilitySnapshot(
         val qty = row.available ?: "—"
         val freshness = freshnessLabel()
         return if (freshness.isBlank()) "Stock $qty" else "Stock $qty · $freshness"
+    }
+
+    fun catalogStockLabel(itemId: Int): String? {
+        val row = byItemId[itemId] ?: return null
+        if (!row.tracked) return null
+        return "Stock ${row.available ?: "—"}"
+    }
+
+    fun shouldBlockUnstocked(
+        itemId: Int,
+        canView: Boolean,
+        isPersonalized: Boolean,
+    ): Boolean {
+        if (isPersonalized || itemId <= 0 || !canView || !enabled) return false
+        val row = byItemId[itemId] ?: return false
+        if (!row.tracked || row.allowNegativeStock) return false
+        val available = row.available?.trim().orEmpty()
+        if (available.isEmpty()) return false
+        val qty = available.toDoubleOrNull() ?: return false
+        return qty <= 0.0
     }
 }
 
@@ -73,6 +97,26 @@ class InventoryAvailabilityStore(
         return ScopeKey.INVENTORY_COUNT in user.scopes
     }
 
+    fun canAdjust(): Boolean {
+        val user = authService.getUserSync() ?: return false
+        if (!user.isSubUser) return true
+        return ScopeKey.INVENTORY_ADJUST in user.scopes
+    }
+
+    fun canConfigure(): Boolean {
+        val user = authService.getUserSync() ?: return false
+        if (!user.isSubUser) return true
+        return ScopeKey.INVENTORY_CONFIGURE in user.scopes
+    }
+
+    fun shouldBlockUnstocked(itemId: Int, isPersonalized: Boolean): Boolean {
+        return snapshot.value.shouldBlockUnstocked(
+            itemId = itemId,
+            canView = canView(),
+            isPersonalized = isPersonalized,
+        )
+    }
+
     suspend fun isModuleEnabled(businessId: Int): Boolean {
         if (businessId <= 0) return false
         val response = runCatching { provider.getAccess(businessId) }.getOrNull() ?: return false
@@ -104,6 +148,29 @@ class InventoryAvailabilityStore(
             _snapshot.value = InventoryAvailabilitySnapshot(enabled = true)
             return
         }
+        loadBatch(businessId, locationId, itemIds)
+    }
+
+    suspend fun refreshForCatalog(businessId: Int, itemIds: List<Int>) {
+        if (businessId <= 0 || !canView()) {
+            _snapshot.value = InventoryAvailabilitySnapshot()
+            return
+        }
+        val enabled = isModuleEnabled(businessId)
+        if (!enabled) {
+            _snapshot.value = InventoryAvailabilitySnapshot()
+            return
+        }
+        val locationsResponse = runCatching { provider.listLocations(businessId) }.getOrNull()
+        val locationId = firstStockableLocationId(locationsResponse?.data)
+        if (locationId == null || locationId <= 0) {
+            _snapshot.value = InventoryAvailabilitySnapshot(enabled = true)
+            return
+        }
+        loadBatch(businessId, locationId, itemIds)
+    }
+
+    private suspend fun loadBatch(businessId: Int, locationId: Int, itemIds: List<Int>) {
         val uniqueIds = itemIds.filter { it > 0 }.distinct().take(100)
         if (uniqueIds.isEmpty()) {
             _snapshot.value = InventoryAvailabilitySnapshot(
@@ -122,8 +189,10 @@ class InventoryAvailabilityStore(
             val itemId = obj["item_id"]?.jsonPrimitive?.intOrNull ?: return@mapNotNull null
             InventoryAvailabilityRow(
                 itemId = itemId,
-                tracked = obj["is_inventory_tracked"]?.jsonPrimitive?.booleanOrNull == true,
+                tracked = obj.jsonTruthy("is_inventory_tracked"),
                 available = obj["available"]?.jsonPrimitive?.contentOrNull,
+                allowNegativeStock = obj.jsonTruthy("allow_negative_stock"),
+                movingAverageUnitCost = obj["moving_average_unit_cost"]?.jsonPrimitive?.contentOrNull,
             )
         }.associateBy { it.itemId }
         _snapshot.value = InventoryAvailabilitySnapshot(
@@ -133,4 +202,30 @@ class InventoryAvailabilityStore(
             byItemId = rows,
         )
     }
+}
+
+private fun firstStockableLocationId(data: JsonElement?): Int? {
+    val array = when (data) {
+        is JsonArray -> data
+        is JsonObject -> data["items"]?.jsonArray
+        else -> null
+    } ?: return null
+    val parsed = array.mapNotNull { element ->
+        val obj = runCatching { element.jsonObject }.getOrNull() ?: return@mapNotNull null
+        val id = obj["id"]?.jsonPrimitive?.intOrNull
+            ?: obj["location_id"]?.jsonPrimitive?.intOrNull
+            ?: return@mapNotNull null
+        val stockable = obj.jsonTruthy("stockable") || !obj.containsKey("stockable")
+        val active = !obj.containsKey("active") || obj.jsonTruthy("active")
+        Triple(id, stockable, active)
+    }
+    return parsed.firstOrNull { it.second && it.third }?.first ?: parsed.firstOrNull()?.first
+}
+
+private fun JsonObject.jsonTruthy(key: String): Boolean {
+    val primitive = runCatching { this[key]?.jsonPrimitive }.getOrNull() ?: return false
+    if (primitive.booleanOrNull == true) return true
+    if (primitive.intOrNull == 1) return true
+    val content = primitive.contentOrNull?.trim()?.lowercase().orEmpty()
+    return content == "true" || content == "1"
 }

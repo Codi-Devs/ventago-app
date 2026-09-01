@@ -33,7 +33,6 @@ import com.teco.ventago.features.orders.domain.models.OrderPaymentDto
 import com.teco.ventago.features.orders.domain.models.PaymentStatus
 import com.teco.ventago.features.orders.domain.models.ReceivableTermDto
 import com.teco.ventago.features.orders.domain.models.OrderStatus
-import com.teco.ventago.features.orders.domain.models.OrderStatus
 import com.teco.ventago.features.orders.domain.models.requests.RetryInvoiceResponse
 import com.teco.ventago.features.payments.domain.PaymentService
 import com.teco.ventago.features.printers.domain.PrinterService

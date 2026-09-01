@@ -5,6 +5,7 @@ import com.teco.ventago.core.authz.ActionKey
 import com.teco.ventago.core.authz.AuthzEvaluator
 import com.teco.ventago.core.camera.SharedImage
 import com.teco.ventago.features.auth.domain.IAuthService
+import com.teco.ventago.features.inventory.domain.InventoryProductSupport
 import com.teco.ventago.features.orders.domain.models.requests.NameValue
 import com.teco.ventago.features.product.domain.ProductService
 import com.teco.ventago.features.product.domain.model.AdditionalInfoCatalog
@@ -31,7 +32,8 @@ import kotlin.ranges.coerceIn
 
 class AddItemViewModel(
     private val authService: IAuthService,
-    private val productService: ProductService
+    private val productService: ProductService,
+    private val inventoryProductSupport: InventoryProductSupport,
 ) : ItemViewModel(productService) {
 
     init {
@@ -53,6 +55,12 @@ class AddItemViewModel(
             
             selectedCategory?.let { category ->
                 updateState { copy(selectedCategory = category) }
+            }
+        }
+        viewModelScope.launch(Dispatchers.IO) {
+            val section = inventoryProductSupport.load(null)
+            withContext(Dispatchers.Main) {
+                updateState { inventoryProductSupport.apply(section, this) }
             }
         }
     }
@@ -236,6 +244,11 @@ class AddItemViewModel(
                 try {
                     val savedItem = productService.addItem(newItem, category.id)
                     if (savedItem.itemId > 0) {
+                        val inventoryError = inventoryProductSupport.save(savedItem.itemId, uiState.value)
+                        if (inventoryError != null) {
+                            showError()
+                            return@launch
+                        }
                         showSuccess()
                         delay(600)
                         if (state.isPersonalizedProduct) {

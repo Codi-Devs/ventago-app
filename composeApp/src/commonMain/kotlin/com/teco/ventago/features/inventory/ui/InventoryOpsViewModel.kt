@@ -41,21 +41,29 @@ class InventoryOpsViewModel(
     fun refresh() {
         viewModelScope.launch {
             val businessId = businessService.business.value?.businessId ?: 0
-            if (businessId <= 0 || !availabilityStore.canView()) {
+            if (businessId <= 0) {
                 _uiState.value = InventoryOpsState()
                 return@launch
             }
             val enabled = availabilityStore.isModuleEnabled(businessId)
+            val canView = availabilityStore.canView()
             val locationsResponse = runCatching { provider.listLocations(businessId) }.getOrNull()
             val locations = parseLocations(locationsResponse?.data)
+            val dashboard = if (enabled && canView) {
+                parseDashboard(runCatching { provider.dashboard(businessId) }.getOrNull()?.data)
+            } else {
+                null
+            }
             _uiState.value = _uiState.value.copy(
                 enabled = enabled,
+                canView = canView,
                 canTransfer = availabilityStore.canTransfer(),
                 canCount = availabilityStore.canCount(),
                 locations = locations,
-                message = if (!enabled) "Inventario no está activo." else "",
+                dashboard = dashboard,
+                message = if (!enabled) "El módulo de inventario no está activo." else "",
             )
-            if (enabled) {
+            if (enabled && canView) {
                 loadAlerts()
             }
         }
@@ -132,6 +140,10 @@ class InventoryOpsViewModel(
 
     fun loadAlerts() {
         viewModelScope.launch {
+            if (!availabilityStore.canView()) {
+                update { copy(alerts = emptyList()) }
+                return@launch
+            }
             val businessId = businessService.business.value?.businessId ?: 0
             val locationId = _uiState.value.countLocationId.toIntOrNull()
             val response = runCatching { provider.belowMin(businessId, locationId) }.getOrNull()
@@ -176,5 +188,17 @@ class InventoryOpsViewModel(
                 suggestedQty = obj["suggested_qty"]?.jsonPrimitive?.contentOrNull ?: "0",
             )
         }
+    }
+
+    private fun parseDashboard(data: JsonElement?): InventoryDashboardSummary? {
+        val obj = data as? JsonObject ?: return null
+        val sales = obj["sales_30d"] as? JsonObject
+        return InventoryDashboardSummary(
+            availableUnits = obj["available_units"]?.jsonPrimitive?.contentOrNull ?: "0",
+            stockValue = obj["stock_value"]?.jsonPrimitive?.contentOrNull ?: "0",
+            averageUnitCost = obj["average_unit_cost"]?.jsonPrimitive?.contentOrNull,
+            salesUnits30d = sales?.get("units")?.jsonPrimitive?.contentOrNull ?: "0",
+            salesAmount30d = sales?.get("amount")?.jsonPrimitive?.contentOrNull ?: "0",
+        )
     }
 }

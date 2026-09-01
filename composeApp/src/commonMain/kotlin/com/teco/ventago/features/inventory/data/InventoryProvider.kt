@@ -15,6 +15,7 @@ import io.ktor.http.HttpHeaders
 import io.ktor.http.HttpStatusCode
 import io.ktor.http.contentType
 import kotlinx.serialization.json.JsonArray
+import kotlinx.serialization.json.JsonNull
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.buildJsonArray
 import kotlinx.serialization.json.buildJsonObject
@@ -165,6 +166,71 @@ class InventoryProvider(
             })
         }
         return parse(res.status, res.body(), retry = { belowMin(businessId, locationId) })
+    }
+
+    suspend fun dashboard(businessId: Int): ApiResponse {
+        val res = client.post("${Configs.serverBasePath}inventory/dashboard") {
+            authHeaders(businessId)
+            contentType(ContentType.Application.Json)
+            setBody(buildJsonObject { put("business_id", businessId) })
+        }
+        return parse(res.status, res.body(), retry = { dashboard(businessId) })
+    }
+
+    suspend fun itemProfile(businessId: Int, itemId: Int): ApiResponse {
+        val res = client.post("${Configs.serverBasePath}inventory/item-profile") {
+            authHeaders(businessId)
+            contentType(ContentType.Application.Json)
+            setBody(buildJsonObject {
+                put("business_id", businessId)
+                put("item_id", itemId)
+            })
+        }
+        return parse(res.status, res.body(), retry = { itemProfile(businessId, itemId) })
+    }
+
+    suspend fun updateItemProfile(
+        businessId: Int,
+        itemId: Int,
+        tracked: Boolean,
+        allowNegativeOverride: Boolean?,
+        expectedVersion: Int,
+        minQty: String?,
+        reorderQty: String?,
+    ): ApiResponse {
+        val res = client.post("${Configs.serverBasePath}inventory/update-item-profile") {
+            authHeaders(businessId)
+            contentType(ContentType.Application.Json)
+            setBody(buildJsonObject {
+                put("business_id", businessId)
+                put("item_id", itemId)
+                put("is_inventory_tracked", tracked)
+                if (allowNegativeOverride == null) {
+                    put("allow_negative_stock_override", JsonNull)
+                } else {
+                    put("allow_negative_stock_override", allowNegativeOverride)
+                }
+                put("expected_version", expectedVersion)
+                if (!minQty.isNullOrBlank()) put("min_qty", minQty)
+                if (!reorderQty.isNullOrBlank()) put("reorder_qty", reorderQty)
+            })
+        }
+        return parse(res.status, res.body(), retry = {
+            updateItemProfile(businessId, itemId, tracked, allowNegativeOverride, expectedVersion, minQty, reorderQty)
+        })
+    }
+
+    suspend fun balances(businessId: Int, itemId: Int): ApiResponse {
+        val res = client.post("${Configs.serverBasePath}inventory/balances") {
+            authHeaders(businessId)
+            contentType(ContentType.Application.Json)
+            setBody(buildJsonObject {
+                put("business_id", businessId)
+                put("item_id", itemId)
+                put("stock_state", "available")
+            })
+        }
+        return parse(res.status, res.body(), retry = { balances(businessId, itemId) })
     }
 
     private fun io.ktor.client.request.HttpRequestBuilder.authHeaders(businessId: Int) {

@@ -1279,7 +1279,9 @@ fun PosSuccessScreen(
             Spacer(modifier = Modifier.height(8.dp))
 
             Text(
-                text = "No se pudo crear el pedido. Por favor, intenta nuevamente o contacta al soporte.",
+                text = uiState.orderCreationErrorMessage.ifBlank {
+                    "No se pudo crear el pedido. Por favor, intenta nuevamente o contacta al soporte."
+                },
                 style = bodyMedium(),
                 modifier = Modifier.padding(horizontal = 32.dp),
                 textAlign = TextAlign.Center

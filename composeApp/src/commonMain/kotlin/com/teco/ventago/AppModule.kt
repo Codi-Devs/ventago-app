@@ -128,6 +128,7 @@ import com.teco.ventago.features.product.data.provider.item.ItemProvider
 import com.teco.ventago.features.product.data.provider.product.ProductProvider
 import com.teco.ventago.features.inventory.data.InventoryProvider
 import com.teco.ventago.features.inventory.domain.InventoryAvailabilityStore
+import com.teco.ventago.features.inventory.domain.InventoryProductSupport
 import com.teco.ventago.features.inventory.ui.InventoryOpsViewModel
 import com.teco.ventago.features.product.data.repository.ProductsRepository
 import com.teco.ventago.features.product.domain.ProductService
@@ -665,6 +666,14 @@ internal fun appModule() = module {
         InventoryAvailabilityStore(
             provider = get(),
             authService = get()
+        )
+    }
+
+    single {
+        InventoryProductSupport(
+            provider = get(),
+            store = get(),
+            businessService = get(),
         )
     }
 

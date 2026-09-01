@@ -1,5 +1,6 @@
 package com.teco.ventago.features.orders.ui.order_details.viewModel
 
+import com.teco.ventago.features.inventory.domain.InventorySaleErrorMapper
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.jsonObject
@@ -15,6 +16,7 @@ internal object OrderMutationErrorMapper {
         codeOverrides: Map<String, String> = emptyMap()
     ): String {
         val parsed = parse(error.message.orEmpty())
+        InventorySaleErrorMapper.messageForCode(parsed.code)?.let { return it }
         val backendMessage = parsed.backendMessage
         if (!backendMessage.isNullOrBlank() && backendMessage != parsed.code) {
             return backendMessage

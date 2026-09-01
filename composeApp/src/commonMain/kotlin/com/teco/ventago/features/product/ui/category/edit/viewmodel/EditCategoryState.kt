@@ -20,6 +20,8 @@ class EditCategoryState {
 
     val isPremium = mutableStateOf(false)
     val canManageCategories = mutableStateOf(false)
+    val inventoryStockByItemId = mutableStateOf(emptyMap<Int, String>())
+    val inventoryCostByItemId = mutableStateOf(emptyMap<Int, String>())
 
     fun showLoading(title: String) {
         loadingState.value = loadingState.value.copy(state = LoadingState.LOADING, title = title)

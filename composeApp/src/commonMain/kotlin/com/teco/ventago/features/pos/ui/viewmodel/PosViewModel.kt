@@ -79,6 +79,7 @@ import com.teco.ventago.features.pos.domain.models.Tax
 import com.teco.ventago.features.pos.provisioning.domain.PosDeviceProvisioningService
 import com.teco.ventago.features.product.domain.ProductService
 import com.teco.ventago.features.inventory.domain.InventoryAvailabilityStore
+import com.teco.ventago.features.inventory.domain.InventorySaleErrorMapper
 import com.teco.ventago.features.product.domain.model.Item
 import com.teco.ventago.features.product.domain.model.ProductType
 import com.teco.ventago.features.product.domain.model.AdditionalInfoKey
@@ -908,6 +909,12 @@ class PosViewModel(
             showError()
             return
         }
+        if (deltaQty > 0 && inventoryAvailabilityStore.shouldBlockUnstocked(item.itemId, item.itemId < 0)) {
+            viewModelScope.launch {
+                snackbarService.show(InventorySaleErrorMapper.ZERO_STOCK_CART_MESSAGE)
+            }
+            return
+        }
         updateState {
         val priceCents = customUnitPrice
         val baseCents = item.price.toLongCents()
@@ -1605,6 +1612,7 @@ class PosViewModel(
         updateState {
             copy(
                 orderCreationFailed = false,
+                orderCreationErrorMessage = "",
                 postCreateInvoiceWarning = com.teco.ventago.features.invoicing.domain.PostCreateInvoiceWarningState(),
             )
         }
@@ -1769,7 +1777,15 @@ class PosViewModel(
                         }
                         return@withContext
                     }
-                    updateState { copy(orderCreationFailed = true) }
+                    updateState {
+                        copy(
+                            orderCreationFailed = true,
+                            orderCreationErrorMessage = InventorySaleErrorMapper.messageFor(
+                                e,
+                                "No se pudo crear el pedido. Por favor, intenta nuevamente o contacta al soporte.",
+                            ),
+                        )
+                    }
                     withContext(Dispatchers.Main) {
                         showError()
                     }

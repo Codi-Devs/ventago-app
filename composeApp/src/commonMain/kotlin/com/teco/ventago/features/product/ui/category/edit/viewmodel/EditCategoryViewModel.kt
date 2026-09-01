@@ -7,7 +7,10 @@ import com.teco.ventago.core.authz.AuthzEvaluator
 import com.teco.ventago.design_system.organism.LoadingState
 import com.teco.ventago.features.auth.domain.IAuthService
 import com.teco.ventago.features.business.domain.BusinessService
+import com.teco.ventago.features.inventory.domain.InventoryAvailabilityStore
 import com.teco.ventago.features.product.domain.ProductService
+import com.teco.ventago.features.product.domain.model.Item
+import com.teco.ventago.utils.formatNumberToMoney
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.IO
 import kotlinx.coroutines.Job
@@ -15,15 +18,18 @@ import kotlinx.coroutines.flow.cancellable
 import kotlinx.coroutines.flow.launchIn
 import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 class EditCategoryViewModel(
     private val authService: IAuthService,
     private val businessService: BusinessService,
     private val productService: ProductService,
+    private val inventoryAvailabilityStore: InventoryAvailabilityStore,
 ) : ViewModel() {
 
     val state = EditCategoryState()
     private val authJob: Job
+    private var inventoryJob: Job? = null
 
     init {
         val selectedCategoryId = productService.selectedCategoryId
@@ -48,6 +54,7 @@ class EditCategoryViewModel(
                     menu.categories.firstOrNull{ it.id == selectedCategoryId }?.let {
                         state.selectedCategory.value = it
                         state.items.value = it.items
+                        refreshInventoryLabels(it.items)
                     } ?: run {
                         // TODO Add logs
                         state.goBack.value = true
@@ -69,6 +76,7 @@ class EditCategoryViewModel(
     override fun onCleared() {
         try {
             authJob.cancel()
+            inventoryJob?.cancel()
         } catch (e: Throwable) {
             e.printStackTrace()
         }
@@ -103,7 +111,7 @@ class EditCategoryViewModel(
                         )
                     }
                 }
-
+                refreshInventoryLabels(state.items.value)
             }
         }
     }
@@ -154,6 +162,32 @@ class EditCategoryViewModel(
                     // TODO Add logs
                     state.showError()
                 }
+            }
+        }
+    }
+
+    private fun refreshInventoryLabels(items: List<Item>) {
+        inventoryJob?.cancel()
+        inventoryJob = viewModelScope.launch(Dispatchers.IO) {
+            val businessId = businessService.business.value?.businessId ?: return@launch
+            inventoryAvailabilityStore.refreshForCatalog(businessId, items.map { it.itemId })
+            val snap = inventoryAvailabilityStore.snapshot.value
+            val stock = mutableMapOf<Int, String>()
+            val cost = mutableMapOf<Int, String>()
+            items.forEach { item ->
+                snap.catalogStockLabel(item.itemId)?.let { stock[item.itemId] = it }
+                val row = snap.byItemId[item.itemId] ?: return@forEach
+                if (!row.tracked) return@forEach
+                val avg = row.movingAverageUnitCost?.trim().orEmpty()
+                val amount = avg.ifEmpty { item.cost?.toString().orEmpty() }
+                if (amount.isNotEmpty()) {
+                    val suffix = if (avg.isNotEmpty()) "Inv." else "Cat."
+                    cost[item.itemId] = "${formatNumberToMoney(amount)} $suffix"
+                }
+            }
+            withContext(Dispatchers.Main) {
+                state.inventoryStockByItemId.value = stock
+                state.inventoryCostByItemId.value = cost
             }
         }
     }

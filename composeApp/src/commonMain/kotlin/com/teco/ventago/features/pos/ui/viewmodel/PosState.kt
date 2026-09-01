@@ -364,6 +364,7 @@ data class PosState(
     val inventoryLocationId: Int? = null,
     val inventoryFreshnessLabel: String = "",
     val inventoryAvailableByItemId: Map<Int, String> = emptyMap(),
+    val orderCreationErrorMessage: String = "",
 
     val branches: List<Branch> = listOf(),
     val selectedBranchIndex: Int = 0,

@@ -158,6 +158,8 @@ fun EditCategoryScreen(
             items(list, key = { it.itemId }) { item ->
                 ItemRow(item = item,
                     currency = viewModel.state.currency.value,
+                    availabilityLabel = viewModel.state.inventoryStockByItemId.value[item.itemId],
+                    costLabel = viewModel.state.inventoryCostByItemId.value[item.itemId],
                     modifier = Modifier.padding(
                         start = 16.dp, end = 16.dp, top = 8.dp, bottom = 8.dp
                     ),

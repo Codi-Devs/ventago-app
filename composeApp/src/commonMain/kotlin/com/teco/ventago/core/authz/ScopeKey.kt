@@ -46,6 +46,8 @@ object ScopeKey {
     const val INVENTORY_RECEIVE = "inventory:receive"
     const val INVENTORY_TRANSFER = "inventory:transfer"
     const val INVENTORY_COUNT = "inventory:count"
+    const val INVENTORY_ADJUST = "inventory:adjust"
+    const val INVENTORY_CONFIGURE = "inventory:configure"
 
     const val RECURRING_VIEW = "recurring_invoice:view"
     const val RECURRING_CREATE = "recurring_invoice:create_invoice"

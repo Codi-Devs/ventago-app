@@ -53,6 +53,8 @@ object AuthzEvaluator {
                 ScopeKey.INVENTORY_VIEW,
                 ScopeKey.INVENTORY_TRANSFER,
                 ScopeKey.INVENTORY_COUNT,
+                ScopeKey.INVENTORY_ADJUST,
+                ScopeKey.INVENTORY_CONFIGURE,
                 ScopeKey.INVENTORY_RECEIVE
             )
         ),
@@ -113,7 +115,10 @@ object AuthzEvaluator {
             requiredAny = setOf(
                 ScopeKey.INVENTORY_VIEW,
                 ScopeKey.INVENTORY_TRANSFER,
-                ScopeKey.INVENTORY_COUNT
+                ScopeKey.INVENTORY_COUNT,
+                ScopeKey.INVENTORY_ADJUST,
+                ScopeKey.INVENTORY_CONFIGURE,
+                ScopeKey.INVENTORY_RECEIVE
             )
         ),
         RouteKey.SETTINGS_PAGE to AuthzPolicy(allowAll = true),

@@ -76,6 +76,7 @@ import com.teco.ventago.design_system.textfields.DMMoneyOutlinedTextField
 import com.teco.ventago.design_system.textfields.DMOutlinedTextField
 import com.teco.ventago.design_system.textfields.helpers.DMDropDownField
 import com.teco.ventago.design_system.theme.bodyMedium
+import com.teco.ventago.design_system.theme.bodyMediumBold
 import com.teco.ventago.design_system.theme.cardContainerColor
 import com.teco.ventago.design_system.theme.headlineSmall
 import com.teco.ventago.design_system.theme.labelMedium
@@ -99,6 +100,7 @@ import com.teco.ventago.features.product.ui.item.add.viewmodel.ItemStateUiEvent
 import com.teco.ventago.features.product.ui.item.add.viewmodel.ItemViewModel
 import com.teco.ventago.features.product.ui.item.edit.EditItemViewModel
 import com.teco.ventago.utils.BarcodeScannerScreen
+import com.teco.ventago.utils.formatNumberToMoney
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -286,6 +288,7 @@ fun ItemScreenContent(
     var taxesExpanded by rememberSaveable { mutableStateOf(false) }
     var identificationExpanded by rememberSaveable { mutableStateOf(false) }
     var fiscalExpanded by rememberSaveable { mutableStateOf(false) }
+    var inventoryExpanded by rememberSaveable { mutableStateOf(true) }
 
     val marginPercent = remember(uiState.price, uiState.cost) {
         if (uiState.price > 0 && uiState.cost > 0) {
@@ -443,7 +446,11 @@ fun ItemScreenContent(
 
             DMMoneyOutlinedTextField(
                 text = uiState.cost.toString(),
-                label = "Costo (Opcional)",
+                label = if (uiState.inventorySectionVisible && uiState.inventoryTracked) {
+                    "Costo de catálogo"
+                } else {
+                    "Costo (Opcional)"
+                },
                 modifier = Modifier.padding(bottom = 0.dp),
                 onChange = {
                     try {
@@ -461,6 +468,19 @@ fun ItemScreenContent(
                 keyboardType = KeyboardType.Number,
                 imeAction = ImeAction.Next,
             )
+
+            if (uiState.inventorySectionVisible && uiState.inventoryCanView && uiState.inventoryTracked) {
+                val avg = uiState.inventoryAvgCost.trim()
+                Text(
+                    text = if (avg.isNotEmpty()) {
+                        "Costo de inventario (Inv.): ${formatNumberToMoney(avg)}"
+                    } else {
+                        "Costo de inventario: Sin promedio aún. Se usará el costo de catálogo."
+                    },
+                    style = labelMedium(MaterialTheme.colorScheme.onSurfaceVariant),
+                    modifier = Modifier.padding(top = 4.dp, bottom = 4.dp),
+                )
+            }
 
             if (marginPercent != null) {
                 Text(
@@ -480,6 +500,67 @@ fun ItemScreenContent(
                 trailingIcon = vectorResource(Res.drawable.help),
                 trailingIconClick = { showHelpDialog = true }
             )
+        }
+
+        if (uiState.inventorySectionVisible) {
+            CollapsibleSectionCard(
+                title = "Inventario",
+                expanded = inventoryExpanded,
+                onToggle = { inventoryExpanded = !inventoryExpanded },
+                modifier = Modifier.padding(start = 16.dp, end = 16.dp, top = 16.dp),
+            ) {
+                Text(
+                    text = if (uiState.inventoryCanConfigure) {
+                        "Define si el producto controlará stock. Saldos y kardex se operan cuando está inventariable."
+                    } else {
+                        "Saldos, alarma de stock y costo promedio de este producto."
+                    },
+                    style = labelMedium(MaterialTheme.colorScheme.onSurfaceVariant),
+                )
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Text("Inventariable", style = bodyMedium(), modifier = Modifier.weight(1f))
+                    Switch(
+                        checked = uiState.inventoryTracked,
+                        onCheckedChange = viewModel::onInventoryTrackedChange,
+                        enabled = uiState.inventoryCanConfigure,
+                    )
+                }
+                if (uiState.inventoryCanView && uiState.inventoryTracked) {
+                    Text(
+                        text = "Disponible: ${uiState.inventoryAvailable.ifBlank { "—" }}",
+                        style = bodyMediumBold(),
+                    )
+                }
+                if (uiState.inventoryCanConfigure) {
+                    DMOutlinedTextField(
+                        text = uiState.inventoryMinQty,
+                        label = "Cantidad mínima",
+                        modifier = Modifier.padding(bottom = 0.dp),
+                        onChange = viewModel::onInventoryMinQtyChange,
+                        maxLines = 1,
+                        keyboardType = KeyboardType.Number,
+                        imeAction = ImeAction.Next,
+                    )
+                    DMDropDownField(
+                        label = "Stock / ventas negativas",
+                        items = listOf("Según negocio", "Permitir", "No permitir"),
+                        selectedIndex = uiState.inventoryNegativePolicyIndex,
+                        onItemSelected = { index, _ -> viewModel.onInventoryNegativePolicyIndex(index) },
+                        selectedItemToString = { it },
+                    )
+                    Text(
+                        text = when (uiState.inventoryNegativePolicyIndex) {
+                            1 -> "Puede quedar en negativo"
+                            2 -> "Bloquea si no hay stock"
+                            else -> "Hereda la política general"
+                        },
+                        style = labelMedium(MaterialTheme.colorScheme.onSurfaceVariant),
+                    )
+                }
+            }
         }
 
         CollapsibleSectionCard(

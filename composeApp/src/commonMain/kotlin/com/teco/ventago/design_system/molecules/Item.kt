@@ -31,6 +31,8 @@ fun ItemRow(
     item: Item,
     reordering: Boolean = false,
     currency: String = "USD",
+    availabilityLabel: String? = null,
+    costLabel: String? = null,
     onClick: (Int) -> Unit = {},
     onOptionsClick: (Int) -> Unit = {},
 ) {
@@ -63,6 +65,22 @@ fun ItemRow(
                 overflow = TextOverflow.Ellipsis,
                 style = bodyMediumBold()
             )
+            if (!availabilityLabel.isNullOrBlank()) {
+                Text(
+                    text = availabilityLabel,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    style = bodySmall(color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f))
+                )
+            }
+            if (!costLabel.isNullOrBlank()) {
+                Text(
+                    text = costLabel,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    style = bodySmall(color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f))
+                )
+            }
             StatusChip(active = item.active)
         },
         trailingSlot = {

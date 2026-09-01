@@ -55,6 +55,18 @@ abstract class ItemViewModel(private val productService: ProductService) :
         }
     }
 
+    fun onInventoryTrackedChange(tracked: Boolean) {
+        updateState { copy(inventoryTracked = tracked) }
+    }
+
+    fun onInventoryMinQtyChange(value: String) {
+        updateState { copy(inventoryMinQty = value) }
+    }
+
+    fun onInventoryNegativePolicyIndex(index: Int) {
+        updateState { copy(inventoryNegativePolicyIndex = index) }
+    }
+
     fun onBarcodeChange(barcode: String) {
         updateState {
             copy(
