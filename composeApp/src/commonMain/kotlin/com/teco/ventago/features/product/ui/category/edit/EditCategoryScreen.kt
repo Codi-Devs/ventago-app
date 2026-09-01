@@ -30,6 +30,7 @@ import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -92,9 +93,14 @@ fun EditCategoryScreen(
     navigate: (PosScreens) -> Unit,
 ) {
     val snackbarHostState = remember { SnackbarHostState() }
-    
+
+    LaunchedEffect(Unit) {
+        viewModel.onScreenVisible()
+    }
 
     var list by remember { viewModel.state.items }
+    val inventoryStockByItemId by viewModel.state.inventoryStockByItemId
+    val inventoryCostByItemId by viewModel.state.inventoryCostByItemId
 
     val lazyListState = rememberLazyListState()
     
@@ -158,17 +164,15 @@ fun EditCategoryScreen(
             items(list, key = { it.itemId }) { item ->
                 ItemRow(item = item,
                     currency = viewModel.state.currency.value,
-                    availabilityLabel = viewModel.state.inventoryStockByItemId.value[item.itemId],
-                    costLabel = viewModel.state.inventoryCostByItemId.value[item.itemId],
+                    availabilityLabel = inventoryStockByItemId[item.itemId],
+                    costLabel = inventoryCostByItemId[item.itemId],
                     modifier = Modifier.padding(
                         start = 16.dp, end = 16.dp, top = 8.dp, bottom = 8.dp
                     ),
                     reordering = false,
                     onClick = {
-                        if (viewModel.state.canManageCategories.value) {
-                            viewModel.selectItem(item.itemId)
-                            navigate(PosScreens.EditItemScreen)
-                        }
+                        viewModel.selectItem(item.itemId)
+                        navigate(PosScreens.ProductDetailsScreen)
                     },
                     onOptionsClick = {
                         if (viewModel.state.canManageCategories.value) {

@@ -79,6 +79,7 @@ import com.teco.ventago.features.pos.domain.models.Tax
 import com.teco.ventago.features.pos.provisioning.domain.PosDeviceProvisioningService
 import com.teco.ventago.features.product.domain.ProductService
 import com.teco.ventago.features.inventory.domain.InventoryAvailabilityStore
+import com.teco.ventago.features.inventory.domain.InventoryKardexSupport
 import com.teco.ventago.features.inventory.domain.InventorySaleErrorMapper
 import com.teco.ventago.features.product.domain.model.Item
 import com.teco.ventago.features.product.domain.model.ProductType
@@ -213,6 +214,10 @@ class PosViewModel(
     )
 
     init {
+        inventoryAvailabilityStore.snapshot
+            .onEach { snap -> applyInventorySnapshot(snap) }
+            .launchIn(viewModelScope)
+
         viewModelScope.launch {
             authService.getUser()
                 .combine(betaService.features()) { user, betaResponse ->
@@ -707,21 +712,20 @@ class PosViewModel(
         inventoryRefreshJob?.cancel()
         inventoryRefreshJob = viewModelScope.launch(Dispatchers.IO) {
             inventoryAvailabilityStore.refresh(businessId, branchCode, billingPoint, itemIds)
-            val snap = inventoryAvailabilityStore.snapshot.value
-            updateState {
-                copy(
-                    inventoryEnabled = snap.enabled,
-                    inventoryLocationId = snap.locationId,
-                    inventoryFreshnessLabel = snap.freshnessLabel(),
-                    inventoryAvailableByItemId = snap.byItemId
-                        .filterValues { it.tracked }
-                        .mapValues { (_, row) ->
-                            val qty = row.available ?: "—"
-                            val freshness = snap.freshnessLabel()
-                            if (freshness.isBlank()) "Stock $qty" else "Stock $qty · $freshness"
-                        }
-                )
-            }
+        }
+    }
+
+    private fun applyInventorySnapshot(snap: com.teco.ventago.features.inventory.domain.InventoryAvailabilitySnapshot) {
+        if (!snap.enabled && snap.byItemId.isEmpty() && snap.fetchedAtEpochMs == 0L) return
+        updateState {
+            copy(
+                inventoryEnabled = snap.enabled,
+                inventoryLocationId = snap.locationId,
+                inventoryFreshnessLabel = snap.freshnessLabel(),
+                inventoryAvailableByItemId = snap.byItemId.keys.mapNotNull { itemId ->
+                    snap.catalogStockLabel(itemId)?.let { itemId to it }
+                }.toMap(),
+            )
         }
     }
 

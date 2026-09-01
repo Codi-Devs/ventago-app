@@ -1,10 +1,12 @@
 package com.teco.ventago.core.changes
 
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.emptyFlow
 
 interface IChangesManager {
 
     fun productsListener(): Flow<Int>
+    fun inventoryListener(): Flow<Int> = emptyFlow()
     fun businessListener(): Flow<Int>
     fun financialListener(): Flow<Int>
     fun customersListener(): Flow<Int>

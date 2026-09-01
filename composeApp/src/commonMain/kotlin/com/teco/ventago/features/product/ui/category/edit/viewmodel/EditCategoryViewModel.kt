@@ -7,6 +7,7 @@ import com.teco.ventago.core.authz.AuthzEvaluator
 import com.teco.ventago.design_system.organism.LoadingState
 import com.teco.ventago.features.auth.domain.IAuthService
 import com.teco.ventago.features.business.domain.BusinessService
+import com.teco.ventago.features.inventory.domain.InventoryAvailabilitySnapshot
 import com.teco.ventago.features.inventory.domain.InventoryAvailabilityStore
 import com.teco.ventago.features.product.domain.ProductService
 import com.teco.ventago.features.product.domain.model.Item
@@ -48,12 +49,21 @@ class EditCategoryViewModel(
             }
         }
 
+        inventoryAvailabilityStore.snapshot
+            .onEach { snap ->
+                if (state.items.value.isNotEmpty()) {
+                    applyInventoryLabels(state.items.value, snap)
+                }
+            }
+            .launchIn(viewModelScope)
+
         viewModelScope.launch {
             productService.getMenu().onEach { menu ->
                 menu?.let { _ ->
                     menu.categories.firstOrNull{ it.id == selectedCategoryId }?.let {
                         state.selectedCategory.value = it
                         state.items.value = it.items
+                        syncInventoryLabels()
                         refreshInventoryLabels(it.items)
                     } ?: run {
                         // TODO Add logs
@@ -83,8 +93,12 @@ class EditCategoryViewModel(
         super.onCleared()
     }
 
+    fun onScreenVisible() {
+        syncInventoryLabels()
+        refreshInventoryLabels(state.items.value)
+    }
+
     fun selectItem(itemId: Int) {
-        if (!state.canManageCategories.value) return
         productService.selectedItemId = itemId
     }
 
@@ -111,6 +125,7 @@ class EditCategoryViewModel(
                         )
                     }
                 }
+                syncInventoryLabels()
                 refreshInventoryLabels(state.items.value)
             }
         }
@@ -171,24 +186,34 @@ class EditCategoryViewModel(
         inventoryJob = viewModelScope.launch(Dispatchers.IO) {
             val businessId = businessService.business.value?.businessId ?: return@launch
             inventoryAvailabilityStore.refreshForCatalog(businessId, items.map { it.itemId })
-            val snap = inventoryAvailabilityStore.snapshot.value
-            val stock = mutableMapOf<Int, String>()
-            val cost = mutableMapOf<Int, String>()
-            items.forEach { item ->
-                snap.catalogStockLabel(item.itemId)?.let { stock[item.itemId] = it }
-                val row = snap.byItemId[item.itemId] ?: return@forEach
-                if (!row.tracked) return@forEach
-                val avg = row.movingAverageUnitCost?.trim().orEmpty()
-                val amount = avg.ifEmpty { item.cost?.toString().orEmpty() }
-                if (amount.isNotEmpty()) {
-                    val suffix = if (avg.isNotEmpty()) "Inv." else "Cat."
-                    cost[item.itemId] = "${formatNumberToMoney(amount)} $suffix"
-                }
-            }
             withContext(Dispatchers.Main) {
-                state.inventoryStockByItemId.value = stock
-                state.inventoryCostByItemId.value = cost
+                syncInventoryLabels()
             }
         }
+    }
+
+    private fun syncInventoryLabels() {
+        val items = state.items.value
+        if (items.isEmpty()) return
+        applyInventoryLabels(items, inventoryAvailabilityStore.snapshot.value)
+    }
+
+    private fun applyInventoryLabels(items: List<Item>, snap: InventoryAvailabilitySnapshot) {
+        if (!snap.enabled && snap.byItemId.isEmpty() && snap.fetchedAtEpochMs == 0L) return
+        val stock = mutableMapOf<Int, String>()
+        val cost = mutableMapOf<Int, String>()
+        items.forEach { item ->
+            snap.catalogStockLabel(item.itemId)?.let { stock[item.itemId] = it }
+            val row = snap.byItemId[item.itemId] ?: return@forEach
+            if (!row.tracked) return@forEach
+            val avg = row.movingAverageUnitCost?.trim().orEmpty()
+            val amount = avg.ifEmpty { item.cost?.toString().orEmpty() }
+            if (amount.isNotEmpty()) {
+                val suffix = if (avg.isNotEmpty()) "Inv." else "Cat."
+                cost[item.itemId] = "${formatNumberToMoney(amount)} $suffix"
+            }
+        }
+        state.inventoryStockByItemId.value = stock
+        state.inventoryCostByItemId.value = cost
     }
 }

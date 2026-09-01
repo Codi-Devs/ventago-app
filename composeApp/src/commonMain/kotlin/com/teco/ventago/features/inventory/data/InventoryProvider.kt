@@ -2,6 +2,7 @@ package com.teco.ventago.features.inventory.data
 
 import com.teco.ventago.Configs
 import com.teco.ventago.features.auth.domain.IAuthService
+import com.teco.ventago.features.inventory.domain.InventoryKardexSupport
 import com.teco.ventago.utils.ApiError
 import com.teco.ventago.utils.ApiResponse
 import io.ktor.client.HttpClient
@@ -87,13 +88,166 @@ class InventoryProvider(
         })
     }
 
-    suspend fun listLocations(businessId: Int): ApiResponse {
+    suspend fun listLocations(businessId: Int, includeRetired: Boolean = false): ApiResponse {
         val res = client.post("${Configs.serverBasePath}inventory/locations") {
+            authHeaders(businessId)
+            contentType(ContentType.Application.Json)
+            setBody(buildJsonObject {
+                put("business_id", businessId)
+                if (includeRetired) {
+                    put("include_retired", 1)
+                }
+            })
+        }
+        return parse(res.status, res.body(), retry = { listLocations(businessId, includeRetired) })
+    }
+
+    suspend fun ensureDefaultLocation(businessId: Int): ApiResponse {
+        val res = client.post("${Configs.serverBasePath}inventory/ensure-default-location") {
             authHeaders(businessId)
             contentType(ContentType.Application.Json)
             setBody(buildJsonObject { put("business_id", businessId) })
         }
-        return parse(res.status, res.body(), retry = { listLocations(businessId) })
+        return parse(res.status, res.body(), retry = { ensureDefaultLocation(businessId) })
+    }
+
+    suspend fun adjustStock(
+        businessId: Int,
+        idempotencyKey: String,
+        reason: String,
+        operation: String,
+        itemId: Int,
+        locationId: Int,
+        quantity: String,
+        unitCost: String?,
+    ): ApiResponse {
+        val line = buildJsonObject {
+            put("operation", operation)
+            put("item_id", itemId)
+            put("location_id", locationId)
+            put("stock_state", "available")
+            put("quantity", quantity)
+            if (!unitCost.isNullOrBlank()) {
+                put("unit_cost", unitCost)
+            }
+        }
+        val res = client.post("${Configs.serverBasePath}inventory/adjust") {
+            authHeaders(businessId)
+            contentType(ContentType.Application.Json)
+            setBody(buildJsonObject {
+                put("business_id", businessId)
+                put("idempotency_key", idempotencyKey)
+                put("reason", reason)
+                put("lines", buildJsonArray { add(line) })
+            })
+        }
+        return parse(res.status, res.body(), retry = {
+            adjustStock(businessId, idempotencyKey, reason, operation, itemId, locationId, quantity, unitCost)
+        })
+    }
+
+    suspend fun createLocation(
+        businessId: Int,
+        code: String,
+        name: String,
+        locationType: String,
+        parentLocationId: Int?,
+        stockable: Boolean,
+    ): ApiResponse {
+        val res = client.post("${Configs.serverBasePath}inventory/create-location") {
+            authHeaders(businessId)
+            contentType(ContentType.Application.Json)
+            setBody(buildJsonObject {
+                put("business_id", businessId)
+                put("code", code)
+                put("name", name)
+                put("location_type", locationType)
+                if (parentLocationId != null && parentLocationId > 0) {
+                    put("parent_location_id", parentLocationId)
+                } else {
+                    put("parent_location_id", JsonNull)
+                }
+                put("stockable", stockable)
+                put("expected_version", 0)
+            })
+        }
+        return parse(res.status, res.body(), retry = {
+            createLocation(businessId, code, name, locationType, parentLocationId, stockable)
+        })
+    }
+
+    suspend fun retireLocation(
+        businessId: Int,
+        locationId: Int,
+        reason: String,
+        expectedVersion: Int,
+    ): ApiResponse {
+        val res = client.post("${Configs.serverBasePath}inventory/retire-location") {
+            authHeaders(businessId)
+            contentType(ContentType.Application.Json)
+            setBody(buildJsonObject {
+                put("business_id", businessId)
+                put("location_id", locationId)
+                put("reason", reason)
+                put("expected_version", expectedVersion)
+            })
+        }
+        return parse(res.status, res.body(), retry = {
+            retireLocation(businessId, locationId, reason, expectedVersion)
+        })
+    }
+
+    suspend fun listDefaults(businessId: Int): ApiResponse {
+        val res = client.post("${Configs.serverBasePath}inventory/defaults") {
+            authHeaders(businessId)
+            contentType(ContentType.Application.Json)
+            setBody(buildJsonObject { put("business_id", businessId) })
+        }
+        return parse(res.status, res.body(), retry = { listDefaults(businessId) })
+    }
+
+    suspend fun setDefault(
+        businessId: Int,
+        branchCode: String,
+        billingPoint: String,
+        locationId: Int,
+        expectedVersion: Int,
+    ): ApiResponse {
+        val res = client.post("${Configs.serverBasePath}inventory/set-default") {
+            authHeaders(businessId)
+            contentType(ContentType.Application.Json)
+            setBody(buildJsonObject {
+                put("business_id", businessId)
+                put("branch_code", branchCode)
+                put("billing_point", billingPoint)
+                put("location_id", locationId)
+                put("expected_version", expectedVersion)
+            })
+        }
+        return parse(res.status, res.body(), retry = {
+            setDefault(businessId, branchCode, billingPoint, locationId, expectedVersion)
+        })
+    }
+
+    suspend fun removeDefault(
+        businessId: Int,
+        branchCode: String,
+        billingPoint: String,
+        expectedVersion: Int,
+    ): ApiResponse {
+        val res = client.post("${Configs.serverBasePath}inventory/remove-default") {
+            authHeaders(businessId)
+            contentType(ContentType.Application.Json)
+            setBody(buildJsonObject {
+                put("business_id", businessId)
+                put("branch_code", branchCode)
+                put("billing_point", billingPoint)
+                put("expected_version", expectedVersion)
+            })
+        }
+        return parse(res.status, res.body(), retry = {
+            removeDefault(businessId, branchCode, billingPoint, expectedVersion)
+        })
     }
 
     suspend fun transfer(
@@ -220,18 +374,56 @@ class InventoryProvider(
         })
     }
 
-    suspend fun balances(businessId: Int, itemId: Int): ApiResponse {
+    suspend fun balances(businessId: Int, itemId: Int, stockState: String? = null): ApiResponse {
         val res = client.post("${Configs.serverBasePath}inventory/balances") {
             authHeaders(businessId)
             contentType(ContentType.Application.Json)
             setBody(buildJsonObject {
                 put("business_id", businessId)
                 put("item_id", itemId)
-                put("stock_state", "available")
+                if (!stockState.isNullOrBlank()) {
+                    put("stock_state", stockState)
+                }
             })
         }
-        return parse(res.status, res.body(), retry = { balances(businessId, itemId) })
+        return parse(res.status, res.body(), retry = { balances(businessId, itemId, stockState) })
     }
+
+    suspend fun kardex(
+        businessId: Int,
+        itemId: Int,
+        limit: Int = InventoryKardexSupport.KARDEX_FETCH_LIMIT,
+        beforeMovementId: Int? = null,
+    ): ApiResponse {
+        val res = client.post("${Configs.serverBasePath}inventory/kardex") {
+            authHeaders(businessId)
+            contentType(ContentType.Application.Json)
+            setBody(buildJsonObject {
+                put("business_id", businessId)
+                put("item_id", itemId)
+                put("limit", limit)
+                if (beforeMovementId != null && beforeMovementId > 0) {
+                    put("before_movement_id", beforeMovementId)
+                }
+            })
+        }
+        return parse(res.status, res.body(), retry = { kardex(businessId, itemId, limit, beforeMovementId) })
+    }
+
+    suspend fun valuation(businessId: Int, itemId: Int): ApiResponse {
+        val res = client.post("${Configs.serverBasePath}inventory/valuation") {
+            authHeaders(businessId)
+            contentType(ContentType.Application.Json)
+            setBody(buildJsonObject {
+                put("business_id", businessId)
+                put("item_id", itemId)
+            })
+        }
+        return parse(res.status, res.body(), retry = { valuation(businessId, itemId) })
+    }
+
+    suspend fun balancesLegacyAvailableOnly(businessId: Int, itemId: Int): ApiResponse =
+        balances(businessId, itemId, stockState = "available")
 
     private fun io.ktor.client.request.HttpRequestBuilder.authHeaders(businessId: Int) {
         headers {

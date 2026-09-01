@@ -30,11 +30,12 @@ class InventoryProductSupport(
     private val provider: InventoryProvider,
     private val store: InventoryAvailabilityStore,
     private val businessService: BusinessService,
+    private val cache: InventoryLocalCache,
 ) {
-    suspend fun load(itemId: Int?): InventoryProductSection {
+    suspend fun load(itemId: Int?, force: Boolean = false): InventoryProductSection {
         val businessId = businessService.business.value?.businessId ?: 0
         if (businessId <= 0) return InventoryProductSection()
-        val enabled = store.isModuleEnabled(businessId)
+        val enabled = store.isModuleEnabled(businessId, force)
         val canView = store.canView()
         val canConfigure = store.canConfigure()
         if (!enabled || (!canView && !canConfigure)) {
@@ -48,6 +49,21 @@ class InventoryProductSupport(
                 canConfigure = true,
             )
         }
+        val cachedProfile = if (force) null else cache.peekItemProfile(businessId, itemId)
+        val cachedBalances = if (force) null else cache.peekBalances(businessId, itemId)
+        if (cachedProfile != null) {
+            return InventoryProductSection(
+                visible = true,
+                canView = canView,
+                canConfigure = canConfigure,
+                tracked = cachedProfile.tracked,
+                available = if (canView && cachedProfile.tracked) cachedBalances?.available.orEmpty() else "",
+                avgCost = if (canView && cachedProfile.tracked) cachedBalances?.avgCost.orEmpty() else "",
+                minQty = InventoryKardexSupport.formatInventoryQuantity(cachedProfile.minQty),
+                negativePolicyIndex = cachedProfile.negativePolicyIndex,
+                profileVersion = cachedProfile.profileVersion,
+            )
+        }
         val profileData = runCatching { provider.itemProfile(businessId, itemId) }.getOrNull()?.data as? JsonObject
         val tracked = profileData.jsonTruthy("is_inventory_tracked")
         val overrideEl = profileData?.get("allow_negative_stock_override")
@@ -59,10 +75,18 @@ class InventoryProductSupport(
         var available = ""
         var avgCost = ""
         if (canView && tracked) {
-            val balances = runCatching { provider.balances(businessId, itemId) }.getOrNull()?.data
+            val balances = runCatching { provider.balancesLegacyAvailableOnly(businessId, itemId) }.getOrNull()?.data
             available = sumAvailable(balances)
             avgCost = firstAvgCost(balances)
+            cache.persistBalances(businessId, itemId, CachedBalances(available = available, avgCost = avgCost))
         }
+        val profile = CachedItemProfile(
+            tracked = tracked,
+            minQty = profileData?.get("min_qty")?.jsonPrimitive?.contentOrNull.orEmpty(),
+            negativePolicyIndex = negativeIndex,
+            profileVersion = profileData?.get("version")?.jsonPrimitive?.intOrNull ?: 0,
+        )
+        cache.persistItemProfile(businessId, itemId, profile)
         return InventoryProductSection(
             visible = true,
             canView = canView,
@@ -70,9 +94,9 @@ class InventoryProductSupport(
             tracked = tracked,
             available = available,
             avgCost = avgCost,
-            minQty = profileData?.get("min_qty")?.jsonPrimitive?.contentOrNull.orEmpty(),
+            minQty = InventoryKardexSupport.formatInventoryQuantity(profile.minQty),
             negativePolicyIndex = negativeIndex,
-            profileVersion = profileData?.get("version")?.jsonPrimitive?.intOrNull ?: 0,
+            profileVersion = profile.profileVersion,
         )
     }
 
@@ -96,7 +120,12 @@ class InventoryProductSupport(
                 reorderQty = null,
             )
         }.getOrNull()
-        return if (response?.successful == true) null else "No se pudo guardar la configuración de inventario."
+        return if (response?.successful == true) {
+            cache.invalidateBusiness(businessId)
+            null
+        } else {
+            "No se pudo guardar la configuración de inventario."
+        }
     }
 
     fun apply(section: InventoryProductSection, state: ItemState): ItemState = state.copy(
@@ -104,9 +133,9 @@ class InventoryProductSupport(
         inventoryCanView = section.canView,
         inventoryCanConfigure = section.canConfigure,
         inventoryTracked = section.tracked,
-        inventoryAvailable = section.available,
+        inventoryAvailable = InventoryKardexSupport.formatInventoryQuantity(section.available),
         inventoryAvgCost = section.avgCost,
-        inventoryMinQty = section.minQty,
+        inventoryMinQty = InventoryKardexSupport.formatInventoryQuantity(section.minQty),
         inventoryNegativePolicyIndex = section.negativePolicyIndex,
         inventoryProfileVersion = section.profileVersion,
     )
@@ -137,7 +166,7 @@ private fun sumAvailable(data: JsonElement?): String {
         any = true
     }
     if (!any) return ""
-    return if (total % 1.0 == 0.0) total.toInt().toString() else total.toString()
+    return InventoryKardexSupport.formatQty(total)
 }
 
 private fun firstAvgCost(data: JsonElement?): String {

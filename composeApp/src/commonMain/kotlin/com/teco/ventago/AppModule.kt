@@ -128,7 +128,9 @@ import com.teco.ventago.features.product.data.provider.item.ItemProvider
 import com.teco.ventago.features.product.data.provider.product.ProductProvider
 import com.teco.ventago.features.inventory.data.InventoryProvider
 import com.teco.ventago.features.inventory.domain.InventoryAvailabilityStore
+import com.teco.ventago.features.inventory.domain.InventoryLocalCache
 import com.teco.ventago.features.inventory.domain.InventoryProductSupport
+import com.teco.ventago.features.inventory.domain.ProductInventorySupport
 import com.teco.ventago.features.inventory.ui.InventoryOpsViewModel
 import com.teco.ventago.features.product.data.repository.ProductsRepository
 import com.teco.ventago.features.product.domain.ProductService
@@ -148,6 +150,8 @@ import com.teco.ventago.features.product.ui.category.add.viewmodel.ModifyCategor
 import com.teco.ventago.features.product.ui.category.edit.viewmodel.EditCategoryViewModel
 import com.teco.ventago.features.product.ui.category.manage.viewmodel.CategoriesManageViewModel
 import com.teco.ventago.features.product.ui.item.add.viewmodel.AddItemViewModel
+import com.teco.ventago.features.product.ui.item.details.ProductDetailsViewModel
+import com.teco.ventago.features.product.ui.item.details.ProductKardexViewModel
 import com.teco.ventago.features.product.ui.item.edit.EditItemViewModel
 import com.teco.ventago.features.quotes.ui.list.QuotesListViewModel
 import com.teco.ventago.features.quotes.ui.details.QuoteDetailsViewModel
@@ -264,6 +268,8 @@ internal val viewModels = module {
     viewModelOf(::EditCategoryViewModel)
     viewModelOf(::AddItemViewModel)
     viewModelOf(::EditItemViewModel)
+    viewModelOf(::ProductDetailsViewModel)
+    viewModelOf(::ProductKardexViewModel)
     viewModelOf(::ModifyCategoryViewModel)
     viewModel {
         PosViewModel(
@@ -663,9 +669,23 @@ internal fun appModule() = module {
     }
 
     single {
+        InventoryLocalCache(storage = get())
+    }
+
+    single {
         InventoryAvailabilityStore(
             provider = get(),
-            authService = get()
+            authService = get(),
+            cache = get(),
+            changesManager = get(),
+        )
+    }
+
+    single {
+        ProductInventorySupport(
+            provider = get(),
+            store = get(),
+            cache = get(),
         )
     }
 
@@ -674,6 +694,7 @@ internal fun appModule() = module {
             provider = get(),
             store = get(),
             businessService = get(),
+            cache = get(),
         )
     }
 
