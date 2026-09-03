@@ -322,8 +322,7 @@ object RealTimeReportQueryDefaults {
             )
             "profit_and_loss" -> mapOf(
                 "group_by" to "month",
-                "base" to "issued",
-                "currency_code" to "USD"
+                "base" to "issued"
             )
             "financial_comparison" -> financialComparisonDefaults()
             "operating_margin" -> mapOf(
@@ -331,8 +330,7 @@ object RealTimeReportQueryDefaults {
                 "base" to "issued"
             )
             "business_overview" -> mapOf(
-                "base" to "issued",
-                "currency_code" to "USD"
+                "base" to "issued"
             )
             "cash_flow" -> mapOf(
                 "group_by" to "week",
@@ -348,12 +346,12 @@ object RealTimeReportQueryDefaults {
     }
 
     private fun currentYearStart(): String {
-        val today = Clock.System.now().toLocalDateTime(TimeZone.currentSystemDefault()).date
+        val today = Clock.System.now().toLocalDateTime(TimeZone.of("America/Panama")).date
         return "${today.year}-01-01"
     }
 
     private fun financialComparisonDefaults(): Map<String, String> {
-        val today = Clock.System.now().toLocalDateTime(TimeZone.currentSystemDefault()).date
+        val today = Clock.System.now().toLocalDateTime(TimeZone.of("America/Panama")).date
         val currentStart = isoDate(today.year, today.monthNumber, 1)
         val currentEnd = isoDate(today.year, today.monthNumber, daysInMonth(today.year, today.monthNumber))
         val previousMonth = if (today.monthNumber == 1) 12 else today.monthNumber - 1
@@ -369,7 +367,7 @@ object RealTimeReportQueryDefaults {
 }
 
 const val DEFAULT_PER_PAGE = 50
-private const val MAX_CHART_POINTS = 8
+private const val MAX_CHART_POINTS = 12
 
 private val MONEY_KEYS = listOf(
     "amount", "average", "balance", "charge", "collected", "cost", "expense", "expenses",

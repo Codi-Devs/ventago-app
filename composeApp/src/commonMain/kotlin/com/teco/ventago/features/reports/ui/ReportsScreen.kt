@@ -2317,22 +2317,28 @@ private fun salesTaxChartSections(data: RealTimeReportData): List<RealTimeReport
 }
 
 private fun salesTaxNetByPeriodChart(data: RealTimeReportData): RealTimeReportChartSection? {
-    val points = data.rows
-        .groupBy { row ->
-            row.cells.firstByKeys(TAX_PERIOD_LABEL_ALIASES)?.value?.takeIf { it.isNotBlank() && it != "-" }
-                ?: "Sin periodo"
-        }
-        .map { (label, rows) ->
-            val value = rows.sumOf(::rowNetItbms)
+    val globalRows = data.chartArray("trend")?.mapNotNull { it as? JsonObject }.orEmpty()
+    val points = if (globalRows.isNotEmpty()) {
+        globalRows.mapNotNull { row ->
+            val label = row.firstText(listOf("label", "key")) ?: "Sin periodo"
+            val value = row.numericField(listOf("amount", "net_itbms_payable")) ?: return@mapNotNull null
             RealTimeReportChartPoint(
                 label = label,
                 value = value,
                 formattedValue = formatMoneyValue(value)
             )
         }
-        .filter { it.value != 0.0 }
-        .sortedByDescending { dateSortKey(it.label) ?: it.label }
-        .take(MAX_REPORT_CHART_POINTS)
+    } else {
+        data.rows
+            .groupBy { row ->
+                row.cells.firstByKeys(TAX_PERIOD_LABEL_ALIASES)?.value?.takeIf { it.isNotBlank() && it != "-" }
+                    ?: "Sin periodo"
+            }
+            .map { (label, rows) ->
+                val value = rows.sumOf(::rowNetItbms)
+                RealTimeReportChartPoint(label, value, formatMoneyValue(value))
+            }
+    }.filter { it.value != 0.0 }.takeLast(MAX_REPORT_CHART_POINTS)
 
     return points.takeIf { it.isNotEmpty() }?.let {
         RealTimeReportChartSection(
@@ -2406,12 +2412,12 @@ private fun expenseTaxMonthlyComboChart(data: RealTimeReportData): RealTimeRepor
         val label = row.firstText(TAX_PERIOD_LABEL_ALIASES) ?: "Sin periodo"
         val total = row.numericField(listOf("total")) ?: return@mapNotNull null
         RealTimeReportChartPoint(label, total, formatMoneyValue(total))
-    }.take(MAX_REPORT_CHART_POINTS)
+    }.takeLast(MAX_REPORT_CHART_POINTS)
     val lines = sourceRows.mapNotNull { row ->
         val label = row.firstText(TAX_PERIOD_LABEL_ALIASES) ?: "Sin periodo"
         val itbms = row.numericField(listOf("itbms")) ?: return@mapNotNull null
         comboLinePayload(label, itbms, formatMoneyValue(itbms))
-    }.take(MAX_REPORT_CHART_POINTS)
+    }.takeLast(MAX_REPORT_CHART_POINTS)
 
     return points.takeIf { it.isNotEmpty() }?.let {
         RealTimeReportChartSection(
@@ -2591,7 +2597,7 @@ private fun expenseSummaryTrendChart(data: RealTimeReportData): RealTimeReportCh
         val label = row.firstText(TAX_PERIOD_LABEL_ALIASES) ?: "Sin periodo"
         val total = row.numericField(TOTAL_SALES_ALIASES) ?: return@mapNotNull null
         RealTimeReportChartPoint(label, total, formatMoneyValue(total))
-    }.take(MAX_REPORT_CHART_POINTS)
+    }.takeLast(MAX_REPORT_CHART_POINTS)
     val lines = rows.mapNotNull { row ->
         val label = row.firstText(TAX_PERIOD_LABEL_ALIASES) ?: "Sin periodo"
         val count = row.numericField(listOf("count", "document_count")) ?: return@mapNotNull null
@@ -2769,12 +2775,12 @@ private fun financialTrendChart(
             val value = row.numericField(listOf(seriesKey)) ?: return@mapNotNull null
             groupedChartPayload(label, friendlyFinancialSeries(seriesKey), value, formatMoneyValue(value))
         }
-    }.take(MAX_REPORT_CHART_POINTS * seriesKeys.size)
+    }.takeLast(MAX_REPORT_CHART_POINTS * seriesKeys.size)
     val points = rows.mapNotNull { row ->
         val label = row.firstText(FINANCIAL_LABEL_ALIASES) ?: "Sin periodo"
         val value = row.numericField(listOf(seriesKeys.last())) ?: return@mapNotNull null
         RealTimeReportChartPoint(label, value, formatMoneyValue(value))
-    }.take(MAX_REPORT_CHART_POINTS)
+    }.takeLast(MAX_REPORT_CHART_POINTS)
     return points.takeIf { it.isNotEmpty() && lines.isNotEmpty() }?.let {
         RealTimeReportChartSection(key, title, it, lines)
     }
@@ -2807,7 +2813,7 @@ private fun operatingMarginTrendChart(data: RealTimeReportData): RealTimeReportC
         val label = row.firstText(FINANCIAL_LABEL_ALIASES) ?: "Sin periodo"
         val value = row.numericField(OPERATING_MARGIN_ALIASES) ?: return@mapNotNull null
         RealTimeReportChartPoint(label, value, percentDisplay(value))
-    }.take(MAX_REPORT_CHART_POINTS)
+    }.takeLast(MAX_REPORT_CHART_POINTS)
     return points.takeIf { it.isNotEmpty() }?.let {
         RealTimeReportChartSection("operating_margin_trend_line", "Margen por periodo", it, emptyList())
     }
@@ -3545,12 +3551,21 @@ private fun agingDonut(
 }
 
 private fun customerRankingPendingChart(data: RealTimeReportData): RealTimeReportChartSection? {
-    val points = data.rows.mapNotNull { row ->
-        val pendingCell = row.cells.firstByKeys(PENDING_ALIASES) ?: return@mapNotNull null
-        val value = numberFromDisplay(pendingCell.value)?.takeIf { it > 0.0 } ?: return@mapNotNull null
-        val label = row.cells.firstByKeys(CUSTOMER_NAME_ALIASES)?.value?.takeIf { it.isNotBlank() && it != "-" }
-            ?: "Consumidor Final"
-        RealTimeReportChartPoint(label, value, pendingCell.value)
+    val globalRows = data.chartArray("matrix")?.mapNotNull { it as? JsonObject }.orEmpty()
+    val points = if (globalRows.isNotEmpty()) {
+        globalRows.mapNotNull { row ->
+            val value = row.numericField(listOf("pending"))?.takeIf { it > 0.0 } ?: return@mapNotNull null
+            val label = row.firstText(listOf("customer_name", "label")) ?: "Consumidor Final"
+            RealTimeReportChartPoint(label, value, formatMoneyValue(value))
+        }
+    } else {
+        data.rows.mapNotNull { row ->
+            val pendingCell = row.cells.firstByKeys(PENDING_ALIASES) ?: return@mapNotNull null
+            val value = numberFromDisplay(pendingCell.value)?.takeIf { it > 0.0 } ?: return@mapNotNull null
+            val label = row.cells.firstByKeys(CUSTOMER_NAME_ALIASES)?.value?.takeIf { it.isNotBlank() && it != "-" }
+                ?: "Consumidor Final"
+            RealTimeReportChartPoint(label, value, pendingCell.value)
+        }
     }.sortedByDescending { it.value }.take(MAX_REPORT_CHART_POINTS)
     return points.takeIf { it.isNotEmpty() }?.let {
         RealTimeReportChartSection(
@@ -4021,7 +4036,7 @@ private const val OPERATING_MARGIN_REPORT_KEY = "operating_margin"
 private const val BUSINESS_OVERVIEW_REPORT_KEY = "business_overview"
 private const val CASH_FLOW_REPORT_KEY = "cash_flow"
 private const val CASH_FLOW_SUMMARY_TAB_KEY = "summary"
-private const val MAX_REPORT_CHART_POINTS = 8
+private const val MAX_REPORT_CHART_POINTS = 12
 private const val MAX_DETAIL_COLUMNS = 13
 private const val MAX_VISIBLE_DETAIL_ROWS = 12
 private val REPORT_CHART_GREEN = Color(0xFF2E7D32)

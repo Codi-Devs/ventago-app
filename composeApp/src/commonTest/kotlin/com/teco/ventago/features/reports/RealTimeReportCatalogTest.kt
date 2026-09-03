@@ -2,6 +2,7 @@ package com.teco.ventago.features.reports
 
 import com.teco.ventago.features.reports.domain.model.RealTimeReportCatalog
 import com.teco.ventago.features.reports.domain.model.RealTimeReportCategory
+import com.teco.ventago.features.reports.domain.model.RealTimeReportFilterCatalog
 import com.teco.ventago.features.reports.domain.model.ReportExportFormat
 import com.teco.ventago.features.reports.domain.model.ReportPdfEndpoint
 import kotlin.test.Test
@@ -55,5 +56,27 @@ class RealTimeReportCatalogTest {
 
         val cashFlow = assertNotNull(RealTimeReportCatalog.reportByKey("cash_flow"))
         assertEquals(ReportPdfEndpoint.EXPORT_PDF, cashFlow.pdfEndpoint)
+    }
+
+    @Test
+    fun publicFiltersMatchBackendContracts() {
+        fun keys(reportKey: String) = RealTimeReportFilterCatalog.filtersFor(
+            assertNotNull(RealTimeReportCatalog.reportByKey(reportKey))
+        ).map { it.key }.toSet()
+
+        assertFalse("currency_code" in keys("profit_and_loss"))
+        assertFalse("currency_code" in keys("business_overview"))
+        assertFalse("branch_id" in keys("expense_detail"))
+        assertFalse("branch_id" in keys("recurring_expense_report"))
+
+        val recurring = RealTimeReportFilterCatalog.filtersFor(
+            assertNotNull(RealTimeReportCatalog.reportByKey("recurring_expense_report"))
+        ).first { it.key == "frequency" }.options.map { it.value }
+        assertEquals(listOf("monthly", "bimonthly", "quarterly", "annual", "variable"), recurring)
+
+        val statuses = RealTimeReportFilterCatalog.filtersFor(
+            assertNotNull(RealTimeReportCatalog.reportByKey("expense_summary"))
+        ).first { it.key == "payment_status" }.options.map { it.value }
+        assertEquals(listOf("not_paid", "partially_paid", "paid"), statuses)
     }
 }

@@ -69,7 +69,7 @@ object RealTimeReportFilterCatalog {
                 "sales_tax_summary" -> listOf(boolean("include_credit_notes", "Incluir notas de crédito"))
                 "expense_tax_summary" -> listOf(
                     expenseGroupBy(),
-                    select("tax_filter", "Filtro fiscal", "all" to "Todos", "with_tax" to "Con ITBMS", "without_tax" to "Sin ITBMS"),
+                    select("tax_filter", "Filtro fiscal", "all" to "Todos", "with_itbms" to "Con ITBMS", "without_itbms" to "Sin ITBMS"),
                     text("supplier_ruc", "RUC proveedor"),
                     source(),
                     currency()
@@ -79,8 +79,9 @@ object RealTimeReportFilterCatalog {
                     select(
                         "aging_bucket",
                         "Antigüedad",
-                        "all" to "Todas",
-                        "current" to "Actual",
+                        "not_due" to "No vencido",
+                        "due_today" to "Vence hoy",
+                        "next_7_days" to "Próximos 7 días",
                         "1_30" to "1-30 días",
                         "31_60" to "31-60 días",
                         "61_90" to "61-90 días",
@@ -97,8 +98,11 @@ object RealTimeReportFilterCatalog {
                         "Agrupar por",
                         "account" to "Cuenta",
                         "category" to "Categoría",
-                        "classification" to "Clasificación",
-                        "supplier" to "Proveedor"
+                        "account_kind" to "Tipo de cuenta",
+                        "supplier" to "Proveedor",
+                        "month" to "Mes",
+                        "quarter" to "Trimestre",
+                        "year" to "Año"
                     ),
                     source(),
                     select("account_kind", "Tipo de cuenta", "cost" to "Costo", "expense" to "Gasto", "uncategorized" to "Sin categorizar"),
@@ -117,7 +121,6 @@ object RealTimeReportFilterCatalog {
                     text("merchant_id", "Comercio"),
                     text("supplier_ruc", "RUC proveedor"),
                     text("category_id", "Categoría"),
-                    text("branch_id", "Sucursal"),
                     paymentStatus(),
                     categorizationStatus(),
                     source(),
@@ -136,15 +139,14 @@ object RealTimeReportFilterCatalog {
                 "recurring_expense_report" -> listOf(
                     text("supplier_id", "Proveedor"),
                     text("category_id", "Categoría"),
-                    text("branch_id", "Sucursal"),
-                    select("frequency", "Frecuencia", "monthly" to "Mensual", "weekly" to "Semanal", "quarterly" to "Trimestral", "annual" to "Anual"),
+                    select("frequency", "Frecuencia", "monthly" to "Mensual", "bimonthly" to "Bimestral", "quarterly" to "Trimestral", "annual" to "Anual", "variable" to "Variable"),
                     paymentStatus(),
                     currency()
                 )
-                "profit_and_loss" -> listOf(periodGroupBy(), base(), currency())
+                "profit_and_loss" -> listOf(periodGroupBy(), base())
                 "financial_comparison" -> listOf(base())
                 "operating_margin" -> listOf(select("group_by", "Agrupar por", "month" to "Mes", "quarter" to "Trimestre", "year" to "Año"), base())
-                "business_overview" -> listOf(base(), currency())
+                "business_overview" -> listOf(base())
                 "cash_flow" -> listOf(
                     select("group_by", "Agrupar por", "week" to "Semana", "day" to "Día", "month" to "Mes"),
                     boolean("include_overdue", "Incluir vencidos"),
@@ -177,8 +179,8 @@ object RealTimeReportFilterCatalog {
     private fun periodGroupBy() = select("group_by", "Agrupar por", "month" to "Mes", "week" to "Semana", "day" to "Día")
     private fun expenseGroupBy() = select("group_by", "Agrupar por", "month" to "Mes", "supplier" to "Proveedor", "category" to "Categoría", "source" to "Fuente")
     private fun source() = select("source", "Origen", "manual" to "Manual", "ocr" to "Escaneado", "import" to "Importado", "crawled" to "Automático")
-    private fun paymentStatus() = select("payment_status", "Estado de pago", "all" to "Todos", "paid" to "Pagado", "pending" to "Pendiente", "partial" to "Parcial")
-    private fun categorizationStatus() = select("categorization_status", "Categorización", "all" to "Todas", "categorized" to "Categorizado", "uncategorized" to "Sin categorizar")
+    private fun paymentStatus() = select("payment_status", "Estado de pago", "not_paid" to "No pagado", "partially_paid" to "Parcial", "paid" to "Pagado")
+    private fun categorizationStatus() = select("categorization_status", "Categorización", "categorized" to "Categorizado", "partial" to "Parcial", "uncategorized" to "Sin categorizar")
     private fun currency() = select("currency_code", "Moneda", "USD" to "USD", "PAB" to "PAB")
     private fun base() = select("base", "Base", "issued" to "Emitido", "collected" to "Cobrado")
 }
