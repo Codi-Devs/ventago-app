@@ -64,6 +64,8 @@ fun routeKeyForScreen(screen: PosScreens): RouteKey? {
         PosScreens.CustomerEditScreen -> RouteKey.CUSTOMER_FORM
         PosScreens.CategoriesManageScreen -> RouteKey.PRODUCTS_LIST
         PosScreens.EditCategoryScreen -> RouteKey.PRODUCT_DETAILS
+        PosScreens.ProductDetailsScreen,
+        PosScreens.ProductKardexScreen -> RouteKey.PRODUCT_DETAILS
         PosScreens.AddItemScreen -> RouteKey.PRODUCT_ADD
         PosScreens.AddCategoryScreen,
         PosScreens.ModifyCategoryScreen -> RouteKey.CATEGORY_MANAGE
@@ -77,6 +79,8 @@ fun routeKeyForScreen(screen: PosScreens): RouteKey? {
         PosScreens.EditExpenseScreen,
         PosScreens.DuplicateExpenseScreen,
         PosScreens.CufeImportScreen -> RouteKey.EXPENSE_NEW
+        PosScreens.Inventory,
+        PosScreens.InventoryOpsScreen -> RouteKey.INVENTORY_OPS
         PosScreens.SettingsScreen -> RouteKey.SETTINGS_PAGE
         PosScreens.Payments,
         PosScreens.PaymentsHomeScreen,

@@ -193,6 +193,7 @@ data class OrderCreationCartLineCheckpoint(
     val pharmaBatchNumber: String? = null,
     val pharmaBatchQty: Int? = null,
     val costCents: Long? = null,
+    val locationId: Int? = null,
 ) {
     fun toCartLine(): CartLine = CartLine(
         lineId = lineId,
@@ -209,6 +210,7 @@ data class OrderCreationCartLineCheckpoint(
         pharmaBatchNumber = pharmaBatchNumber,
         pharmaBatchQty = pharmaBatchQty,
         costCents = costCents,
+        locationId = locationId,
     )
 
     companion object {
@@ -228,6 +230,7 @@ data class OrderCreationCartLineCheckpoint(
                 pharmaBatchNumber = line.pharmaBatchNumber,
                 pharmaBatchQty = line.pharmaBatchQty,
                 costCents = line.costCents,
+                locationId = line.locationId,
             )
     }
 }
@@ -357,6 +360,11 @@ data class PosState(
     val canUseCustomProduct: Boolean = false,
     val canEditProduct: Boolean = false,
     val posProvisioningActive: Boolean = false,
+    val inventoryEnabled: Boolean = false,
+    val inventoryLocationId: Int? = null,
+    val inventoryFreshnessLabel: String = "",
+    val inventoryAvailableByItemId: Map<Int, String> = emptyMap(),
+    val orderCreationErrorMessage: String = "",
 
     val branches: List<Branch> = listOf(),
     val selectedBranchIndex: Int = 0,

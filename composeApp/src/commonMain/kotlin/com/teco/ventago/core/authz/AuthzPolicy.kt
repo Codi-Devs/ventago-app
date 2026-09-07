@@ -24,6 +24,7 @@ enum class MenuKey {
     QUOTES_LIST,
     RECURRING_LIST,
     EXPENSES,
+    INVENTORY,
     REPORTS,
     SETTINGS,
 }
@@ -48,6 +49,7 @@ enum class RouteKey {
     EXPENSES_LIST,
     EXPENSE_DETAILS,
     EXPENSE_NEW,
+    INVENTORY_OPS,
     SETTINGS_PAGE,
     PAYMENTS_PAGE,
     SETTINGS_BRANCHES_OWNER,

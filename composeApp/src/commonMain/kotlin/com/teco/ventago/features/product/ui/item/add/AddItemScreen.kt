@@ -45,6 +45,7 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Surface
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Tab
 import androidx.compose.material3.TabRow
 import androidx.compose.material3.TabRowDefaults
@@ -120,6 +121,7 @@ import com.teco.ventago.features.product.ui.item.add.viewmodel.ItemStateUiEvent
 import com.teco.ventago.features.product.ui.item.add.viewmodel.OTITaxUI
 import com.teco.ventago.navigation.NavResults
 import com.teco.ventago.utils.BarcodeScannerScreen
+import com.teco.ventago.utils.formatNumberToMoney
 import com.teco.ventago.utils.formatTwoDecimals
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.collect
@@ -326,7 +328,16 @@ fun AddItemScreen(
     // Collapsible section states
     var taxesExpanded by rememberSaveable { mutableStateOf(false) }
     var identificationExpanded by rememberSaveable { mutableStateOf(false) }
+    var inventoryExpanded by rememberSaveable { mutableStateOf(false) }
+    var inventoryDefaultApplied by rememberSaveable { mutableStateOf(false) }
     var fiscalExpanded by rememberSaveable { mutableStateOf(false) }
+
+    LaunchedEffect(uiState.inventorySectionVisible, uiState.inventoryTracked) {
+        if (!inventoryDefaultApplied && uiState.inventorySectionVisible) {
+            inventoryExpanded = uiState.inventoryTracked
+            inventoryDefaultApplied = true
+        }
+    }
 
     // Margin calculation
     val marginPercent = remember(uiState.price, uiState.cost) {
@@ -495,7 +506,11 @@ fun AddItemScreen(
 
             DMMoneyOutlinedTextField(
                 text = uiState.cost.toString(),
-                label = "Costo (Opcional)",
+                label = if (uiState.inventorySectionVisible && uiState.inventoryTracked) {
+                    "Costo de catálogo"
+                } else {
+                    "Costo (Opcional)"
+                },
                 modifier = Modifier.padding(bottom = 0.dp),
                 onChange = {
                     try {
@@ -513,6 +528,19 @@ fun AddItemScreen(
                 keyboardType = KeyboardType.Number,
                 imeAction = ImeAction.Next,
             )
+
+            if (uiState.inventorySectionVisible && uiState.inventoryCanView && uiState.inventoryTracked) {
+                val avg = uiState.inventoryAvgCost.trim()
+                Text(
+                    text = if (avg.isNotEmpty()) {
+                        "Costo de inventario (Inv.): ${formatNumberToMoney(avg)}"
+                    } else {
+                        "Costo de inventario: Sin promedio aún. Se usará el costo de catálogo."
+                    },
+                    style = labelMedium(MaterialTheme.colorScheme.onSurfaceVariant),
+                    modifier = Modifier.padding(top = 4.dp, bottom = 4.dp),
+                )
+            }
 
             if (marginPercent != null) {
                 Text(
@@ -532,6 +560,67 @@ fun AddItemScreen(
                 trailingIcon = vectorResource(Res.drawable.help),
                 trailingIconClick = { showHelpDialog = true }
             )
+        }
+
+        if (uiState.inventorySectionVisible) {
+            CollapsibleSectionCard(
+                title = "Inventario",
+                expanded = inventoryExpanded,
+                onToggle = { inventoryExpanded = !inventoryExpanded },
+                modifier = Modifier.padding(start = 16.dp, end = 16.dp, top = 16.dp),
+            ) {
+                Text(
+                    text = if (uiState.inventoryCanConfigure) {
+                        "Define si el producto controlará stock. Saldos y kardex se operan cuando está inventariable."
+                    } else {
+                        "Saldos, alarma de stock y costo promedio de este producto."
+                    },
+                    style = labelMedium(MaterialTheme.colorScheme.onSurfaceVariant),
+                )
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Text("Inventariable", style = bodyMedium(), modifier = Modifier.weight(1f))
+                    Switch(
+                        checked = uiState.inventoryTracked,
+                        onCheckedChange = viewModel::onInventoryTrackedChange,
+                        enabled = uiState.inventoryCanConfigure,
+                    )
+                }
+                if (uiState.inventoryCanView && uiState.inventoryTracked) {
+                    Text(
+                        text = "Disponible: ${uiState.inventoryAvailable.ifBlank { "—" }}",
+                        style = bodyMediumBold(),
+                    )
+                }
+                if (uiState.inventoryCanConfigure) {
+                    DMOutlinedTextField(
+                        text = uiState.inventoryMinQty,
+                        label = "Cantidad mínima",
+                        modifier = Modifier.padding(bottom = 0.dp),
+                        onChange = viewModel::onInventoryMinQtyChange,
+                        maxLines = 1,
+                        keyboardType = KeyboardType.Number,
+                        imeAction = ImeAction.Next,
+                    )
+                    DMDropDownField(
+                        label = "Stock / ventas negativas",
+                        items = listOf("Según negocio", "Permitir", "No permitir"),
+                        selectedIndex = uiState.inventoryNegativePolicyIndex,
+                        onItemSelected = { index, _ -> viewModel.onInventoryNegativePolicyIndex(index) },
+                        selectedItemToString = { it },
+                    )
+                    Text(
+                        text = when (uiState.inventoryNegativePolicyIndex) {
+                            1 -> "Puede quedar en negativo"
+                            2 -> "Bloquea si no hay stock"
+                            else -> "Hereda la política general"
+                        },
+                        style = labelMedium(MaterialTheme.colorScheme.onSurfaceVariant),
+                    )
+                }
+            }
         }
 
         // ═══════════════════════════════════════════════════════

@@ -206,6 +206,14 @@ fun MenuScreen(
         )
         add(
             ModuleMenuItem(
+                label = "Inventario",
+                icon = ModuleIcon.Vector(Icons.Rounded.Inventory2),
+                destination = PosScreens.Inventory,
+                routeKey = RouteKey.INVENTORY_OPS
+            )
+        )
+        add(
+            ModuleMenuItem(
                 label = "Sucursales",
                 icon = ModuleIcon.Vector(Icons.Rounded.Business),
                 destination = PosScreens.Branches,

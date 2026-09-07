@@ -5,6 +5,7 @@ import com.teco.ventago.core.authz.ActionKey
 import com.teco.ventago.core.authz.AuthzEvaluator
 import com.teco.ventago.core.camera.SharedImage
 import com.teco.ventago.features.auth.domain.IAuthService
+import com.teco.ventago.features.inventory.domain.InventoryProductSupport
 import com.teco.ventago.features.product.domain.ProductService
 import com.teco.ventago.features.product.domain.model.AdditionalInfoCatalog
 import com.teco.ventago.features.product.domain.model.AdditionalInfoKey
@@ -34,6 +35,7 @@ import kotlinx.serialization.json.JsonPrimitive
 class EditItemViewModel (
     private val authService: IAuthService,
     private val productService: ProductService,
+    private val inventoryProductSupport: InventoryProductSupport,
 ) : ItemViewModel(productService) {
 
     private val itemId: Int?
@@ -104,6 +106,8 @@ class EditItemViewModel (
                                     additionalInputValue = ""                    // empty input until user edits
                                 )
                             }
+
+                            loadInventorySection(item.itemId)
 
                             if (item.unitMeasureCode != "und" ||
                                 item.iscRate != null ||
@@ -221,6 +225,11 @@ class EditItemViewModel (
                     ), categoryId)
 
                     if (res) {
+                        val inventoryError = inventoryProductSupport.save(item.itemId, uiState.value)
+                        if (inventoryError != null) {
+                            showError()
+                            return@launch
+                        }
                         showSuccess()
                         delay(600)
                         emitEvent(ItemStateUiEvent.GoBack)
@@ -236,6 +245,15 @@ class EditItemViewModel (
         } ?: run {
             viewModelScope.launch {
                 emitEvent(ItemStateUiEvent.GoBack)
+            }
+        }
+    }
+
+    private fun loadInventorySection(itemId: Int) {
+        viewModelScope.launch(Dispatchers.IO) {
+            val section = inventoryProductSupport.load(itemId)
+            withContext(Dispatchers.Main) {
+                updateState { inventoryProductSupport.apply(section, this) }
             }
         }
     }

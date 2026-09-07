@@ -95,7 +95,7 @@ data class OrderItem(
     @SerialName("vehicle_sale") val vehicleSale: VehicleSale? = null,
     @SerialName("additional_info") val additionalInfo: List<NameValue> = emptyList(),
     @SerialName("product_type") val productType: String? = null,
-
+    @SerialName("location_id") val locationId: Long? = null,
 )
 
 @Serializable

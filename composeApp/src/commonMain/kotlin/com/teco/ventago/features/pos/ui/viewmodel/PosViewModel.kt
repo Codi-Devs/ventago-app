@@ -78,6 +78,9 @@ import com.teco.ventago.features.pos.domain.models.Money
 import com.teco.ventago.features.pos.domain.models.Tax
 import com.teco.ventago.features.pos.provisioning.domain.PosDeviceProvisioningService
 import com.teco.ventago.features.product.domain.ProductService
+import com.teco.ventago.features.inventory.domain.InventoryAvailabilityStore
+import com.teco.ventago.features.inventory.domain.InventoryKardexSupport
+import com.teco.ventago.features.inventory.domain.InventorySaleErrorMapper
 import com.teco.ventago.features.product.domain.model.Item
 import com.teco.ventago.features.product.domain.model.ProductType
 import com.teco.ventago.features.product.domain.model.AdditionalInfoKey
@@ -161,6 +164,7 @@ class PosViewModel(
     private val analyticsService: AnalyticsService,
     private val appScope: CoroutineScope,
     private val posProvisioningService: PosDeviceProvisioningService,
+    private val inventoryAvailabilityStore: InventoryAvailabilityStore,
 ) : BaseViewModel<PosState, PosStateUiEvent>(PosState()) {
     private companion object {
         const val DEFAULT_QUOTE_BRANCH_CODE = "0000"
@@ -188,6 +192,7 @@ class PosViewModel(
     private var yappyOnsiteDevicesJob: Job? = null
     private var paymentLinkPollingJob: Job? = null
     private var yappyOnsitePollingJob: Job? = null
+    private var inventoryRefreshJob: Job? = null
     private var lastPaymentConfigRefreshAtEpochSeconds: Long = 0L
     private data class PersistedBranchBillingPoint(
         val branchCode: String,
@@ -209,6 +214,10 @@ class PosViewModel(
     )
 
     init {
+        inventoryAvailabilityStore.snapshot
+            .onEach { snap -> applyInventorySnapshot(snap) }
+            .launchIn(viewModelScope)
+
         viewModelScope.launch {
             authService.getUser()
                 .combine(betaService.features()) { user, betaResponse ->
@@ -691,6 +700,33 @@ class PosViewModel(
         }
 
         updateState { copy(visibleItems = filteredItems) }
+        refreshInventoryAvailability()
+    }
+
+    private fun refreshInventoryAvailability() {
+        val state = uiState.value
+        val businessId = business?.businessId ?: return
+        val branchCode = state.branches.getOrNull(state.selectedBranchIndex)?.branchCode.orEmpty()
+        val billingPoint = state.billingPoints.getOrNull(state.selectedBillingPointIndex)?.billingPoint.orEmpty()
+        val itemIds = (state.visibleItems.map { it.itemId } + state.cart.map { it.itemId }).distinct()
+        inventoryRefreshJob?.cancel()
+        inventoryRefreshJob = viewModelScope.launch(Dispatchers.IO) {
+            inventoryAvailabilityStore.refresh(businessId, branchCode, billingPoint, itemIds)
+        }
+    }
+
+    private fun applyInventorySnapshot(snap: com.teco.ventago.features.inventory.domain.InventoryAvailabilitySnapshot) {
+        if (!snap.enabled && snap.byItemId.isEmpty() && snap.fetchedAtEpochMs == 0L) return
+        updateState {
+            copy(
+                inventoryEnabled = snap.enabled,
+                inventoryLocationId = snap.locationId,
+                inventoryFreshnessLabel = snap.freshnessLabel(),
+                inventoryAvailableByItemId = snap.byItemId.keys.mapNotNull { itemId ->
+                    snap.catalogStockLabel(itemId)?.let { itemId to it }
+                }.toMap(),
+            )
+        }
     }
 
     fun onSearchChange(query: String) {
@@ -877,6 +913,12 @@ class PosViewModel(
             showError()
             return
         }
+        if (deltaQty > 0 && inventoryAvailabilityStore.shouldBlockUnstocked(item.itemId, item.itemId < 0)) {
+            viewModelScope.launch {
+                snackbarService.show(InventorySaleErrorMapper.ZERO_STOCK_CART_MESSAGE)
+            }
+            return
+        }
         updateState {
         val priceCents = customUnitPrice
         val baseCents = item.price.toLongCents()
@@ -928,6 +970,7 @@ class PosViewModel(
                 tax = tax,
                 discount = null,
                 costCents = item.cost?.toLongCents(),
+                locationId = uiState.value.inventoryLocationId,
             )
             // Store personalized items (itemId < 0) keyed by lineId for later use in order creation
             val newPersonalizedItems = if (isPersonalized) {
@@ -1573,6 +1616,7 @@ class PosViewModel(
         updateState {
             copy(
                 orderCreationFailed = false,
+                orderCreationErrorMessage = "",
                 postCreateInvoiceWarning = com.teco.ventago.features.invoicing.domain.PostCreateInvoiceWarningState(),
             )
         }
@@ -1737,7 +1781,15 @@ class PosViewModel(
                         }
                         return@withContext
                     }
-                    updateState { copy(orderCreationFailed = true) }
+                    updateState {
+                        copy(
+                            orderCreationFailed = true,
+                            orderCreationErrorMessage = InventorySaleErrorMapper.messageFor(
+                                e,
+                                "No se pudo crear el pedido. Por favor, intenta nuevamente o contacta al soporte.",
+                            ),
+                        )
+                    }
                     withContext(Dispatchers.Main) {
                         showError()
                     }
@@ -2109,7 +2161,8 @@ class PosViewModel(
                 pharmaSale = pharmaSale,
                 vehicleSale = null, // TODO hardcoded to null by now
                 additionalInfo = additionalInfo,
-                productType = product.productType.code
+                productType = product.productType.code,
+                locationId = item.locationId?.toLong()
             )
             orderItems.add(orderItem)
         }
@@ -3740,6 +3793,7 @@ class PosViewModel(
         updateBranchSelection(index)
         persistCurrentBranchBillingPointSelection()
         saveOrderCreationCheckpoint(OrderCreationStep.CUSTOMER)
+        refreshInventoryAvailability()
     }
 
     fun onBillingPointSelected(index: Int) {
@@ -3747,6 +3801,7 @@ class PosViewModel(
         updateState { copy(selectedBillingPointIndex = index) }
         persistCurrentBranchBillingPointSelection()
         saveOrderCreationCheckpoint(OrderCreationStep.CUSTOMER)
+        refreshInventoryAvailability()
     }
 
     private fun updateBranchSelection(

@@ -1,6 +1,8 @@
 package com.teco.ventago.core.changes
 
 import com.teco.ventago.core.LocalStorage
+import com.teco.ventago.features.inventory.domain.InventoryChangeTokenAction
+import com.teco.ventago.features.inventory.domain.resolveInventoryChangeToken
 import com.teco.ventago.utils.randomUUID
 import dev.gitlive.firebase.Firebase
 import dev.gitlive.firebase.auth.auth
@@ -28,6 +30,7 @@ class ChangesManager(private val storage: LocalStorage): IChangesManager {
 
     private val userChanged = MutableStateFlow(1)
     private val menuChanged = MutableStateFlow(1)
+    private val inventoryChanged = MutableStateFlow(1)
     private val businessChanged = MutableStateFlow(1)
     private val financialChanged = MutableStateFlow(1)
     private val customerChanged = MutableStateFlow(1)
@@ -47,6 +50,7 @@ class ChangesManager(private val storage: LocalStorage): IChangesManager {
     private val scope = CoroutineScope(Dispatchers.IO)
 
     override fun productsListener(): Flow<Int> = menuChanged
+    override fun inventoryListener(): Flow<Int> = inventoryChanged
     override fun businessListener(): Flow<Int> = businessChanged
     override fun financialListener(): Flow<Int> = financialChanged
     override fun customersListener(): Flow<Int> = customerChanged
@@ -114,8 +118,14 @@ class ChangesManager(private val storage: LocalStorage): IChangesManager {
                     changedMenuDB = it.child("changed_menu").value<String?>() ?: ""
                 }
 
+                var changedInventoryDB = ""
+                if (it.child("changed_inventory").value != null) {
+                    changedInventoryDB = it.child("changed_inventory").value<String?>() ?: ""
+                }
+
                 val changedBusinessCache = storage.string("changed_business") ?: ""
                 val changedMenuCache = storage.string("changed_menu") ?: ""
+                val changedInventoryCache = storage.string("changed_inventory") ?: ""
                 val changedFinancialCache = storage.string("changed_financial") ?: ""
                 val changedCustomerCache = storage.string("customer_cache") ?: ""
                 val changedBranchCache = storage.string("branches_cache") ?: ""
@@ -143,6 +153,17 @@ class ChangesManager(private val storage: LocalStorage): IChangesManager {
                 if (changedMenuDB != changedMenuCache) {
                     menuChanged.update {actual -> actual + 1 }
                     storage.set("changed_menu", changedMenuDB)
+                }
+
+                when (resolveInventoryChangeToken(changedInventoryCache, changedInventoryDB)) {
+                    InventoryChangeTokenAction.StoreOnly -> {
+                        storage.set("changed_inventory", changedInventoryDB)
+                    }
+                    InventoryChangeTokenAction.EmitInvalidate -> {
+                        inventoryChanged.update { actual -> actual + 1 }
+                        storage.set("changed_inventory", changedInventoryDB)
+                    }
+                    InventoryChangeTokenAction.Ignore -> Unit
                 }
             }.launchIn(this)
 

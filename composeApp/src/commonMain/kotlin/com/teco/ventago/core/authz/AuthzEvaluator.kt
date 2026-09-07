@@ -48,6 +48,16 @@ object AuthzEvaluator {
         MenuKey.EXPENSES to AuthzPolicy(
             requiredAny = setOf(ScopeKey.EXPENSES_VIEW, ScopeKey.EXPENSES_CREATE, ScopeKey.EXPENSES_DELETE)
         ),
+        MenuKey.INVENTORY to AuthzPolicy(
+            requiredAny = setOf(
+                ScopeKey.INVENTORY_VIEW,
+                ScopeKey.INVENTORY_TRANSFER,
+                ScopeKey.INVENTORY_COUNT,
+                ScopeKey.INVENTORY_ADJUST,
+                ScopeKey.INVENTORY_CONFIGURE,
+                ScopeKey.INVENTORY_RECEIVE
+            )
+        ),
         MenuKey.REPORTS to AuthzPolicy(
             requiredAny = setOf(ScopeKey.REPORTS_VIEW, ScopeKey.REPORTS_EXECUTE),
             betaFeature = BetaFeature.REAL_TIME_REPORTS
@@ -101,6 +111,16 @@ object AuthzEvaluator {
             requiredAny = setOf(ScopeKey.EXPENSES_VIEW, ScopeKey.EXPENSES_CREATE, ScopeKey.EXPENSES_DELETE)
         ),
         RouteKey.EXPENSE_NEW to AuthzPolicy(requiredAny = setOf(ScopeKey.EXPENSES_CREATE)),
+        RouteKey.INVENTORY_OPS to AuthzPolicy(
+            requiredAny = setOf(
+                ScopeKey.INVENTORY_VIEW,
+                ScopeKey.INVENTORY_TRANSFER,
+                ScopeKey.INVENTORY_COUNT,
+                ScopeKey.INVENTORY_ADJUST,
+                ScopeKey.INVENTORY_CONFIGURE,
+                ScopeKey.INVENTORY_RECEIVE
+            )
+        ),
         RouteKey.SETTINGS_PAGE to AuthzPolicy(allowAll = true),
         RouteKey.PAYMENTS_PAGE to AuthzPolicy(
             requiredAny = setOf(

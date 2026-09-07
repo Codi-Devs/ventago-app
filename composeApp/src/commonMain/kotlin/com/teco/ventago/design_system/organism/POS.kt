@@ -386,6 +386,15 @@ fun CartOrganism(
                                 maxLines = 2,
                                 overflow = TextOverflow.Ellipsis
                             )
+                            uiState.inventoryAvailableByItemId[cartItem.itemId]?.let { label ->
+                                Text(
+                                    text = label,
+                                    style = bodyMedium(color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)),
+                                    modifier = Modifier.padding(start = 16.dp, end = 16.dp),
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
+                                )
+                            }
                             Row {
                                 Text(
                                     text = formatNumberToMoney(
@@ -967,6 +976,7 @@ fun PosListOrganism(
                     PosItemRow(
                         item = item,
                         currency = uiState.currency,
+                        availabilityLabel = uiState.inventoryAvailableByItemId[item.itemId],
                         modifier = Modifier.padding(
                             start = 16.dp, end = 16.dp, top = 8.dp, bottom = 8.dp
                         ),
@@ -1005,6 +1015,7 @@ fun PosListOrganism(
                         PosItemGridCard(
                             item = item,
                             currency = uiState.currency,
+                            availabilityLabel = uiState.inventoryAvailableByItemId[item.itemId],
                             modifier = Modifier.padding(horizontal = 8.dp),
                             onClick = { addItemToCart(item) }
                         )
@@ -1268,7 +1279,9 @@ fun PosSuccessScreen(
             Spacer(modifier = Modifier.height(8.dp))
 
             Text(
-                text = "No se pudo crear el pedido. Por favor, intenta nuevamente o contacta al soporte.",
+                text = uiState.orderCreationErrorMessage.ifBlank {
+                    "No se pudo crear el pedido. Por favor, intenta nuevamente o contacta al soporte."
+                },
                 style = bodyMedium(),
                 modifier = Modifier.padding(horizontal = 32.dp),
                 textAlign = TextAlign.Center

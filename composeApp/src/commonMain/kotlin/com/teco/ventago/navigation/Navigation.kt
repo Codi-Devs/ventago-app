@@ -112,7 +112,11 @@ import com.teco.ventago.features.pos.domain.models.Tax
 import com.teco.ventago.features.product.domain.model.Item
 import com.teco.ventago.features.product.ui.item.add.AddItemScreen
 import com.teco.ventago.features.product.ui.item.add.AddItemScreenActions
+import com.teco.ventago.features.product.ui.item.details.ProductDetailsScreen
+import com.teco.ventago.features.product.ui.item.details.ProductKardexScreen
 import com.teco.ventago.features.product.ui.item.edit.EditItemScreen
+import com.teco.ventago.features.inventory.ui.InventoryOpsScreen
+import com.teco.ventago.features.inventory.ui.InventoryOpsViewModel
 import com.teco.ventago.features.settings.ui.address.SetBusinessAddressScreen
 import com.teco.ventago.features.settings.ui.address.viewmodel.SetAddressViewModel
 import com.teco.ventago.features.settings.ui.logo.ChangeBusinessImageContent
@@ -247,6 +251,8 @@ enum class PosScreens(
         Res.string.items,
         true,
         actions = { backStackEntry, _, _ -> ItemScreenActions(backStackEntry) }),
+    ProductDetailsScreen(Res.string.details, true),
+    ProductKardexScreen(Res.string.details, true),
 
     // POS Screens
     POS(Res.string.pos),
@@ -379,7 +385,10 @@ enum class PosScreens(
     NewExpenseScreen(Res.string.new_expense, true, showBackButton = true),
     EditExpenseScreen(Res.string.expense_details, true, showBackButton = true),
     DuplicateExpenseScreen(Res.string.new_expense, true, showBackButton = true),
-    CufeImportScreen(Res.string.cufe_import, true, showBackButton = true);
+    CufeImportScreen(Res.string.cufe_import, true, showBackButton = true),
+
+    Inventory(Res.string.home),
+    InventoryOpsScreen(Res.string.home, true, showBackButton = true);
 
 
     fun isPosScreens(): Boolean {
@@ -509,6 +518,8 @@ fun Navigation(
         addBranchesNavigation(navController, analyticsService)
 
         addExpensesNavigation(navController, analyticsService)
+
+        addInventoryNavigation(navController, analyticsService)
     }
 }
 
@@ -685,6 +696,23 @@ private fun NavGraphBuilder.addProductsNavigation(
             EditItemScreen {
                 navController.navigateUp()
             }
+        }
+
+        composable(route = PosScreens.ProductDetailsScreen.name) {
+            analyticsService.logScreenView("ProductDetailsScreen")
+            ProductDetailsScreen(
+                onEdit = { navController.navigate(PosScreens.EditItemScreen.name) },
+                onOpenKardex = { navController.navigate(PosScreens.ProductKardexScreen.name) },
+            )
+        }
+
+        composable(route = PosScreens.ProductKardexScreen.name) {
+            analyticsService.logScreenView("ProductKardexScreen")
+            ProductKardexScreen(
+                onOpenOrderDetails = { orderNumber ->
+                    navController.navigate(OrdersScreenRoute(orderNumber = orderNumber))
+                },
+            )
         }
 
     }
@@ -1644,6 +1672,25 @@ private fun NavGraphBuilder.addBranchesNavigation(
                 parameters = { parametersOf(branchCode, billingCode) }
             )
             EditBillingPointScreen(viewModel) { navController.navigateUp() }
+        }
+    }
+}
+
+private fun NavGraphBuilder.addInventoryNavigation(
+    navController: NavHostController, analyticsService: AnalyticsService
+) {
+    navigation(
+        route = PosScreens.Inventory.name, startDestination = PosScreens.InventoryOpsScreen.name
+    ) {
+        composable(route = PosScreens.InventoryOpsScreen.name) {
+            val viewModel: InventoryOpsViewModel = koinViewModel()
+            analyticsService.logScreenView("InventoryOpsScreen")
+            InventoryOpsScreen(
+                viewModel = viewModel,
+                onBack = { navController.navigateUp() },
+                onOpenOrders = { navController.navigate(PosScreens.Orders.name) },
+                onOpenProducts = { navController.navigate(PosScreens.ProductsManage.name) },
+            )
         }
     }
 }

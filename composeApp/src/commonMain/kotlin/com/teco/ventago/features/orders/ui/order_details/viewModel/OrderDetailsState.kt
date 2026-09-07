@@ -56,6 +56,10 @@ data class OrderDetailsState(
     val registerPaymentState: RegisterPaymentState = RegisterPaymentState(),
     val rescheduleState: RescheduleState = RescheduleState(),
     val voidPaymentState: VoidPaymentState = VoidPaymentState(),
+    val canPhysicalReturn: Boolean = false,
+    val showPhysicalReturnSheet: Boolean = false,
+    val physicalReturnSubmitting: Boolean = false,
+    val physicalReturnLines: List<PhysicalReturnLineState> = emptyList(),
 
     override val loadingBottomSheet: LoadingBottomSheetState = LoadingBottomSheetState(),
 ): LoadableState<OrderDetailsState> {
@@ -294,3 +298,13 @@ data class AchReviewState(
     val isLoading: Boolean = false,
     val errorMessage: String? = null,
 )
+
+data class PhysicalReturnLineState(
+    val itemId: Int,
+    val itemName: String,
+    val maxQuantity: Double,
+    val quantityInput: String,
+    val disposition: String = "",
+    val locationId: Int,
+)
+
