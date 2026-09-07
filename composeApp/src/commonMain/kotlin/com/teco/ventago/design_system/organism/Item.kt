@@ -288,7 +288,15 @@ fun ItemScreenContent(
     var taxesExpanded by rememberSaveable { mutableStateOf(false) }
     var identificationExpanded by rememberSaveable { mutableStateOf(false) }
     var fiscalExpanded by rememberSaveable { mutableStateOf(false) }
-    var inventoryExpanded by rememberSaveable { mutableStateOf(true) }
+    var inventoryExpanded by rememberSaveable { mutableStateOf(false) }
+    var inventoryDefaultApplied by rememberSaveable { mutableStateOf(false) }
+
+    LaunchedEffect(uiState.inventorySectionVisible, uiState.inventoryTracked) {
+        if (!inventoryDefaultApplied && uiState.inventorySectionVisible) {
+            inventoryExpanded = uiState.inventoryTracked
+            inventoryDefaultApplied = true
+        }
+    }
 
     val marginPercent = remember(uiState.price, uiState.cost) {
         if (uiState.price > 0 && uiState.cost > 0) {
