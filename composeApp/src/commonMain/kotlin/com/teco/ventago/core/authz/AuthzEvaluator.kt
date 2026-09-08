@@ -56,7 +56,8 @@ object AuthzEvaluator {
                 ScopeKey.INVENTORY_ADJUST,
                 ScopeKey.INVENTORY_CONFIGURE,
                 ScopeKey.INVENTORY_RECEIVE
-            )
+            ),
+            betaFeature = BetaFeature.INVENTORY_MODULE
         ),
         MenuKey.REPORTS to AuthzPolicy(
             requiredAny = setOf(ScopeKey.REPORTS_VIEW, ScopeKey.REPORTS_EXECUTE),
@@ -119,7 +120,8 @@ object AuthzEvaluator {
                 ScopeKey.INVENTORY_ADJUST,
                 ScopeKey.INVENTORY_CONFIGURE,
                 ScopeKey.INVENTORY_RECEIVE
-            )
+            ),
+            betaFeature = BetaFeature.INVENTORY_MODULE
         ),
         RouteKey.SETTINGS_PAGE to AuthzPolicy(allowAll = true),
         RouteKey.PAYMENTS_PAGE to AuthzPolicy(

@@ -1,6 +1,8 @@
 package com.teco.ventago.features.inventory.domain
 
 import com.teco.ventago.core.authz.ScopeKey
+import com.teco.ventago.core.beta.BetaFeature
+import com.teco.ventago.core.beta.BetaService
 import com.teco.ventago.core.changes.IChangesManager
 import com.teco.ventago.features.auth.domain.IAuthService
 import com.teco.ventago.features.inventory.data.InventoryProvider
@@ -79,6 +81,7 @@ class InventoryAvailabilityStore(
     private val authService: IAuthService,
     private val cache: InventoryLocalCache,
     private val changesManager: IChangesManager,
+    private val betaService: BetaService,
 ) {
     private val _snapshot = MutableStateFlow(InventoryAvailabilitySnapshot())
     val snapshot: StateFlow<InventoryAvailabilitySnapshot> = _snapshot.asStateFlow()
@@ -98,37 +101,48 @@ class InventoryAvailabilityStore(
         }.launchIn(scope)
     }
 
+    fun hasBetaAccess(): Boolean {
+        return betaService.features().value?.features.orEmpty()
+            .contains(BetaFeature.INVENTORY_MODULE.key)
+    }
+
     fun canView(): Boolean {
+        if (!hasBetaAccess()) return false
         val user = authService.getUserSync() ?: return false
         if (!user.isSubUser) return true
         return ScopeKey.INVENTORY_VIEW in user.scopes
     }
 
     fun canReceive(): Boolean {
+        if (!hasBetaAccess()) return false
         val user = authService.getUserSync() ?: return false
         if (!user.isSubUser) return true
         return ScopeKey.INVENTORY_RECEIVE in user.scopes
     }
 
     fun canTransfer(): Boolean {
+        if (!hasBetaAccess()) return false
         val user = authService.getUserSync() ?: return false
         if (!user.isSubUser) return true
         return ScopeKey.INVENTORY_TRANSFER in user.scopes
     }
 
     fun canCount(): Boolean {
+        if (!hasBetaAccess()) return false
         val user = authService.getUserSync() ?: return false
         if (!user.isSubUser) return true
         return ScopeKey.INVENTORY_COUNT in user.scopes
     }
 
     fun canAdjust(): Boolean {
+        if (!hasBetaAccess()) return false
         val user = authService.getUserSync() ?: return false
         if (!user.isSubUser) return true
         return ScopeKey.INVENTORY_ADJUST in user.scopes
     }
 
     fun canConfigure(): Boolean {
+        if (!hasBetaAccess()) return false
         val user = authService.getUserSync() ?: return false
         if (!user.isSubUser) return true
         return ScopeKey.INVENTORY_CONFIGURE in user.scopes
@@ -147,7 +161,7 @@ class InventoryAvailabilityStore(
     }
 
     suspend fun isModuleEnabled(businessId: Int, force: Boolean = false): Boolean {
-        if (businessId <= 0) return false
+        if (businessId <= 0 || !hasBetaAccess()) return false
         if (!force) {
             cache.peekAccess(businessId)?.let { return it }
         }

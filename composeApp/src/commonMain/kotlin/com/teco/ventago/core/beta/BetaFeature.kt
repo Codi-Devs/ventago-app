@@ -10,7 +10,8 @@ enum class BetaFeature(val key: String) {
     MULTI_USERS("multi_users"),
     EXPENSES_QR("expenses_qr"),
     EXPENSES_OCR("expenses_ocr"),
-    PAYMENTS_MODULE("payments_module");
+    PAYMENTS_MODULE("payments_module"),
+    INVENTORY_MODULE("inventory_module");
 
     companion object {
         fun fromKey(key: String): BetaFeature? = entries.firstOrNull { it.key == key }

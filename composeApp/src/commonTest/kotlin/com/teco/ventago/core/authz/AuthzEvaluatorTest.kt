@@ -69,6 +69,23 @@ class AuthzEvaluatorTest {
     }
 
     @Test
+    fun inventoryMenuAndRouteRequireInventoryModuleBeta() {
+        val owner = owner()
+        val viewer = subUser(setOf(ScopeKey.INVENTORY_VIEW))
+
+        assertFalse(AuthzEvaluator.canMenu(MenuKey.INVENTORY, owner, emptySet()))
+        assertFalse(AuthzEvaluator.canRoute(RouteKey.INVENTORY_OPS, owner, emptySet()))
+        assertFalse(AuthzEvaluator.canMenu(MenuKey.INVENTORY, viewer, emptySet()))
+        assertFalse(AuthzEvaluator.canRoute(RouteKey.INVENTORY_OPS, viewer, emptySet()))
+
+        val beta = setOf(BetaFeature.INVENTORY_MODULE)
+        assertTrue(AuthzEvaluator.canMenu(MenuKey.INVENTORY, owner, beta))
+        assertTrue(AuthzEvaluator.canRoute(RouteKey.INVENTORY_OPS, owner, beta))
+        assertTrue(AuthzEvaluator.canMenu(MenuKey.INVENTORY, viewer, beta))
+        assertTrue(AuthzEvaluator.canRoute(RouteKey.INVENTORY_OPS, viewer, beta))
+    }
+
+    @Test
     fun reportsRouteAndExecuteActionRequireRealTimeReportsBeta() {
         val viewer = subUser(setOf(ScopeKey.REPORTS_VIEW))
         val executor = subUser(setOf(ScopeKey.REPORTS_EXECUTE))

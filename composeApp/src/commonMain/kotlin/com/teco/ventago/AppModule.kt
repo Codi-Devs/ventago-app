@@ -678,6 +678,7 @@ internal fun appModule() = module {
             authService = get(),
             cache = get(),
             changesManager = get(),
+            betaService = get(),
         )
     }
 
