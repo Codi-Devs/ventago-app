@@ -17,7 +17,7 @@ class PosService(
         return repository.retryElectronicInvoice(businessId, orderId)
     }
 
-    suspend fun getInvoiceDocsRaw(businessId: Int, cufe: String): InvoiceDocsDto {
-        return repository.getInvoiceDocsRaw(businessId, cufe)
+    suspend fun getInvoiceDocsRaw(businessId: Int, cufe: String, orderId: Long? = null): InvoiceDocsDto {
+        return repository.getInvoiceDocsRaw(businessId, cufe, orderId)
     }
 }

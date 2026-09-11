@@ -78,7 +78,8 @@ interface IOrdersRepository {
         orderId: Int,
     ): RetryInvoiceResponse
 
-    suspend fun getInvoiceDocsRaw(businessId: Int, cufe: String): InvoiceDocsDto
+    suspend fun getInvoiceDocsRaw(businessId: Int, cufe: String, orderId: Long? = null): InvoiceDocsDto
+    suspend fun confirmNonFiscal(businessId: Int, orderId: Int)
     suspend fun createPaymentLink(businessId: Int, request: CreatePaymentLinkRequest): String?
     suspend fun releasePendingPaymentIntent(
         businessId: Int,

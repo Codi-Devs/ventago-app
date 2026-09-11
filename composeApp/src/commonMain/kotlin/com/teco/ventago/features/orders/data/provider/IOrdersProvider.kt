@@ -35,7 +35,8 @@ interface IOrdersProvider {
         businessId: Int,
         orderId: Int,
     ): ApiResponse
-    suspend fun getInvoiceDocsRaw(businessId: Int, cufe: String): ApiResponse
+    suspend fun confirmNonFiscal(businessId: Int, orderId: Int): ApiResponse
+    suspend fun getInvoiceDocsRaw(businessId: Int, cufe: String, orderId: Long? = null): ApiResponse
     suspend fun createPaymentLink(businessId: Int, request: CreatePaymentLinkRequest): ApiResponse
     suspend fun releasePendingPaymentIntent(
         businessId: Int,

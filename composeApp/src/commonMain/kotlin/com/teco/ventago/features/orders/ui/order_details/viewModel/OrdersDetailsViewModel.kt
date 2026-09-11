@@ -121,6 +121,11 @@ class OrdersDetailsViewModel(
                             user,
                             beta
                         ),
+                        canCreateNonFiscal = AuthzEvaluator.canAction(
+                            ActionKey.ORDERS_CREATE_NON_FISCAL,
+                            user,
+                            beta
+                        ),
                         canCreatePaymentLink = AuthzEvaluator.canAction(
                             ActionKey.ORDERS_PAYMENT_LINK,
                             user,
@@ -1528,16 +1533,16 @@ class OrdersDetailsViewModel(
 
     fun getDocumentByCufe() {
         val order = uiState.value.order ?: return
-        val cufe = order.externalInvoiceNumber ?: return
         val businessId = business?.businessId ?: return
         showLoading()
         viewModelScope.launch {
             withContext(Dispatchers.IO) {
                 try {
                     val docs = orderService.getDocumentByCufe(
-                        businessId,
-                        cufe
-                    ) // must return pdf in base64
+                        businessId = businessId,
+                        cufe = order.externalInvoiceNumber.orEmpty(),
+                        orderId = order.id.toLong()
+                    )
                     val pdfB64 = docs.pdfBase64 ?: error("No PDF in response")
 
                     @OptIn(ExperimentalEncodingApi::class)
@@ -1564,10 +1569,39 @@ class OrdersDetailsViewModel(
         val businessId = business?.businessId ?: safeOrder.businessId
         return !uiState.value.hideReprintTicketAction &&
             !uiState.value.reprintInFlight &&
-            safeOrder.invoiceStatus == InvoiceStatus.ISSUED.id &&
+            (
+                safeOrder.invoiceStatus == InvoiceStatus.ISSUED.id ||
+                    safeOrder.hasCurrentNonFiscalDocument()
+                ) &&
             safeOrder.id > 0 &&
             businessId > 0 &&
             safeOrder.ticketEnabled == true
+    }
+
+    fun canConfirmNonFiscal(order: Order? = uiState.value.order): Boolean {
+        val safeOrder = order ?: return false
+        return uiState.value.canCreateNonFiscal && safeOrder.canConfirmNonFiscal()
+    }
+
+    fun confirmNonFiscal() {
+        val order = uiState.value.order ?: return
+        val businessId = business?.businessId ?: order.businessId
+        if (!canConfirmNonFiscal(order) || businessId <= 0) return
+        showLoading()
+        viewModelScope.launch {
+            runCatching {
+                withContext(Dispatchers.IO) {
+                    orderService.confirmNonFiscal(businessId, order.id)
+                }
+            }.onSuccess { fresh ->
+                updateState { copy(order = fresh) }
+                snackbarService.show("Documento no fiscal generado.")
+                showSuccess()
+            }.onFailure { error ->
+                snackbarService.show(mapOrderMutationError(error, "No se pudo generar el documento no fiscal."))
+                showError()
+            }
+        }
     }
 
     fun reprintTicket() {
