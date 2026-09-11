@@ -28,7 +28,8 @@ data class CreateOrderRequest(
     val formats: List<String> = emptyList(),
     @SerialName("include_bottom_note") val includeBottomNote: Boolean? = null,
 
-    @SerialName("save_as") val saveAs: String = "confirmed"
+    @SerialName("save_as") val saveAs: String = "confirmed",
+    @SerialName("invoicing_mode") val invoicingMode: String? = null
 )
 
 @Serializable

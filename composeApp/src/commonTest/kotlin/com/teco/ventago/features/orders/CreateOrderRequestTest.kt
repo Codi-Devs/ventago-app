@@ -174,6 +174,16 @@ class CreateOrderRequestTest {
         assertEquals("\"CUFE-123\"", referenceNumber["number"].toString())
     }
 
+    @Test
+    fun createOrderSerializesExplicitInvoicingMode() {
+        val payload = json.parseToJsonElement(
+            json.encodeToString(sampleRequest(includeBottomNote = null).copy(invoicingMode = "explicit"))
+        ).jsonObject
+
+        assertEquals("\"explicit\"", payload["invoicing_mode"].toString())
+        assertEquals("\"confirmed\"", payload["save_as"].toString())
+    }
+
     private fun sampleRequest(
         includeBottomNote: Boolean?,
         finalCustomerInfo: FinalCustomerInfo? = null

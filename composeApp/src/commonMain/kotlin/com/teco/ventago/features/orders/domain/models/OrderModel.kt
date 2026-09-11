@@ -64,6 +64,9 @@ data class Order(
     @SerialName("external_uuid") val externalUuid: String? = null,
     @SerialName("payment_flow_type") val paymentFlowType: String? = null,
     @SerialName("ticket_enabled") val ticketEnabled: Boolean? = null,
+    @SerialName("invoicing_mode") val invoicingMode: String? = null,
+    @SerialName("non_fiscal_confirmed_at") val nonFiscalConfirmedAt: String? = null,
+    @SerialName("non_fiscal_invalidated_at") val nonFiscalInvalidatedAt: String? = null,
 
     val customer: CustomerSnapshot? = null,
 
@@ -73,6 +76,27 @@ data class Order(
 
     fun formattedInternalNumber(): String {
         return internalNumber.substringAfterLast('-')
+    }
+
+    fun isExplicitInternal(): Boolean =
+        invoicingMode.equals("explicit", ignoreCase = true)
+
+    fun hasCurrentNonFiscalDocument(): Boolean {
+        if (!isExplicitInternal()) return false
+        if (nonFiscalConfirmedAt.isNullOrBlank()) return false
+        if (!nonFiscalInvalidatedAt.isNullOrBlank()) return false
+        if (status != OrderStatus.CONFIRMED) return false
+        return invoiceStatus != InvoiceStatus.ISSUED.id
+    }
+
+    fun canConfirmNonFiscal(): Boolean {
+        if (orderType in setOf("04", "05", "06", "07")) return false
+        if (status == OrderStatus.CANCELLED) return false
+        val invoice = invoiceStatus ?: InvoiceStatus.NONE.id
+        if (invoice != InvoiceStatus.NONE.id && invoice != InvoiceStatus.FAILED.id) return false
+        if (!externalInvoiceNumber.isNullOrBlank()) return false
+        if (status != OrderStatus.DRAFT && status != OrderStatus.CONFIRMED) return false
+        return !hasCurrentNonFiscalDocument()
     }
 
     fun displayCustomerName(): String? {

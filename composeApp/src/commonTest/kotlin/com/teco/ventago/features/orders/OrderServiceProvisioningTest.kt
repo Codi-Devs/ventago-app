@@ -170,7 +170,8 @@ class OrderServiceProvisioningTest {
             request: VoidOrderPaymentRequest
         ): VoidOrderPaymentResponse = unused()
         override suspend fun retryElectronicInvoice(businessId: Int, orderId: Int): RetryInvoiceResponse = unused()
-        override suspend fun getInvoiceDocsRaw(businessId: Int, cufe: String): InvoiceDocsDto = unused()
+        override suspend fun confirmNonFiscal(businessId: Int, orderId: Int) = unused<Unit>()
+        override suspend fun getInvoiceDocsRaw(businessId: Int, cufe: String, orderId: Long?): InvoiceDocsDto = unused()
         override suspend fun createPaymentLink(businessId: Int, request: CreatePaymentLinkRequest): String? = unused()
         override suspend fun releasePendingPaymentIntent(
             businessId: Int,

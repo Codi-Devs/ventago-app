@@ -26,6 +26,7 @@ data class OrderDetailsState(
     val havePaymentsConfigured: Boolean = false,
     val invoicingEnabled: Boolean = false,
     val canMarkPaid: Boolean = false,
+    val canCreateNonFiscal: Boolean = false,
     val canCreatePaymentLink: Boolean = false,
     val canViewAchPayment: Boolean = false,
     val canApproveAchPayment: Boolean = false,

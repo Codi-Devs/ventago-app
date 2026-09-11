@@ -370,6 +370,7 @@ fun OrderDetailsScreen(
 ) {
 
     var showCancelDialog by remember { mutableStateOf(false) }
+    var showConfirmNonFiscalDialog by remember { mutableStateOf(false) }
     var cancelReason by remember { mutableStateOf("") }
     var showDeleteDialog by remember { mutableStateOf(false) }
     var deleteReason by remember { mutableStateOf("") }
@@ -510,19 +511,33 @@ fun OrderDetailsScreen(
 
         // Action buttons
         if (order.status != OrderStatus.CANCELLED) {
-            when (order.invoiceStatus) {
-                InvoiceStatus.ISSUED.id -> {
-                    ButtonM(
-                        onClick = { viewModel.getDocumentByCufe() },
-                        containerColor = MaterialTheme.colorScheme.secondary,
-                        contentColor = MaterialTheme.colorScheme.onSecondary
-                    ) {
-                        OrderActionButtonContent(
-                            icon = Icons.Rounded.Visibility,
-                            label = "Ver factura PDF"
-                        )
-                    }
+            val hasCurrentNonFiscal = order.hasCurrentNonFiscalDocument()
+            if (order.invoiceStatus == InvoiceStatus.ISSUED.id || hasCurrentNonFiscal) {
+                ButtonM(
+                    onClick = { viewModel.getDocumentByCufe() },
+                    containerColor = MaterialTheme.colorScheme.secondary,
+                    contentColor = MaterialTheme.colorScheme.onSecondary
+                ) {
+                    OrderActionButtonContent(
+                        icon = Icons.Rounded.Visibility,
+                        label = if (hasCurrentNonFiscal) "Ver documento PDF" else "Ver factura PDF"
+                    )
                 }
+            }
+            if (viewModel.canConfirmNonFiscal(order)) {
+                ButtonM(
+                    onClick = { showConfirmNonFiscalDialog = true },
+                    containerColor = Color(0xFF2E7D32),
+                    contentColor = Color.White
+                ) {
+                    OrderActionButtonContent(
+                        icon = Icons.Rounded.Description,
+                        label = "Generar documento no fiscal"
+                    )
+                }
+            }
+            when (order.invoiceStatus) {
+                InvoiceStatus.ISSUED.id -> Unit
 
                 InvoiceStatus.FAILED.id -> {
                     // No retry button and no cancel-order action for failed invoice orders.
@@ -1363,6 +1378,32 @@ fun OrderDetailsScreen(
                 },
                 onConfirmManualPayment = {
                     viewModel.onConfirmManualPayment()
+                }
+            )
+        }
+
+        if (showConfirmNonFiscalDialog) {
+            val confirmMessage = if (order.status == OrderStatus.DRAFT) {
+                "Generar el documento no fiscal confirmará la venta y moverá inventario. ¿Deseas continuar?"
+            } else {
+                "Se generará un documento no fiscal para esta orden. No es factura electrónica ni comprobante fiscal ante DGI. ¿Deseas continuar?"
+            }
+            AlertDialog(
+                onDismissRequest = { showConfirmNonFiscalDialog = false },
+                title = { Text("Generar documento no fiscal") },
+                text = { Text(confirmMessage) },
+                confirmButton = {
+                    ButtonM(onClick = {
+                        showConfirmNonFiscalDialog = false
+                        viewModel.confirmNonFiscal()
+                    }) {
+                        Text("Continuar")
+                    }
+                },
+                dismissButton = {
+                    TextButton(onClick = { showConfirmNonFiscalDialog = false }) {
+                        Text("Cancelar")
+                    }
                 }
             )
         }

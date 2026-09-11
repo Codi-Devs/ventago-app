@@ -23,12 +23,13 @@ object AuthzEvaluator {
                 ScopeKey.INVOICE_CREATE,
                 ScopeKey.INVOICE_CREDIT_NOTES,
                 ScopeKey.INVOICE_CREATE_DRAFT,
+                ScopeKey.INVOICE_CREATE_NON_FISCAL,
                 ScopeKey.INVOICE_CANCEL
             )
         ),
         MenuKey.ORDERS_LIST to AuthzPolicy(requiredAny = setOf(ScopeKey.INVOICE_VIEW)),
         MenuKey.ORDERS_CREATE to AuthzPolicy(
-            requiredAny = setOf(ScopeKey.INVOICE_CREATE, ScopeKey.INVOICE_CREATE_DRAFT)
+            requiredAny = setOf(ScopeKey.INVOICE_CREATE, ScopeKey.INVOICE_CREATE_DRAFT, ScopeKey.INVOICE_CREATE_NON_FISCAL)
         ),
         MenuKey.QUOTES_LIST to AuthzPolicy(
             requiredAny = setOf(ScopeKey.QUOTES_VIEW, ScopeKey.QUOTES_CREATE, ScopeKey.QUOTES_ACCEPT),
@@ -76,7 +77,7 @@ object AuthzEvaluator {
         RouteKey.ORDER_DETAILS to AuthzPolicy(requiredAny = setOf(ScopeKey.INVOICE_VIEW)),
         RouteKey.INVOICE_PREVIEW to AuthzPolicy(requiredAny = setOf(ScopeKey.INVOICE_VIEW)),
         RouteKey.ORDERS_NEW to AuthzPolicy(
-            requiredAny = setOf(ScopeKey.INVOICE_CREATE, ScopeKey.INVOICE_CREATE_DRAFT)
+            requiredAny = setOf(ScopeKey.INVOICE_CREATE, ScopeKey.INVOICE_CREATE_DRAFT, ScopeKey.INVOICE_CREATE_NON_FISCAL)
         ),
         RouteKey.CUSTOMERS_LIST to AuthzPolicy(
             requiredAny = setOf(ScopeKey.CUSTOMER_VIEW, ScopeKey.CUSTOMER_CREATE, ScopeKey.CUSTOMER_DELETE)
@@ -157,13 +158,17 @@ object AuthzEvaluator {
 
     private val actionPolicies = mapOf(
         ActionKey.ORDERS_OPEN_CREATE to AuthzPolicy(
-            requiredAny = setOf(ScopeKey.INVOICE_CREATE, ScopeKey.INVOICE_CREATE_DRAFT)
+            requiredAny = setOf(ScopeKey.INVOICE_CREATE, ScopeKey.INVOICE_CREATE_DRAFT, ScopeKey.INVOICE_CREATE_NON_FISCAL)
         ),
         ActionKey.ORDERS_CREATE to AuthzPolicy(requiredAny = setOf(ScopeKey.INVOICE_CREATE)),
         ActionKey.ORDERS_CREATE_DRAFT to AuthzPolicy(requiredAny = setOf(ScopeKey.INVOICE_CREATE_DRAFT)),
+        ActionKey.ORDERS_CREATE_NON_FISCAL to AuthzPolicy(
+            requiredAny = setOf(ScopeKey.INVOICE_CREATE_NON_FISCAL),
+            betaFeature = BetaFeature.NON_FISCAL_DOCUMENTS
+        ),
         ActionKey.ORDERS_PAYMENT_LINK to AuthzPolicy(requiredAny = setOf(ScopeKey.INVOICE_CREATE_PAYMENT_LINK)),
-        ActionKey.ORDERS_MANUAL_PAYMENT to AuthzPolicy(requiredAny = setOf(ScopeKey.INVOICE_CREATE)),
-        ActionKey.ORDERS_MARK_PAID to AuthzPolicy(requiredAny = setOf(ScopeKey.INVOICE_CREATE)),
+        ActionKey.ORDERS_MANUAL_PAYMENT to AuthzPolicy(requiredAny = setOf(ScopeKey.INVOICE_CREATE, ScopeKey.INVOICE_CREATE_NON_FISCAL)),
+        ActionKey.ORDERS_MARK_PAID to AuthzPolicy(requiredAny = setOf(ScopeKey.INVOICE_CREATE, ScopeKey.INVOICE_CREATE_NON_FISCAL)),
         ActionKey.ORDERS_CANCEL to AuthzPolicy(requiredAny = setOf(ScopeKey.INVOICE_CANCEL)),
         ActionKey.ORDERS_CREDIT_NOTE to AuthzPolicy(requiredAny = setOf(ScopeKey.INVOICE_CREDIT_NOTES)),
         ActionKey.ORDERS_CUSTOM_PRODUCT to AuthzPolicy(requiredAny = setOf(ScopeKey.INVOICE_CUSTOM_PRODUCT)),

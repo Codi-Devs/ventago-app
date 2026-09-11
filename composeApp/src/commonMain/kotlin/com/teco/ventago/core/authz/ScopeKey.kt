@@ -6,6 +6,7 @@ object ScopeKey {
     const val INVOICE_VIEW = "invoice:view"
     const val INVOICE_CREATE = "invoice:create_invoice"
     const val INVOICE_CREATE_DRAFT = "invoice:create_draft"
+    const val INVOICE_CREATE_NON_FISCAL = "invoice:create_non_fiscal"
     const val INVOICE_CREATE_PAYMENT_LINK = "invoice:create_payment_link"
     const val INVOICE_CANCEL = "invoice:cancel"
     const val INVOICE_CREDIT_NOTES = "invoice:credit_notes"
