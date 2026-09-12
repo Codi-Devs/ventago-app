@@ -18,7 +18,11 @@ import com.teco.ventago.features.expenses.domain.buildExpenseCategorizationPaylo
 import com.teco.ventago.features.expenses.domain.inferDefaultExpenseAccount
 import com.teco.ventago.features.expenses.domain.models.Expense
 import com.teco.ventago.features.expenses.domain.models.ExpensePayment
-import com.teco.ventago.features.expenses.domain.models.PaymentSummary
+import com.teco.ventago.features.expenses.domain.models.ExpensePaymentDeleteResult
+import com.teco.ventago.features.expenses.domain.models.ExpensePaymentMutationResult
+import com.teco.ventago.features.expenses.domain.applyDeletedPayment
+import com.teco.ventago.features.expenses.domain.applyExpenseSummary
+import com.teco.ventago.features.expenses.domain.applyUpsertedPayment
 import com.teco.ventago.features.expenses.domain.resolveExpenseConceptMode
 import com.teco.ventago.features.expenses.domain.toConceptSelections
 import com.teco.ventago.features.expenses.domain.models.requests.ExpenseProofFile
@@ -146,10 +150,10 @@ class ExpenseDetailsViewModel(
                 }
                 showLoading("Registrando pago...")
                 analyticsService.logExpensePaymentSubmitAttempted(mode = "create")
-                val createdPayment = withContext(Dispatchers.IO) {
+                val mutation = withContext(Dispatchers.IO) {
                     expensesService.createPayment(expenseId, requestResult.request, proofFile)
                 }
-                applyCreatedPaymentLocally(createdPayment)
+                applyPaymentMutationLocally(mutation)
                 analyticsService.logExpensePaymentSubmitSucceeded(mode = "create")
                 showSuccess("Pago registrado correctamente")
                 _uiState.value = _uiState.value.copy(isSubmittingPayment = false, paymentSuccess = true)
@@ -170,10 +174,10 @@ class ExpenseDetailsViewModel(
         viewModelScope.launch {
             try {
                 showLoading("Eliminando pago...")
-                withContext(Dispatchers.IO) {
+                val result = withContext(Dispatchers.IO) {
                     expensesService.deletePayment(expenseId, paymentId)
                 }
-                applyDeletedPaymentLocally(paymentId)
+                applyDeletedPaymentMutationLocally(paymentId, result)
                 analyticsService.logExpensePaymentDeleteSucceeded()
                 showSuccess("Pago eliminado correctamente")
             } catch (e: Exception) {
@@ -199,16 +203,16 @@ class ExpenseDetailsViewModel(
                 )
                 showLoading("Actualizando pago...")
                 analyticsService.logExpensePaymentSubmitAttempted(mode = "mark_paid")
-                val updatedPayment = withContext(Dispatchers.IO) {
+                val mutation = withContext(Dispatchers.IO) {
                     expensesService.updatePayment(expenseId, paymentId, request)
                 }
                 val optimisticPayment = mergePaymentWithFallbacks(
                     paymentId = paymentId,
-                    backend = updatedPayment,
+                    backend = mutation.payment,
                     request = request,
                     fallback = payment
                 )
-                applyUpsertedPaymentLocally(optimisticPayment)
+                applyPaymentMutationLocally(mutation.copy(payment = optimisticPayment))
                 analyticsService.logExpensePaymentSubmitSucceeded(mode = "mark_paid")
                 showSuccess("Pago actualizado correctamente")
             } catch (e: Exception) {
@@ -264,18 +268,18 @@ class ExpenseDetailsViewModel(
                 showLoading("Actualizando pago...")
                 val mode = if (paymentStatus == "paid") "mark_paid" else "update"
                 analyticsService.logExpensePaymentSubmitAttempted(mode = mode)
-                val updatedPayment = withContext(Dispatchers.IO) {
+                val mutation = withContext(Dispatchers.IO) {
                     expensesService.updatePayment(expenseId, paymentId, requestResult.request, proofFile)
                 }
                 val fallback = _uiState.value.expense?.payments
                     ?.firstOrNull { it.id == paymentId }
                 val optimisticPayment = mergePaymentWithFallbacks(
                     paymentId = paymentId,
-                    backend = updatedPayment,
+                    backend = mutation.payment,
                     request = requestResult.request,
                     fallback = fallback
                 )
-                applyUpsertedPaymentLocally(optimisticPayment)
+                applyPaymentMutationLocally(mutation.copy(payment = optimisticPayment))
                 analyticsService.logExpensePaymentSubmitSucceeded(mode = mode)
                 showSuccess("Pago actualizado correctamente")
                 _uiState.value = _uiState.value.copy(
@@ -575,11 +579,12 @@ class ExpenseDetailsViewModel(
             defaultAccountId = inferredDefault,
             items = expense.toConceptSelections()
         )
-        val defaultName = expense.defaultAccount?.name
-            ?: expense.items.orEmpty()
-                .mapNotNull { it.expenseAccount?.name }
-                .distinct()
-                .singleOrNull()
+                val defaultName = expense.defaultAccount?.name
+                    ?: expense.defaultAccountId?.let { "Concepto #$it" }
+                    ?: expense.items.orEmpty()
+                        .mapNotNull { it.expenseAccount?.name ?: it.expenseAccountId?.let { id -> "Concepto #$id" } }
+                        .distinct()
+                        .singleOrNull()
 
         val shouldOpenSheet = _uiState.value.pendingOpenCategorization && !keepSheetClosed
         _uiState.value = _uiState.value.copy(
@@ -594,6 +599,7 @@ class ExpenseDetailsViewModel(
                         description = item.description ?: "Sin descripcion",
                         expenseAccountId = item.expenseAccountId,
                         expenseAccountName = item.expenseAccount?.name
+                            ?: item.expenseAccountId?.let { "Concepto #$it" }
                     )
                 },
                 expenseAccounts = accounts,
@@ -609,55 +615,28 @@ class ExpenseDetailsViewModel(
         val error: String? = null
     )
 
-    private fun applyCreatedPaymentLocally(createdPayment: ExpensePayment) {
-        applyUpsertedPaymentLocally(createdPayment)
-    }
-
-    private fun applyUpsertedPaymentLocally(updatedPayment: ExpensePayment) {
+    private fun applyPaymentMutationLocally(mutation: ExpensePaymentMutationResult) {
         val currentExpense = _uiState.value.expense ?: return
-        val payments = currentExpense.payments.orEmpty().toMutableList()
-        val updateIndex = updatedPayment.id?.let { id ->
-            payments.indexOfFirst { it.id == id }
-        } ?: -1
-        if (updateIndex >= 0) {
-            payments[updateIndex] = updatedPayment
+        val updatedExpense = if (mutation.summary != null) {
+            applyExpenseSummary(currentExpense, mutation.summary)
         } else {
-            payments.add(updatedPayment)
+            applyUpsertedPayment(currentExpense, mutation.payment)
         }
-        updateExpensePaymentSummary(currentExpense, payments)
+        publishUpdatedExpense(updatedExpense)
     }
 
-    private fun applyDeletedPaymentLocally(paymentId: Long) {
+    private fun applyDeletedPaymentMutationLocally(paymentId: Long, result: ExpensePaymentDeleteResult) {
         val currentExpense = _uiState.value.expense ?: return
-        val updatedPayments = currentExpense.payments.orEmpty().filterNot { it.id == paymentId }
-        updateExpensePaymentSummary(currentExpense, updatedPayments)
+        val updatedExpense = if (result.summary != null) {
+            applyExpenseSummary(currentExpense, result.summary)
+        } else {
+            applyDeletedPayment(currentExpense, paymentId)
+        }
+        publishUpdatedExpense(updatedExpense)
     }
 
-    private fun updateExpensePaymentSummary(expense: Expense, payments: List<ExpensePayment>) {
-        val paidTotal = payments
-            .filter { it.paymentStatus == "paid" }
-            .sumOf { it.amountPaid ?: 0.0 }
-        val totalAmount = expense.totalAmount ?: 0.0
-        val remaining = (totalAmount - paidTotal).coerceAtLeast(0.0)
-        val status = when {
-            paidTotal <= 0.0 -> "not_paid"
-            remaining <= 0.0001 -> "paid"
-            else -> "partial"
-        }
-        val updatedExpense = expense.copy(
-            payments = payments,
-            totalPaid = paidTotal,
-            paymentStatus = status,
-            paymentSummary = PaymentSummary(
-                totalPaid = paidTotal,
-                remaining = remaining,
-                status = status
-            )
-        )
-
-        _uiState.value = _uiState.value.copy(
-            expense = updatedExpense
-        )
+    private fun publishUpdatedExpense(updatedExpense: Expense) {
+        _uiState.value = _uiState.value.copy(expense = updatedExpense)
         expensesService.publishExpenseUpdate(updatedExpense)
     }
 

@@ -5,14 +5,21 @@ import com.teco.ventago.features.expenses.data.provider.buildCategorizationPaylo
 import com.teco.ventago.features.expenses.domain.ExpenseConceptMode
 import com.teco.ventago.features.expenses.domain.ExpenseItemConceptSelection
 import com.teco.ventago.features.expenses.domain.ExpensesErrorMapper
+import com.teco.ventago.features.expenses.domain.applyExpenseSummary
 import com.teco.ventago.features.expenses.domain.buildExpenseAccountsTree
 import com.teco.ventago.features.expenses.domain.buildExpenseCategorizationPayload
 import com.teco.ventago.features.expenses.domain.buildExpenseConceptLabel
 import com.teco.ventago.features.expenses.domain.buildExpenseCreatePayload
 import com.teco.ventago.features.expenses.domain.inferDefaultExpenseAccount
+import com.teco.ventago.features.expenses.domain.mergeExpenseSnapshots
 import com.teco.ventago.features.expenses.domain.models.Expense
 import com.teco.ventago.features.expenses.domain.models.ExpenseAccount
 import com.teco.ventago.features.expenses.domain.models.ExpenseItem
+import com.teco.ventago.features.expenses.domain.models.ExpensePayment
+import com.teco.ventago.features.expenses.domain.models.ExpensePaymentSnapshot
+import com.teco.ventago.features.expenses.domain.paidPaymentsTotal
+import com.teco.ventago.features.expenses.domain.remainingToRegister
+import com.teco.ventago.features.expenses.domain.upsertPayments
 import com.teco.ventago.features.expenses.domain.models.requests.CategorizeExpenseItemRequest
 import com.teco.ventago.features.expenses.domain.models.requests.CategorizeExpenseRequest
 import com.teco.ventago.features.expenses.domain.models.requests.ExpenseItemRequest
@@ -311,5 +318,144 @@ class ExpenseConceptsTest {
             "Tu sesion expiro. Inicia sesion nuevamente.",
             ExpensesErrorMapper.mapCreateOrEditExpenseError(response)
         )
+    }
+
+    @Test
+    fun errorMapperMapsPaymentExceedsTotal() {
+        val response = normalizeExpensesApiResponse(
+            Json.parseToJsonElement(
+                """
+                {
+                  "success": false,
+                  "data": null,
+                  "error": "payment amount exceeds expense total"
+                }
+                """.trimIndent()
+            ) as JsonObject
+        )
+
+        assertEquals(
+            "El monto registrado no puede superar el total del gasto.",
+            ExpensesErrorMapper.mapCreateOrEditExpenseError(response)
+        )
+    }
+
+    @Test
+    fun mergeExpenseSnapshotsKeepsNewerCompleteOverIncomplete() {
+        val complete = Expense(
+            id = 494,
+            totalAmount = 100.0,
+            totalPaid = 40.0,
+            totalItemsCount = 2,
+            items = listOf(ExpenseItem(id = 1, lineNumber = 1, expenseAccountId = 10)),
+            payments = listOf(ExpensePayment(id = 1, amountPaid = 40.0, paymentStatus = "paid", paymentDate = "2026-09-12")),
+            updatedAt = "2026-09-12T12:00:00Z"
+        )
+        val incompleteNewer = Expense(
+            id = 494,
+            totalAmount = 100.0,
+            totalPaid = 40.0,
+            totalItemsCount = 2,
+            items = emptyList(),
+            payments = emptyList(),
+            updatedAt = "2026-09-12T13:00:00Z"
+        )
+
+        val merged = mergeExpenseSnapshots(complete, incompleteNewer)
+        assertEquals(complete.items, merged?.items)
+        assertEquals(complete.payments, merged?.payments)
+    }
+
+    @Test
+    fun mergeExpenseSnapshotsDoesNotLetOlderIncomingOverwrite() {
+        val newer = Expense(id = 1, notes = "nuevo", updatedAt = "2026-09-12T14:00:00Z")
+        val older = Expense(id = 1, notes = "viejo", updatedAt = "2026-09-12T10:00:00Z")
+        assertEquals("nuevo", mergeExpenseSnapshots(newer, older)?.notes)
+    }
+
+    @Test
+    fun remainingToRegisterCountsPendingCredit() {
+        val payments = listOf(
+            ExpensePayment(id = 1, amountPaid = 60.0, paymentStatus = "paid", paymentDate = "2026-09-01"),
+            ExpensePayment(id = 2, amountPaid = 40.0, paymentStatus = "not_paid", paymentMethod = "credit")
+        )
+        assertEquals(0.0, remainingToRegister(100.0, payments), 0.001)
+        assertEquals(40.0, remainingToRegister(100.0, payments, excludePaymentId = 2), 0.001)
+        assertEquals(60.0, paidPaymentsTotal(payments), 0.001)
+    }
+
+    @Test
+    fun applyExpenseSummaryReplacesPayments() {
+        val expense = Expense(
+            id = 10,
+            totalAmount = 100.0,
+            payments = listOf(ExpensePayment(id = 1, amountPaid = 60.0, paymentStatus = "paid", paymentDate = "2026-09-01"))
+        )
+        val summary = ExpensePaymentSnapshot(
+            totalPaid = 100.0,
+            registeredAmount = 100.0,
+            remaining = 0.0,
+            paymentStatus = "paid",
+            payments = listOf(
+                ExpensePayment(id = 1, amountPaid = 60.0, paymentStatus = "paid", paymentDate = "2026-09-01"),
+                ExpensePayment(id = 2, amountPaid = 40.0, paymentStatus = "paid", paymentDate = "2026-09-12")
+            )
+        )
+        val updated = applyExpenseSummary(expense, summary)
+        assertEquals(2, updated.payments?.size)
+        assertEquals(100.0, updated.totalPaid)
+        assertEquals(0.0, updated.paymentSummary?.remaining)
+    }
+
+    @Test
+    fun upsertPaymentsMergesByIdWithoutWipingExisting() {
+        val existing = listOf(ExpensePayment(id = 1, amountPaid = 60.0))
+        val incoming = listOf(ExpensePayment(id = 2, amountPaid = 40.0))
+        val merged = upsertPayments(existing, incoming)
+        assertEquals(setOf(1L, 2L), merged.mapNotNull { it.id }.toSet())
+    }
+
+    @Test
+    fun buildExpenseCreatePayloadKeepsItemAccountsInPerItemMode() {
+        val request = UpsertExpenseRequest(
+            businessId = 45,
+            issuer = ExpensePartyRequest(name = "A"),
+            receiver = ExpensePartyRequest(name = "B"),
+            items = listOf(
+                ExpenseItemRequest(
+                    lineNumber = 1,
+                    description = "Item",
+                    quantity = 1.0,
+                    unitPrice = 5.0,
+                    discountAmount = 0.0,
+                    subtotal = 5.0,
+                    itbmsAmount = 0.35,
+                    total = 5.35,
+                    expenseAccountId = 140L
+                )
+            ),
+            subtotal = 5.0,
+            itbmsTotal = 0.35,
+            totalAmount = 5.35
+        )
+
+        val payload = buildExpenseCreatePayload(
+            baseRequest = request,
+            defaultAccountId = 101L,
+            applyConceptPerItem = true
+        )
+
+        assertEquals(101L, payload.defaultAccountId)
+        assertEquals(140L, payload.items.first().expenseAccountId)
+    }
+
+    @Test
+    fun buildExpenseConceptLabelFallsBackToConceptId() {
+        val expense = Expense(
+            items = listOf(
+                ExpenseItem(id = 1, lineNumber = 1, expenseAccountId = 77, expenseAccount = null)
+            )
+        )
+        assertEquals("Concepto #77", buildExpenseConceptLabel(expense))
     }
 }

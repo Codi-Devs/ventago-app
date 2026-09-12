@@ -90,11 +90,11 @@ import com.teco.ventago.design_system.theme.labelSmall
 import com.teco.ventago.design_system.theme.titleMediumBold
 import com.teco.ventago.features.expenses.domain.ExpensesSelectionStore
 import com.teco.ventago.features.expenses.domain.buildExpenseConceptLabel
+import com.teco.ventago.features.expenses.domain.remainingToRegister
 import com.teco.ventago.features.expenses.domain.models.Expense
 import com.teco.ventago.features.expenses.domain.models.ExpenseItem
 import com.teco.ventago.features.expenses.domain.models.ExpenseParty
 import com.teco.ventago.features.expenses.domain.models.ExpensePayment
-import com.teco.ventago.features.expenses.domain.models.PaymentSummary
 import com.teco.ventago.features.expenses.domain.models.requests.ExpenseProofFile
 import com.teco.ventago.features.expenses.ui.components.ExpenseAccountSelectorField
 import com.teco.ventago.design_system.textfields.DMMoneyOutlinedTextField
@@ -135,8 +135,6 @@ fun ExpenseDetailsScreen(
     val uriHandler = LocalUriHandler.current
     var showPaymentSheet by remember { mutableStateOf(false) }
     var paymentSheetMode by remember { mutableStateOf(PaymentSheetMode.REGISTER) }
-    var showOverpaymentDialog by remember { mutableStateOf(false) }
-    var pendingPaymentData by remember { mutableStateOf<PaymentSubmitData?>(null) }
 
     LaunchedEffect(Unit) {
         val selected = ExpensesSelectionStore.selected
@@ -204,7 +202,7 @@ fun ExpenseDetailsScreen(
             // Payment summary card
             PaymentSummaryCard(
                 expense = expense,
-                isPaid = expense.paymentStatus == "paid",
+                isFullyRegistered = remainingToRegister(expense.totalAmount ?: 0.0, expense.payments.orEmpty()) <= 0.0001,
                 hasCreditLock = creditLockPayment != null,
                 canManagePayments = uiState.canUpdateExpenseAction,
                 onRegisterPayment = {
@@ -332,42 +330,26 @@ fun ExpenseDetailsScreen(
                 isSubmitting = uiState.isSubmittingPayment,
                 error = uiState.paymentError,
                 editingPayment = uiState.editingPayment,
-                expenseTotalAmount = expense.totalAmount ?: 0.0,
+                pendingLimit = remainingToRegister(
+                    totalAmount = expense.totalAmount ?: 0.0,
+                    payments = expense.payments.orEmpty(),
+                    excludePaymentId = uiState.editingPayment?.id
+                ),
                 hasExpensesQr = uiState.hasExpensesQr,
                 onSubmit = { method, amount, reference, notes, paymentDate, dueDate, proofFileUrl, proofFile ->
-                    // Check for overpayment
-                    val totalAmount = expense.totalAmount ?: 0.0
-                    val totalPaid = expense.paymentSummary?.totalPaid ?: expense.totalPaid ?: 0.0
-                    val editingAmount = uiState.editingPayment?.amountPaid ?: 0.0
-                    val effectivePaid = totalPaid - editingAmount + amount
-                    if (paymentSheetMode != PaymentSheetMode.MARK_AS_PAID && effectivePaid > totalAmount) {
-                        pendingPaymentData = PaymentSubmitData(
-                            method,
-                            amount,
-                            reference,
-                            notes,
-                            paymentDate,
-                            dueDate,
-                            paymentSheetMode,
-                            proofFileUrl,
-                            proofFile
-                        )
-                        showOverpaymentDialog = true
-                    } else {
-                        submitPayment(
-                            viewModel,
-                            uiState.editingPayment,
-                            paymentSheetMode,
-                            method,
-                            amount,
-                            reference,
-                            notes,
-                            paymentDate,
-                            dueDate,
-                            proofFileUrl,
-                            proofFile
-                        )
-                    }
+                    submitPayment(
+                        viewModel,
+                        uiState.editingPayment,
+                        paymentSheetMode,
+                        method,
+                        amount,
+                        reference,
+                        notes,
+                        paymentDate,
+                        dueDate,
+                        proofFileUrl,
+                        proofFile
+                    )
                 },
                 onDismiss = {
                     showPaymentSheet = false
@@ -394,48 +376,6 @@ fun ExpenseDetailsScreen(
                 onDismiss = { viewModel.setConceptSheetVisible(false) }
             )
         }
-    }
-
-    // Overpayment confirmation dialog
-    if (showOverpaymentDialog && pendingPaymentData != null) {
-        AlertDialog(
-            onDismissRequest = { showOverpaymentDialog = false },
-            title = { Text("Sobrepago") },
-            text = { Text("El monto total de los pagos excede el total del gasto. ¿Desea continuar?") },
-            confirmButton = {
-                TextButton(
-                    onClick = {
-                        showOverpaymentDialog = false
-                        pendingPaymentData?.let { data ->
-                            submitPayment(
-                                viewModel,
-                                uiState.editingPayment,
-                                data.mode,
-                                data.method,
-                                data.amount,
-                                data.reference,
-                                data.notes,
-                                data.paymentDate,
-                                data.dueDate,
-                                data.proofFileUrl,
-                                data.proofFile
-                            )
-                        }
-                        pendingPaymentData = null
-                    }
-                ) {
-                    Text("Continuar")
-                }
-            },
-            dismissButton = {
-                TextButton(onClick = {
-                    showOverpaymentDialog = false
-                    pendingPaymentData = null
-                }) {
-                    Text("Cancelar")
-                }
-            }
-        )
     }
 
     if (uiState.loadingBottomSheet.isLoading()) {
@@ -487,7 +427,10 @@ private fun ConceptSummaryCard(
             InfoRow("Items", summary)
             expense.defaultAccount?.name?.let {
                 Spacer(modifier = Modifier.height(4.dp))
-                InfoRow("Concepto factura", it, maxLines = 2)
+                InfoRow("Concepto factura", it, maxLines = 4)
+            } ?: expense.defaultAccountId?.let {
+                Spacer(modifier = Modifier.height(4.dp))
+                InfoRow("Concepto factura", "Concepto #$it", maxLines = 2)
             }
             Spacer(modifier = Modifier.height(8.dp))
             Text(
@@ -497,18 +440,6 @@ private fun ConceptSummaryCard(
         }
     }
 }
-
-private data class PaymentSubmitData(
-    val method: String,
-    val amount: Double,
-    val reference: String,
-    val notes: String,
-    val paymentDate: String?,
-    val dueDate: String?,
-    val mode: PaymentSheetMode = PaymentSheetMode.REGISTER,
-    val proofFileUrl: String? = null,
-    val proofFile: ExpenseProofFile? = null
-)
 
 private enum class PaymentSheetMode {
     REGISTER,
@@ -853,7 +784,7 @@ private fun PartiesCard(issuer: ExpenseParty?, receiver: ExpenseParty?) {
 @Composable
 private fun PaymentSummaryCard(
     expense: Expense,
-    isPaid: Boolean,
+    isFullyRegistered: Boolean,
     hasCreditLock: Boolean,
     canManagePayments: Boolean,
     onRegisterPayment: () -> Unit,
@@ -861,7 +792,7 @@ private fun PaymentSummaryCard(
 ) {
     val totalAmount = expense.totalAmount ?: 0.0
     val totalPaid = expense.paymentSummary?.totalPaid ?: expense.totalPaid ?: 0.0
-    val remaining = expense.paymentSummary?.remaining ?: (totalAmount - totalPaid)
+    val remaining = remainingToRegister(totalAmount, expense.payments.orEmpty())
     val creditBadge = remember(expense) { buildCreditDueBadge(expense) }
 
     Card(
@@ -916,7 +847,7 @@ private fun PaymentSummaryCard(
                 )
             }
 
-            if (!isPaid && canManagePayments) {
+            if (!isFullyRegistered && canManagePayments) {
                 if (hasCreditLock) {
                     Text(
                         text = "Existe un crédito pendiente por el total. Debe marcarlo como pagado para cerrar el gasto.",
@@ -1464,7 +1395,7 @@ private fun PaymentRegistrationSheet(
     isSubmitting: Boolean,
     error: String?,
     editingPayment: ExpensePayment? = null,
-    expenseTotalAmount: Double = 0.0,
+    pendingLimit: Double = 0.0,
     hasExpensesQr: Boolean = false,
     onSubmit: (
         method: String,
@@ -1504,7 +1435,7 @@ private fun PaymentRegistrationSheet(
     var amount by remember {
         mutableStateOf(
             editingPayment?.amountPaid?.let { amountToRawCents(it) }
-                ?: amountToRawCents(expenseTotalAmount)
+                ?: amountToRawCents(pendingLimit)
         )
     }
     var reference by remember { mutableStateOf(editingPayment?.reference ?: "") }
@@ -1559,7 +1490,7 @@ private fun PaymentRegistrationSheet(
             readOnly = isMarkAsPaidMode,
             onChange = { newValue ->
                 val cents = newValue.filter(Char::isDigit).toLongOrNull() ?: 0L
-                val maxCents = (expenseTotalAmount * 100.0).roundToLong().coerceAtLeast(0L)
+                val maxCents = (pendingLimit * 100.0).roundToLong().coerceAtLeast(0L)
                 amount = cents.coerceAtMost(maxCents).toString()
             }
         )

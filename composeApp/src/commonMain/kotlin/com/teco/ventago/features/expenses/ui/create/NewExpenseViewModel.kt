@@ -11,18 +11,16 @@ import com.teco.ventago.design_system.organism.LoadingState
 import com.teco.ventago.features.expenses.domain.ExpenseConceptMode
 import com.teco.ventago.features.expenses.domain.ExpensesSelectionStore
 import com.teco.ventago.features.expenses.domain.ExpensesService
-import com.teco.ventago.features.expenses.domain.buildExpenseCategorizationPayload
 import com.teco.ventago.features.expenses.domain.buildExpenseCreatePayload
 import com.teco.ventago.features.expenses.domain.inferDefaultExpenseAccount
-import com.teco.ventago.features.expenses.domain.ExpenseItemConceptSelection
+import com.teco.ventago.features.expenses.domain.resolveExpenseConceptMode
+import com.teco.ventago.features.expenses.domain.toConceptSelections
 import com.teco.ventago.features.expenses.domain.models.Expense
 import com.teco.ventago.features.expenses.domain.models.requests.ExpenseItemRequest
 import com.teco.ventago.features.expenses.domain.models.requests.ExpensePartyRequest
 import com.teco.ventago.features.expenses.domain.models.requests.ExpenseProofFile
 import com.teco.ventago.features.expenses.domain.models.requests.InitialExpensePaymentRequest
 import com.teco.ventago.features.expenses.domain.models.requests.UpsertExpenseRequest
-import com.teco.ventago.features.expenses.domain.resolveExpenseConceptMode
-import com.teco.ventago.features.expenses.domain.toConceptSelections
 import com.teco.ventago.features.expenses.domain.models.ExpenseMerchant
 import com.teco.ventago.utils.randomUUID
 import kotlinx.coroutines.Job
@@ -134,6 +132,7 @@ class NewExpenseViewModel(
                     itbmsAmount = formatAmountForInput(item.itbmsAmount ?: 0.0),
                     expenseAccountId = item.expenseAccountId,
                     expenseAccountName = item.expenseAccount?.name
+                        ?: item.expenseAccountId?.let { "Concepto #$it" }
                 )
             }
             ?.ifEmpty { listOf(defaultEditableItem()) }
@@ -595,43 +594,8 @@ class NewExpenseViewModel(
 
     private suspend fun saveEditedExpense(state: NewExpenseState, businessId: Int): Expense {
         val expenseId = state.editingExpenseId ?: throw IllegalStateException("No expense selected")
-        val baseRequest = buildUpdateRequest(state, businessId)
-        val updatedExpense = expensesService.updateExpense(expenseId, baseRequest, localExpenseFile)
-        val hasSelectedConcepts = hasAnySelectedConcept(state)
-
-        if (!hasSelectedConcepts) {
-            return updatedExpense
-        }
-
-        val mode = if (state.applyConceptPerItem) ExpenseConceptMode.PER_ITEM else ExpenseConceptMode.GLOBAL
-        val refreshedExpense = expensesService.getExpense(expenseId)
-        val payload = buildExpenseCategorizationPayload(
-            defaultAccountId = state.defaultExpenseAccountId,
-            mode = mode,
-            items = buildCategorizationSelections(state, refreshedExpense, mode)
-        )
-        return expensesService.categorizeExpense(expenseId, payload)
-    }
-
-    private fun buildCategorizationSelections(
-        state: NewExpenseState,
-        refreshedExpense: Expense,
-        mode: ExpenseConceptMode
-    ): List<ExpenseItemConceptSelection> {
-        val stateItemsByLineNumber = state.items.associateBy { it.lineNumber }
-        return refreshedExpense.items.orEmpty().mapIndexed { index, refreshedItem ->
-            val lineNumber = refreshedItem.lineNumber ?: (index + 1)
-            val matchedStateItem = stateItemsByLineNumber[lineNumber] ?: state.items.getOrNull(index)
-            ExpenseItemConceptSelection(
-                itemId = refreshedItem.id,
-                lineNumber = lineNumber,
-                accountId = if (mode == ExpenseConceptMode.GLOBAL) {
-                    state.defaultExpenseAccountId
-                } else {
-                    matchedStateItem?.expenseAccountId
-                }
-            )
-        }
+        val request = buildCreateRequest(state, businessId)
+        return expensesService.updateExpense(expenseId, request, localExpenseFile)
     }
 
     private fun buildCreateRequest(state: NewExpenseState, businessId: Int): UpsertExpenseRequest {
@@ -641,10 +605,6 @@ class NewExpenseViewModel(
             defaultAccountId = state.defaultExpenseAccountId,
             applyConceptPerItem = state.applyConceptPerItem
         )
-    }
-
-    private fun buildUpdateRequest(state: NewExpenseState, businessId: Int): UpsertExpenseRequest {
-        return buildBaseRequest(state, businessId, includeConcepts = false)
     }
 
     private fun buildBaseRequest(

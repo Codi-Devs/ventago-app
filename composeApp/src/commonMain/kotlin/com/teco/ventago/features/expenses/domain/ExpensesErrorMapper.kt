@@ -24,6 +24,8 @@ object ExpensesErrorMapper {
                 "El concepto de gasto seleccionado no fue encontrado."
             response.errorCode == "AUTH_001" ->
                 "Tu sesion expiro. Inicia sesion nuevamente."
+            response.matchesPaymentExceedsTotal() ->
+                "El monto registrado no puede superar el total del gasto."
             else -> "No se pudo guardar el gasto. Intentalo nuevamente."
         }
     }
@@ -52,6 +54,15 @@ object ExpensesErrorMapper {
                 "Tu sesion expiro. Inicia sesion nuevamente."
             else -> "No se pudo procesar la solicitud del proveedor."
         }
+    }
+
+    private fun ApiResponse.matchesPaymentExceedsTotal(): Boolean {
+        val code = errorCode?.lowercase().orEmpty()
+        val message = errorMessage?.lowercase().orEmpty()
+        return code.contains("payment amount exceeds expense total") ||
+            message.contains("payment amount exceeds expense total") ||
+            code.contains("payment_exceeds_total") ||
+            message.contains("payment_exceeds_total")
     }
 
     private fun ApiResponse.matchesAccountNotFound(): Boolean {
