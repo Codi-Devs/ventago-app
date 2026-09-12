@@ -11,6 +11,9 @@ import com.teco.ventago.features.expenses.domain.models.ExpenseAccount
 import com.teco.ventago.features.expenses.domain.models.ExpenseItem
 import com.teco.ventago.features.expenses.domain.models.ExpenseParty
 import com.teco.ventago.features.expenses.domain.models.ExpensePayment
+import com.teco.ventago.features.expenses.domain.models.ExpensePaymentDeleteResult
+import com.teco.ventago.features.expenses.domain.models.ExpensePaymentMutationResult
+import com.teco.ventago.features.expenses.domain.models.ExpensePaymentSnapshot
 import com.teco.ventago.features.expenses.domain.models.PagedCrawlJobs
 import com.teco.ventago.features.expenses.domain.models.ExpenseMerchant
 import com.teco.ventago.features.expenses.domain.models.PagedExpenses
@@ -235,12 +238,12 @@ class ExpensesRepository(
         expenseId: Long,
         request: UpsertExpensePaymentRequest,
         proofFile: ExpenseProofFile?
-    ): ExpensePayment {
+    ): ExpensePaymentMutationResult {
         return try {
             val response = provider.createPayment(businessId, expenseId, request, proofFile)
             ensureSuccess(response, ExpensesErrorMapper.mapCreateOrEditExpenseError(response))
             val dataObj = response.data as? JsonObject
-            dataObj?.let(::mapExpensePayment) ?: ExpensePayment(expenseId = expenseId)
+            parseExpensePaymentMutation(dataObj, expenseId)
         } catch (e: Exception) {
             logAndThrow(
                 flow = "createPayment",
@@ -271,12 +274,12 @@ class ExpensesRepository(
         paymentId: Long,
         request: UpsertExpensePaymentRequest,
         proofFile: ExpenseProofFile?
-    ): ExpensePayment {
+    ): ExpensePaymentMutationResult {
         return try {
             val response = provider.updatePayment(businessId, expenseId, paymentId, request, proofFile)
             ensureSuccess(response, ExpensesErrorMapper.mapCreateOrEditExpenseError(response))
             val dataObj = response.data as? JsonObject
-            dataObj?.let(::mapExpensePayment) ?: ExpensePayment(id = paymentId, expenseId = expenseId)
+            parseExpensePaymentMutation(dataObj, expenseId, paymentId)
         } catch (e: Exception) {
             logAndThrow(
                 flow = "updatePayment",
@@ -286,11 +289,13 @@ class ExpensesRepository(
         }
     }
 
-    override suspend fun deletePayment(businessId: Int, expenseId: Long, paymentId: Long): Boolean {
+    override suspend fun deletePayment(businessId: Int, expenseId: Long, paymentId: Long): ExpensePaymentDeleteResult {
         return try {
             val response = provider.deletePayment(businessId, expenseId, paymentId)
             ensureSuccess(response, ExpensesErrorMapper.mapCreateOrEditExpenseError(response))
-            response.successful
+            val dataObj = response.data as? JsonObject
+            val summary = (dataObj?.get("expense_summary") as? JsonObject)?.let(::mapExpensePaymentSnapshot)
+            ExpensePaymentDeleteResult(success = response.successful, summary = summary)
         } catch (e: Exception) {
             logAndThrow(
                 flow = "deletePayment",
@@ -436,6 +441,35 @@ class ExpensesRepository(
             )
         )
         throw error
+    }
+
+    private fun parseExpensePaymentMutation(
+        dataObj: JsonObject?,
+        expenseId: Long,
+        paymentId: Long? = null
+    ): ExpensePaymentMutationResult {
+        val summary = (dataObj?.get("expense_summary") as? JsonObject)?.let(::mapExpensePaymentSnapshot)
+        val paymentPayload = when {
+            dataObj == null -> null
+            dataObj["id"] != null -> dataObj
+            else -> dataObj["payment"] as? JsonObject
+        }
+        val payment = paymentPayload?.let(::mapExpensePayment)
+            ?: ExpensePayment(id = paymentId, expenseId = expenseId)
+        return ExpensePaymentMutationResult(payment = payment, summary = summary)
+    }
+
+    private fun mapExpensePaymentSnapshot(dataObj: JsonObject): ExpensePaymentSnapshot {
+        val payments = (dataObj["payments"] as? JsonArray)?.mapNotNull { element ->
+            (element as? JsonObject)?.let(::mapExpensePayment)
+        } ?: emptyList()
+        return ExpensePaymentSnapshot(
+            totalPaid = dataObj.doubleValue("total_paid"),
+            registeredAmount = dataObj.doubleValue("registered_amount"),
+            remaining = dataObj.doubleValue("remaining"),
+            paymentStatus = dataObj.stringValue("payment_status"),
+            payments = payments
+        )
     }
 
     private fun mapExpensePayment(dataObj: JsonObject): ExpensePayment {

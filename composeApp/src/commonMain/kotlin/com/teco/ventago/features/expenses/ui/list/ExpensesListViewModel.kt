@@ -148,14 +148,13 @@ class ExpensesListViewModel(
 
                 expensesService.markCacheHydrated()
 
-                // Update cache: replace on refresh, merge on pagination
-                if (refresh) {
-                    expensesService.replaceCache(response.expenses)
-                } else if (response.expenses.isNotEmpty()) {
-                    expensesService.mergeExpensesIntoCache(response.expenses)
-                }
+                // Update cache: merge by freshness/completeness so a list page
+                // cannot wipe a richer detail snapshot.
+                expensesService.mergeExpensesIntoCache(response.expenses)
+                val cachedById = expensesService.getCachedExpenses().associateBy { it.id }
+                val mergedPage = response.expenses.map { cachedById[it.id] ?: it }
 
-                val newExpenses = if (refresh) response.expenses else state.expenses + response.expenses
+                val newExpenses = if (refresh) mergedPage else state.expenses + mergedPage
                 val noMore = response.expenses.isEmpty() ||
                     (response.size != null && response.expenses.size < (response.size))
 
@@ -197,9 +196,10 @@ class ExpensesListViewModel(
                     return@launch
                 }
 
-                // Replace cache with fresh data from API
-                expensesService.replaceCache(response.expenses)
-                val filtered = applyLocalFilters(response.expenses, currentState)
+                expensesService.mergeExpensesIntoCache(response.expenses)
+                val cachedById = expensesService.getCachedExpenses().associateBy { it.id }
+                val mergedPage = response.expenses.map { cachedById[it.id] ?: it }
+                val filtered = applyLocalFilters(mergedPage, currentState)
                 val noMore = response.expenses.isEmpty() ||
                     (response.size != null && response.expenses.size < (response.size))
 

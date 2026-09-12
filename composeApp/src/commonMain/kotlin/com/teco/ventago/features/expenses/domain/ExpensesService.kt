@@ -9,6 +9,8 @@ import com.teco.ventago.features.expenses.domain.models.CrawlJob
 import com.teco.ventago.features.expenses.domain.models.Expense
 import com.teco.ventago.features.expenses.domain.models.ExpenseAccount
 import com.teco.ventago.features.expenses.domain.models.ExpensePayment
+import com.teco.ventago.features.expenses.domain.models.ExpensePaymentDeleteResult
+import com.teco.ventago.features.expenses.domain.models.ExpensePaymentMutationResult
 import com.teco.ventago.features.expenses.domain.models.PagedCrawlJobs
 import com.teco.ventago.features.expenses.domain.models.PagedExpenses
 import com.teco.ventago.features.expenses.domain.models.requests.CategorizeExpenseRequest
@@ -77,20 +79,23 @@ class ExpensesService(
     }
 
     fun mergeExpensesIntoCache(fresh: List<Expense>): List<Expense> {
-        val cached = getCachedExpenses().toMutableList()
-        val existingIds = cached.mapNotNull { it.id }.toMutableSet()
+        val byId = LinkedHashMap<Long, Expense>()
+        getCachedExpenses().forEach { expense ->
+            val id = expense.id ?: return@forEach
+            byId[id] = expense
+        }
         for (expense in fresh) {
             val id = expense.id ?: continue
-            if (id in existingIds) {
-                val index = cached.indexOfFirst { it.id == id }
-                if (index >= 0) cached[index] = expense
-            } else {
-                cached.add(expense)
-                existingIds.add(id)
-            }
+            byId[id] = mergeExpenseSnapshots(byId[id], expense) ?: expense
         }
-        saveCacheExpenses(cached)
-        return cached
+        val merged = byId.values.toList()
+        saveCacheExpenses(merged)
+        return merged
+    }
+
+    fun upsertExpenseInCache(expense: Expense): Expense {
+        val merged = mergeExpensesIntoCache(listOf(expense))
+        return merged.firstOrNull { it.id == expense.id } ?: expense
     }
 
     fun consumePendingRefresh(requestKey: String): PagedExpenses? {
@@ -124,9 +129,20 @@ class ExpensesService(
         }
     }
 
-    suspend fun getExpense(expenseId: Long): Expense {
+    suspend fun getExpense(expenseId: Long, forceRefresh: Boolean = false): Expense {
         val businessId = businessId() ?: throw IllegalStateException("No business selected")
-        return repository.getExpense(businessId, expenseId)
+        if (!forceRefresh) {
+            val cached = getCachedExpenses().firstOrNull { it.id == expenseId }
+            if (cached != null && isExpenseSnapshotComplete(cached)) {
+                return cached
+            }
+        }
+        return try {
+            val fetched = repository.getExpense(businessId, expenseId)
+            upsertExpenseInCache(fetched)
+        } catch (error: Exception) {
+            getCachedExpenses().firstOrNull { it.id == expenseId } ?: throw error
+        }
     }
 
     suspend fun createExpense(
@@ -135,7 +151,8 @@ class ExpensesService(
         paymentProofFiles: List<ExpenseProofFile> = emptyList()
     ): Expense {
         val businessId = businessId() ?: throw IllegalStateException("No business selected")
-        return repository.createExpense(businessId, request, file, paymentProofFiles)
+        val created = repository.createExpense(businessId, request, file, paymentProofFiles)
+        return upsertExpenseInCache(created)
     }
 
     suspend fun updateExpense(
@@ -144,7 +161,8 @@ class ExpensesService(
         file: ExpenseProofFile? = null
     ): Expense {
         val businessId = businessId() ?: throw IllegalStateException("No business selected")
-        return repository.updateExpense(businessId, expenseId, request, file)
+        val updated = repository.updateExpense(businessId, expenseId, request, file)
+        return upsertExpenseInCache(updated)
     }
 
     suspend fun deleteExpense(expenseId: Long): Boolean {
@@ -154,7 +172,8 @@ class ExpensesService(
 
     suspend fun categorizeExpense(expenseId: Long, request: CategorizeExpenseRequest): Expense {
         val businessId = businessId() ?: throw IllegalStateException("No business selected")
-        return repository.categorizeExpense(businessId, expenseId, request)
+        val categorized = repository.categorizeExpense(businessId, expenseId, request)
+        return upsertExpenseInCache(categorized)
     }
 
     suspend fun getExpenseAccounts(includeInactive: Boolean = false): List<ExpenseAccount> {
@@ -191,7 +210,7 @@ class ExpensesService(
         expenseId: Long,
         request: UpsertExpensePaymentRequest,
         proofFile: ExpenseProofFile? = null
-    ): ExpensePayment {
+    ): ExpensePaymentMutationResult {
         val businessId = businessId() ?: throw IllegalStateException("No business selected")
         return repository.createPayment(businessId, expenseId, request, proofFile)
     }
@@ -206,12 +225,12 @@ class ExpensesService(
         paymentId: Long,
         request: UpsertExpensePaymentRequest,
         proofFile: ExpenseProofFile? = null
-    ): ExpensePayment {
+    ): ExpensePaymentMutationResult {
         val businessId = businessId() ?: throw IllegalStateException("No business selected")
         return repository.updatePayment(businessId, expenseId, paymentId, request, proofFile)
     }
 
-    suspend fun deletePayment(expenseId: Long, paymentId: Long): Boolean {
+    suspend fun deletePayment(expenseId: Long, paymentId: Long): ExpensePaymentDeleteResult {
         val businessId = businessId() ?: throw IllegalStateException("No business selected")
         return repository.deletePayment(businessId, expenseId, paymentId)
     }
@@ -280,7 +299,7 @@ class ExpensesService(
     }
 
     fun publishExpenseUpdate(expense: Expense) {
-        mergeExpensesIntoCache(listOf(expense))
-        expenseUpdates.tryEmit(expense)
+        val merged = upsertExpenseInCache(expense)
+        expenseUpdates.tryEmit(merged)
     }
 }
