@@ -213,7 +213,8 @@ fun ExpensesListScreen(
         if (uiState.hasExpensesQr && visibleCrawlJobs.isNotEmpty()) {
             CrawlJobsSummary(
                 jobs = visibleCrawlJobs,
-                isLoading = uiState.isLoadingCrawlJobs
+                isLoading = uiState.isLoadingCrawlJobs,
+                onDismissFailedJob = viewModel::dismissFailedCrawlJob
             )
         }
 
@@ -732,8 +733,10 @@ private fun EmptyExpensesView() {
 @Composable
 private fun CrawlJobsSummary(
     jobs: List<CrawlJob>,
-    isLoading: Boolean
+    isLoading: Boolean,
+    onDismissFailedJob: (Long) -> Unit
 ) {
+    var showFailedDetail by remember { mutableStateOf(false) }
     Surface(
         modifier = Modifier
             .fillMaxWidth()
@@ -783,7 +786,8 @@ private fun CrawlJobsSummary(
             } else {
                 val pending = jobs.count { it.status == "pending" || it.status == "processing" }
                 val succeeded = jobs.count { it.status == "success" }
-                val failed = jobs.count { it.status == "failed" }
+                val failedJobs = jobs.filter { it.status == "failed" }
+                val failed = failedJobs.size
 
                 Row(
                     modifier = Modifier.fillMaxWidth(),
@@ -805,10 +809,44 @@ private fun CrawlJobsSummary(
                     }
                     if (failed > 0) {
                         Text(
-                            text = "$failed fallidos",
+                            text = if (failed == 1) "1 error" else "$failed errores",
                             style = MaterialTheme.typography.bodySmall,
-                            color = Color(0xFFF44336)
+                            color = MaterialTheme.colorScheme.error,
+                            modifier = Modifier.clickable { showFailedDetail = !showFailedDetail }
                         )
+                    }
+                }
+
+                if (showFailedDetail && failedJobs.isNotEmpty()) {
+                    failedJobs.forEach { job ->
+                        val jobId = job.resolvedId
+                        Column(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(top = 8.dp),
+                            verticalArrangement = Arrangement.spacedBy(4.dp)
+                        ) {
+                            Text(
+                                text = "No se importó la factura",
+                                style = MaterialTheme.typography.bodySmall,
+                                fontWeight = FontWeight.SemiBold
+                            )
+                            Text(
+                                text = job.errorMessage
+                                    ?.takeIf { it.isNotBlank() }
+                                    ?: "No se pudo importar esta factura desde DGI.",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                            if (jobId != null) {
+                                Text(
+                                    text = "Ocultar",
+                                    style = MaterialTheme.typography.labelLarge,
+                                    color = MaterialTheme.colorScheme.primary,
+                                    modifier = Modifier.clickable { onDismissFailedJob(jobId) }
+                                )
+                            }
+                        }
                     }
                 }
             }

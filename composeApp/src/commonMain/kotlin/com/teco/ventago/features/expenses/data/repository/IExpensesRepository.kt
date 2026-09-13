@@ -82,4 +82,5 @@ interface IExpensesRepository {
     suspend fun crawlExpense(businessId: Int, payload: String): CrawlJob
     suspend fun getCrawlJobStatus(businessId: Int, jobId: Long): CrawlJob
     suspend fun listCrawlJobs(businessId: Int, page: Int, pageSize: Int): PagedCrawlJobs
+    suspend fun deleteCrawlJob(businessId: Int, jobId: Long): Boolean
 }

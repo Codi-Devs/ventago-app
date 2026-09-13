@@ -426,6 +426,20 @@ class ExpensesRepository(
         }
     }
 
+    override suspend fun deleteCrawlJob(businessId: Int, jobId: Long): Boolean {
+        return try {
+            val response = provider.deleteCrawlJob(businessId, jobId)
+            ensureSuccess(response, ExpensesErrorMapper.mapCreateOrEditExpenseError(response))
+            response.successful
+        } catch (e: Exception) {
+            logAndThrow(
+                flow = "deleteCrawlJob",
+                context = "Error deleting crawl job. businessId: $businessId, jobId: $jobId",
+                error = e
+            )
+        }
+    }
+
     private fun ensureSuccess(response: com.teco.ventago.utils.ApiResponse, userMessage: String) {
         if (!response.successful || !response.errorCode.isNullOrBlank()) {
             throw BadRequestException(userMessage)

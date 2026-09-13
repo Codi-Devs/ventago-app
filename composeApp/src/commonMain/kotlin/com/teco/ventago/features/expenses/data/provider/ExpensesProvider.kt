@@ -331,6 +331,14 @@ class ExpensesProvider(
         return handleAuth(response, res.status) { listCrawlJobs(businessId, page, pageSize) }
     }
 
+    override suspend fun deleteCrawlJob(businessId: Int, jobId: Long): ApiResponse {
+        val res = client.delete(Configs.ordersBasePath + "/api/v1/expenses/crawl/$jobId") {
+            applyJsonHeaders(businessId)
+        }
+        val response = normalizeResponse(res.body())
+        return handleAuth(response, res.status) { deleteCrawlJob(businessId, jobId) }
+    }
+
     // Merchants
 
     override suspend fun listMerchants(businessId: Int, request: ListMerchantsRequest): ApiResponse {

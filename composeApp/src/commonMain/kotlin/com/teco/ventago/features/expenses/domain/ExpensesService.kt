@@ -291,6 +291,11 @@ class ExpensesService(
         return repository.listCrawlJobs(businessId, page, pageSize)
     }
 
+    suspend fun deleteCrawlJob(jobId: Long): Boolean {
+        val businessId = businessId() ?: throw IllegalStateException("No business selected")
+        return repository.deleteCrawlJob(businessId, jobId)
+    }
+
     fun clearCache() {
         storage.deleteObject(cacheKey())
         pendingRefreshResults.clear()

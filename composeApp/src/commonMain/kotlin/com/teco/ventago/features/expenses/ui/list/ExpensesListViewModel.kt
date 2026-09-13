@@ -92,6 +92,21 @@ class ExpensesListViewModel(
         }
     }
 
+    fun dismissFailedCrawlJob(jobId: Long) {
+        viewModelScope.launch {
+            try {
+                withContext(Dispatchers.IO) {
+                    expensesService.deleteCrawlJob(jobId)
+                }
+                loadCrawlJobs()
+            } catch (_: Exception) {
+                _uiState.value = _uiState.value.copy(
+                    error = "No se pudo eliminar el error de importación."
+                )
+            }
+        }
+    }
+
     fun loadExpenses(refresh: Boolean = false) {
         viewModelScope.launch {
             val state = _uiState.value
