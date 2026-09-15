@@ -377,16 +377,16 @@ fun ItemScreenContent(
                 isError = false,
             )
 
-            if (uiState.productTypeId == ProductType.GOOD.typeId) {
-                DMDropDownField(
+            DMDropDownField(
                     label = "Unidad de medida",
                     items = viewModel.uomOptions(),
                     selectedIndex = viewModel.selectedUomIndex(),
+                    searchable = true,
+                    searchPlaceholder = "Buscar unidad",
                     modifier = Modifier.padding(bottom = 0.dp),
                     onItemSelected = { idx, _ -> viewModel.onUomSelected(UomRegistry.all()[idx].code) },
                     isError = false,
                 )
-            }
         }
 
         CollapsibleSectionCard(

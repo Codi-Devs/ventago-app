@@ -2,10 +2,12 @@ package com.teco.ventago.design_system.textfields.helpers
 
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
@@ -114,6 +116,8 @@ fun <T> DMDropDownField(
     selectedIndex: Int = -1,
     onItemSelected: (index: Int, item: T) -> Unit,
     selectedItemToString: (T) -> String = { it.toString() },
+    searchable: Boolean = false,
+    searchPlaceholder: String = "Buscar",
     isError: Boolean = false,
     drawItem: @Composable (T, Boolean, Boolean, () -> Unit) -> Unit = { item, selected, itemEnabled, onClick ->
         LargeDropdownMenuItem(
@@ -171,37 +175,70 @@ fun <T> DMDropDownField(
                     shape = RoundedCornerShape(12.dp),
                     modifier = Modifier.padding(top = 16.dp)
                 ) {
+                    var query by remember { mutableStateOf("") }
+                    val visibleItems = remember(items, query, searchable) {
+                        val indexed = items.mapIndexed { index, item -> index to item }
+                        if (!searchable || query.isBlank()) {
+                            indexed
+                        } else {
+                            indexed.filter { (_, item) ->
+                                selectedItemToString(item).contains(query, ignoreCase = true)
+                            }
+                        }
+                    }
                     val listState = rememberLazyListState()
-                    if (selectedIndex > -1) {
-                        LaunchedEffect("ScrollToSelected") {
-                            listState.scrollToItem(index = selectedIndex)
+                    if (selectedIndex > -1 && query.isBlank()) {
+                        LaunchedEffect(selectedIndex) {
+                            val visibleIndex = visibleItems.indexOfFirst { it.first == selectedIndex }
+                            if (visibleIndex >= 0) {
+                                listState.scrollToItem(index = visibleIndex)
+                            }
                         }
                     }
 
-                    LazyColumn(modifier = Modifier.fillMaxWidth(), state = listState) {
-                        if (notSetLabel != null) {
-                            item {
-                                LargeDropdownMenuItem(
-                                    text = notSetLabel,
-                                    selected = false,
-                                    enabled = false,
-                                    onClick = { },
-                                )
-                            }
+                    Column(modifier = Modifier.fillMaxWidth()) {
+                        if (searchable) {
+                            OutlinedTextField(
+                                value = query,
+                                onValueChange = { query = it },
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(start = 16.dp, end = 16.dp, top = 16.dp),
+                                label = { Text(searchPlaceholder) },
+                                singleLine = true,
+                            )
                         }
-                        itemsIndexed(items) { index, item ->
-                            val selectedItem = index == selectedIndex
-                            drawItem(
-                                item,
-                                selectedItem,
-                                true
-                            ) {
-                                onItemSelected(index, item)
-                                expanded = false
+                        LazyColumn(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .heightIn(max = 420.dp),
+                            state = listState
+                        ) {
+                            if (notSetLabel != null) {
+                                item {
+                                    LargeDropdownMenuItem(
+                                        text = notSetLabel,
+                                        selected = false,
+                                        enabled = false,
+                                        onClick = { },
+                                    )
+                                }
                             }
+                            itemsIndexed(visibleItems) { index, pair ->
+                                val (originalIndex, item) = pair
+                                val selectedItem = originalIndex == selectedIndex
+                                drawItem(
+                                    item,
+                                    selectedItem,
+                                    true
+                                ) {
+                                    onItemSelected(originalIndex, item)
+                                    expanded = false
+                                }
 
-                            if (index < items.lastIndex) {
-                                Divider(modifier = Modifier.padding(horizontal = 16.dp))
+                                if (index < visibleItems.lastIndex) {
+                                    Divider(modifier = Modifier.padding(horizontal = 16.dp))
+                                }
                             }
                         }
                     }
