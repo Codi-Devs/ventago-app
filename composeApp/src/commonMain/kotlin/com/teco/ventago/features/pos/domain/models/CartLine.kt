@@ -2,6 +2,7 @@ package com.teco.ventago.features.pos.domain.models
 
 import com.teco.ventago.utils.multiplyCentsByQuantity
 import com.teco.ventago.utils.normalizeQuantity
+import kotlinx.serialization.json.JsonObject
 
 typealias Money = Long
 
@@ -43,6 +44,7 @@ data class CartLine(
 
     val costCents: Money? = null,         // cost from catalog (cents), used for margin display
     val locationId: Int? = null,
+    val additionalInfo: JsonObject? = null,
 ) {
     fun unitPrice(): Money = overrideUnitPrice ?: baseUnitPrice
     fun normalizedQuantity(): Double = normalizeQuantity(quantity)

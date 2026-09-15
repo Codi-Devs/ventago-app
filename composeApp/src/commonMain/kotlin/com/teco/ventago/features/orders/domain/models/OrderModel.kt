@@ -2,6 +2,7 @@ package com.teco.ventago.features.orders.domain.models
 
 import com.teco.ventago.features.invoicing.domain.models.InvoiceStatus
 import com.teco.ventago.features.invoicing.domain.models.FeCustomerType
+import com.teco.ventago.features.orders.domain.models.requests.NameValue
 import com.teco.ventago.utils.toLongCents
 import kotlinx.serialization.ExperimentalSerializationApi
 import kotlinx.serialization.SerialName
@@ -213,7 +214,8 @@ data class OrderLineDto(
     @SerialName("tax_rate") val taxRate: String,
     @SerialName("line_subtotal") val lineSubtotal: String,
     @SerialName("tax_amount") val taxAmount: String,
-    @SerialName("line_total") val lineTotal: String
+    @SerialName("line_total") val lineTotal: String,
+    @SerialName("additional_info") val additionalInfo: List<NameValue> = emptyList(),
 )
 
 @Serializable
