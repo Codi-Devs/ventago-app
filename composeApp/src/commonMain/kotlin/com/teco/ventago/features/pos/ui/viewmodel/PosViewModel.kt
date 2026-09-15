@@ -203,6 +203,7 @@ class PosViewModel(
     private data class PosAuthzState(
         val canCreateInvoice: Boolean,
         val canCreateDraft: Boolean,
+        val canCreateNonFiscal: Boolean,
         val canCreatePaymentLink: Boolean,
         val canUseManualPaymentMethods: Boolean,
         val canConfigurePayments: Boolean,
@@ -234,6 +235,7 @@ class PosViewModel(
                     PosAuthzState(
                         canCreateInvoice = AuthzEvaluator.canAction(ActionKey.ORDERS_CREATE, user, betaSnapshot),
                         canCreateDraft = AuthzEvaluator.canAction(ActionKey.ORDERS_CREATE_DRAFT, user, betaSnapshot),
+                        canCreateNonFiscal = AuthzEvaluator.canAction(ActionKey.ORDERS_CREATE_NON_FISCAL, user, betaSnapshot),
                         canCreatePaymentLink = AuthzEvaluator.canAction(ActionKey.ORDERS_PAYMENT_LINK, user, betaSnapshot),
                         canUseManualPaymentMethods = AuthzEvaluator.canAction(ActionKey.ORDERS_MANUAL_PAYMENT, user, betaSnapshot),
                         canConfigurePayments = canConfigurePayments,
@@ -252,6 +254,7 @@ class PosViewModel(
                         copy(
                             canCreateInvoice = authz.canCreateInvoice,
                             canCreateDraft = authz.canCreateDraft,
+                            canCreateNonFiscal = authz.canCreateNonFiscal,
                             canCreatePaymentLink = authz.canCreatePaymentLink,
                             canUseManualPaymentMethods = authz.canUseManualPaymentMethods,
                             canConfigurePayments = authz.canConfigurePayments,
@@ -272,6 +275,7 @@ class PosViewModel(
                         posProvisioningActive = provisioning.required && provisioning.isProvisioned,
                         canCreateInvoice = authz.canCreateInvoice,
                         canCreateDraft = authz.canCreateDraft,
+                        canCreateNonFiscal = authz.canCreateNonFiscal,
                         canCreatePaymentLink = authz.canCreatePaymentLink,
                         canUseManualPaymentMethods = authz.canUseManualPaymentMethods,
                         canConfigurePayments = authz.canConfigurePayments,
@@ -425,6 +429,7 @@ class PosViewModel(
         return PosAuthzState(
             canCreateInvoice = AuthzEvaluator.canAction(ActionKey.ORDERS_CREATE, user, betaSnapshot),
             canCreateDraft = AuthzEvaluator.canAction(ActionKey.ORDERS_CREATE_DRAFT, user, betaSnapshot),
+            canCreateNonFiscal = AuthzEvaluator.canAction(ActionKey.ORDERS_CREATE_NON_FISCAL, user, betaSnapshot),
             canCreatePaymentLink = AuthzEvaluator.canAction(ActionKey.ORDERS_PAYMENT_LINK, user, betaSnapshot),
             canUseManualPaymentMethods = AuthzEvaluator.canAction(ActionKey.ORDERS_MANUAL_PAYMENT, user, betaSnapshot),
             canConfigurePayments = canConfigurePayments,
@@ -1633,12 +1638,13 @@ class PosViewModel(
         if (saveAsDraft) {
             analyticsService.logOrderCreationPaymentOptionSelected(mode = "DRAFT")
         }
+        val saveAsNonFiscal = !saveAsDraft && uiState.value.paymentFlowMode == PaymentFlowMode.NON_FISCAL
         val hasPaymentLinkAccess = canAction(ActionKey.ORDERS_PAYMENT_LINK)
         val hasYappyOnsiteAccess = canAction(ActionKey.ORDERS_YAPPY_ONSITE)
         val hasManualPaymentAccess = canAction(ActionKey.ORDERS_MANUAL_PAYMENT)
         val effectiveCreatePaymentLink = createPaymentLink && hasPaymentLinkAccess
         val effectiveCreateYappyOnsite = createYappyOnsite && hasYappyOnsiteAccess && selectedBillingPointHasYappyOnsiteDevice()
-        val isManualPayment = !saveAsDraft && !effectiveCreatePaymentLink && !effectiveCreateYappyOnsite
+        val isManualPayment = !saveAsDraft && !saveAsNonFiscal && !effectiveCreatePaymentLink && !effectiveCreateYappyOnsite
         if (createPaymentLink && !hasPaymentLinkAccess) {
             updateState { copy(paymentFlowMode = PaymentFlowMode.MANUAL_OR_INSTALLMENTS) }
             viewModelScope.launch {
@@ -1665,17 +1671,17 @@ class PosViewModel(
             }
             return
         }
-        val allowed = if (saveAsDraft) {
-            canAction(ActionKey.ORDERS_CREATE_DRAFT)
-        } else {
-            canAction(ActionKey.ORDERS_CREATE)
+        val allowed = when {
+            saveAsDraft -> canAction(ActionKey.ORDERS_CREATE_DRAFT)
+            saveAsNonFiscal -> canAction(ActionKey.ORDERS_CREATE_NON_FISCAL)
+            else -> canAction(ActionKey.ORDERS_CREATE)
         }
         if (!allowed) {
             showError()
             return
         }
         val stateBeforeSubmit = uiState.value
-        if (!saveAsDraft && !effectiveCreatePaymentLink && !effectiveCreateYappyOnsite && stateBeforeSubmit.installments.any { it.dueDateIso.isBlank() }) {
+        if (!saveAsDraft && !saveAsNonFiscal && !effectiveCreatePaymentLink && !effectiveCreateYappyOnsite && stateBeforeSubmit.installments.any { it.dueDateIso.isBlank() }) {
             viewModelScope.launch {
                 snackbarService.show("Selecciona fecha de vencimiento para cada pago a crédito.")
             }
@@ -1699,7 +1705,7 @@ class PosViewModel(
                           invoiceStatus = response.invoiceStatus,
                       invoiceWarningCode = response.invoiceWarningCode,
                       invoiceWarningMessage = response.invoiceWarningMessage,
-                      isImmediateInvoiceCreate = !effectiveCreatePaymentLink && !saveAsDraft
+                      isImmediateInvoiceCreate = !effectiveCreatePaymentLink && !saveAsDraft && !saveAsNonFiscal
                   )
                   
                   updateState {
@@ -1743,6 +1749,16 @@ class PosViewModel(
                       )
                       if (printer != null) {
                           val ticketPayload = response.invoiceFiles?.ticket
+                              ?: if (saveAsNonFiscal) {
+                                  runCatching {
+                                      printerService.fetchOrderTicketLayout(
+                                          orderId = response.id,
+                                          businessId = business!!.businessId
+                                      )
+                                  }.getOrNull()
+                              } else {
+                                  null
+                              }
                           if (ticketPayload != null) {
                               runCatching {
                                   printerService.printTicketPayload(
@@ -1764,6 +1780,22 @@ class PosViewModel(
                                   snackbarService.show("La venta se guardó, pero el ticket no estuvo disponible para imprimir.")
                               }
                           }
+                      }
+                  }
+
+                  if (hasValidOrderNumber && saveAsNonFiscal) {
+                      val pdf = runCatching {
+                          posService.getInvoiceDocsRaw(
+                              businessId = business!!.businessId,
+                              cufe = "",
+                              orderId = response.id.toLong()
+                          ).pdfBase64.orEmpty()
+                      }.getOrElse { error ->
+                          if (error is CancellationException) throw error
+                          ""
+                      }
+                      if (pdf.isNotBlank()) {
+                          updateState { copy(pdfDocument = pdf) }
                       }
                   }
                   
@@ -2235,6 +2267,7 @@ class PosViewModel(
 
         var links: PaymentLinksBlock? = null
         val payments = mutableListOf<CreateOrderPayment>()
+        val saveAsNonFiscal = !saveAsDraft && state.paymentFlowMode == PaymentFlowMode.NON_FISCAL
         if ((createPaymentLink || createYappyOnsite) && !saveAsDraft) {
             links = PaymentLinksBlock(
                 create = true,
@@ -2242,7 +2275,7 @@ class PosViewModel(
                 note = if (createYappyOnsite) yappyOnsitePaymentDescription() else "",
                 method = if (createYappyOnsite) "YAPPY_ONSITE" else "LINK"
             )
-        } else if (!saveAsDraft) {
+        } else if (!saveAsDraft && !saveAsNonFiscal) {
             for ((key, value) in state.charged) {
                 val methodLabel = manualMethodOptions().firstOrNull { it.first == key }?.second ?: "Método $key"
                 // For type 99 (OTHER), use custom description and ensure it's bigger than 10 characters
@@ -2447,7 +2480,8 @@ class PosViewModel(
             } else {
                 state.includeBottomNote
             },
-            saveAs = if (saveAsDraft) "draft" else "confirmed"
+            saveAs = if (saveAsDraft) "draft" else "confirmed",
+            invoicingMode = if (saveAsNonFiscal) "explicit" else null
         )
     }
 
@@ -3136,6 +3170,7 @@ class PosViewModel(
             PaymentFlowMode.PAYMENT_LINK -> "customer_selected_payment_link"
             PaymentFlowMode.YAPPY_ONSITE -> "customer_selected_yappy_onsite"
             PaymentFlowMode.DRAFT -> "customer_changed_payment_method"
+            PaymentFlowMode.NON_FISCAL -> "customer_changed_payment_method"
         }
     }
 
@@ -3703,9 +3738,12 @@ class PosViewModel(
         val orderId = state.createdOrderId ?: return false
         return businessId > 0 &&
             orderId > 0 &&
-            state.invoiceStatus == InvoiceStatus.ISSUED &&
             state.orderNumber.isNotBlank() &&
-            !state.orderCreationFailed
+            !state.orderCreationFailed &&
+            (
+                state.invoiceStatus == InvoiceStatus.ISSUED ||
+                    state.paymentFlowMode == PaymentFlowMode.NON_FISCAL
+                )
     }
 
     fun reprintSuccessTicket() {
@@ -4922,6 +4960,7 @@ class PosViewModel(
         if (mode == PaymentFlowMode.MANUAL_OR_INSTALLMENTS && !uiState.value.canUseManualPaymentMethods) return
         if (mode == PaymentFlowMode.PAYMENT_LINK && !uiState.value.canCreatePaymentLink) return
         if (mode == PaymentFlowMode.DRAFT && !uiState.value.canCreateDraft) return
+        if (mode == PaymentFlowMode.NON_FISCAL && !uiState.value.canCreateNonFiscal) return
         if (mode == PaymentFlowMode.YAPPY_ONSITE && !selectedBillingPointHasYappyOnsiteDevice()) {
             viewModelScope.launch {
                 snackbarService.show("Configura un dispositivo Yappy en caja para esta sucursal y punto de facturación.")
@@ -4935,11 +4974,12 @@ class PosViewModel(
                 PaymentFlowMode.PAYMENT_LINK -> "LINK"
                 PaymentFlowMode.YAPPY_ONSITE -> "YAPPY_ONSITE"
                 PaymentFlowMode.DRAFT -> "DRAFT"
+                PaymentFlowMode.NON_FISCAL -> "NON_FISCAL"
             }
         )
 
         updateState {
-            if (mode == PaymentFlowMode.PAYMENT_LINK || mode == PaymentFlowMode.YAPPY_ONSITE || mode == PaymentFlowMode.DRAFT) {
+            if (mode == PaymentFlowMode.PAYMENT_LINK || mode == PaymentFlowMode.YAPPY_ONSITE || mode == PaymentFlowMode.DRAFT || mode == PaymentFlowMode.NON_FISCAL) {
                 business?.businessId?.let { businessId ->
                     localStorage.set(paymentLinkBadgeSeenKey(businessId), true)
                 }

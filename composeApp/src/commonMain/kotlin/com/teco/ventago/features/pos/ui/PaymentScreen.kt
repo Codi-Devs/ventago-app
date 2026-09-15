@@ -271,6 +271,11 @@ fun PaymentScreenContent(
             sourceMethod = replacementConfig?.sourceMethod,
             normallyVisible = !isCreditOrDebitNote && ui.canCreateDraft,
         )
+        val showNonFiscalOption = shouldShowPendingPaymentChangeOption(
+            mode = PaymentFlowMode.NON_FISCAL,
+            sourceMethod = replacementConfig?.sourceMethod,
+            normallyVisible = !isCreditOrDebitNote && ui.canCreateNonFiscal,
+        )
         val showPaymentLinkOption = shouldShowPendingPaymentChangeOption(
             mode = PaymentFlowMode.PAYMENT_LINK,
             sourceMethod = replacementConfig?.sourceMethod,
@@ -320,6 +325,7 @@ fun PaymentScreenContent(
             ui.paymentFlowMode,
             isCreditOrDebitNote,
             showDraftOption,
+            showNonFiscalOption,
             showManualOption,
             paymentLinkReady,
             yappyOnsiteReady,
@@ -346,6 +352,9 @@ fun PaymentScreenContent(
             if (ui.paymentFlowMode == PaymentFlowMode.DRAFT && !showDraftOption) {
                 viewModel.setPaymentFlow(PaymentFlowMode.MANUAL_OR_INSTALLMENTS)
             }
+            if (ui.paymentFlowMode == PaymentFlowMode.NON_FISCAL && !showNonFiscalOption) {
+                viewModel.setPaymentFlow(PaymentFlowMode.MANUAL_OR_INSTALLMENTS)
+            }
             if (ui.paymentFlowMode == PaymentFlowMode.MANUAL_OR_INSTALLMENTS && !showManualOption) {
                 selectedPaymentMode = null
             }
@@ -356,6 +365,7 @@ fun PaymentScreenContent(
             isCreditOrDebitNote,
             isReplacementMode,
             showDraftOption,
+            showNonFiscalOption,
             showManualOption,
             paymentLinkReady,
             yappyOnsiteReady,
@@ -366,6 +376,7 @@ fun PaymentScreenContent(
                 PaymentFlowMode.PAYMENT_LINK -> if (!paymentLinkReady) selectedPaymentMode = null
                 PaymentFlowMode.YAPPY_ONSITE -> if (!yappyOnsiteReady) selectedPaymentMode = null
                 PaymentFlowMode.DRAFT -> if (!showDraftOption) selectedPaymentMode = null
+                PaymentFlowMode.NON_FISCAL -> if (!showNonFiscalOption) selectedPaymentMode = null
                 else -> Unit
             }
         }
@@ -429,6 +440,11 @@ fun PaymentScreenContent(
             viewModel.setPaymentFlow(PaymentFlowMode.DRAFT)
         }
 
+        fun selectNonFiscal() {
+            selectedPaymentMode = PaymentFlowMode.NON_FISCAL
+            viewModel.setPaymentFlow(PaymentFlowMode.NON_FISCAL)
+        }
+
             Column(
                 modifier = Modifier.onSizeChanged { selectorHeightPx = it.height }
             ) {
@@ -437,6 +453,7 @@ fun PaymentScreenContent(
                         selectedMode = effectivePaymentMode,
                         showManualOption = showManualOption,
                         showDraftOption = showDraftOption,
+                        showNonFiscalOption = showNonFiscalOption,
                         showPaymentLinkOption = showPaymentLinkOption,
                         linkEnabled = paymentLinkReady,
                         paymentLinkNeedsConfiguration = paymentLinkNeedsConfiguration,
@@ -447,6 +464,7 @@ fun PaymentScreenContent(
                         yappyOnsiteNeedsConfiguration = yappyOnsiteNeedsConfiguration,
                         yappyOnsiteConfigureEnabled = ui.canConfigureYappyOnsite,
                         draftEnabled = ui.canCreateDraft,
+                        nonFiscalEnabled = ui.canCreateNonFiscal,
                         onManual = { selectManualPayment() },
                         onPaymentLink = { selectPaymentLink() },
                         onConfigurePaymentLinks = {
@@ -457,6 +475,7 @@ fun PaymentScreenContent(
                             navigateToPaymentConfiguration(PaymentConfigurationTarget.YappyOnsite)
                         },
                         onDraft = { selectDraft() },
+                        onNonFiscal = { selectNonFiscal() },
                     )
                 }
             }
@@ -539,6 +558,15 @@ fun PaymentScreenContent(
                 onConfirm = {
                     requestGovernmentWarningOrProceed {
                         viewModel.createOrder(createPaymentLink = false, saveAsDraft = true)
+                    }
+                }
+            )
+        } else if (effectivePaymentMode == PaymentFlowMode.NON_FISCAL) {
+            NonFiscalPaymentSection(
+                enabled = hasPositiveAmount && ui.canCreateNonFiscal,
+                onConfirm = {
+                    requestGovernmentWarningOrProceed {
+                        viewModel.createOrder(createPaymentLink = false, saveAsDraft = false)
                     }
                 }
             )
@@ -671,6 +699,7 @@ private fun PaymentMethodSelector(
     selectedMode: PaymentFlowMode?,
     showManualOption: Boolean,
     showDraftOption: Boolean,
+    showNonFiscalOption: Boolean,
     showPaymentLinkOption: Boolean,
     linkEnabled: Boolean,
     paymentLinkNeedsConfiguration: Boolean,
@@ -681,12 +710,14 @@ private fun PaymentMethodSelector(
     yappyOnsiteNeedsConfiguration: Boolean,
     yappyOnsiteConfigureEnabled: Boolean,
     draftEnabled: Boolean,
+    nonFiscalEnabled: Boolean,
     onManual: () -> Unit,
     onPaymentLink: () -> Unit,
     onConfigurePaymentLinks: () -> Unit,
     onYappyOnsite: () -> Unit,
     onConfigureYappyOnsite: () -> Unit,
     onDraft: () -> Unit,
+    onNonFiscal: () -> Unit,
 ) {
     var hasRenderedOption = false
     Column(
@@ -748,6 +779,18 @@ private fun PaymentMethodSelector(
                 selected = selectedMode == PaymentFlowMode.DRAFT,
                 enabled = draftEnabled,
                 onClick = onDraft,
+            )
+            hasRenderedOption = true
+        }
+        if (showNonFiscalOption) {
+            if (hasRenderedOption) Spacer(Modifier.height(10.dp))
+            PaymentMethodOptionCard(
+                title = "Documento no fiscal",
+                subtitle = "Confirma la venta sin factura electrónica ni comprobante ante DGI",
+                icon = Icons.AutoMirrored.Rounded.FactCheck,
+                selected = selectedMode == PaymentFlowMode.NON_FISCAL,
+                enabled = nonFiscalEnabled,
+                onClick = onNonFiscal,
             )
         }
     }
@@ -1902,6 +1945,40 @@ private fun DraftPaymentSection(
             PaymentFilledActionButton(
                 label = "Guardar sin facturar",
                 icon = Icons.Rounded.Description,
+                enabled = enabled,
+                onClick = onConfirm,
+            )
+        }
+    }
+}
+
+@Composable
+private fun NonFiscalPaymentSection(
+    enabled: Boolean,
+    onConfirm: () -> Unit,
+) {
+    Surface(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp, vertical = 8.dp),
+        shape = RoundedCornerShape(22.dp),
+        color = MaterialTheme.colorScheme.surface,
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
+        shadowElevation = 1.dp
+    ) {
+        Column(Modifier.padding(16.dp)) {
+            Text(
+                "Documento no fiscal",
+                style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.W800)
+            )
+            Text(
+                "Se confirmará la venta y se generará un documento no fiscal. No es factura electrónica ni comprobante fiscal ante DGI.",
+                style = bodySmall(color = MaterialTheme.colorScheme.onSurfaceVariant)
+            )
+            Spacer(Modifier.height(16.dp))
+            PaymentFilledActionButton(
+                label = "Generar documento no fiscal",
+                icon = Icons.AutoMirrored.Rounded.FactCheck,
                 enabled = enabled,
                 onClick = onConfirm,
             )

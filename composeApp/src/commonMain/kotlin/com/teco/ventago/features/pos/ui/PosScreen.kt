@@ -115,7 +115,7 @@ fun PosScreen(
             QuoteSelectionStore.startOrderFlowFromQuote = false
             QuoteSelectionStore.startQuoteFlow = false
 
-            if (uiState.canCreateInvoice || uiState.canCreateDraft) {
+            if (uiState.canCreateInvoice || uiState.canCreateDraft || uiState.canCreateNonFiscal) {
                 viewModel.disableOrderCreationCheckpointForCurrentFlow(clearExisting = true)
                 viewModel.resetForNewSale()
                 viewModel.setFlowMode(FlowMode.SALE, quoteId = null)

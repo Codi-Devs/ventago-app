@@ -24,6 +24,13 @@ class PendingPaymentChangePolicyTest {
                 normallyVisible = true,
             )
         )
+        assertFalse(
+            shouldShowPendingPaymentChangeOption(
+                mode = PaymentFlowMode.NON_FISCAL,
+                sourceMethod = PendingPaymentIntentMethod.PAYMENT_LINK,
+                normallyVisible = true,
+            )
+        )
         assertTrue(
             shouldShowPendingPaymentChangeOption(
                 mode = PaymentFlowMode.YAPPY_ONSITE,

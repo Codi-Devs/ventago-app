@@ -231,10 +231,39 @@ class OrdersProvider(private val client: HttpClient, private val authService: IA
         return response
     }
 
-    override suspend fun getInvoiceDocsRaw(businessId: Int, cufe: String): ApiResponse {
+    override suspend fun confirmNonFiscal(businessId: Int, orderId: Int): ApiResponse {
+        val res = client.post(Configs.ordersBasePath + "/api/v1/orders/$orderId/non-fiscal") {
+            headers {
+                append(HttpHeaders.Accept, "*/*")
+                append(HttpHeaders.Authorization, "Bearer ${authService.getJwtToken()}")
+                append(HttpHeaders.ContentType, "application/json")
+                append("X-Business-ID", "$businessId")
+            }
+            contentType(ContentType.Application.Json)
+        }
+
+        val body = res.body<JsonObject>()
+        val response = ApiResponse.fromJson(body)
+        if (response.error == ApiError.AUTH_001) {
+            return try {
+                authService.refreshToken(client)
+                confirmNonFiscal(businessId, orderId)
+            } catch (e: Exception) {
+                response
+            }
+        }
+        return response
+    }
+
+    override suspend fun getInvoiceDocsRaw(businessId: Int, cufe: String, orderId: Long?): ApiResponse {
         val res = client.get(Configs.ordersBasePath + "/api/v1/orders/invoices/docs") {
             url {
-                parameters.append("cufe", cufe)
+                if (cufe.isNotBlank()) {
+                    parameters.append("cufe", cufe)
+                }
+                if (orderId != null) {
+                    parameters.append("order_id", orderId.toString())
+                }
             }
             headers {
                 append(HttpHeaders.Accept, "*/*")
@@ -250,7 +279,7 @@ class OrdersProvider(private val client: HttpClient, private val authService: IA
         if (response.error == ApiError.AUTH_001) {
             return try {
                 authService.refreshToken(client)
-                getInvoiceDocsRaw(businessId, cufe)
+                getInvoiceDocsRaw(businessId, cufe, orderId)
             } catch (e: Exception) {
                 response
             }

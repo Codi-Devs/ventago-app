@@ -11,7 +11,8 @@ enum class BetaFeature(val key: String) {
     EXPENSES_QR("expenses_qr"),
     EXPENSES_OCR("expenses_ocr"),
     PAYMENTS_MODULE("payments_module"),
-    INVENTORY_MODULE("inventory_module");
+    INVENTORY_MODULE("inventory_module"),
+    NON_FISCAL_DOCUMENTS("non_fiscal_documents");
 
     companion object {
         fun fromKey(key: String): BetaFeature? = entries.firstOrNull { it.key == key }

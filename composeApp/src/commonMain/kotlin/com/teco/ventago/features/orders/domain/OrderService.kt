@@ -390,8 +390,13 @@ class OrderService(
         ordersFlow.value = orders.toList()
     }
 
-    suspend fun getDocumentByCufe(businessId: Int, cufe: String): InvoiceDocsDto {
-        return repository.getInvoiceDocsRaw(businessId, cufe)
+    suspend fun getDocumentByCufe(businessId: Int, cufe: String, orderId: Long? = null): InvoiceDocsDto {
+        return repository.getInvoiceDocsRaw(businessId, cufe, orderId)
+    }
+
+    suspend fun confirmNonFiscal(businessId: Int, orderId: Int): Order {
+        repository.confirmNonFiscal(businessId, orderId)
+        return refreshOrder(businessId, orderId)
     }
 
     suspend fun changeOrderStatus(order: Order, status: Int, businessId: Int): Boolean {
