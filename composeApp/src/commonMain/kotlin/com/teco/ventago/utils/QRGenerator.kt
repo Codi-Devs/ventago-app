@@ -1,5 +1,11 @@
 package com.teco.ventago.utils
 
+import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
@@ -15,6 +21,7 @@ import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.RoundRect
 import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.StrokeCap
@@ -93,6 +100,11 @@ fun BarcodeScannerScreen(
             cutoutWidthFraction = cutoutWidthFraction,
             cutoutAspectRatio = cutoutAspectRatio
         )
+        ScannerLaserLine(
+            modifier = Modifier.matchParentSize(),
+            cutoutWidthFraction = cutoutWidthFraction,
+            cutoutAspectRatio = cutoutAspectRatio
+        )
     }
 }
 
@@ -133,6 +145,46 @@ fun ScannerOverlay(
         // BR
         line(Offset(right - len, bottom), Offset(right, bottom))
         line(Offset(right, bottom - len), Offset(right, bottom))
+    }
+}
+
+@Composable
+fun ScannerLaserLine(
+    modifier: Modifier = Modifier,
+    cutoutWidthFraction: Float = 0.72f,
+    cutoutAspectRatio: Float = 1f,
+    laserColor: Color = Color(0xFF34A853)
+) {
+    val infinite = rememberInfiniteTransition(label = "scannerLaser")
+    val t by infinite.animateFloat(
+        initialValue = 0f,
+        targetValue = 1f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(durationMillis = 1600, easing = LinearEasing),
+            repeatMode = RepeatMode.Reverse
+        ),
+        label = "laserT"
+    )
+    Canvas(modifier = modifier) {
+        val cw = size.width * cutoutWidthFraction
+        val ch = cw / cutoutAspectRatio
+        val left = (size.width - cw) / 2f
+        val top = (size.height - ch) / 2f
+        val y = top + (ch * (0.08f + t * 0.84f))
+        drawLine(
+            brush = Brush.horizontalGradient(
+                listOf(
+                    Color.Transparent,
+                    laserColor.copy(alpha = 0.15f),
+                    laserColor,
+                    laserColor.copy(alpha = 0.15f),
+                    Color.Transparent
+                )
+            ),
+            start = Offset(left, y),
+            end = Offset(left + cw, y),
+            strokeWidth = 6f
+        )
     }
 }
 

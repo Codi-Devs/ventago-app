@@ -5,6 +5,7 @@ import com.teco.ventago.features.expenses.domain.models.CrawlJob
 
 data class CufeImportState(
     val hasExpensesQr: Boolean = false,
+    val betaLoaded: Boolean = false,
     val cufeInput: String = "",
     val isImporting: Boolean = false,
     val currentJob: CrawlJob? = null,
@@ -15,6 +16,7 @@ data class CufeImportState(
     val isOpeningExpense: Boolean = false,
     val error: String? = null,
     val showScanner: Boolean = false,
+    val wantsScanner: Boolean = true,
     val showPermissionDialog: Boolean = false,
     val openScannerOnStart: Boolean = false
 ) {

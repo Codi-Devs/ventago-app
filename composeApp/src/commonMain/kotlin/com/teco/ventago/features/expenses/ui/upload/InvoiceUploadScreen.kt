@@ -19,11 +19,11 @@ import androidx.compose.material.icons.rounded.Description
 import androidx.compose.material.icons.rounded.PhotoCamera
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -42,8 +42,9 @@ import com.teco.ventago.core.camera.rememberGalleryManager
 import com.teco.ventago.core.file.SharedFile
 import com.teco.ventago.core.file.rememberDocumentPickerManager
 import com.teco.ventago.design_system.buttons.OutlinedButtonM
-import com.teco.ventago.design_system.molecules.DMSimpleAlertDialog
 import com.teco.ventago.design_system.theme.bodyMedium
+import com.teco.ventago.features.expenses.ui.components.InvoiceReceivedScreen
+import com.teco.ventago.features.expenses.ui.components.InvoiceScanningScreen
 import com.teco.ventago.design_system.theme.cardContainerColor
 import com.teco.ventago.design_system.theme.labelSmall
 import com.teco.ventago.design_system.theme.titleMediumBold
@@ -61,17 +62,20 @@ fun InvoiceUploadScreen(
     var launchDocument by remember { mutableStateOf(false) }
     var launchSetting by remember { mutableStateOf(false) }
 
-    val permissionsManager = createPermissionsManager(object : PermissionCallback {
-        override fun onPermissionStatus(permissionType: PermissionType, status: PermissionStatus) {
-            when (status) {
-                PermissionStatus.GRANTED -> when (permissionType) {
-                    PermissionType.CAMERA -> launchCamera = true
-                    PermissionType.GALLERY -> launchGallery = true
+    val permissionCallback = remember {
+        object : PermissionCallback {
+            override fun onPermissionStatus(permissionType: PermissionType, status: PermissionStatus) {
+                when (status) {
+                    PermissionStatus.GRANTED -> when (permissionType) {
+                        PermissionType.CAMERA -> launchCamera = true
+                        PermissionType.GALLERY -> launchGallery = true
+                    }
+                    else -> {}
                 }
-                else -> {}
             }
         }
-    })
+    }
+    val permissionsManager = createPermissionsManager(permissionCallback)
 
     val scope = rememberCoroutineScope()
     val cameraManager = rememberCameraManager { image ->
@@ -117,21 +121,26 @@ fun InvoiceUploadScreen(
         }
     }
 
-    if (launchGallery) {
-        if (permissionsManager.isPermissionGranted(PermissionType.GALLERY)) {
-            galleryManager.launch()
-        } else {
-            permissionsManager.askPermission(PermissionType.GALLERY)
-        }
-        launchGallery = false
+    val cameraGranted = permissionsManager.isPermissionGranted(PermissionType.CAMERA)
+    val galleryGranted = permissionsManager.isPermissionGranted(PermissionType.GALLERY)
+
+    if (launchGallery && !galleryGranted) {
+        permissionsManager.askPermission(PermissionType.GALLERY)
     }
-    if (launchCamera) {
-        if (permissionsManager.isPermissionGranted(PermissionType.CAMERA)) {
-            cameraManager.launch()
-        } else {
-            permissionsManager.askPermission(PermissionType.CAMERA)
+    if (launchCamera && !cameraGranted) {
+        permissionsManager.askPermission(PermissionType.CAMERA)
+    }
+    LaunchedEffect(launchGallery, galleryGranted) {
+        if (launchGallery && galleryGranted) {
+            galleryManager.launch()
+            launchGallery = false
         }
-        launchCamera = false
+    }
+    LaunchedEffect(launchCamera, cameraGranted) {
+        if (launchCamera && cameraGranted) {
+            cameraManager.launch()
+            launchCamera = false
+        }
     }
     if (launchSetting) {
         permissionsManager.launchSettings()
@@ -142,20 +151,28 @@ fun InvoiceUploadScreen(
         launchDocument = false
     }
 
-    DMSimpleAlertDialog(
-        title = "Recibimos tu factura",
-        message = "La IA puede tardar unos minutos; aparecerá en Gastos cuando esté lista.",
-        show = uiState.showAccepted,
-        onDismiss = {
-            viewModel.dismissAccepted()
-            onBack()
-        },
-        onConfirm = {
-            viewModel.dismissAccepted()
-            onBack()
-        },
-        btnText = "Entendido"
-    )
+    if (uiState.showAccepted) {
+        InvoiceReceivedScreen(
+            onUnderstood = {
+                viewModel.dismissAccepted()
+                onBack()
+            },
+            onScanAnother = { viewModel.dismissAccepted() }
+        )
+        return
+    }
+
+    if (uiState.isScanning || uiState.isUploading) {
+        InvoiceScanningScreen(
+            title = if (uiState.isUploading) "Enviando factura..." else "Escaneando documento...",
+            subtitle = if (uiState.isUploading) {
+                "La IA la procesará en segundo plano."
+            } else {
+                "Buscamos el QR y revisamos que la foto se pueda leer."
+            }
+        )
+        return
+    }
 
     Column(
         modifier = Modifier
@@ -210,57 +227,45 @@ fun InvoiceUploadScreen(
                 )
                 Spacer(modifier = Modifier.height(16.dp))
 
-                if (uiState.isUploading) {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.Center
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    OutlinedButtonM(
+                        onClick = { launchCamera = true },
+                        modifier = Modifier.weight(1f)
                     ) {
-                        CircularProgressIndicator(modifier = Modifier.size(20.dp), strokeWidth = 2.dp)
-                        Spacer(modifier = Modifier.width(8.dp))
-                        Text("Subiendo factura...", style = bodyMedium())
+                        Icon(
+                            imageVector = Icons.Rounded.CameraAlt,
+                            contentDescription = null,
+                            modifier = Modifier.size(18.dp)
+                        )
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Text("Cámara")
                     }
-                } else {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    OutlinedButtonM(
+                        onClick = { launchGallery = true },
+                        modifier = Modifier.weight(1f)
                     ) {
-                        OutlinedButtonM(
-                            onClick = { launchCamera = true },
-                            modifier = Modifier.weight(1f)
-                        ) {
-                            Icon(
-                                imageVector = Icons.Rounded.CameraAlt,
-                                contentDescription = null,
-                                modifier = Modifier.size(18.dp)
-                            )
-                            Spacer(modifier = Modifier.width(4.dp))
-                            Text("Cámara")
-                        }
-                        OutlinedButtonM(
-                            onClick = { launchGallery = true },
-                            modifier = Modifier.weight(1f)
-                        ) {
-                            Icon(
-                                imageVector = Icons.Rounded.Collections,
-                                contentDescription = null,
-                                modifier = Modifier.size(18.dp)
-                            )
-                            Spacer(modifier = Modifier.width(4.dp))
-                            Text("Galería")
-                        }
-                        OutlinedButtonM(
-                            onClick = { launchDocument = true },
-                            modifier = Modifier.weight(1f)
-                        ) {
-                            Icon(
-                                imageVector = Icons.Rounded.Description,
-                                contentDescription = null,
-                                modifier = Modifier.size(18.dp)
-                            )
-                            Spacer(modifier = Modifier.width(4.dp))
-                            Text("Archivo")
-                        }
+                        Icon(
+                            imageVector = Icons.Rounded.Collections,
+                            contentDescription = null,
+                            modifier = Modifier.size(18.dp)
+                        )
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Text("Galería")
+                    }
+                    OutlinedButtonM(
+                        onClick = { launchDocument = true },
+                        modifier = Modifier.weight(1f)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Rounded.Description,
+                            contentDescription = null,
+                            modifier = Modifier.size(18.dp)
+                        )
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Text("Archivo")
                     }
                 }
 
