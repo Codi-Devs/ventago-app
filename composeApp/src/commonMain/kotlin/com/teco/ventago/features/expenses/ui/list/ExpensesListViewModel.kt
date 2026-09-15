@@ -8,10 +8,11 @@ import com.teco.ventago.core.beta.BetaFeature
 import com.teco.ventago.core.beta.BetaService
 import com.teco.ventago.features.auth.domain.IAuthService
 import com.teco.ventago.features.expenses.domain.ExpensesService
-import com.teco.ventago.features.expenses.domain.models.Expense
 import com.teco.ventago.features.expenses.domain.buildExpenseConceptLabel
-import com.teco.ventago.features.expenses.domain.models.requests.ListExpensesRequest
+import com.teco.ventago.features.expenses.domain.models.CrawlJob
+import com.teco.ventago.features.expenses.domain.models.Expense
 import com.teco.ventago.features.expenses.domain.models.ExpenseMerchant
+import com.teco.ventago.features.expenses.domain.models.requests.ListExpensesRequest
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.IO
 import kotlinx.coroutines.Job
@@ -45,15 +46,17 @@ class ExpensesListViewModel(
                         .mapNotNull(BetaFeature::fromKey)
                         .toSet()
                     val canCreateExpense = AuthzEvaluator.canAction(ActionKey.EXPENSES_CREATE, user, betaSnapshot)
-                    Pair(
+                    Triple(
                         canCreateExpense,
-                        canCreateExpense && BetaFeature.EXPENSES_QR in betaSnapshot
+                        canCreateExpense && BetaFeature.EXPENSES_QR in betaSnapshot,
+                        canCreateExpense && BetaFeature.EXPENSES_OCR in betaSnapshot
                     )
                 }
-                .onEach { (canCreateExpense, hasQrImportAccess) ->
+                .onEach { (canCreateExpense, hasQrImportAccess, hasOcrAccess) ->
                     _uiState.value = _uiState.value.copy(
                         canCreateExpense = canCreateExpense,
-                        hasExpensesQr = hasQrImportAccess
+                        hasExpensesQr = hasQrImportAccess,
+                        hasExpensesOcr = hasOcrAccess
                     )
                     if (hasQrImportAccess) loadCrawlJobs()
                 }
@@ -73,6 +76,18 @@ class ExpensesListViewModel(
                 .launchIn(this)
         }
         loadExpenses(refresh = true)
+        viewModelScope.launch {
+            while (true) {
+                delay(30_000)
+                val state = _uiState.value
+                val hasActiveJobs = state.crawlJobs.any { job ->
+                    job.status == "pending" || job.status == "processing"
+                }
+                if (state.hasExpensesQr && hasActiveJobs) {
+                    loadCrawlJobs()
+                }
+            }
+        }
     }
 
     private fun loadCrawlJobs() {
@@ -92,7 +107,52 @@ class ExpensesListViewModel(
         }
     }
 
+    fun retryFailedCrawlJob(job: CrawlJob, onReady: (String) -> Unit) {
+        val cufe = job.cufe?.trim().orEmpty()
+        if (cufe.isEmpty()) {
+            _uiState.value = _uiState.value.copy(
+                error = "Esta factura no tiene CUFE para reintentar."
+            )
+            return
+        }
+        viewModelScope.launch {
+            val jobId = job.resolvedId
+            if (jobId != null) {
+                try {
+                    withContext(Dispatchers.IO) {
+                        expensesService.deleteCrawlJob(jobId)
+                    }
+                } catch (_: Exception) {
+                    _uiState.value = _uiState.value.copy(
+                        error = "No se pudo preparar el reintento de importación."
+                    )
+                    return@launch
+                }
+            }
+            loadCrawlJobs()
+            onReady(cufe)
+        }
+    }
+
+    fun dismissFailedCrawlJob(jobId: Long) {
+        viewModelScope.launch {
+            try {
+                withContext(Dispatchers.IO) {
+                    expensesService.deleteCrawlJob(jobId)
+                }
+                loadCrawlJobs()
+            } catch (_: Exception) {
+                _uiState.value = _uiState.value.copy(
+                    error = "No se pudo eliminar el error de importación."
+                )
+            }
+        }
+    }
+
     fun loadExpenses(refresh: Boolean = false) {
+        if (refresh && _uiState.value.hasExpensesQr) {
+            loadCrawlJobs()
+        }
         viewModelScope.launch {
             val state = _uiState.value
             val currentPage = if (refresh) 1 else state.page
@@ -148,14 +208,13 @@ class ExpensesListViewModel(
 
                 expensesService.markCacheHydrated()
 
-                // Update cache: replace on refresh, merge on pagination
-                if (refresh) {
-                    expensesService.replaceCache(response.expenses)
-                } else if (response.expenses.isNotEmpty()) {
-                    expensesService.mergeExpensesIntoCache(response.expenses)
-                }
+                // Update cache: merge by freshness/completeness so a list page
+                // cannot wipe a richer detail snapshot.
+                expensesService.mergeExpensesIntoCache(response.expenses)
+                val cachedById = expensesService.getCachedExpenses().associateBy { it.id }
+                val mergedPage = response.expenses.map { cachedById[it.id] ?: it }
 
-                val newExpenses = if (refresh) response.expenses else state.expenses + response.expenses
+                val newExpenses = if (refresh) mergedPage else state.expenses + mergedPage
                 val noMore = response.expenses.isEmpty() ||
                     (response.size != null && response.expenses.size < (response.size))
 
@@ -197,9 +256,10 @@ class ExpensesListViewModel(
                     return@launch
                 }
 
-                // Replace cache with fresh data from API
-                expensesService.replaceCache(response.expenses)
-                val filtered = applyLocalFilters(response.expenses, currentState)
+                expensesService.mergeExpensesIntoCache(response.expenses)
+                val cachedById = expensesService.getCachedExpenses().associateBy { it.id }
+                val mergedPage = response.expenses.map { cachedById[it.id] ?: it }
+                val filtered = applyLocalFilters(mergedPage, currentState)
                 val noMore = response.expenses.isEmpty() ||
                     (response.size != null && response.expenses.size < (response.size))
 

@@ -4,6 +4,9 @@ import com.teco.ventago.features.expenses.domain.models.CrawlJob
 import com.teco.ventago.features.expenses.domain.models.ExpenseAccount
 import com.teco.ventago.features.expenses.domain.models.Expense
 import com.teco.ventago.features.expenses.domain.models.ExpensePayment
+import com.teco.ventago.features.expenses.domain.models.ExpensePaymentDeleteResult
+import com.teco.ventago.features.expenses.domain.models.ExpensePaymentMutationResult
+import com.teco.ventago.features.expenses.domain.models.OcrAcceptResult
 import com.teco.ventago.features.expenses.domain.models.PagedCrawlJobs
 import com.teco.ventago.features.expenses.domain.models.PagedExpenses
 import com.teco.ventago.features.expenses.domain.models.requests.CategorizeExpenseRequest
@@ -58,7 +61,7 @@ interface IExpensesRepository {
         expenseId: Long,
         request: UpsertExpensePaymentRequest,
         proofFile: ExpenseProofFile? = null
-    ): ExpensePayment
+    ): ExpensePaymentMutationResult
     suspend fun listPayments(businessId: Int, expenseId: Long): List<ExpensePayment>
     suspend fun updatePayment(
         businessId: Int,
@@ -66,8 +69,8 @@ interface IExpensesRepository {
         paymentId: Long,
         request: UpsertExpensePaymentRequest,
         proofFile: ExpenseProofFile? = null
-    ): ExpensePayment
-    suspend fun deletePayment(businessId: Int, expenseId: Long, paymentId: Long): Boolean
+    ): ExpensePaymentMutationResult
+    suspend fun deletePayment(businessId: Int, expenseId: Long, paymentId: Long): ExpensePaymentDeleteResult
 
     // Merchants
     suspend fun listMerchants(businessId: Int, request: ListMerchantsRequest): PagedMerchants
@@ -80,4 +83,6 @@ interface IExpensesRepository {
     suspend fun crawlExpense(businessId: Int, payload: String): CrawlJob
     suspend fun getCrawlJobStatus(businessId: Int, jobId: Long): CrawlJob
     suspend fun listCrawlJobs(businessId: Int, page: Int, pageSize: Int): PagedCrawlJobs
+    suspend fun deleteCrawlJob(businessId: Int, jobId: Long): Boolean
+    suspend fun uploadOcr(businessId: Int, file: ExpenseProofFile): OcrAcceptResult
 }

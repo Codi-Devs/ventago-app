@@ -8,17 +8,14 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.remember
 import androidx.compose.ui.platform.LocalContext
-import androidx.lifecycle.compose.LocalLifecycleOwner
-import androidx.lifecycle.lifecycleScope
 import com.google.accompanist.permissions.ExperimentalPermissionsApi
 import com.google.accompanist.permissions.isGranted
 import com.google.accompanist.permissions.rememberPermissionState
 import com.google.accompanist.permissions.shouldShowRationale
-import kotlinx.coroutines.launch
 
 @Composable
 actual fun createPermissionsManager(callback: PermissionCallback): PermissionsManager {
-    return remember { PermissionsManager(callback) }
+    return remember(callback) { PermissionsManager(callback) }
 }
 
 actual class PermissionsManager actual constructor(private val callback: PermissionCallback) :
@@ -26,26 +23,20 @@ actual class PermissionsManager actual constructor(private val callback: Permiss
     @OptIn(ExperimentalPermissionsApi::class)
     @Composable
     actual override fun askPermission(permission: PermissionType) {
-        val lifecycleOwner = LocalLifecycleOwner.current
         when (permission) {
             PermissionType.CAMERA -> {
                 val cameraPermissionState = rememberPermissionState(Manifest.permission.CAMERA)
-                LaunchedEffect(cameraPermissionState) {
+                LaunchedEffect(Unit) {
+                    if (!cameraPermissionState.status.isGranted) {
+                        cameraPermissionState.launchPermissionRequest()
+                    }
+                }
+                LaunchedEffect(cameraPermissionState.status) {
                     val permissionResult = cameraPermissionState.status
-                    if (!permissionResult.isGranted) {
-                        if (permissionResult.shouldShowRationale) {
-                            callback.onPermissionStatus(
-                                permission, PermissionStatus.SHOW_RATIONAL
-                            )
-                        } else {
-                            lifecycleOwner.lifecycleScope.launch {
-                                cameraPermissionState.launchPermissionRequest()
-                            }
-                        }
-                    } else {
-                        callback.onPermissionStatus(
-                            permission, PermissionStatus.GRANTED
-                        )
+                    if (permissionResult.isGranted) {
+                        callback.onPermissionStatus(permission, PermissionStatus.GRANTED)
+                    } else if (permissionResult.shouldShowRationale) {
+                        callback.onPermissionStatus(permission, PermissionStatus.SHOW_RATIONAL)
                     }
                 }
             }

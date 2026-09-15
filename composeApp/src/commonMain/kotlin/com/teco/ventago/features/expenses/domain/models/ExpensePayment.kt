@@ -21,3 +21,22 @@ data class ExpensePayment(
     @SerialName("created_at") val createdAt: String? = null,
     @SerialName("updated_at") val updatedAt: String? = null
 )
+
+@Serializable
+data class ExpensePaymentSnapshot(
+    @SerialName("total_paid") val totalPaid: Double? = null,
+    @SerialName("registered_amount") val registeredAmount: Double? = null,
+    val remaining: Double? = null,
+    @SerialName("payment_status") val paymentStatus: String? = null,
+    val payments: List<ExpensePayment> = emptyList()
+)
+
+data class ExpensePaymentMutationResult(
+    val payment: ExpensePayment,
+    val summary: ExpensePaymentSnapshot? = null
+)
+
+data class ExpensePaymentDeleteResult(
+    val success: Boolean,
+    val summary: ExpensePaymentSnapshot? = null
+)

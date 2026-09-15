@@ -598,6 +598,7 @@
     <string name="expenses_issuer_ruc">Issuer RUC</string>
     <string name="new_expense">New Expense</string>
     <string name="cufe_import">CUFE Import</string>
+    <string name="invoice_upload">Upload invoice</string>
     <string name="expenses_start_date">Start date (YYYY-MM-DD)</string>
     <string name="expenses_end_date">End date (YYYY-MM-DD)</string>
     <string name="expense_accounts_settings">Conceptos de gasto</string>
