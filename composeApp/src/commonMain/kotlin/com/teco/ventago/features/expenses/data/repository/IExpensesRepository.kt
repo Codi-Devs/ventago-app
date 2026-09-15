@@ -6,6 +6,7 @@ import com.teco.ventago.features.expenses.domain.models.Expense
 import com.teco.ventago.features.expenses.domain.models.ExpensePayment
 import com.teco.ventago.features.expenses.domain.models.ExpensePaymentDeleteResult
 import com.teco.ventago.features.expenses.domain.models.ExpensePaymentMutationResult
+import com.teco.ventago.features.expenses.domain.models.OcrAcceptResult
 import com.teco.ventago.features.expenses.domain.models.PagedCrawlJobs
 import com.teco.ventago.features.expenses.domain.models.PagedExpenses
 import com.teco.ventago.features.expenses.domain.models.requests.CategorizeExpenseRequest
@@ -83,4 +84,5 @@ interface IExpensesRepository {
     suspend fun getCrawlJobStatus(businessId: Int, jobId: Long): CrawlJob
     suspend fun listCrawlJobs(businessId: Int, page: Int, pageSize: Int): PagedCrawlJobs
     suspend fun deleteCrawlJob(businessId: Int, jobId: Long): Boolean
+    suspend fun uploadOcr(businessId: Int, file: ExpenseProofFile): OcrAcceptResult
 }

@@ -339,6 +339,21 @@ class ExpensesProvider(
         return handleAuth(response, res.status) { deleteCrawlJob(businessId, jobId) }
     }
 
+    override suspend fun uploadOcr(businessId: Int, file: ExpenseProofFile): ApiResponse {
+        val res = client.post(Configs.ordersBasePath + "/api/v1/expenses/ocr") {
+            applyMultipartHeaders(businessId)
+            setBody(
+                MultiPartFormDataContent(
+                    formData {
+                        appendFile("file", file)
+                    }
+                )
+            )
+        }
+        val response = normalizeResponse(res.body())
+        return handleAuth(response, res.status) { uploadOcr(businessId, file) }
+    }
+
     // Merchants
 
     override suspend fun listMerchants(businessId: Int, request: ListMerchantsRequest): ApiResponse {

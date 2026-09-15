@@ -22,6 +22,8 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.ExperimentalMaterialApi
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Add
+import androidx.compose.material.icons.rounded.Edit
+import androidx.compose.material.icons.rounded.PhotoCamera
 import androidx.compose.material.icons.rounded.QrCodeScanner
 import androidx.compose.material.icons.rounded.Receipt
 import androidx.compose.material.icons.rounded.Search
@@ -59,17 +61,26 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.material3.FloatingActionButton
-import androidx.compose.material3.SmallFloatingActionButton
+import androidx.compose.material3.Icon
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.LocalClipboardManager
+import androidx.compose.ui.text.AnnotatedString
+import com.teco.ventago.core.SnackbarService
 import com.teco.ventago.design_system.buttons.ButtonM
 import com.teco.ventago.design_system.buttons.OutlinedButtonM
 import com.teco.ventago.design_system.buttons.TextButtonS
 import com.teco.ventago.design_system.loaders.shimmerBrush
 import com.teco.ventago.design_system.molecules.InstallmentDueDateFieldKmp
 import com.teco.ventago.design_system.textfields.DMOutlinedTextField
+import com.teco.ventago.features.expenses.domain.CrawlErrorCopy
+import com.teco.ventago.features.expenses.domain.CufeParser
 import com.teco.ventago.features.expenses.domain.models.CrawlJob
 import com.teco.ventago.features.expenses.domain.models.Expense
 import com.teco.ventago.features.expenses.domain.models.ExpenseMerchant
 import com.teco.ventago.features.expenses.domain.models.PaymentMethod
+import kotlinx.coroutines.launch
+import org.koin.compose.koinInject
 import com.teco.ventago.navigation.PosScreens
 import com.teco.ventago.utils.DateFormat.getFormattedDate
 import com.teco.ventago.utils.formatNumberToMoney
@@ -101,11 +112,18 @@ import ventago.composeapp.generated.resources.see_more
 fun ExpensesListScreen(
     viewModel: ExpensesListViewModel,
     navigate: (PosScreens) -> Unit,
+    onUploadInvoice: () -> Unit,
+    onImportCufe: (cufe: String?, autoImport: Boolean, openScanner: Boolean) -> Unit,
     onBack: () -> Unit
 ) {
     val uiState by viewModel.uiState.collectAsState()
     var showFilters by remember { mutableStateOf(false) }
+    var showRegisterSheet by remember { mutableStateOf(false) }
     val filterSheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+    val registerSheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+    val snackbarService: SnackbarService = koinInject()
+    val clipboard = LocalClipboardManager.current
+    val scope = rememberCoroutineScope()
 
     val pullRefreshState = rememberPullRefreshState(
         refreshing = uiState.refreshing,
@@ -214,7 +232,16 @@ fun ExpensesListScreen(
             CrawlJobsSummary(
                 jobs = visibleCrawlJobs,
                 isLoading = uiState.isLoadingCrawlJobs,
-                onDismissFailedJob = viewModel::dismissFailedCrawlJob
+                onDismissFailedJob = viewModel::dismissFailedCrawlJob,
+                onRetryFailedJob = { job ->
+                    viewModel.retryFailedCrawlJob(job) { cufe ->
+                        onImportCufe(cufe, true, false)
+                    }
+                },
+                onCopyCufe = { cufe ->
+                    clipboard.setText(AnnotatedString(cufe))
+                    scope.launch { snackbarService.show("CUFE copiado") }
+                }
             )
         }
 
@@ -298,26 +325,14 @@ fun ExpensesListScreen(
                 verticalArrangement = Arrangement.spacedBy(12.dp),
                 horizontalAlignment = Alignment.End
             ) {
-                if (uiState.hasExpensesQr) {
-                    SmallFloatingActionButton(
-                        onClick = { navigate(PosScreens.CufeImportScreen) },
-                        containerColor = MaterialTheme.colorScheme.secondaryContainer
-                    ) {
-                        Icon(
-                            imageVector = Icons.Rounded.QrCodeScanner,
-                            contentDescription = "Importar CUFE",
-                            tint = MaterialTheme.colorScheme.onSecondaryContainer
-                        )
-                    }
-                }
                 if (uiState.canCreateExpense) {
                     FloatingActionButton(
-                        onClick = { navigate(PosScreens.NewExpenseScreen) },
+                        onClick = { showRegisterSheet = true },
                         containerColor = MaterialTheme.colorScheme.primary
                     ) {
                         Icon(
                             imageVector = Icons.Rounded.Add,
-                            contentDescription = "Nuevo gasto",
+                            contentDescription = "Registrar gasto",
                             tint = MaterialTheme.colorScheme.onPrimary
                         )
                     }
@@ -354,6 +369,93 @@ fun ExpensesListScreen(
                     showFilters = false
                     viewModel.clearFilters()
                 }
+            )
+        }
+    }
+
+    if (showRegisterSheet) {
+        ModalBottomSheet(
+            onDismissRequest = { showRegisterSheet = false },
+            sheetState = registerSheetState
+        ) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp, vertical = 8.dp),
+                verticalArrangement = Arrangement.spacedBy(4.dp)
+            ) {
+                Text(
+                    text = "Registrar gasto",
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.SemiBold
+                )
+                Spacer(modifier = Modifier.height(8.dp))
+                RegisterExpenseOption(
+                    icon = Icons.Rounded.Edit,
+                    title = "Registro manual",
+                    subtitle = "Completa los datos del gasto"
+                ) {
+                    showRegisterSheet = false
+                    navigate(PosScreens.NewExpenseScreen)
+                }
+                if (uiState.hasInvoiceUploadAccess) {
+                    RegisterExpenseOption(
+                        icon = Icons.Rounded.PhotoCamera,
+                        title = "Sube tu factura",
+                        subtitle = "La IA escanea fotos, imágenes o PDF"
+                    ) {
+                        showRegisterSheet = false
+                        onUploadInvoice()
+                    }
+                }
+                if (uiState.hasExpensesQr) {
+                    RegisterExpenseOption(
+                        icon = Icons.Rounded.QrCodeScanner,
+                        title = "Escanear QR",
+                        subtitle = "Importa desde DGI con el CUFE"
+                    ) {
+                        showRegisterSheet = false
+                        onImportCufe(null, false, true)
+                    }
+                }
+                Spacer(modifier = Modifier.height(16.dp))
+            }
+        }
+    }
+}
+
+@Composable
+private fun RegisterExpenseOption(
+    icon: ImageVector,
+    title: String,
+    subtitle: String,
+    onClick: () -> Unit
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(12.dp))
+            .clickable(onClick = onClick)
+            .padding(horizontal = 8.dp, vertical = 12.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(12.dp)
+    ) {
+        Icon(
+            imageVector = icon,
+            contentDescription = null,
+            tint = MaterialTheme.colorScheme.primary,
+            modifier = Modifier.size(24.dp)
+        )
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                text = title,
+                style = MaterialTheme.typography.bodyMedium,
+                fontWeight = FontWeight.SemiBold
+            )
+            Text(
+                text = subtitle,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
             )
         }
     }
@@ -734,7 +836,9 @@ private fun EmptyExpensesView() {
 private fun CrawlJobsSummary(
     jobs: List<CrawlJob>,
     isLoading: Boolean,
-    onDismissFailedJob: (Long) -> Unit
+    onDismissFailedJob: (Long) -> Unit,
+    onRetryFailedJob: (CrawlJob) -> Unit,
+    onCopyCufe: (String) -> Unit
 ) {
     var showFailedDetail by remember { mutableStateOf(false) }
     Surface(
@@ -820,6 +924,7 @@ private fun CrawlJobsSummary(
                 if (showFailedDetail && failedJobs.isNotEmpty()) {
                     failedJobs.forEach { job ->
                         val jobId = job.resolvedId
+                        val cufe = job.cufe?.trim().orEmpty()
                         Column(
                             modifier = Modifier
                                 .fillMaxWidth()
@@ -832,19 +937,33 @@ private fun CrawlJobsSummary(
                                 fontWeight = FontWeight.SemiBold
                             )
                             Text(
-                                text = job.errorMessage
-                                    ?.takeIf { it.isNotBlank() }
-                                    ?: "No se pudo importar esta factura desde DGI.",
+                                text = CrawlErrorCopy.userMessage(job.errorMessage ?: job.message),
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
-                            if (jobId != null) {
+                            if (cufe.isNotEmpty()) {
                                 Text(
-                                    text = "Ocultar",
+                                    text = CufeParser.truncate(cufe),
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.primary,
+                                    modifier = Modifier.clickable { onCopyCufe(cufe) }
+                                )
+                            }
+                            Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+                                Text(
+                                    text = "Intentar de nuevo",
                                     style = MaterialTheme.typography.labelLarge,
                                     color = MaterialTheme.colorScheme.primary,
-                                    modifier = Modifier.clickable { onDismissFailedJob(jobId) }
+                                    modifier = Modifier.clickable { onRetryFailedJob(job) }
                                 )
+                                if (jobId != null) {
+                                    Text(
+                                        text = "Ocultar",
+                                        style = MaterialTheme.typography.labelLarge,
+                                        color = MaterialTheme.colorScheme.primary,
+                                        modifier = Modifier.clickable { onDismissFailedJob(jobId) }
+                                    )
+                                }
                             }
                         }
                     }

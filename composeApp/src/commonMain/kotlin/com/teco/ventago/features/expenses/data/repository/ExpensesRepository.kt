@@ -14,6 +14,7 @@ import com.teco.ventago.features.expenses.domain.models.ExpensePayment
 import com.teco.ventago.features.expenses.domain.models.ExpensePaymentDeleteResult
 import com.teco.ventago.features.expenses.domain.models.ExpensePaymentMutationResult
 import com.teco.ventago.features.expenses.domain.models.ExpensePaymentSnapshot
+import com.teco.ventago.features.expenses.domain.models.OcrAcceptResult
 import com.teco.ventago.features.expenses.domain.models.PagedCrawlJobs
 import com.teco.ventago.features.expenses.domain.models.ExpenseMerchant
 import com.teco.ventago.features.expenses.domain.models.PagedExpenses
@@ -435,6 +436,21 @@ class ExpensesRepository(
             logAndThrow(
                 flow = "deleteCrawlJob",
                 context = "Error deleting crawl job. businessId: $businessId, jobId: $jobId",
+                error = e
+            )
+        }
+    }
+
+    override suspend fun uploadOcr(businessId: Int, file: ExpenseProofFile): OcrAcceptResult {
+        return try {
+            val response = provider.uploadOcr(businessId, file)
+            ensureSuccess(response, ExpensesErrorMapper.mapOcrUploadError(response))
+            val dataObj = response.data?.jsonObject ?: throw BadRequestException("Missing data")
+            json.decodeFromJsonElement(OcrAcceptResult.serializer(), dataObj)
+        } catch (e: Exception) {
+            logAndThrow(
+                flow = "uploadOcr",
+                context = "Error uploading expense invoice for OCR. businessId: $businessId",
                 error = e
             )
         }

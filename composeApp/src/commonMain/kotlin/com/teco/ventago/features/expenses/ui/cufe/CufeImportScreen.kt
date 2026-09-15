@@ -30,6 +30,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -108,6 +109,13 @@ fun CufeImportScreen(
     if (launchSetting) {
         permissionsManager.launchSettings()
         launchSetting = false
+    }
+
+    LaunchedEffect(uiState.openScannerOnStart) {
+        if (uiState.openScannerOnStart) {
+            launchCamera = true
+            viewModel.consumeOpenScannerOnStart()
+        }
     }
 
     // Permission rational dialog
@@ -231,7 +239,7 @@ fun CufeImportScreen(
                 )
                 Spacer(modifier = Modifier.height(4.dp))
                 Text(
-                    "Formatos aceptados: FE..., URL con chFE=, URL con /FacturasPorCUFE/",
+                    "Formatos aceptados: FE..., URL con chFE=, /FacturasPorCUFE/ o /FacturasPorQR/",
                     style = labelSmall(color = MaterialTheme.colorScheme.onSurfaceVariant)
                 )
                 Spacer(modifier = Modifier.height(12.dp))
@@ -268,7 +276,7 @@ fun CufeImportScreen(
         ModalBottomSheet(
             onDismissRequest = {
                 if (!uiState.isPolling) {
-                    viewModel.reset()
+                    viewModel.clearCurrentJob()
                 }
             },
             sheetState = statusSheetState,
@@ -276,7 +284,7 @@ fun CufeImportScreen(
         ) {
             ImportStatusContent(
                 uiState = uiState,
-                onReset = { viewModel.reset() },
+                onReset = { viewModel.retryImport() },
                 onOpenImportedExpense = { viewModel.openImportedExpense(onExpenseImported) }
             )
         }

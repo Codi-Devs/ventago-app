@@ -11,6 +11,7 @@ import com.teco.ventago.features.expenses.domain.models.ExpenseAccount
 import com.teco.ventago.features.expenses.domain.models.ExpensePayment
 import com.teco.ventago.features.expenses.domain.models.ExpensePaymentDeleteResult
 import com.teco.ventago.features.expenses.domain.models.ExpensePaymentMutationResult
+import com.teco.ventago.features.expenses.domain.models.OcrAcceptResult
 import com.teco.ventago.features.expenses.domain.models.PagedCrawlJobs
 import com.teco.ventago.features.expenses.domain.models.PagedExpenses
 import com.teco.ventago.features.expenses.domain.models.requests.CategorizeExpenseRequest
@@ -294,6 +295,11 @@ class ExpensesService(
     suspend fun deleteCrawlJob(jobId: Long): Boolean {
         val businessId = businessId() ?: throw IllegalStateException("No business selected")
         return repository.deleteCrawlJob(businessId, jobId)
+    }
+
+    suspend fun uploadOcr(file: ExpenseProofFile): OcrAcceptResult {
+        val businessId = businessId() ?: throw IllegalStateException("No business selected")
+        return repository.uploadOcr(businessId, file)
     }
 
     fun clearCache() {

@@ -64,6 +64,7 @@ interface IExpensesProvider {
     suspend fun getCrawlJobStatus(businessId: Int, jobId: Long): ApiResponse
     suspend fun listCrawlJobs(businessId: Int, page: Int, pageSize: Int): ApiResponse
     suspend fun deleteCrawlJob(businessId: Int, jobId: Long): ApiResponse
+    suspend fun uploadOcr(businessId: Int, file: ExpenseProofFile): ApiResponse
 
     // Merchants
     suspend fun listMerchants(businessId: Int, request: ListMerchantsRequest): ApiResponse

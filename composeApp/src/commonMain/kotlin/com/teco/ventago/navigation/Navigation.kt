@@ -184,6 +184,7 @@ import ventago.composeapp.generated.resources.expense_accounts_settings
 import ventago.composeapp.generated.resources.new_expense
 import ventago.composeapp.generated.resources.notifications
 import ventago.composeapp.generated.resources.cufe_import
+import ventago.composeapp.generated.resources.invoice_upload
 import ventago.composeapp.generated.resources.register
 import ventago.composeapp.generated.resources.register_business
 import ventago.composeapp.generated.resources.reset_password
@@ -386,6 +387,7 @@ enum class PosScreens(
     EditExpenseScreen(Res.string.expense_details, true, showBackButton = true),
     DuplicateExpenseScreen(Res.string.new_expense, true, showBackButton = true),
     CufeImportScreen(Res.string.cufe_import, true, showBackButton = true),
+    InvoiceUploadScreen(Res.string.invoice_upload, true, showBackButton = true),
 
     Inventory(Res.string.home),
     InventoryOpsScreen(Res.string.home, true, showBackButton = true);
@@ -1705,10 +1707,17 @@ private fun NavGraphBuilder.addExpensesNavigation(
             val expensesOwner = rememberGraphOwner(navController, PosScreens.Expenses.name)
             val viewModel: com.teco.ventago.features.expenses.ui.list.ExpensesListViewModel =
                 koinViewModel(viewModelStoreOwner = expensesOwner)
+            val cufeViewModel: com.teco.ventago.features.expenses.ui.cufe.CufeImportViewModel =
+                koinViewModel(viewModelStoreOwner = expensesOwner)
             analyticsService.logScreenView("ExpensesListScreen")
             com.teco.ventago.features.expenses.ui.list.ExpensesListScreen(
                 viewModel = viewModel,
                 navigate = { route -> navController.navigate(route.name) },
+                onUploadInvoice = { navController.navigate(PosScreens.InvoiceUploadScreen.name) },
+                onImportCufe = { cufe, autoImport, openScanner ->
+                    cufeViewModel.prepare(cufe, autoImport, openScanner)
+                    navController.navigate(PosScreens.CufeImportScreen.name)
+                },
                 onBack = { navController.navigateUp() }
             )
         }
@@ -1717,6 +1726,8 @@ private fun NavGraphBuilder.addExpensesNavigation(
             val args = backStackEntry.toRoute<ExpensesListScreenRoute>()
             val expensesOwner = rememberGraphOwner(navController, PosScreens.Expenses.name)
             val viewModel: com.teco.ventago.features.expenses.ui.list.ExpensesListViewModel =
+                koinViewModel(viewModelStoreOwner = expensesOwner)
+            val cufeViewModel: com.teco.ventago.features.expenses.ui.cufe.CufeImportViewModel =
                 koinViewModel(viewModelStoreOwner = expensesOwner)
             analyticsService.logScreenView("ExpensesListScreen")
 
@@ -1729,6 +1740,11 @@ private fun NavGraphBuilder.addExpensesNavigation(
             com.teco.ventago.features.expenses.ui.list.ExpensesListScreen(
                 viewModel = viewModel,
                 navigate = { route -> navController.navigate(route.name) },
+                onUploadInvoice = { navController.navigate(PosScreens.InvoiceUploadScreen.name) },
+                onImportCufe = { cufe, autoImport, openScanner ->
+                    cufeViewModel.prepare(cufe, autoImport, openScanner)
+                    navController.navigate(PosScreens.CufeImportScreen.name)
+                },
                 onBack = { navController.navigateUp() }
             )
         }
@@ -1819,6 +1835,17 @@ private fun NavGraphBuilder.addExpensesNavigation(
                         popUpTo(PosScreens.ExpensesListScreen.name) { inclusive = false }
                     }
                 }
+            )
+        }
+
+        composable(route = PosScreens.InvoiceUploadScreen.name) {
+            val expensesOwner = rememberGraphOwner(navController, PosScreens.Expenses.name)
+            val viewModel: com.teco.ventago.features.expenses.ui.upload.InvoiceUploadViewModel =
+                koinViewModel(viewModelStoreOwner = expensesOwner)
+            analyticsService.logScreenView("InvoiceUploadScreen")
+            com.teco.ventago.features.expenses.ui.upload.InvoiceUploadScreen(
+                viewModel = viewModel,
+                onBack = { navController.navigateUp() }
             )
         }
     }

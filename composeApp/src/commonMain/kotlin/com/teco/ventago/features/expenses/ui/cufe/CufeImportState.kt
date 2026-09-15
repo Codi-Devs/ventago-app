@@ -1,5 +1,6 @@
 package com.teco.ventago.features.expenses.ui.cufe
 
+import com.teco.ventago.features.expenses.domain.CrawlErrorCopy
 import com.teco.ventago.features.expenses.domain.models.CrawlJob
 
 data class CufeImportState(
@@ -14,7 +15,8 @@ data class CufeImportState(
     val isOpeningExpense: Boolean = false,
     val error: String? = null,
     val showScanner: Boolean = false,
-    val showPermissionDialog: Boolean = false
+    val showPermissionDialog: Boolean = false,
+    val openScannerOnStart: Boolean = false
 ) {
     val jobStatusLabel: String?
         get() {
@@ -26,7 +28,7 @@ data class CufeImportState(
                 "processing" -> "Procesando factura..."
                 "success", "completed" -> "Factura importada exitosamente"
                 "failed", "error", "cancelled", "timeout" ->
-                    currentJob.errorMessage ?: currentJob.message ?: "Error al importar"
+                    CrawlErrorCopy.userMessage(currentJob.errorMessage ?: currentJob.message)
                 else -> currentJob?.message
             }
         }
