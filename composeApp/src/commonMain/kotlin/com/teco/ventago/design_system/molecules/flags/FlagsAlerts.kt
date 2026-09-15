@@ -16,6 +16,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Build
+import androidx.compose.material.icons.outlined.Info
 import androidx.compose.material.icons.outlined.Schedule
 import androidx.compose.material.icons.outlined.SupportAgent
 import androidx.compose.material.icons.outlined.WarningAmber
@@ -169,6 +170,38 @@ fun DgiDownAlertBanner(
             Text(
                 text = "Te recomendamos esperar antes de facturar. Si continuas, podrias necesitar reintentar luego.",
                 style = labelSmall(color = MaterialTheme.colorScheme.onSurfaceVariant)
+            )
+        }
+    }
+}
+
+@Composable
+fun PosProvisioningAlertBanner(
+    message: String,
+    modifier: Modifier = Modifier,
+) {
+    val container = Color(0xFFE3F2FD)
+    val titleColor = Color(0xFF1565C0)
+
+    Card(
+        modifier = modifier,
+        colors = CardDefaults.cardColors(containerColor = container),
+        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+    ) {
+        Row(
+            modifier = Modifier.padding(12.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Icon(
+                imageVector = Icons.Outlined.Info,
+                contentDescription = null,
+                tint = titleColor,
+                modifier = Modifier.size(20.dp)
+            )
+            Spacer(Modifier.width(8.dp))
+            Text(
+                text = message,
+                style = bodyMedium(color = titleColor)
             )
         }
     }

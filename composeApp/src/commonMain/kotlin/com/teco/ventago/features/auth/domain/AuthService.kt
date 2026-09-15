@@ -15,6 +15,7 @@ import com.teco.ventago.features.auth.domain.model.response.AuthResponse
 import com.teco.ventago.features.business.domain.model.Business
 import com.teco.ventago.features.pos.provisioning.domain.PosDeviceProvisioningService
 import com.teco.ventago.features.pos.provisioning.domain.PosProvisioningException
+import com.teco.ventago.features.pos.provisioning.domain.shouldAbortPosLogin
 import com.teco.ventago.features.product.domain.model.Products
 import com.teco.ventago.features.user.data.repository.IUserRepository
 import com.teco.ventago.utils.ApiError
@@ -81,10 +82,12 @@ class AuthService(
                             businessIds = cachedUser.businessIds.map { it.businessId },
                             accessToken = accessToken
                         )
-                    } catch (_: PosProvisioningException) {
-                        user.tryEmit(null)
-                        signOut()
-                        return@launch
+                    } catch (e: PosProvisioningException) {
+                        if (e.shouldAbortPosLogin()) {
+                            user.tryEmit(null)
+                            signOut()
+                            return@launch
+                        }
                     }
                     user.tryEmit(cachedUser)
                     user = MutableStateFlow(cachedUser)
@@ -229,7 +232,7 @@ class AuthService(
             user.update {
                 null
             }
-            if (e is PosProvisioningException) {
+            if (e.shouldAbortPosLogin()) {
                 signOut()
             }
             throw e
@@ -264,7 +267,7 @@ class AuthService(
             user.update {
                 null
             }
-            if (e is PosProvisioningException) {
+            if (e.shouldAbortPosLogin()) {
                 signOut()
             }
             throw e

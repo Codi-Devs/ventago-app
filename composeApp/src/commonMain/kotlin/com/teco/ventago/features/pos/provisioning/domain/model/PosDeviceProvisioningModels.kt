@@ -48,14 +48,29 @@ data class PosDevicePermissions(
     @SerialName("reports_view") val reportsView: Boolean = false,
 )
 
+enum class PosLinkMode {
+    NotRequired,
+    Linked,
+    Degraded,
+    Unlinked,
+}
+
 data class PosProvisioningState(
     val required: Boolean = false,
     val agentConfig: PosAgentDeviceConfig? = null,
     val deviceConfig: PosDeviceConfig? = null,
     val valid: Boolean = !required,
+    val linkMode: PosLinkMode = if (required) PosLinkMode.Unlinked else PosLinkMode.NotRequired,
 ) {
     val isProvisioned: Boolean
         get() = !required || valid
+
+    val locksBranchPoint: Boolean
+        get() = required &&
+            valid &&
+            (linkMode == PosLinkMode.Linked || linkMode == PosLinkMode.Degraded) &&
+            !fixedBranchCode.isNullOrBlank() &&
+            !fixedBillingPointCode.isNullOrBlank()
 
     val fixedBranchCode: String?
         get() = deviceConfig?.branchCode ?: agentConfig?.branchCode
@@ -65,6 +80,21 @@ data class PosProvisioningState(
 
     val permissions: PosDevicePermissions?
         get() = deviceConfig?.permissions
+
+    val bannerMessage: String?
+        get() = when {
+            !required || !valid -> null
+            linkMode == PosLinkMode.Degraded -> BANNER_DEGRADED
+            linkMode == PosLinkMode.Unlinked -> BANNER_UNLINKED
+            else -> null
+        }
+
+    companion object {
+        const val BANNER_DEGRADED =
+            "VentaGo Agent no responde. Facturando con la sucursal vinculada."
+        const val BANNER_UNLINKED =
+            "Este equipo no está vinculado. Elige sucursal y punto para facturar."
+    }
 }
 
 data class PosAgentConfigResult(
