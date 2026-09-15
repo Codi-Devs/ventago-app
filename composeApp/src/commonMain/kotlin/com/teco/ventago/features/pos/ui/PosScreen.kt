@@ -56,6 +56,7 @@ import com.teco.ventago.design_system.buttons.ButtonM
 import com.teco.ventago.design_system.molecules.InstallmentDueDateFieldKmp
 import com.teco.ventago.design_system.molecules.DMAlertDialog
 import com.teco.ventago.design_system.molecules.flags.DgiDownAlertBanner
+import com.teco.ventago.design_system.molecules.flags.PosProvisioningAlertBanner
 import com.teco.ventago.design_system.textfields.DMOutlinedTextField
 import com.teco.ventago.design_system.textfields.helpers.DMDropDownField
 import com.teco.ventago.design_system.theme.bodyLarge
@@ -108,6 +109,12 @@ fun PosScreen(
     val minInvoiceDate = remember(todayPanama) { todayPanama.plus(DatePeriod(months = -6)) }
     val minOriginalInvoiceDate = remember { LocalDate(2000, 1, 1) }
     var invoiceConfigExpanded by rememberSaveable { mutableStateOf(false) }
+
+    LaunchedEffect(uiState.posProvisioningBanner) {
+        if (!uiState.posProvisioningBanner.isNullOrBlank()) {
+            invoiceConfigExpanded = true
+        }
+    }
 
     LaunchedEffect(Unit) {
         if (QuoteSelectionStore.startOrderFlowFromQuote) {
@@ -170,6 +177,14 @@ fun PosScreen(
 
         if (flagsState.dgiDown) {
             DgiDownAlertBanner(
+                modifier = Modifier.padding(horizontal = 16.dp)
+            )
+            Spacer(modifier = Modifier.height(8.dp))
+        }
+
+        uiState.posProvisioningBanner?.let { banner ->
+            PosProvisioningAlertBanner(
+                message = banner,
                 modifier = Modifier.padding(horizontal = 16.dp)
             )
             Spacer(modifier = Modifier.height(8.dp))

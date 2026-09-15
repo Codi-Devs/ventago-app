@@ -34,6 +34,7 @@ import com.teco.ventago.features.orders.domain.models.responses.CreateOrderRespo
 import com.teco.ventago.features.orders.domain.models.responses.InvoiceDocsDto
 import com.teco.ventago.features.pos.provisioning.data.repository.IPosDeviceProvisioningRepository
 import com.teco.ventago.features.pos.provisioning.domain.IPosAgentConfigReader
+import com.teco.ventago.features.pos.provisioning.domain.InMemoryPosDeviceBindingStore
 import com.teco.ventago.features.pos.provisioning.domain.PosDeviceProvisioningService
 import com.teco.ventago.features.pos.provisioning.domain.model.PosAgentConfigResult
 import com.teco.ventago.features.pos.provisioning.domain.model.PosDeviceConfig
@@ -72,6 +73,23 @@ class OrderServiceProvisioningTest {
     }
 
     @Test
+    fun posOrderLoadsStayUnscopedAfterUnlinkedLogin() = runTest {
+        val ordersRepository = CapturingOrdersRepository()
+        val provisioningService = provisioningService(
+            isPosBuild = true,
+            agentConfigReader = FakeAgentReader(result = null),
+        )
+        provisioningService.validateLogin(authResponse())
+        val service = OrderService(ordersRepository, provisioningService)
+
+        service.loadOrders(businessId = 7)
+
+        val request = ordersRepository.requests.single()
+        assertNull(request.branchCode)
+        assertNull(request.billingPointCode)
+    }
+
+    @Test
     fun publicOrderLoadsKeepUnscopedBranchAndBillingFilters() = runTest {
         val ordersRepository = CapturingOrdersRepository()
         val service = OrderService(ordersRepository, provisioningService(isPosBuild = false))
@@ -83,12 +101,16 @@ class OrderServiceProvisioningTest {
         assertNull(request.billingPointCode)
     }
 
-    private fun provisioningService(isPosBuild: Boolean): PosDeviceProvisioningService =
+    private fun provisioningService(
+        isPosBuild: Boolean,
+        agentConfigReader: IPosAgentConfigReader = FakeAgentReader(),
+    ): PosDeviceProvisioningService =
         PosDeviceProvisioningService(
             appDistribution = AppDistribution(isPosBuild = isPosBuild),
-            agentConfigReader = FakeAgentReader(),
+            agentConfigReader = agentConfigReader,
             repository = FakeProvisioningRepository(),
-            logger = NoopLoggerService()
+            logger = NoopLoggerService(),
+            bindingStore = InMemoryPosDeviceBindingStore(),
         )
 
     private fun authResponse(): AuthResponse =
@@ -107,19 +129,20 @@ class OrderServiceProvisioningTest {
             businesses = listOf(BusinessIds(businessId = 7, menuId = 1))
         )
 
-    private class FakeAgentReader : IPosAgentConfigReader {
-        override suspend fun getDeviceConfig(): PosAgentConfigResult =
-            PosAgentConfigResult(
-                activated = true,
-                configJson = """
-                    {
-                      "device_id": "pos_123",
-                      "business_id": 7,
-                      "branch_code": "0000",
-                      "billing_point_code": "865"
-                    }
-                """.trimIndent()
-            )
+    private class FakeAgentReader(
+        private val result: PosAgentConfigResult? = PosAgentConfigResult(
+            activated = true,
+            configJson = """
+                {
+                  "device_id": "pos_123",
+                  "business_id": 7,
+                  "branch_code": "0000",
+                  "billing_point_code": "865"
+                }
+            """.trimIndent()
+        )
+    ) : IPosAgentConfigReader {
+        override suspend fun getDeviceConfig(): PosAgentConfigResult? = result
     }
 
     private class FakeProvisioningRepository : IPosDeviceProvisioningRepository {

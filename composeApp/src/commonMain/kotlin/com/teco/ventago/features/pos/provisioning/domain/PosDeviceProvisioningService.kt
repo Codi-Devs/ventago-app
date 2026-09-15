@@ -9,11 +9,11 @@ import com.teco.ventago.features.auth.domain.model.response.AuthResponse
 import com.teco.ventago.features.pos.provisioning.data.repository.IPosDeviceProvisioningRepository
 import com.teco.ventago.features.pos.provisioning.domain.model.PosAgentDeviceConfig
 import com.teco.ventago.features.pos.provisioning.domain.model.PosDeviceConfig
+import com.teco.ventago.features.pos.provisioning.domain.model.PosLinkMode
 import com.teco.ventago.features.pos.provisioning.domain.model.PosProvisioningState
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.SerializationException
 import kotlinx.serialization.json.Json
 
@@ -22,8 +22,9 @@ class PosDeviceProvisioningService(
     private val agentConfigReader: IPosAgentConfigReader,
     private val repository: IPosDeviceProvisioningRepository,
     private val logger: ILoggerService,
+    private val bindingStore: IPosDeviceBindingStore,
 ) {
-    private val state = MutableStateFlow(PosProvisioningState(required = appDistribution.isPosBuild))
+    private val state = MutableStateFlow(initialState())
     private var currentAccessToken: String? = null
     private val json = Json {
         ignoreUnknownKeys = true
@@ -44,99 +45,180 @@ class PosDeviceProvisioningService(
     suspend fun validateBusinessIds(businessIds: List<Int>, accessToken: String? = currentAccessToken) {
         if (!isRequired()) return
         currentAccessToken = accessToken
-        val agentConfig = loadAgentConfig()
-        val userBusinessMatches = businessIds.any { it == agentConfig.businessId }
-        if (!userBusinessMatches) {
-            state.value = PosProvisioningState(required = true, agentConfig = agentConfig, valid = false)
+        val agentConfig = probeAgent()
+        val fromAgent = agentConfig != null
+        val binding = agentConfig ?: bindingStore.load()
+        if (binding == null) {
+            enterUnlinked()
+            return
+        }
+        if (businessIds.none { it == binding.businessId }) {
+            state.value = PosProvisioningState(
+                required = true,
+                agentConfig = binding,
+                valid = false,
+                linkMode = if (fromAgent) PosLinkMode.Linked else PosLinkMode.Degraded,
+            )
             throw PosProvisioningException.BusinessMismatch
         }
-        refreshBackendConfig(agentConfig, accessToken)
+        applyBinding(
+            binding = binding,
+            accessToken = accessToken,
+            requireExactMatch = fromAgent,
+            agentReachable = fromAgent,
+        )
     }
 
     suspend fun refreshFromKnownDevice(): PosDeviceConfig? {
         if (!isRequired()) return null
-        val agentConfig = state.value.agentConfig ?: loadAgentConfig()
-        return refreshBackendConfig(agentConfig, currentAccessToken)
+        val agentConfig = probeAgent()
+        val binding = state.value.agentConfig ?: agentConfig ?: bindingStore.load() ?: return null
+        return applyBinding(
+            binding = binding,
+            accessToken = currentAccessToken,
+            requireExactMatch = agentConfig != null,
+            agentReachable = agentConfig != null,
+        )
     }
 
     fun clear() {
         currentAccessToken = null
         PosDevicePermissionGate.clear()
-        state.value = PosProvisioningState(
-            required = appDistribution.isPosBuild,
-            valid = !appDistribution.isPosBuild
-        )
+        state.value = initialState()
     }
 
-    private suspend fun loadAgentConfig(): PosAgentDeviceConfig {
-        val result = agentConfigReader.getDeviceConfig()
-            ?: throw PosProvisioningException.AgentUnavailable
-        if (!result.activated) {
-            throw PosProvisioningException.AgentInactive
-        }
+    private fun initialState(): PosProvisioningState =
+        PosProvisioningState(
+            required = appDistribution.isPosBuild,
+            valid = !appDistribution.isPosBuild,
+            linkMode = if (appDistribution.isPosBuild) PosLinkMode.Unlinked else PosLinkMode.NotRequired,
+        )
+
+    private suspend fun probeAgent(): PosAgentDeviceConfig? {
+        val result = try {
+            agentConfigReader.getDeviceConfig()
+        } catch (e: Exception) {
+            logger.sendLog(
+                Log(
+                    LogLevel.ERROR,
+                    "PosDeviceProvisioningService::probeAgent",
+                    "POS agent probe failed: ${e.message ?: "UNKNOWN"}"
+                )
+            )
+            return null
+        } ?: return null
+        if (!result.activated) return null
+        return parseAgentConfig(result.configJson)
+    }
+
+    private fun parseAgentConfig(configJson: String): PosAgentDeviceConfig? {
         val parsed = try {
-            json.decodeFromString<PosAgentDeviceConfig>(result.configJson)
+            json.decodeFromString<PosAgentDeviceConfig>(configJson)
         } catch (e: SerializationException) {
             logger.sendLog(
                 Log(
                     LogLevel.ERROR,
-                    "PosDeviceProvisioningService::loadAgentConfig",
+                    "PosDeviceProvisioningService::parseAgentConfig",
                     "Invalid POS agent config JSON: ${e.message ?: "UNKNOWN"}"
                 )
             )
-            throw PosProvisioningException.InvalidAgentConfig
+            return null
         } catch (e: IllegalArgumentException) {
             logger.sendLog(
                 Log(
                     LogLevel.ERROR,
-                    "PosDeviceProvisioningService::loadAgentConfig",
+                    "PosDeviceProvisioningService::parseAgentConfig",
                     "Invalid POS agent config JSON: ${e.message ?: "UNKNOWN"}"
                 )
             )
-            throw PosProvisioningException.InvalidAgentConfig
+            return null
         }
-        if (!parsed.isComplete()) {
-            throw PosProvisioningException.InvalidAgentConfig
-        }
-        return parsed
+        return parsed.takeIf { it.isComplete() }
     }
 
-    private suspend fun refreshBackendConfig(
-        agentConfig: PosAgentDeviceConfig,
-        accessToken: String?
-    ): PosDeviceConfig {
+    private suspend fun applyBinding(
+        binding: PosAgentDeviceConfig,
+        accessToken: String?,
+        requireExactMatch: Boolean,
+        agentReachable: Boolean,
+    ): PosDeviceConfig? {
         val deviceConfig = try {
-            repository.getPosConfig(agentConfig.deviceId, accessToken)
-        } catch (_: Exception) {
-            throw PosProvisioningException.DeviceConfigUnavailable
+            repository.getPosConfig(binding.deviceId, accessToken)
+        } catch (e: Exception) {
+            logger.sendLog(
+                Log(
+                    LogLevel.ERROR,
+                    "PosDeviceProvisioningService::applyBinding",
+                    "POS device config unavailable for ${binding.deviceId}: ${e.message ?: "UNKNOWN"}"
+                )
+            )
+            enterDegraded(binding, deviceConfig = null)
+            return null
         }
         if (!deviceConfig.active) {
             state.value = PosProvisioningState(
                 required = true,
-                agentConfig = agentConfig,
+                agentConfig = binding,
                 deviceConfig = deviceConfig,
-                valid = false
+                valid = false,
+                linkMode = if (agentReachable) PosLinkMode.Linked else PosLinkMode.Degraded,
             )
             throw PosProvisioningException.DeviceInactive
         }
-        if (!matchesAgent(agentConfig, deviceConfig)) {
+        if (requireExactMatch && !matchesAgent(binding, deviceConfig)) {
             state.value = PosProvisioningState(
                 required = true,
-                agentConfig = agentConfig,
+                agentConfig = binding,
                 deviceConfig = deviceConfig,
-                valid = false
+                valid = false,
+                linkMode = PosLinkMode.Linked,
             )
             throw PosProvisioningException.DeviceConfigMismatch
         }
+        val canonical = bindingFromDevice(deviceConfig)
+        bindingStore.save(canonical)
         PosDevicePermissionGate.update(deviceConfig.permissions)
         state.value = PosProvisioningState(
             required = true,
-            agentConfig = agentConfig,
+            agentConfig = canonical,
             deviceConfig = deviceConfig,
-            valid = true
+            valid = true,
+            linkMode = if (agentReachable) PosLinkMode.Linked else PosLinkMode.Degraded,
         )
         return deviceConfig
     }
+
+    private fun enterDegraded(binding: PosAgentDeviceConfig, deviceConfig: PosDeviceConfig?) {
+        if (deviceConfig != null) {
+            PosDevicePermissionGate.update(deviceConfig.permissions)
+        } else {
+            PosDevicePermissionGate.clear()
+        }
+        state.value = PosProvisioningState(
+            required = true,
+            agentConfig = binding,
+            deviceConfig = deviceConfig,
+            valid = true,
+            linkMode = PosLinkMode.Degraded,
+        )
+    }
+
+    private fun enterUnlinked() {
+        PosDevicePermissionGate.clear()
+        state.value = PosProvisioningState(
+            required = true,
+            valid = true,
+            linkMode = PosLinkMode.Unlinked,
+        )
+    }
+
+    private fun bindingFromDevice(config: PosDeviceConfig): PosAgentDeviceConfig =
+        PosAgentDeviceConfig(
+            deviceId = config.deviceId,
+            businessId = config.businessId,
+            branchCode = config.branchCode,
+            billingPointCode = config.billingPointCode,
+        )
 
     private fun matchesAgent(agentConfig: PosAgentDeviceConfig, deviceConfig: PosDeviceConfig): Boolean =
         agentConfig.deviceId == deviceConfig.deviceId &&

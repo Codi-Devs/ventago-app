@@ -10,4 +10,17 @@ sealed class PosProvisioningException(
     data object DeviceConfigUnavailable : PosProvisioningException("POS device config could not be loaded.")
     data object DeviceInactive : PosProvisioningException("POS device config is not active.")
     data object DeviceConfigMismatch : PosProvisioningException("POS device config does not match agent config.")
+
+    fun shouldAbortLogin(): Boolean = when (this) {
+        BusinessMismatch,
+        DeviceInactive,
+        DeviceConfigMismatch -> true
+        AgentUnavailable,
+        AgentInactive,
+        InvalidAgentConfig,
+        DeviceConfigUnavailable -> false
+    }
 }
+
+fun Exception.shouldAbortPosLogin(): Boolean =
+    this is PosProvisioningException && shouldAbortLogin()
