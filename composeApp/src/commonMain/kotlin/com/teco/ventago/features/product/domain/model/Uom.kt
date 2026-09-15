@@ -250,8 +250,11 @@ object UomRegistry {
 
         // Textile / Time / Work
         "denier" to "Denier", "lbb" to "lbb", "madeja" to "Madeja",
-        "anocomun" to "AnoComun", "mes" to "Mes", "dia" to "Dia",
-        "hora" to "Hora", "min" to "Min", "seg" to "Seg",
+        "anocomun" to "AnoComun", "anocomún" to "AnoComun",
+        "añocomun" to "AnoComun", "añocomún" to "AnoComun",
+        "mes" to "Mes", "dia" to "Dia", "día" to "Dia",
+        "hora" to "Hora", "min" to "Min", "minuto" to "Min",
+        "seg" to "Seg", "segundo" to "Seg",
         "semana" to "Semana", "actividad" to "Actividad",
         "horatrabajo" to "HoraTrabajo", "horaextra" to "HoraExtra",
         "mestrabajo" to "MesTrabajo", "puesto" to "Puesto"

@@ -16,6 +16,21 @@ object ExpensesErrorMapper {
         }
     }
 
+    fun mapOcrUploadError(response: ApiResponse): String {
+        val code = response.errorCode?.lowercase().orEmpty()
+        val message = response.errorMessage?.lowercase().orEmpty()
+        return when {
+            message.contains("too large") ||
+                (message.contains("10") && message.contains("mb")) ->
+                "El archivo no puede superar 10 MB."
+            code.contains("beta") || message.contains("beta") ->
+                "La carga de facturas no está disponible para este negocio."
+            message.contains("unsupported") || message.contains("content type") ->
+                "Usa un PDF o una imagen JPEG/PNG."
+            else -> mapCreateOrEditExpenseError(response)
+        }
+    }
+
     fun mapCreateOrEditExpenseError(response: ApiResponse): String {
         return when {
             response.errorCode == "O_RP_002" ->
@@ -24,6 +39,8 @@ object ExpensesErrorMapper {
                 "El concepto de gasto seleccionado no fue encontrado."
             response.errorCode == "AUTH_001" ->
                 "Tu sesion expiro. Inicia sesion nuevamente."
+            response.matchesPaymentExceedsTotal() ->
+                "El monto registrado no puede superar el total del gasto."
             else -> "No se pudo guardar el gasto. Intentalo nuevamente."
         }
     }
@@ -52,6 +69,15 @@ object ExpensesErrorMapper {
                 "Tu sesion expiro. Inicia sesion nuevamente."
             else -> "No se pudo procesar la solicitud del proveedor."
         }
+    }
+
+    private fun ApiResponse.matchesPaymentExceedsTotal(): Boolean {
+        val code = errorCode?.lowercase().orEmpty()
+        val message = errorMessage?.lowercase().orEmpty()
+        return code.contains("payment amount exceeds expense total") ||
+            message.contains("payment amount exceeds expense total") ||
+            code.contains("payment_exceeds_total") ||
+            message.contains("payment_exceeds_total")
     }
 
     private fun ApiResponse.matchesAccountNotFound(): Boolean {

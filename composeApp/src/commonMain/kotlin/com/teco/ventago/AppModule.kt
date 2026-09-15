@@ -145,6 +145,7 @@ import com.teco.ventago.features.expenses.ui.cufe.CufeImportViewModel
 import com.teco.ventago.features.expenses.ui.details.ExpenseDetailsViewModel
 import com.teco.ventago.features.expenses.ui.list.ExpensesListViewModel
 import com.teco.ventago.features.expenses.ui.accounts.ExpenseAccountsViewModel
+import com.teco.ventago.features.expenses.ui.upload.InvoiceUploadViewModel
 import com.teco.ventago.features.product.ui.category.add.viewmodel.AddCategoryViewModel
 import com.teco.ventago.features.product.ui.category.add.viewmodel.ModifyCategoryViewModel
 import com.teco.ventago.features.product.ui.category.edit.viewmodel.EditCategoryViewModel
@@ -302,6 +303,7 @@ internal val viewModels = module {
     viewModelOf(::NewExpenseViewModel)
     viewModelOf(::InventoryOpsViewModel)
     viewModelOf(::CufeImportViewModel)
+    viewModelOf(::InvoiceUploadViewModel)
     viewModelOf(::ExpenseAccountsViewModel)
     viewModelOf(::OrdersViewModel)
     viewModelOf(::ChangeImageViewModel)

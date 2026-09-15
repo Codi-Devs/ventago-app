@@ -4,6 +4,8 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.teco.ventago.core.beta.BetaFeature
 import com.teco.ventago.core.beta.BetaService
+import com.teco.ventago.features.expenses.domain.CrawlErrorCopy
+import com.teco.ventago.features.expenses.domain.CufeParser
 import com.teco.ventago.features.expenses.domain.ExpensesService
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.IO
@@ -37,7 +39,10 @@ class CufeImportViewModel(
         viewModelScope.launch {
             betaService.accessFlow(BetaFeature.EXPENSES_QR)
                 .onEach { hasAccess ->
-                    _uiState.value = _uiState.value.copy(hasExpensesQr = hasAccess)
+                    _uiState.value = _uiState.value.copy(
+                        hasExpensesQr = hasAccess,
+                        betaLoaded = true
+                    )
                 }
                 .launchIn(this)
         }
@@ -47,32 +52,31 @@ class CufeImportViewModel(
         _uiState.value = _uiState.value.copy(cufeInput = value, error = null)
     }
 
-    /**
-     * Parse CUFE from various input formats:
-     * - URL with ?chFE=FE...
-     * - URL with /FacturasPorCUFE/FE...
-     * - Direct FE... string
-     */
-    private fun parseCufe(input: String): String? {
-        val trimmed = input.trim()
+    fun prepare(cufe: String?, autoImport: Boolean, openScanner: Boolean) {
+        pollingJob?.cancel()
+        pollingJobId = null
+        val shouldScan = !autoImport && cufe.isNullOrBlank()
+        _uiState.value = CufeImportState(
+            hasExpensesQr = _uiState.value.hasExpensesQr,
+            betaLoaded = _uiState.value.betaLoaded,
+            cufeInput = cufe.orEmpty(),
+            wantsScanner = shouldScan || openScanner,
+            openScannerOnStart = shouldScan || openScanner
+        )
+        if (autoImport && !cufe.isNullOrBlank()) {
+            importCufe()
+        }
+    }
 
-        // Try URL query param: chFE=FE...
-        val queryMatch = Regex("[?&]chFE=([^&]+)").find(trimmed)
-        if (queryMatch != null) return queryMatch.groupValues[1]
-
-        // Try URL path: /FacturasPorCUFE/FE...
-        val pathMatch = Regex("/FacturasPorCUFE/(FE[^/\\s]+)").find(trimmed)
-        if (pathMatch != null) return pathMatch.groupValues[1]
-
-        // Direct CUFE
-        if (trimmed.startsWith("FE") && trimmed.length >= 50) return trimmed
-
-        return null
+    fun consumeOpenScannerOnStart() {
+        if (_uiState.value.openScannerOnStart) {
+            _uiState.value = _uiState.value.copy(openScannerOnStart = false)
+        }
     }
 
     fun importCufe() {
         val input = _uiState.value.cufeInput
-        val cufe = parseCufe(input)
+        val cufe = CufeParser.parse(input)
         if (cufe == null) {
             _uiState.value = _uiState.value.copy(
                 error = "CUFE inválido. Debe comenzar con 'FE' y tener al menos 50 caracteres."
@@ -87,7 +91,8 @@ class CufeImportViewModel(
                 pollingTimedOut = false,
                 error = null,
                 importSuccess = false,
-                importedExpenseId = null
+                importedExpenseId = null,
+                showScanner = false
             )
             try {
                 val job = withContext(Dispatchers.IO) {
@@ -100,8 +105,12 @@ class CufeImportViewModel(
 
                 if (job.isTerminal) {
                     handleTerminalStatus(job)
-                } else if (isScreenVisible) {
-                    job.resolvedId?.let { startPolling(it) }
+                } else {
+                    _uiState.value = _uiState.value.copy(
+                        importSuccess = true,
+                        showScanner = false,
+                        wantsScanner = false
+                    )
                 }
             } catch (e: Exception) {
                 _uiState.value = _uiState.value.copy(
@@ -201,10 +210,19 @@ class CufeImportViewModel(
 
     private fun handleTerminalStatus(job: com.teco.ventago.features.expenses.domain.models.CrawlJob) {
         val isSuccess = job.status == "success" || job.status == "completed"
+        val isFailure = job.status == "failed" || job.status == "error" ||
+            job.status == "cancelled" || job.status == "timeout"
         _uiState.value = _uiState.value.copy(
-            cufeInput = if (isSuccess) "" else _uiState.value.cufeInput,
-            importSuccess = isSuccess,
-            importedExpenseId = if (isSuccess) job.expenseId else _uiState.value.importedExpenseId
+            cufeInput = if (isSuccess || !isFailure) "" else _uiState.value.cufeInput,
+            importSuccess = isSuccess || !isFailure,
+            showScanner = false,
+            wantsScanner = false,
+            importedExpenseId = if (isSuccess) job.expenseId else _uiState.value.importedExpenseId,
+            error = if (isFailure) {
+                CrawlErrorCopy.userMessage(job.errorMessage ?: job.message)
+            } else {
+                null
+            }
         )
     }
 
@@ -217,26 +235,90 @@ class CufeImportViewModel(
     }
 
     fun onQrScanned(rawValue: String) {
-        val cufe = parseCufe(rawValue)
+        val cufe = CufeParser.parse(rawValue)
         if (cufe != null) {
             _uiState.value = _uiState.value.copy(
                 cufeInput = cufe,
-                showScanner = false,
                 error = null
             )
             importCufe()
         } else {
             _uiState.value = _uiState.value.copy(
-                showScanner = false,
-                error = "No se encontró un CUFE válido en el código QR escaneado."
+                error = "No se encontró un CUFE válido en el código QR. Intente de nuevo."
             )
         }
+    }
+
+    fun scanAnother() {
+        pollingJob?.cancel()
+        pollingJobId = null
+        _uiState.value = CufeImportState(
+            hasExpensesQr = _uiState.value.hasExpensesQr,
+            betaLoaded = _uiState.value.betaLoaded,
+            wantsScanner = true,
+            openScannerOnStart = true,
+            showScanner = false
+        )
+    }
+
+    fun retryImport() {
+        val state = _uiState.value
+        val failedJobId = state.currentJob?.resolvedId
+        val cufe = CufeParser.parse(state.cufeInput)
+            ?: CufeParser.parse(state.currentJob?.cufe.orEmpty())
+        if (cufe == null) {
+            _uiState.value = state.copy(
+                currentJob = null,
+                isPolling = false,
+                pollingTimedOut = false,
+                error = "Esta factura no tiene CUFE para reintentar."
+            )
+            return
+        }
+
+        viewModelScope.launch {
+            pollingJob?.cancel()
+            pollingJobId = null
+            if (failedJobId != null) {
+                runCatching {
+                    withContext(Dispatchers.IO) {
+                        expensesService.deleteCrawlJob(failedJobId)
+                    }
+                }
+            }
+            _uiState.value = state.copy(
+                cufeInput = cufe,
+                currentJob = null,
+                isImporting = false,
+                isPolling = false,
+                pollingTimedOut = false,
+                importSuccess = false,
+                importedExpenseId = null,
+                error = null
+            )
+            importCufe()
+        }
+    }
+
+    fun clearCurrentJob() {
+        pollingJob?.cancel()
+        pollingJobId = null
+        _uiState.value = _uiState.value.copy(
+            currentJob = null,
+            isPolling = false,
+            pollingTimedOut = false,
+            importSuccess = false,
+            isOpeningExpense = false
+        )
     }
 
     fun reset() {
         pollingJob?.cancel()
         pollingJobId = null
-        _uiState.value = CufeImportState(hasExpensesQr = _uiState.value.hasExpensesQr)
+        _uiState.value = CufeImportState(
+            hasExpensesQr = _uiState.value.hasExpensesQr,
+            betaLoaded = _uiState.value.betaLoaded
+        )
     }
 
     override fun onCleared() {

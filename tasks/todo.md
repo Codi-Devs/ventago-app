@@ -1,3 +1,21 @@
+# Expenses cache coherence (Trello 360) TODO
+
+## Plan
+- [x] Align KMP expenses with web: PUT edit keeps accounts, no post-PUT PATCH.
+- [x] Merge expenses cache by freshness/completeness; serve complete cache-first detail.
+- [x] Parse `expense_summary` on payment mutations; hide register when remaining to register is 0.
+- [x] Remove overpayment confirmation; clamp amount to pending registered limit; map backend 400 to Spanish.
+- [x] Fallback labels `Concepto #id` when the account name is empty.
+
+## Verification Gates
+- [x] `./gradlew :composeApp:testAndroidHostTest --tests com.teco.ventago.features.expenses.ExpenseConceptsTest`
+- [x] `git diff --check`
+
+## Review Notes
+- Edit PUT now sends `default_account_id` and item accounts in the same write, matching web. A later PATCH with stale item IDs was the path that dropped concepts.
+- List refresh merges snapshots instead of replacing the cache with a thin first page.
+- Payment remaining is registered amount (credit included), not cash `total_paid`.
+
 # Mobile Payments Store Compliance TODO
 
 ## Plan

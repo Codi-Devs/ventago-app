@@ -48,7 +48,6 @@ import com.teco.ventago.features.orders.domain.models.requests.InvoiceCharge
 import com.teco.ventago.features.orders.domain.models.requests.InvoiceDiscount
 import com.teco.ventago.features.orders.domain.models.requests.ItemTotals
 import com.teco.ventago.features.orders.domain.models.requests.Logistics
-import com.teco.ventago.features.orders.domain.models.requests.NameValue
 import com.teco.ventago.features.orders.domain.models.requests.OrderItem
 import com.teco.ventago.features.orders.domain.models.requests.OrderItemDiscount
 import com.teco.ventago.features.orders.domain.models.requests.OrderItemTax
@@ -69,6 +68,8 @@ import com.teco.ventago.features.orders.domain.models.responses.YappyOnsitePendi
 import com.teco.ventago.features.payments.domain.PaymentService
 import com.teco.ventago.features.payments.domain.models.YappyOnsiteDevice
 import com.teco.ventago.features.pos.domain.PosService
+import com.teco.ventago.features.pos.domain.additionalInfoToNameValues
+import com.teco.ventago.features.pos.domain.resolveCartAdditionalInfo
 import com.teco.ventago.features.printers.domain.PrinterService
 import com.teco.ventago.features.printers.domain.model.PrintContext
 import com.teco.ventago.features.printers.domain.model.TicketDocumentPayload
@@ -525,8 +526,15 @@ class PosViewModel(
         var personalizedIdCounter = -1
 
         orderLines.forEach { orderLine ->
-            // Try to find existing product in catalog
-            val existingItem = items.firstOrNull { it.itemId == orderLine.itemId }
+            val existingItem = if (orderLine.itemId > 0) {
+                items.firstOrNull { it.itemId == orderLine.itemId }
+            } else {
+                null
+            }
+            val lineAdditionalInfo = resolveCartAdditionalInfo(
+                orderLine.additionalInfo,
+                existingItem?.additionalInfo,
+            )
 
             if (existingItem != null) {
                 // Product exists in catalog - add it with the order line's data
@@ -554,6 +562,7 @@ class PosViewModel(
                     tax = tax,
                     discount = discount,
                     costCents = existingItem.cost?.toLongCents(),
+                    additionalInfo = lineAdditionalInfo,
                 )
 
                 updateState { copy(cart = cart + newLine) }
@@ -585,7 +594,7 @@ class PosViewModel(
                     iscRate = null,
                     otiTaxes = null,
                     isPharma = false,
-                    additionalInfo = null
+                    additionalInfo = lineAdditionalInfo,
                 )
 
                 // Create tax from order line
@@ -605,6 +614,7 @@ class PosViewModel(
                     quantity = normalizeQuantity(orderLine.quantity, minValue = 0.0001),
                     tax = tax,
                     discount = discount,
+                    additionalInfo = lineAdditionalInfo,
                 )
 
                 updateState {
@@ -870,7 +880,7 @@ class PosViewModel(
         val state = uiState.value
         val invalidProducts = state.cart.mapNotNull { line ->
             val product = resolveProductForLine(state, line)
-            val info = product?.additionalInfo
+            val info = line.additionalInfo ?: product?.additionalInfo
             val goodsCode = info.valueOrBlank(AdditionalInfoKey.PANAMA_GOODS_SERVICES_CODE.keyName)
             val unitCode = info.valueOrBlank(AdditionalInfoKey.PANAMA_GOODS_SERVICES_UNIT_CODE.keyName)
             if (goodsCode.isBlank() || unitCode.isBlank()) {
@@ -2162,13 +2172,9 @@ class PosViewModel(
                 )
             }
 
-            val additionalInfo = mutableListOf<NameValue>()
-            product.additionalInfo?.let { infoJson ->
-                val infoMap = infoJson.toMap() // You need to implement this extension function
-                for ((key, value) in infoMap) {
-                    additionalInfo.add(NameValue(name = key, value = value))
-                }
-            }
+            val additionalInfo = additionalInfoToNameValues(
+                item.additionalInfo ?: product.additionalInfo
+            )
 
 
             val orderItem = OrderItem(
