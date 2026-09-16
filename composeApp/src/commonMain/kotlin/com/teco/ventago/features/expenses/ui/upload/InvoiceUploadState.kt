@@ -6,5 +6,6 @@ data class InvoiceUploadState(
     val isUploading: Boolean = false,
     val selectedFileName: String? = null,
     val showAccepted: Boolean = false,
+    val acceptedFromDgi: Boolean = false,
     val error: String? = null
 )

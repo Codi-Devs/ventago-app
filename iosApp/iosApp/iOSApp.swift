@@ -14,6 +14,8 @@ class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCenterDele
     // Cold start: still do your setup
     func application(_ application: UIApplication,
                      didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]? = nil) -> Bool {
+        UserDefaults.standard.set(["es"], forKey: "AppleLanguages")
+        UserDefaults.standard.synchronize()
         FirebaseApp.configure()
         ComposeApp.AppModuleKt.doInitKoinIOS()
         UNUserNotificationCenter.current().delegate = self

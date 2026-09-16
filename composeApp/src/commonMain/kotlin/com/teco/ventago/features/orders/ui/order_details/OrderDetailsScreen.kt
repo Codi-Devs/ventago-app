@@ -109,6 +109,8 @@ import androidx.compose.ui.unit.sp
 import androidx.navigation.NavBackStackEntry
 import androidx.navigation.NavOptionsBuilder
 import coil3.compose.AsyncImage
+import com.teco.ventago.core.keyboard.KeyboardDismissHost
+import com.teco.ventago.core.keyboard.keyboardDismissTarget
 import com.teco.ventago.design_system.buttons.ButtonM
 import com.teco.ventago.design_system.buttons.OutlinedButtonM
 import com.teco.ventago.design_system.buttons.TextButtonM
@@ -723,6 +725,7 @@ fun OrderDetailsScreen(
                 onDismissRequest = { viewModel.dismissPhysicalReturn() },
                 sheetState = physicalReturnSheetState,
             ) {
+                KeyboardDismissHost(Modifier.fillMaxWidth()) {
                 Column(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -748,8 +751,14 @@ fun OrderDetailsScreen(
                             value = line.quantityInput,
                             onValueChange = { viewModel.updatePhysicalReturnQuantity(line.itemId, it) },
                             label = { Text("Cantidad") },
-                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
-                            modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp)
+                            keyboardOptions = KeyboardOptions(
+                                keyboardType = KeyboardType.Decimal,
+                                imeAction = ImeAction.Done
+                            ),
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(bottom = 8.dp)
+                                .keyboardDismissTarget()
                         )
                         Row(
                             modifier = Modifier.fillMaxWidth().padding(bottom = 16.dp),
@@ -775,6 +784,7 @@ fun OrderDetailsScreen(
                     ) {
                         Text(if (uiState.physicalReturnSubmitting) "Registrando..." else "Registrar devolución")
                     }
+                }
                 }
             }
         }
@@ -1125,7 +1135,7 @@ fun OrderDetailsScreen(
                                 value = rejectDialog.customReasonText,
                                 onValueChange = { viewModel.updateAchRejectCustomReasonText(it) },
                                 label = { Text("Motivo personalizado") },
-                                modifier = Modifier.fillMaxWidth(),
+                                modifier = Modifier.fillMaxWidth().keyboardDismissTarget(),
                                 minLines = 3
                             )
                         }
@@ -3213,7 +3223,8 @@ fun ManualPaymentBottomSheet(
         sheetState = sheetState,
         dragHandle = null
     ) {
-        // Header
+        KeyboardDismissHost(Modifier.fillMaxWidth()) {
+            Column(Modifier.fillMaxWidth()) {
         Row(
             modifier = Modifier.fillMaxWidth()
                 .padding(horizontal = 16.dp, vertical = 8.dp),
@@ -3339,6 +3350,8 @@ fun ManualPaymentBottomSheet(
             }
 
             Spacer(Modifier.height(8.dp))
+        }
+            }
         }
     }
 }

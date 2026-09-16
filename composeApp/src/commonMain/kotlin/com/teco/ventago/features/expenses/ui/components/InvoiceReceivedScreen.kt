@@ -47,7 +47,8 @@ import ventago.composeapp.generated.resources.Res
 fun InvoiceReceivedScreen(
     onUnderstood: () -> Unit,
     onScanAnother: () -> Unit,
-    secondaryLabel: String = "Escanear otra factura"
+    secondaryLabel: String = "Escanear otra factura",
+    message: String = ExpenseInvoiceCopy.OCR_RECEIVED
 ) {
     val composition by rememberLottieComposition {
         LottieCompositionSpec.JsonString(
@@ -133,7 +134,7 @@ fun InvoiceReceivedScreen(
                 )
                 Spacer(modifier = Modifier.height(8.dp))
                 Text(
-                    text = "La IA puede tardar unos minutos; aparecerá en Gastos cuando esté lista.",
+                    text = message,
                     style = bodyMedium(color = MaterialTheme.colorScheme.onSurfaceVariant),
                     textAlign = TextAlign.Center
                 )

@@ -20,7 +20,16 @@ actual fun rememberCameraManager(onResult: (SharedImage?) -> Unit): CameraManage
         contract = ActivityResultContracts.TakePicture(),
         onResult = { success ->
             if (success) {
-                onResult.invoke(SharedImage(BitmapUtils.getBitmapFromUri(tempPhotoUri, contentResolver)))
+                val originalBytes = runCatching {
+                    contentResolver.openInputStream(tempPhotoUri)?.use { it.readBytes() }
+                }.getOrNull()
+                if (originalBytes != null && originalBytes.isNotEmpty()) {
+                    onResult.invoke(SharedImage(bitmap = null, encodedBytes = originalBytes))
+                } else {
+                    onResult.invoke(
+                        SharedImage(BitmapUtils.getBitmapFromUri(tempPhotoUri, contentResolver))
+                    )
+                }
             }
         }
     )

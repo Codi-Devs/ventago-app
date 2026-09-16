@@ -5,9 +5,7 @@ import platform.Foundation.NSDate
 import platform.Foundation.NSDateFormatter
 import platform.Foundation.NSLocale
 import platform.Foundation.NSTimeZone
-import platform.Foundation.currentLocale
 import platform.Foundation.dateWithTimeIntervalSince1970
-import platform.Foundation.localeIdentifier
 import platform.Foundation.systemTimeZone
 import platform.Foundation.timeZoneWithName
 
@@ -20,7 +18,6 @@ actual fun parseToLocalDateTime(
 
 actual object DateFormat {
     private const val ORDERS: String = "yyyy-MM-dd'T'HH:mm:ss"
-    private const val ORDERS_TIME_EN: String = "dd MMMM yyyy, 'at' hh:mm aaa"
     private const val ORDERS_TIME_ES: String = "dd MMMM yyyy, 'a las' hh:mm aaa"
     private const val FALLBACK_DATE: String = "00-00-0000 00:00"
 
@@ -32,6 +29,7 @@ actual object DateFormat {
         val date = NSDate.dateWithTimeIntervalSince1970((milliSeconds / 1000.0))
         val dateFormatter = NSDateFormatter()
         dateFormatter.dateFormat = dateFormat
+        dateFormatter.locale = NSLocale(localeIdentifier = "es")
         dateFormatter.timeZone = NSTimeZone.systemTimeZone()
         return dateFormatter.stringFromDate(date)
     }
@@ -40,9 +38,7 @@ actual object DateFormat {
      * Formats date for orders based on locale.
      */
     actual fun getOrdersFormattedDate(date: String): String {
-        val locale = NSLocale.currentLocale.localeIdentifier
-        val outputFormat = if (locale.contains("es")) ORDERS_TIME_ES else ORDERS_TIME_EN
-        return getFormattedDate(date, ORDERS, outputFormat)
+        return getFormattedDate(date, ORDERS, ORDERS_TIME_ES)
     }
 
     /**
@@ -53,6 +49,7 @@ actual object DateFormat {
 
         val outputFormatter = NSDateFormatter()
         outputFormatter.dateFormat = outputFormat
+        outputFormatter.locale = NSLocale(localeIdentifier = "es")
         outputFormatter.timeZone = NSTimeZone.systemTimeZone()
 
         return outputFormatter.stringFromDate(parsedDate)

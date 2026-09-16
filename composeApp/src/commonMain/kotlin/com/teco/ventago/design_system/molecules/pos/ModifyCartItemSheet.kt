@@ -6,9 +6,6 @@ import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.gestures.awaitEachGesture
-import androidx.compose.foundation.gestures.awaitFirstDown
-import androidx.compose.foundation.gestures.waitForUpOrCancellation
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -56,7 +53,6 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.Stable
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -65,20 +61,14 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.vector.ImageVector
-import androidx.compose.ui.input.pointer.PointerEventPass
-import androidx.compose.ui.input.pointer.pointerInput
-import androidx.compose.ui.layout.boundsInRoot
-import androidx.compose.ui.layout.onGloballyPositioned
-import androidx.compose.ui.platform.LocalFocusManager
-import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
+import com.teco.ventago.core.keyboard.KeyboardDismissHost
+import com.teco.ventago.core.keyboard.keyboardDismissTarget
 import com.teco.ventago.design_system.textfields.DMMoneyOutlinedTextField
 import com.teco.ventago.design_system.textfields.DMOutlinedTextField
 import com.teco.ventago.design_system.theme.bodyMedium
@@ -235,36 +225,7 @@ fun ModifyCartItemSheet(
     }
     // Line total = discounted unit price × quantity
     val lineTotalCents = multiplyCentsByQuantity(discountedUnitCents, qty)
-    val focusManager = LocalFocusManager.current
-    val keyboardController = LocalSoftwareKeyboardController.current
     val secondary = MaterialTheme.colorScheme.secondary
-    val inputBounds = remember { mutableStateMapOf<String, Rect>() }
-    var sheetBounds by remember { mutableStateOf<Rect?>(null) }
-    var contentBounds by remember { mutableStateOf<Rect?>(null) }
-
-    fun Modifier.trackInputBounds(key: String): Modifier = onGloballyPositioned {
-        inputBounds[key] = it.boundsInRoot()
-    }
-
-    fun Modifier.clearKeyboardOnOutsideTap(containerBounds: Rect?): Modifier = pointerInput(
-        containerBounds,
-        inputBounds.size
-    ) {
-        awaitEachGesture {
-            val down = awaitFirstDown(requireUnconsumed = false, pass = PointerEventPass.Initial)
-            val bounds = containerBounds ?: return@awaitEachGesture
-            val rootTapPosition = Offset(
-                x = bounds.left + down.position.x,
-                y = bounds.top + down.position.y
-            )
-            val tappedInput = inputBounds.values.any { it.contains(rootTapPosition) }
-            val up = waitForUpOrCancellation(pass = PointerEventPass.Initial)
-            if (up != null && !tappedInput) {
-                focusManager.clearFocus()
-                keyboardController?.hide()
-            }
-        }
-    }
 
     ModalBottomSheet(
         containerColor = MaterialTheme.colorScheme.surface,
@@ -272,12 +233,11 @@ fun ModifyCartItemSheet(
         sheetState = sheetState,
         dragHandle = null
     ) {
+        KeyboardDismissHost {
         Column(
             modifier = Modifier
                 .fillMaxSize()
-                .onGloballyPositioned { sheetBounds = it.boundsInRoot() }
                 .background(MaterialTheme.colorScheme.surface)
-                .clearKeyboardOnOutsideTap(sheetBounds)
                 .imePadding()
                 .navigationBarsPadding()
         ) {
@@ -333,8 +293,6 @@ fun ModifyCartItemSheet(
                 modifier = Modifier
                     .fillMaxWidth()
                     .weight(1f)
-                    .onGloballyPositioned { contentBounds = it.boundsInRoot() }
-                    .clearKeyboardOnOutsideTap(contentBounds)
                     .verticalScroll(rememberScrollState())
                     .padding(horizontal = 24.dp),
                 verticalArrangement = Arrangement.spacedBy(14.dp)
@@ -347,9 +305,7 @@ fun ModifyCartItemSheet(
                         text = productName,
                         label = "Nombre",
                         onChange = { productName = it },
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .trackInputBounds("name"),
+                        modifier = Modifier.fillMaxWidth(),
                         imeAction = ImeAction.Done,
                         maxLines = 1
                     )
@@ -371,9 +327,7 @@ fun ModifyCartItemSheet(
                         text = unitPriceRaw,
                         label = "",
                         onChange = { unitPriceRaw = it.filter(Char::isDigit) },
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .trackInputBounds("unitPrice"),
+                        modifier = Modifier.fillMaxWidth(),
                         imeAction = ImeAction.Done,
                         maxLines = 1,
                         leadingIcon = null
@@ -381,7 +335,7 @@ fun ModifyCartItemSheet(
                     if (showMargin) {
                         val costDisplay = formatNumberToMoney((itemToModify.costCents!! / 100.0).toString())
                         Text(
-                            text = "Margen: ${marginPercent.roundToInt()}% (costo: $currencySymbol$costDisplay)",
+                            text = "Margen: ${marginPercent.roundToInt()}% (costo: $costDisplay)",
                             style = labelMedium(),
                             color = marginColor,
                             modifier = Modifier.padding(top = 6.dp)
@@ -421,7 +375,7 @@ fun ModifyCartItemSheet(
                             modifier = Modifier
                                 .width(128.dp)
                                 .padding(horizontal = 8.dp)
-                                .trackInputBounds("quantity"),
+                                .keyboardDismissTarget(),
                             textStyle = TextStyle(
                                 textAlign = TextAlign.Center,
                                 color = MaterialTheme.colorScheme.onSurface
@@ -490,8 +444,7 @@ fun ModifyCartItemSheet(
                                 imeAction = ImeAction.Done,
                                 modifier = Modifier
                                     .fillMaxWidth()
-                                    .padding(top = 12.dp)
-                                    .trackInputBounds("discountPercent"),
+                                    .padding(top = 12.dp),
                                 maxLines = 1
                             )
                         }
@@ -503,8 +456,7 @@ fun ModifyCartItemSheet(
                                 onChange = { fixedRaw = it.filter(Char::isDigit) },
                                 modifier = Modifier
                                     .fillMaxWidth()
-                                    .padding(top = 12.dp)
-                                    .trackInputBounds("discountFixed"),
+                                    .padding(top = 12.dp),
                                 imeAction = ImeAction.Done,
                                 maxLines = 1,
                                 leadingIcon = null
@@ -534,8 +486,7 @@ fun ModifyCartItemSheet(
                     batchQtyText = batchQtyText,
                     onBatchQtyText = { batchQtyText = it.filter(Char::isDigit) },
                     globalShipping = invoiceHasGlobalShipping,
-                    globalInsurance = invoiceHasGlobalInsurance,
-                    trackInputModifier = { key, modifier -> modifier.trackInputBounds(key) }
+                    globalInsurance = invoiceHasGlobalInsurance
                 )
 
                 SummaryCard(
@@ -607,6 +558,7 @@ fun ModifyCartItemSheet(
                     ) { Text("Aplicar") }
                 }
             }
+        }
         }
     }
 }
@@ -759,7 +711,7 @@ private fun SummaryCard(
                 style = labelMediumBold().copy(color = MaterialTheme.colorScheme.secondary)
             )
             Text(
-                text = "$currencySymbol${formatNumberToMoney((discountedUnitCents / 100.0).toString())} x ${quantity.toQuantityUiString()}",
+                text = "${formatNumberToMoney((discountedUnitCents / 100.0).toString())} x ${quantity.toQuantityUiString()}",
                 style = bodyMedium(),
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.padding(top = 8.dp)
@@ -773,7 +725,7 @@ private fun SummaryCard(
                 style = titleMediumBold(color = MaterialTheme.colorScheme.onSurface)
             )
             Text(
-                text = "$currencySymbol${formatNumberToMoney((lineTotalCents / 100.0).toString())}",
+                text = formatNumberToMoney((lineTotalCents / 100.0).toString()),
                 style = headlineMediumBold(color = MaterialTheme.colorScheme.secondary),
                 modifier = Modifier.padding(top = 2.dp)
             )
@@ -802,8 +754,7 @@ private fun AdditionalItemInfoCard(
     onBatchQtyText: (String) -> Unit,
     // Global flags (for helper notes)
     globalShipping: Boolean,
-    globalInsurance: Boolean,
-    trackInputModifier: (String, Modifier) -> Modifier = { _, modifier -> modifier }
+    globalInsurance: Boolean
 ) {
     val rotation by animateFloatAsState(if (expanded) 180f else 0f)
 
@@ -852,12 +803,9 @@ private fun AdditionalItemInfoCard(
                     label = "Acarreo del ítem ($currencySymbol)",
                     onChange = onShippingRaw,
                     enabled = shippingEnabled,
-                    modifier = trackInputModifier(
-                        "shipping",
-                        Modifier
-                            .fillMaxWidth()
-                            .padding(vertical = 6.dp)
-                    ),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(vertical = 6.dp),
                     imeAction = ImeAction.Next,
                     maxLines = 1,
                     leadingIcon = null,
@@ -874,12 +822,9 @@ private fun AdditionalItemInfoCard(
                     label = "Seguro del ítem ($currencySymbol)",
                     onChange = onInsuranceRaw,
                     enabled = insuranceEnabled,
-                    modifier = trackInputModifier(
-                        "insurance",
-                        Modifier
-                            .fillMaxWidth()
-                            .padding(vertical = 6.dp)
-                    ),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(vertical = 6.dp),
                     imeAction = ImeAction.Next,
                     maxLines = 1,
                     leadingIcon = null,
@@ -897,12 +842,9 @@ private fun AdditionalItemInfoCard(
                     DMOutlinedTextField(
                         text = batchNumber,
                         label = "Lote (batch number)",
-                        modifier = trackInputModifier(
-                            "batchNumber",
-                            Modifier
-                                .fillMaxWidth()
-                                .padding(vertical = 6.dp)
-                        ),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(vertical = 6.dp),
                         onChange = onBatchNumber,
                         maxLines = 1,
                         imeAction = ImeAction.Next
@@ -910,12 +852,9 @@ private fun AdditionalItemInfoCard(
                     DMOutlinedTextField(
                         text = batchQtyText,
                         label = "Cantidad del lote",
-                        modifier = trackInputModifier(
-                            "batchQty",
-                            Modifier
-                                .fillMaxWidth()
-                                .padding(vertical = 6.dp)
-                        ),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(vertical = 6.dp),
                         onChange = onBatchQtyText,
                         maxLines = 1,
                         keyboardType = KeyboardType.Number,

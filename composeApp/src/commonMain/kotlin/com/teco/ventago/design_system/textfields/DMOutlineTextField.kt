@@ -36,6 +36,7 @@ import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
+import com.teco.ventago.core.keyboard.keyboardDismissTarget
 import com.teco.ventago.design_system.textfields.helpers.PrefixTransformation
 import com.teco.ventago.design_system.textfields.helpers.getKeyboardType
 import com.teco.ventago.design_system.theme.bodyLarge
@@ -66,7 +67,7 @@ fun DMOutlinedTextField(
         OutlinedTextField(
             value = text,
             onValueChange = onChange,
-            modifier = modifier.fillMaxWidth(),
+            modifier = modifier.fillMaxWidth().keyboardDismissTarget(),
             enabled = enabled,
             readOnly = readOnly,
             label = {
@@ -91,7 +92,7 @@ fun DMOutlinedTextField(
         )
     } ?: run {
         OutlinedTextField(
-            modifier = modifier.fillMaxWidth(),
+            modifier = modifier.fillMaxWidth().keyboardDismissTarget(),
             value = text,
             onValueChange = onChange,
             label = { Text(label, style = bodyLarge()) },
@@ -137,7 +138,7 @@ fun DMMoneyOutlinedTextField(
 ) {
     leadingIcon?.let {
         OutlinedTextField(
-            modifier = modifier.fillMaxWidth(),
+            modifier = modifier.fillMaxWidth().keyboardDismissTarget(),
             value = text,
             onValueChange = onChange,
             label = { Text(label, style = bodyLarge()) },
@@ -165,7 +166,7 @@ fun DMMoneyOutlinedTextField(
         )
     } ?: run {
         OutlinedTextField(
-            modifier = modifier.fillMaxWidth(),
+            modifier = modifier.fillMaxWidth().keyboardDismissTarget(),
             value = text,
             onValueChange = onChange,
             label = { Text(label, style = bodyLarge()) },
@@ -255,6 +256,7 @@ fun DMChipTextField(
                 textStyle = LocalTextStyle.current.copy(color = MaterialTheme.colorScheme.onSurface),
                 modifier = Modifier
                     .focusRequester(focusRequester)
+                    .keyboardDismissTarget()
                     .widthIn(min = 80.dp, max = 200.dp)
                     .padding(4.dp)
 

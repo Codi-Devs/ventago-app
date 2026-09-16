@@ -214,6 +214,7 @@
 - En validadores de cédula panameña con prefijos especiales (`E`, `N`), si negocio reporta formatos cortos válidos, no abras todo el rango intermedio por conveniencia: modela explícitamente las longitudes aceptadas por prefijo (ej. `1` o `4/5` dígitos), y cubre con tests tanto los nuevos válidos como variantes intermedias que deben seguir siendo inválidas.
 - Al subir Ktor a 3.x, no uses `io.ktor.util.reflect.instanceOf` para validar tipos de `JsonElement`; usa APIs de `kotlinx.serialization.json` como `jsonPrimitive.booleanOrNull` para evitar imports removidos o incompatibles.
 - Al subir Google Places Android SDK a 5.x, cambia `Place.Field.ADDRESS`/`LAT_LNG` por `Place.Field.FORMATTED_ADDRESS`/`LOCATION` y conserva el manejo de resultado con `formattedAddress`/`location`.
+- En Android, no inicialices Places solo al abrir el autocomplete: `BasicPlaceAutocompleteActivity`/`AutocompleteActivity` se recrean solas tras process death y crashean con `Places must be initialized` si `Application.onCreate` no llamó `Places.initialize` antes.
 - Con `kotlinx-datetime` 0.8, si el proyecto todavía usa `kotlinx.datetime.Clock`/`Instant`, usar el artefacto compat (`0.8.0-0.6.x-compat`) permite compilar el upgrade, pero deja una migración posterior explícita a `kotlin.time.Clock`/`Instant`.
 - En proyectos KMP con un módulo que aplica `org.jetbrains.kotlin.multiplatform` y `com.android.application`, no subas a AGP 9.x como version bump directo: primero separa el Android app module y migra el shared module al plugin Android-KMP library.
 - Al migrar al plugin Android-KMP library, no asumas que los nombres de tasks Android se mantienen: el test unitario del target compartido pasa a `testAndroidHostTest`, y el módulo app debe declarar por separado las dependencias Compose que usa directamente (ej. `foundation` para `isSystemInDarkTheme`).
@@ -250,3 +251,5 @@
 # POS Device Permissions Config Lesson
 
 - Do not rely on POS device list payloads for admin permission editing. Load permissions from the app-facing `GET /api/v1/devices/{deviceId}/pos-config` endpoint when opening device details, and keep permission editing disabled while that config is unavailable.
+- En Kotlin/Native `iosMain`, `UIView.endEditing` del UIKit commonizado es una extensión: hay que `import platform.UIKit.endEditing`. `VNImageRequestHandler` usa el parámetro `cGImage`, no `cgImage`; APIs CInterop del archivo necesitan `@file:OptIn(ExperimentalForeignApi::class)`.
+- En iOS, no uses Skia `Image.makeFromEncoded(...).peekPixels()` para validar fotos de factura: el JPEG encoded no trae pixmap y el gate local responde `UNREADABLE`. Decodifica con `UIImage`/`CGImage` y un bitmap context.

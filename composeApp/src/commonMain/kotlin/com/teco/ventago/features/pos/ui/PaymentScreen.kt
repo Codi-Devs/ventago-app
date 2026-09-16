@@ -72,6 +72,7 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.navigation.NavOptionsBuilder
 import com.teco.ventago.AppViewModel
+import com.teco.ventago.core.keyboard.KeyboardDismissHost
 import com.teco.ventago.design_system.buttons.ButtonM
 import com.teco.ventago.design_system.buttons.OutlinedButtonM
 import com.teco.ventago.design_system.buttons.TextButtonM
@@ -1531,6 +1532,7 @@ private fun OtherPaymentCreateSheet(
 ) {
     val trimmedDescription = description.trim()
     val descriptionIsValid = trimmedDescription.length >= 15
+    KeyboardDismissHost(Modifier.fillMaxWidth()) {
     Column(
         Modifier
             .fillMaxWidth()
@@ -1579,6 +1581,7 @@ private fun OtherPaymentCreateSheet(
             Text("Listo", style = labelLarge().copy(color = MaterialTheme.colorScheme.onPrimary))
         }
     }
+    }
 }
 
 @Composable
@@ -1589,6 +1592,7 @@ private fun CreditPaymentCreateSheet(
     onDueDateChange: (String) -> Unit,
     onConfirm: () -> Unit,
 ) {
+    KeyboardDismissHost(Modifier.fillMaxWidth()) {
     Column(
         Modifier
             .fillMaxWidth()
@@ -1633,6 +1637,7 @@ private fun CreditPaymentCreateSheet(
             Text("Listo", style = labelLarge().copy(color = MaterialTheme.colorScheme.onPrimary))
         }
     }
+    }
 }
 
 @Composable
@@ -1649,6 +1654,7 @@ private fun PaymentAmountEditSheet(
 ) {
     val otherDescriptionIsValid = otherPaymentDescription == null ||
         otherPaymentDescription.trim().length >= 15
+    KeyboardDismissHost(Modifier.fillMaxWidth()) {
     Column(
         Modifier
             .fillMaxWidth()
@@ -1716,6 +1722,7 @@ private fun PaymentAmountEditSheet(
         ) {
             Text("Listo", style = labelLarge().copy(color = MaterialTheme.colorScheme.onPrimary))
         }
+    }
     }
 }
 

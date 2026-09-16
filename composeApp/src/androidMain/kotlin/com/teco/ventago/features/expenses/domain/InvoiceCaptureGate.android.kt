@@ -20,7 +20,10 @@ internal actual fun decodeInvoiceRaster(bytes: ByteArray, maxSide: Int): Invoice
         bytes,
         0,
         bytes.size,
-        BitmapFactory.Options().apply { inSampleSize = sample }
+        BitmapFactory.Options().apply {
+            inSampleSize = sample
+            inScaled = false
+        }
     ) ?: return null
     return try {
         toRaster(bitmap, bounds.outWidth, bounds.outHeight)
@@ -39,7 +42,10 @@ internal actual suspend fun scanQrFromImageBytes(bytes: ByteArray): String? =
             bytes,
             0,
             bytes.size,
-            BitmapFactory.Options().apply { inSampleSize = sample }
+            BitmapFactory.Options().apply {
+            inSampleSize = sample
+            inScaled = false
+        }
         ) ?: return@withContext null
         try {
             decodeQr(bitmap)
@@ -82,4 +88,38 @@ private fun decodeQr(bitmap: Bitmap): String? {
     return runCatching {
         reader.decodeWithState(BinaryBitmap(HybridBinarizer(source))).text
     }.getOrNull()
+}
+
+internal actual fun fitInvoiceJpegUnderLimit(bytes: ByteArray, maxBytes: Int): ByteArray {
+    if (bytes.size <= maxBytes) return bytes
+    if (bytes.size < 2 || bytes[0] != 0xFF.toByte() || bytes[1] != 0xD8.toByte()) return bytes
+    val options = BitmapFactory.Options().apply { inScaled = false }
+    val original = BitmapFactory.decodeByteArray(bytes, 0, bytes.size, options) ?: return bytes
+    var current = original
+    try {
+        var quality = 92
+        repeat(8) {
+            val out = java.io.ByteArrayOutputStream()
+            current.compress(Bitmap.CompressFormat.JPEG, quality, out)
+            val compressed = out.toByteArray()
+            if (compressed.size <= maxBytes) return compressed
+            if (quality > 78) {
+                quality -= 6
+            } else {
+                val nextW = maxOf(1, (current.width * 0.85f).toInt())
+                val nextH = maxOf(1, (current.height * 0.85f).toInt())
+                if (nextW == current.width || nextH == current.height) return compressed
+                val scaled = Bitmap.createScaledBitmap(current, nextW, nextH, true)
+                if (current != original) current.recycle()
+                current = scaled
+                quality = 90
+            }
+        }
+        val fallback = java.io.ByteArrayOutputStream()
+        current.compress(Bitmap.CompressFormat.JPEG, 75, fallback)
+        return fallback.toByteArray()
+    } finally {
+        if (current != original && !current.isRecycled) current.recycle()
+        if (!original.isRecycled) original.recycle()
+    }
 }

@@ -63,7 +63,6 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
 import androidx.compose.runtime.rememberCoroutineScope
-import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.text.AnnotatedString
 import com.teco.ventago.core.SnackbarService
@@ -73,6 +72,8 @@ import com.teco.ventago.design_system.buttons.TextButtonS
 import com.teco.ventago.design_system.loaders.shimmerBrush
 import com.teco.ventago.design_system.molecules.InstallmentDueDateFieldKmp
 import com.teco.ventago.design_system.textfields.DMOutlinedTextField
+import com.teco.ventago.features.expenses.ui.components.ExpenseSheetOption
+import com.teco.ventago.features.expenses.ui.upload.InvoiceUploadCapture
 import com.teco.ventago.features.expenses.domain.CrawlErrorCopy
 import com.teco.ventago.features.expenses.domain.CufeParser
 import com.teco.ventago.features.expenses.domain.models.CrawlJob
@@ -111,14 +112,15 @@ import ventago.composeapp.generated.resources.see_more
 @Composable
 fun ExpensesListScreen(
     viewModel: ExpensesListViewModel,
+    uploadViewModel: com.teco.ventago.features.expenses.ui.upload.InvoiceUploadViewModel,
     navigate: (PosScreens) -> Unit,
-    onUploadInvoice: () -> Unit,
     onImportCufe: (cufe: String?, autoImport: Boolean, openScanner: Boolean) -> Unit,
     onBack: () -> Unit
 ) {
     val uiState by viewModel.uiState.collectAsState()
     var showFilters by remember { mutableStateOf(false) }
     var showRegisterSheet by remember { mutableStateOf(false) }
+    var showInvoiceSourceSheet by remember { mutableStateOf(false) }
     val filterSheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     val registerSheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     val snackbarService: SnackbarService = koinInject()
@@ -129,6 +131,8 @@ fun ExpensesListScreen(
         refreshing = uiState.refreshing,
         onRefresh = { viewModel.loadExpenses(refresh = true) }
     )
+
+    Box(modifier = Modifier.fillMaxSize()) {
 
     val sourceOptions = listOf(
         null to stringResource(Res.string.expenses_source_all),
@@ -390,7 +394,7 @@ fun ExpensesListScreen(
                     fontWeight = FontWeight.SemiBold
                 )
                 Spacer(modifier = Modifier.height(8.dp))
-                RegisterExpenseOption(
+                ExpenseSheetOption(
                     icon = Icons.Rounded.Edit,
                     title = "Registro manual",
                     subtitle = "Completa los datos del gasto"
@@ -399,17 +403,17 @@ fun ExpensesListScreen(
                     navigate(PosScreens.NewExpenseScreen)
                 }
                 if (uiState.hasInvoiceUploadAccess) {
-                    RegisterExpenseOption(
+                    ExpenseSheetOption(
                         icon = Icons.Rounded.PhotoCamera,
                         title = "Sube tu factura",
-                        subtitle = "La IA escanea fotos, imágenes o PDF"
+                        subtitle = "Toma una foto o elige una imagen o PDF"
                     ) {
                         showRegisterSheet = false
-                        onUploadInvoice()
+                        showInvoiceSourceSheet = true
                     }
                 }
                 if (uiState.hasExpensesQr) {
-                    RegisterExpenseOption(
+                    ExpenseSheetOption(
                         icon = Icons.Rounded.QrCodeScanner,
                         title = "Escanear QR",
                         subtitle = "Importa desde DGI con el CUFE"
@@ -422,42 +426,19 @@ fun ExpensesListScreen(
             }
         }
     }
-}
 
-@Composable
-private fun RegisterExpenseOption(
-    icon: ImageVector,
-    title: String,
-    subtitle: String,
-    onClick: () -> Unit
-) {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clip(RoundedCornerShape(12.dp))
-            .clickable(onClick = onClick)
-            .padding(horizontal = 8.dp, vertical = 12.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(12.dp)
-    ) {
-        Icon(
-            imageVector = icon,
-            contentDescription = null,
-            tint = MaterialTheme.colorScheme.primary,
-            modifier = Modifier.size(24.dp)
-        )
-        Column(modifier = Modifier.weight(1f)) {
-            Text(
-                text = title,
-                style = MaterialTheme.typography.bodyMedium,
-                fontWeight = FontWeight.SemiBold
-            )
-            Text(
-                text = subtitle,
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
-        }
+    InvoiceUploadCapture(
+        viewModel = uploadViewModel,
+        showSourceSheet = showInvoiceSourceSheet,
+        onDismissSourceSheet = { showInvoiceSourceSheet = false },
+        onCancelSourceSheet = { showInvoiceSourceSheet = false },
+        onFinished = { showInvoiceSourceSheet = false },
+        onAcceptedAndContinue = {
+            showInvoiceSourceSheet = false
+            viewModel.loadExpenses(refresh = true)
+        },
+        onRequestAnotherUpload = { showInvoiceSourceSheet = true }
+    )
     }
 }
 

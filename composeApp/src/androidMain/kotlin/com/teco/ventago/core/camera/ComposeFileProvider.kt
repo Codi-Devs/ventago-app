@@ -14,10 +14,8 @@ class ComposeFileProvider : FileProvider(
         fun getImageUri(context: Context): Uri {
             // 1
             val tempFile = File.createTempFile(
-                "picture_${System.currentTimeMillis()}", ".png", context.cacheDir
-            ).apply {
-                createNewFile()
-            }
+                "picture_${System.currentTimeMillis()}", ".jpg", context.cacheDir
+            )
             // 2
             val authority = context.applicationContext.packageName + ".provider"
             // 3

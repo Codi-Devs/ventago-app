@@ -64,6 +64,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import coil3.compose.AsyncImage
+import com.teco.ventago.core.keyboard.keyboardDismissTarget
 import com.teco.ventago.design_system.buttons.ButtonM
 import com.teco.ventago.design_system.buttons.OutlinedButtonM
 import com.teco.ventago.design_system.buttons.TextButtonS
@@ -272,7 +273,7 @@ fun AchPaymentReviewScreen(
                                 value = rejectDialog.customReasonText,
                                 onValueChange = { viewModel.updateAchRejectCustomReasonText(it) },
                                 label = { Text("Motivo personalizado") },
-                                modifier = Modifier.fillMaxWidth(),
+                                modifier = Modifier.fillMaxWidth().keyboardDismissTarget(),
                                 minLines = 3
                             )
                         }

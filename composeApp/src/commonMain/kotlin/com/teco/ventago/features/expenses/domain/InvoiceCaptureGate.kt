@@ -4,6 +4,8 @@ internal expect fun decodeInvoiceRaster(bytes: ByteArray, maxSide: Int = 1600): 
 
 internal expect suspend fun scanQrFromImageBytes(bytes: ByteArray): String?
 
+internal expect fun fitInvoiceJpegUnderLimit(bytes: ByteArray, maxBytes: Int): ByteArray
+
 fun isInvoiceRasterMime(contentType: String?, fileName: String?): Boolean {
     val mime = contentType.orEmpty().lowercase()
     val name = fileName.orEmpty().lowercase()

@@ -11,44 +11,63 @@ fun getKeyboardType(
     imeAction: ImeAction,
     capitalization: KeyboardCapitalization? = null,
 ): KeyboardOptions {
+    val resolvedImeAction = if (
+        imeAction == ImeAction.Default &&
+        keyboardType in numericKeyboardTypes
+    ) {
+        ImeAction.Done
+    } else {
+        imeAction
+    }
     return when (keyboardType) {
         KeyboardType.Text -> KeyboardOptions(
             keyboardType = keyboardType,
             autoCorrectEnabled = true,
             capitalization = capitalization ?: KeyboardCapitalization.Sentences,
-            imeAction = imeAction
+            imeAction = resolvedImeAction
         )
         KeyboardType.Number -> KeyboardOptions(
             keyboardType = keyboardType,
             autoCorrectEnabled = true,
             capitalization = capitalization ?: KeyboardCapitalization.None,
-            imeAction = imeAction
+            imeAction = resolvedImeAction
         )
         KeyboardType.Password -> KeyboardOptions(
             keyboardType = keyboardType,
             autoCorrectEnabled = false,
             capitalization = capitalization ?: KeyboardCapitalization.None,
-            imeAction = imeAction
+            imeAction = resolvedImeAction
         )
         KeyboardType.Phone -> KeyboardOptions(
             keyboardType = keyboardType,
             autoCorrectEnabled = true,
             capitalization = capitalization ?: KeyboardCapitalization.None,
-            imeAction = imeAction
+            imeAction = resolvedImeAction
         )
         KeyboardType.Email -> KeyboardOptions(
             keyboardType = keyboardType,
             autoCorrectEnabled = true,
             capitalization = capitalization ?: KeyboardCapitalization.None,
-            imeAction = imeAction
+            imeAction = resolvedImeAction
         )
         KeyboardType.Uri -> KeyboardOptions(
             capitalization = capitalization ?: KeyboardCapitalization.None,
             autoCorrectEnabled = true,
             keyboardType = keyboardType,
-            imeAction = imeAction
+            imeAction = resolvedImeAction
         )
-        else -> KeyboardOptions(keyboardType = keyboardType, autoCorrectEnabled = true)
+        else -> KeyboardOptions(
+            keyboardType = keyboardType,
+            autoCorrectEnabled = true,
+            imeAction = resolvedImeAction
+        )
     }
 }
+
+private val numericKeyboardTypes = setOf(
+    KeyboardType.Number,
+    KeyboardType.Decimal,
+    KeyboardType.NumberPassword,
+    KeyboardType.Phone
+)
 

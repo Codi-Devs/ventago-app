@@ -10,7 +10,8 @@ object BitmapUtils {
         var inputStream: InputStream? = null
         try {
             inputStream = contentResolver.openInputStream(uri)
-            val s = BitmapFactory.decodeStream(inputStream)
+            val options = BitmapFactory.Options().apply { inScaled = false }
+            val s = BitmapFactory.decodeStream(inputStream, null, options)
             inputStream?.close()
             return s
         } catch (e: Exception) {

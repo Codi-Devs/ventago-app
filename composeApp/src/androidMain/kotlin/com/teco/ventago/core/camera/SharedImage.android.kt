@@ -5,8 +5,12 @@ import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.asImageBitmap
 import java.io.ByteArrayOutputStream
 
-actual class SharedImage(private val bitmap: android.graphics.Bitmap?) {
+actual class SharedImage(
+    private val bitmap: android.graphics.Bitmap?,
+    private val encodedBytes: ByteArray? = null
+) {
     actual fun toByteArray(): ByteArray? {
+        encodedBytes?.let { return it }
         return if (bitmap != null) {
             val byteArrayOutputStream = ByteArrayOutputStream()
             @Suppress("MagicNumber") bitmap.compress(
@@ -20,6 +24,9 @@ actual class SharedImage(private val bitmap: android.graphics.Bitmap?) {
     }
 
     actual fun toImageBitmap(): ImageBitmap? {
+        encodedBytes?.let { bytes ->
+            return BitmapFactory.decodeByteArray(bytes, 0, bytes.size)?.asImageBitmap()
+        }
         val byteArray = toByteArray()
         return if (byteArray != null) {
             return BitmapFactory.decodeByteArray(byteArray, 0, byteArray.size).asImageBitmap()

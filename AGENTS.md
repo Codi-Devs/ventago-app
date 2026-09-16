@@ -18,6 +18,17 @@ Before making changes, review the relevant documentation:
 
 ---
 
+# Keyboard dismiss (iOS numeric keyboards)
+
+iOS number/decimal pads have no dismiss key. Tapping outside an input must close the keyboard on **every** screen.
+
+- Host: `KeyboardDismissHost` in `App.kt` (covers the main graph).
+- Text fields: `Modifier.keyboardDismissTarget()` (already on `DMOutlinedTextField` / `DMMoneyOutlinedTextField`).
+- Sheets/dialogs: wrap content in `KeyboardDismissHost` because they live in a separate window; the app host does not receive those taps.
+- Hide via `rememberHideSoftwareKeyboard()` (iOS `endEditing(true)`). Do not rely only on `LocalSoftwareKeyboardController.hide()`.
+
+---
+
 # UI Style Guide for Invoice / Quote / Transaction Detail Screens
 
 This document describes the standard UI patterns used to present invoices, quotes, and transaction details in the VentaGo KMP app.

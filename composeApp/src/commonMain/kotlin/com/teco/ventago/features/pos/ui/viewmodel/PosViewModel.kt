@@ -368,8 +368,8 @@ class PosViewModel(
                     val persistedViewMode = readPersistedProductViewMode(it.businessId)
                     updateState {
                         copy(
-                            currency = it.currency.currencyCode,
-                            currencySymbol = it.currency.symbol,
+                            currency = "USD",
+                            currencySymbol = "$",
                             productViewMode = persistedViewMode
                         )
                     }
