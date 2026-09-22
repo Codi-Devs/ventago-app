@@ -30,6 +30,7 @@ import com.teco.ventago.features.product.domain.ProductService
 import com.teco.ventago.features.quotes.domain.QuotesService
 import com.teco.ventago.features.quotes.domain.models.QuoteSettings
 import com.teco.ventago.features.settings.domain.SettingsService
+import com.teco.ventago.features.settings.domain.reloadEmailVerification
 import com.teco.ventago.utils.randomUUID
 import com.teco.ventago.utils.uploadImageToBunnyCdn
 import dev.gitlive.firebase.Firebase
@@ -163,8 +164,13 @@ class SettingsViewModel(
                             val auth = Firebase.auth
                             val userFb = auth.currentUser
                             userFb?.let { firebaseUser ->
-                                firebaseUser.reload()
-                                updateState { copy(isVerified = firebaseUser.isEmailVerified) }
+                                val isVerified = reloadEmailVerification(logger) {
+                                    firebaseUser.reload()
+                                    firebaseUser.isEmailVerified
+                                }
+                                if (isVerified != null) {
+                                    updateState { copy(isVerified = isVerified) }
+                                }
                             } ?: run {
                                 signOut()
                             }

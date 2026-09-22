@@ -6948,3 +6948,21 @@
 - The sheet builds full internal numbers like `ORD-4-0000-865-0000000870` from the selected branch, selected billing point, current business id, and zero-padded user input.
 - Search submits through the existing `findOrderByOrderNumber` flow and opens order details when found.
 - Common metadata compilation passed. Existing project warnings remain unrelated.
+
+
+## Crashlytics live — 2026-09-22
+
+Trello: https://trello.com/c/CpygLoab
+
+- [x] Sincronizar conocimiento y aislar app desde origin/main.
+- [x] Crear tarjeta y registrar plan.
+- [x] Confirmar causas con traces, dependencias y fuentes primarias.
+- [x] Implementar fixes mínimos y pruebas de regresión.
+- [ ] Comparar pruebas de base y posteriores; verificar Android minificado cuando aplique.
+- [ ] Publicar PR de app y conocimiento, adjuntar Trello y registrar release/rollback.
+
+Validación: 5 pruebas AndroidX contra el AAR real y 4 pruebas Firebase aprobadas.
+Suite compartida: 342 pruebas, único fallo CxC idéntico a la base de 338 pruebas;
+no aparecen fallos nuevos. Ambos sabores debug compilaron. R8 pendiente.
+No hubo dispositivo afectado disponible ni despliegue. No se modifican los AAB
+preexistentes de la carpeta principal.

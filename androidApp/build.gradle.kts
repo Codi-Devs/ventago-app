@@ -8,6 +8,14 @@ import org.gradle.api.tasks.PathSensitive
 import org.gradle.api.tasks.PathSensitivity
 import org.gradle.api.tasks.TaskAction
 import java.net.URI
+import com.android.build.api.instrumentation.FramesComputationMode
+import com.android.build.api.instrumentation.InstrumentationScope
+import com.android.build.api.instrumentation.AsmClassVisitorFactory
+import com.android.build.api.instrumentation.ClassContext
+import com.android.build.api.instrumentation.ClassData
+import com.android.build.api.instrumentation.InstrumentationParameters
+import com.teco.build.WindowInsetsCompatibility
+import org.objectweb.asm.ClassVisitor
 
 plugins {
     alias(libs.plugins.androidApplication)
@@ -18,6 +26,25 @@ plugins {
 }
 
 val productionOrdersBasePath = "https://invoice-vg.tecodigi.com"
+
+abstract class WindowInsetsCompatibilityFactory : AsmClassVisitorFactory<InstrumentationParameters.None> {
+    override fun isInstrumentable(classData: ClassData) =
+        classData.className == WindowInsetsCompatibility.TARGET.replace('/', '.')
+
+    override fun createClassVisitor(classContext: ClassContext, nextClassVisitor: ClassVisitor) =
+        WindowInsetsCompatibility.visitor(nextClassVisitor)
+}
+
+// Core 1.18/1.19 calls this API even on reported API-34 frameworks that lack it.
+// Apply before D8/R8 to cover root insets, Scaffold, sheets and IME in both flavors.
+androidComponents.onVariants { variant ->
+    variant.instrumentation.transformClassesWith(
+        WindowInsetsCompatibilityFactory::class.java, InstrumentationScope.ALL
+    ) {}
+    variant.instrumentation.setAsmFramesComputationMode(
+        FramesComputationMode.COMPUTE_FRAMES_FOR_INSTRUMENTED_METHODS
+    )
+}
 
 abstract class ValidateReleaseOrdersBasePathTask : DefaultTask() {
     @get:InputFile
