@@ -6958,11 +6958,18 @@ Trello: https://trello.com/c/CpygLoab
 - [x] Crear tarjeta y registrar plan.
 - [x] Confirmar causas con traces, dependencias y fuentes primarias.
 - [x] Implementar fixes mínimos y pruebas de regresión.
-- [ ] Comparar pruebas de base y posteriores; verificar Android minificado cuando aplique.
-- [ ] Publicar PR de app y conocimiento, adjuntar Trello y registrar release/rollback.
+- [x] Comparar pruebas de base y posteriores; verificar Android minificado cuando aplique.
+- [x] Publicar PR de app y conocimiento, adjuntar Trello y registrar release/rollback.
 
 Validación: 5 pruebas AndroidX contra el AAR real y 4 pruebas Firebase aprobadas.
 Suite compartida: 342 pruebas, único fallo CxC idéntico a la base de 338 pruebas;
-no aparecen fallos nuevos. Ambos sabores debug compilaron. R8 pendiente.
+no aparecen fallos nuevos. Ambos sabores debug y minifyPublicReleaseWithR8 finalizaron correctamente.
+DEX minificado inspeccionado: conserva NoSuchMethodError y fallback 0.
 No hubo dispositivo afectado disponible ni despliegue. No se modifican los AAB
 preexistentes de la carpeta principal.
+
+PR app: https://github.com/Codi-Devs/ventago-app/pull/9
+PR knowledge: https://github.com/Codi-Devs/ventago-ai-knowledge-public/pull/59
+Ambos adjuntos en Trello. El plugin finalizó R8 con uploadCrashlyticsMappingFilePublicRelease;
+se subió mapping automáticamente, sin distribuir una nueva versión de la app.
+Para futuras validaciones locales de R8, excluir explícitamente esa tarea de upload.
