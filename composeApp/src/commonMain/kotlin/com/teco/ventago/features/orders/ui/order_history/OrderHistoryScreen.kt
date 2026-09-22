@@ -29,6 +29,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.unit.dp
+import com.teco.ventago.core.keyboard.keyboardDismissTarget
 import com.teco.ventago.design_system.buttons.ButtonM
 import com.teco.ventago.design_system.molecules.orders.OrderHistoryList
 import com.teco.ventago.design_system.organism.LoadingSheet
@@ -111,7 +112,8 @@ fun OrderHistoryScreen(
                     Column {
                         TextField(
                             value = rejectReason,
-                            onValueChange = { rejectReason = it }
+                            onValueChange = { rejectReason = it },
+                            modifier = Modifier.keyboardDismissTarget()
                         )
                         Text(
                             stringResource(Res.string.cancellation_reason),

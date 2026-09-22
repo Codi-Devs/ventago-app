@@ -21,7 +21,6 @@ actual fun parseToLocalDateTime(
 
 actual object DateFormat {
     private const val ORDERS: String = "yyyy-MM-dd'T'HH:mm:ss"
-    private const val ORDERS_TIME_EN: String = "dd MMMM yyyy, 'at' hh:mm aaa"
     private const val ORDERS_TIME_ES: String = "dd MMMM yyyy, 'a las' hh:mm aaa"
     /**
      * Return date in specified format.
@@ -31,7 +30,7 @@ actual object DateFormat {
      */
     actual fun getDate(milliSeconds: Long, dateFormat: String): String {
         // Create a DateFormatter object for displaying date in specified format.
-        val simpleDateFormat = SimpleDateFormat(dateFormat, Locale.US)
+        val simpleDateFormat = SimpleDateFormat(dateFormat, Locale("es"))
 
         // Create a calendar object that will convert the date and time value in milliseconds to date.
         val calendar = Calendar.getInstance()
@@ -45,15 +44,7 @@ actual object DateFormat {
      * @return String representing date in specified format
      */
     actual fun getOrdersFormattedDate(date: String): String {
-        var locale = "en"
-        if (Locale.getDefault().language.contains("es")) {
-            locale = "es"
-        }
-        var outputFormat = ORDERS_TIME_EN
-        if (locale.equals("es", ignoreCase = true)) {
-            outputFormat = ORDERS_TIME_ES
-        }
-        return getFormattedDate(date, ORDERS, outputFormat)
+        return getFormattedDate(date, ORDERS, ORDERS_TIME_ES)
     }
 
 
@@ -64,13 +55,14 @@ actual object DateFormat {
      */
     actual fun getFormattedDate(date: String, inputFormat: String, outputFormat: String): String {
         return try {
-            val formatter = SimpleDateFormat(inputFormat, Locale.getDefault())
+            val spanish = Locale("es")
+            val formatter = SimpleDateFormat(inputFormat, Locale.US)
             formatter.timeZone = TimeZone.getTimeZone("UTC")
             val value = formatter.parse(date)
 
             val dateFormatter = SimpleDateFormat(
                 outputFormat,
-                Locale.getDefault()
+                spanish
             ) //this format changeable
 
             dateFormatter.timeZone = TimeZone.getDefault()

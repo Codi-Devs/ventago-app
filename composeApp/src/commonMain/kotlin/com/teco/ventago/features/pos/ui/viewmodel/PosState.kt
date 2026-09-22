@@ -361,6 +361,7 @@ data class PosState(
     val canUseCustomProduct: Boolean = false,
     val canEditProduct: Boolean = false,
     val posProvisioningActive: Boolean = false,
+    val posProvisioningBanner: String? = null,
     val inventoryEnabled: Boolean = false,
     val inventoryLocationId: Int? = null,
     val inventoryFreshnessLabel: String = "",

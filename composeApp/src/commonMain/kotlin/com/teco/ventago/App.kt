@@ -2,7 +2,6 @@ package com.teco.ventago
 
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
@@ -59,6 +58,7 @@ import androidx.navigation.compose.rememberNavController
 import coil3.ImageLoader
 import coil3.compose.setSingletonImageLoaderFactory
 import coil3.network.ktor3.KtorNetworkFetcherFactory
+import com.teco.ventago.core.keyboard.KeyboardDismissHost
 import com.teco.ventago.core.SnackbarService
 import com.teco.ventago.core.LocalStorage
 import com.teco.ventago.core.authz.AuthzEvaluator
@@ -267,7 +267,7 @@ fun App(
             LocalAppChrome provides appChrome,
             LocalNavController provides navController,
             ){
-            Box(modifier = Modifier.fillMaxSize()) {
+            KeyboardDismissHost {
                 Scaffold(
                     snackbarHost = {
                         SnackbarHost(hostState = snackbarHostState)
@@ -499,7 +499,7 @@ fun App(
                                                     } else {
                                                         Icons.Outlined.Settings
                                                     },
-                                                    contentDescription = "Settings"
+                                                    contentDescription = "Opciones"
                                                 )
                                             }
                                         }
@@ -507,7 +507,7 @@ fun App(
                                     label = {
                                         Text(
                                             when (item) {
-                                                BottomNavKey.HOME -> "Home"
+                                                BottomNavKey.HOME -> "Inicio"
                                                 BottomNavKey.SUMMARY -> stringResource(Res.string.home_summary_tab)
                                                 BottomNavKey.ORDERS -> "Facturas"
                                                 BottomNavKey.MENU -> "Menú"

@@ -19,16 +19,20 @@ object AutocompleteLauncher {
     var onResult: ((BusinessAddress?) -> Unit)? = null
 }
 
+private const val PLACES_API_KEY = "AIzaSyArIiQadvA4yny2iITHvIVPHSzbaQY_Kz0"
+
+fun ensurePlacesInitialized(context: Context) {
+    if (!Places.isInitialized()) {
+        Places.initialize(context.applicationContext, PLACES_API_KEY)
+    }
+}
+
 actual fun launchAutocompleteWidget(
     onAddressSelected: (formattedAddress: BusinessAddress) -> Unit,
     onCancelled: () -> Unit
 ) {
     val context: Context = KoinJavaComponent.getKoin().get()
-    val apiKey = "AIzaSyArIiQadvA4yny2iITHvIVPHSzbaQY_Kz0"
-
-    if (!Places.isInitialized()) {
-        Places.initialize(context.applicationContext, apiKey)
-    }
+    ensurePlacesInitialized(context)
 
     val fields: List<Place.Field> =
         listOf(Place.Field.ID, Place.Field.FORMATTED_ADDRESS, Place.Field.LOCATION)

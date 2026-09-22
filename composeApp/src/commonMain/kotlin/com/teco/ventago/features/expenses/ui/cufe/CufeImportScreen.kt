@@ -33,6 +33,7 @@ import com.teco.ventago.design_system.buttons.OutlinedButtonM
 import com.teco.ventago.design_system.molecules.DMAlertDialog
 import com.teco.ventago.design_system.theme.bodyMedium
 import com.teco.ventago.design_system.theme.titleMediumBold
+import com.teco.ventago.features.expenses.ui.components.ExpenseInvoiceCopy
 import com.teco.ventago.features.expenses.ui.components.InvoiceReceivedScreen
 import com.teco.ventago.features.expenses.ui.components.InvoiceScanningScreen
 import com.teco.ventago.utils.BarcodeScannerScreen
@@ -119,7 +120,8 @@ fun CufeImportScreen(
     when {
         uiState.importSuccess -> InvoiceReceivedScreen(
             onUnderstood = onBack,
-            onScanAnother = { viewModel.scanAnother() }
+            onScanAnother = { viewModel.scanAnother() },
+            message = ExpenseInvoiceCopy.DGI_RECEIVED
         )
 
         uiState.isImporting -> InvoiceScanningScreen(

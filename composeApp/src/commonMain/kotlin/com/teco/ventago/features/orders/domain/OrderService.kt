@@ -181,11 +181,11 @@ class OrderService(
         if (!posProvisioningService.isRequired()) return request
 
         val state = posProvisioningService.currentState()
-        val branchCode = state.fixedBranchCode?.takeIf { it.isNotBlank() }
-        val billingPointCode = state.fixedBillingPointCode?.takeIf { it.isNotBlank() }
-        if (!state.isProvisioned || branchCode == null || billingPointCode == null) {
-            return null
+        if (!state.locksBranchPoint) {
+            return if (state.isProvisioned) request else null
         }
+        val branchCode = state.fixedBranchCode?.takeIf { it.isNotBlank() } ?: return null
+        val billingPointCode = state.fixedBillingPointCode?.takeIf { it.isNotBlank() } ?: return null
 
         return request.copy(
             branchCode = branchCode,

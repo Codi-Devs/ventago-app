@@ -11,6 +11,7 @@ import com.teco.ventago.features.financialProfile.domain.model.BusinessFinancial
 import com.teco.ventago.features.financialProfile.domain.model.PaymentSummary
 import com.teco.ventago.features.pos.provisioning.data.repository.IPosDeviceProvisioningRepository
 import com.teco.ventago.features.pos.provisioning.domain.IPosAgentConfigReader
+import com.teco.ventago.features.pos.provisioning.domain.InMemoryPosDeviceBindingStore
 import com.teco.ventago.features.pos.provisioning.domain.PosDeviceProvisioningService
 import com.teco.ventago.features.pos.provisioning.domain.model.PosAgentConfigResult
 import com.teco.ventago.features.pos.provisioning.domain.model.PosDeviceConfig
@@ -105,6 +106,7 @@ class FinancialProfileServiceTest {
             agentConfigReader = FakePosAgentConfigReader(),
             repository = posRepository,
             logger = NoopLoggerService(),
+            bindingStore = InMemoryPosDeviceBindingStore(),
         )
         val service = createService(cache, repository, this, changesManager, posService)
 
@@ -138,6 +140,7 @@ class FinancialProfileServiceTest {
             agentConfigReader = FakePosAgentConfigReader(),
             repository = FakePosDeviceProvisioningRepository(),
             logger = NoopLoggerService(),
+            bindingStore = InMemoryPosDeviceBindingStore(),
         )
 
     private fun profile(

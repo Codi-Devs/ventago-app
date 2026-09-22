@@ -272,7 +272,8 @@ class PosViewModel(
                 val authz = currentPosAuthzState()
                 updateState {
                     copy(
-                        posProvisioningActive = provisioning.required && provisioning.isProvisioned,
+                        posProvisioningActive = provisioning.locksBranchPoint,
+                        posProvisioningBanner = provisioning.bannerMessage,
                         canCreateInvoice = authz.canCreateInvoice,
                         canCreateDraft = authz.canCreateDraft,
                         canCreateNonFiscal = authz.canCreateNonFiscal,
@@ -371,8 +372,8 @@ class PosViewModel(
                     val persistedViewMode = readPersistedProductViewMode(it.businessId)
                     updateState {
                         copy(
-                            currency = it.currency.currencyCode,
-                            currencySymbol = it.currency.symbol,
+                            currency = "USD",
+                            currencySymbol = "$",
                             productViewMode = persistedViewMode
                         )
                     }
@@ -3910,7 +3911,7 @@ class PosViewModel(
         branches: List<BranchModel>
     ): Pair<Int, Int>? {
         val provisioning = posProvisioningService.currentState()
-        if (!provisioning.required || !provisioning.isProvisioned) return null
+        if (!provisioning.locksBranchPoint) return null
         val branchCode = provisioning.fixedBranchCode?.takeIf { it.isNotBlank() } ?: return null
         val billingPointCode = provisioning.fixedBillingPointCode?.takeIf { it.isNotBlank() } ?: return null
         val branchIndex = branches.indexOfFirst { it.branchCode == branchCode }

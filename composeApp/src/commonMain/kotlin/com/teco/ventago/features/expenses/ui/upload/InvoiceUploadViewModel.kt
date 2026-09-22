@@ -10,6 +10,7 @@ import com.teco.ventago.features.expenses.domain.InvoiceImageQuality
 import com.teco.ventago.features.expenses.domain.InvoiceQualityReason
 import com.teco.ventago.features.expenses.domain.InvoiceQualityVerdict
 import com.teco.ventago.features.expenses.domain.decodeInvoiceRaster
+import com.teco.ventago.features.expenses.domain.fitInvoiceJpegUnderLimit
 import com.teco.ventago.features.expenses.domain.isInvoiceRasterMime
 import com.teco.ventago.features.expenses.domain.scanQrFromImageBytes
 import com.teco.ventago.features.expenses.domain.ExpensesService
@@ -55,26 +56,34 @@ class InvoiceUploadViewModel(
             )
             return
         }
-        if (file.bytes.size > MAX_FILE_BYTES) {
-            _uiState.value = _uiState.value.copy(
-                selectedFileName = file.fileName,
-                error = "El archivo no puede superar 10 MB."
-            )
-            return
-        }
-
         viewModelScope.launch {
+            val prepared = if (isInvoiceRasterMime(file.contentType, file.fileName)) {
+                val fitted = withContext(Dispatchers.Default) {
+                    fitInvoiceJpegUnderLimit(file.bytes, MAX_FILE_BYTES)
+                }
+                file.copy(bytes = fitted)
+            } else {
+                file
+            }
+            if (prepared.bytes.size > MAX_FILE_BYTES) {
+                _uiState.value = _uiState.value.copy(
+                    selectedFileName = prepared.fileName,
+                    error = "El archivo no puede superar 10 MB."
+                )
+                return@launch
+            }
             _uiState.value = _uiState.value.copy(
                 isScanning = true,
                 isUploading = false,
-                selectedFileName = file.fileName,
+                selectedFileName = prepared.fileName,
                 showAccepted = false,
+                acceptedFromDgi = false,
                 error = null
             )
             try {
-                if (isInvoiceRasterMime(file.contentType, file.fileName)) {
+                if (isInvoiceRasterMime(prepared.contentType, prepared.fileName)) {
                     val raster = withContext(Dispatchers.Default) {
-                        decodeInvoiceRaster(file.bytes)
+                        decodeInvoiceRaster(prepared.bytes)
                     }
                     if (raster == null) {
                         _uiState.value = _uiState.value.copy(
@@ -94,7 +103,7 @@ class InvoiceUploadViewModel(
                         InvoiceQualityVerdict.Ok -> Unit
                     }
                     val qrPayload = withContext(Dispatchers.Default) {
-                        scanQrFromImageBytes(file.bytes)
+                        scanQrFromImageBytes(prepared.bytes)
                     }
                     val cufe = qrPayload?.let { CufeParser.parse(it) }
                     if (cufe != null && tryCrawl(cufe)) {
@@ -106,9 +115,9 @@ class InvoiceUploadViewModel(
                 val result = withContext(Dispatchers.IO) {
                     expensesService.uploadOcr(
                         ExpenseProofFile(
-                            bytes = file.bytes,
-                            fileName = file.fileName,
-                            contentType = file.contentType
+                            bytes = prepared.bytes,
+                            fileName = prepared.fileName,
+                            contentType = prepared.contentType
                         )
                     )
                 }
@@ -124,6 +133,7 @@ class InvoiceUploadViewModel(
                     isScanning = false,
                     isUploading = false,
                     showAccepted = true,
+                    acceptedFromDgi = false,
                     error = null
                 )
             } catch (e: Exception) {
@@ -148,6 +158,7 @@ class InvoiceUploadViewModel(
                 isScanning = false,
                 isUploading = false,
                 showAccepted = true,
+                acceptedFromDgi = true,
                 error = null
             )
             true
@@ -159,10 +170,17 @@ class InvoiceUploadViewModel(
     fun dismissAccepted() {
         _uiState.value = _uiState.value.copy(
             showAccepted = false,
+            acceptedFromDgi = false,
             isScanning = false,
             isUploading = false,
             selectedFileName = null,
             error = null
         )
+    }
+
+    fun clearError() {
+        if (_uiState.value.error != null) {
+            _uiState.value = _uiState.value.copy(error = null)
+        }
     }
 }

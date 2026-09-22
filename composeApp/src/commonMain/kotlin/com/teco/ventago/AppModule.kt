@@ -113,11 +113,13 @@ import com.teco.ventago.features.pos.devices.data.repository.IPosDevicesReposito
 import com.teco.ventago.features.pos.devices.data.repository.PosDevicesRepository
 import com.teco.ventago.features.pos.devices.domain.PosDevicesService
 import com.teco.ventago.features.pos.devices.ui.viewmodel.PosDevicesViewModel
+import com.teco.ventago.features.pos.provisioning.data.LocalStoragePosDeviceBindingStore
 import com.teco.ventago.features.pos.provisioning.data.provider.IPosDeviceProvisioningProvider
 import com.teco.ventago.features.pos.provisioning.data.provider.PosDeviceProvisioningProvider
 import com.teco.ventago.features.pos.provisioning.data.repository.IPosDeviceProvisioningRepository
 import com.teco.ventago.features.pos.provisioning.data.repository.PosDeviceProvisioningRepository
 import com.teco.ventago.features.pos.provisioning.domain.IPosAgentConfigReader
+import com.teco.ventago.features.pos.provisioning.domain.IPosDeviceBindingStore
 import com.teco.ventago.features.pos.provisioning.domain.PosDeviceProvisioningService
 import com.teco.ventago.features.pos.ui.customer.add.viewmodel.AddCustomerViewModel
 import com.teco.ventago.features.pos.ui.customer.list.viewmodel.ClientListViewModel
@@ -538,12 +540,20 @@ internal fun appModule() = module {
         )
     }
 
+    single<IPosDeviceBindingStore> {
+        LocalStoragePosDeviceBindingStore(
+            storage = get(),
+            json = json,
+        )
+    }
+
     single {
         PosDeviceProvisioningService(
             appDistribution = get(),
             agentConfigReader = get<IPosAgentConfigReader>(),
             repository = get(),
-            logger = get()
+            logger = get(),
+            bindingStore = get(),
         )
     }
 

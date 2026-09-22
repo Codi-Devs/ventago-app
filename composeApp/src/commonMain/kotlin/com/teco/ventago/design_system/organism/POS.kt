@@ -91,7 +91,9 @@ import androidx.compose.ui.graphics.painter.BitmapPainter
 import androidx.compose.ui.graphics.vector.rememberVectorPainter
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.platform.LocalFocusManager
+import com.teco.ventago.core.keyboard.KeyboardDismissHost
+import com.teco.ventago.core.keyboard.dismissKeyboardOnOutsideTap
+import com.teco.ventago.core.keyboard.keyboardDismissTarget
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
@@ -759,7 +761,7 @@ fun CartOrganism(
 
     if (showGlobalPricingDialog) {
         GlobalInvoiceSheet(
-            currencySymbol = uiState.currency,
+            currencySymbol = uiState.currencySymbol,
             subtotalCents = viewModel.getSubtotalAmount(),
             anyItemHasShipping = viewModel.getItemsShippingTotal() > 0L,
             anyItemHasInsurance = viewModel.getItemsInsuranceTotal() > 0L,
@@ -786,7 +788,7 @@ fun CartOrganism(
     if (showModifyItemDialog && itemToModify != null) {
         ModifyCartItemSheet(
             itemToModify = itemToModify!!,
-            currencySymbol = uiState.currency,
+            currencySymbol = uiState.currencySymbol,
             onDismiss = {
                 itemToModify = null
                 showModifyItemDialog = false
@@ -821,17 +823,12 @@ fun PosListOrganism(
 ) {
     val uiState by viewModel.uiState.collectAsState()
     val productControlsHeight = 56.dp
-    val focusManager = LocalFocusManager.current
 
     Column(
         modifier = modifier
             .padding(horizontal = 0.dp)
             .fillMaxSize()
-            .pointerInput(focusManager) {
-                detectTapGestures(onTap = {
-                    focusManager.clearFocus()
-                })
-            }
+            .dismissKeyboardOnOutsideTap()
     ) {
         Spacer(modifier = Modifier.height(16.dp))
 
@@ -853,7 +850,8 @@ fun PosListOrganism(
                 onValueChange = viewModel::onSearchChange,
                 modifier = Modifier
                     .weight(1f)
-                    .height(productControlsHeight),
+                    .height(productControlsHeight)
+                    .keyboardDismissTarget(),
                 textStyle = bodyMedium().copy(color = MaterialTheme.colorScheme.onSurface),
                 placeholder = {
                     Text(
@@ -1540,6 +1538,7 @@ private fun AdditionalInfoSheet(
         uiState.bottomNoteSettings.title.isNotBlank() &&
         uiState.bottomNoteSettings.body.isNotBlank()
 
+    KeyboardDismissHost(Modifier.fillMaxWidth()) {
     Column(
         Modifier
             .fillMaxWidth()
@@ -1966,6 +1965,7 @@ private fun AdditionalInfoSheet(
         ) {
             TextButton(onClick = onClose) { Text("Cerrar") }
         }
+    }
     }
 }
 

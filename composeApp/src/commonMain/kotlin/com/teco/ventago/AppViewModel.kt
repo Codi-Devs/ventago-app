@@ -15,7 +15,6 @@ import com.teco.ventago.features.business.domain.model.Business
 import com.teco.ventago.features.customers.domain.CustomerService
 import com.teco.ventago.features.financialProfile.domain.FinancialProfileService
 import com.teco.ventago.features.payments.domain.PaymentService
-import com.teco.ventago.features.pos.provisioning.domain.PosDeviceProvisioningService
 import com.teco.ventago.features.product.domain.ProductService
 import com.teco.ventago.features.product.domain.model.Products
 import kotlinx.coroutines.Dispatchers
@@ -40,7 +39,6 @@ class AppViewModel(
     private val customerService: CustomerService,
     private val branchService: BranchService,
     private val logger: ILoggerService,
-    private val posProvisioningService: PosDeviceProvisioningService,
 ) : ViewModel() {
     private val _mainState = MutableStateFlow(MainState())
     val mainState = _mainState.asStateFlow()
@@ -96,19 +94,6 @@ class AppViewModel(
                             )
                         )
                     }
-                }
-            }.launchIn(this)
-        }
-
-        viewModelScope.launch {
-            posProvisioningService.observe().onEach { provisioning ->
-                if (
-                    provisioning.required &&
-                    provisioning.agentConfig != null &&
-                    !provisioning.isProvisioned
-                ) {
-                    authService.signOut()
-                    clearFeatureStateAfterSignOut()
                 }
             }.launchIn(this)
         }

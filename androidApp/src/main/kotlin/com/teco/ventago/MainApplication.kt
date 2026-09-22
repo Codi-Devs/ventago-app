@@ -7,20 +7,26 @@ import androidx.appcompat.app.AppCompatDelegate
 import com.google.firebase.FirebaseApp
 import com.imagekit.android.ImageKit
 import com.imagekit.android.entity.TransformationPosition
+import com.teco.ventago.utils.ensurePlacesInitialized
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
 import org.koin.android.logger.AndroidLogger
 import org.koin.dsl.bind
 import org.koin.dsl.module
 
 class MainApplication: Application() {
 
+    override fun attachBaseContext(base: Context) {
+        super.attachBaseContext(AppLocale.wrap(base))
+    }
+
     override fun onCreate() {
+        AppLocale.apply()
         super.onCreate()
         AppCompatDelegate.setDefaultNightMode(AppCompatDelegate.MODE_NIGHT_NO)
         FirebaseApp.initializeApp(this@MainApplication)
+        ensurePlacesInitialized(this)
         initKoinAndroid(
             AndroidLogger(),
             listOf(

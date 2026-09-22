@@ -9,11 +9,16 @@ import com.teco.ventago.features.pos.provisioning.data.provider.IPosDeviceProvis
 import com.teco.ventago.features.pos.provisioning.data.repository.IPosDeviceProvisioningRepository
 import com.teco.ventago.features.pos.provisioning.data.repository.PosDeviceProvisioningRepository
 import com.teco.ventago.features.pos.provisioning.domain.IPosAgentConfigReader
+import com.teco.ventago.features.pos.provisioning.domain.IPosDeviceBindingStore
+import com.teco.ventago.features.pos.provisioning.domain.InMemoryPosDeviceBindingStore
 import com.teco.ventago.features.pos.provisioning.domain.PosDeviceProvisioningService
 import com.teco.ventago.features.pos.provisioning.domain.PosProvisioningException
 import com.teco.ventago.features.pos.provisioning.domain.model.PosAgentConfigResult
+import com.teco.ventago.features.pos.provisioning.domain.model.PosAgentDeviceConfig
 import com.teco.ventago.features.pos.provisioning.domain.model.PosDeviceConfig
 import com.teco.ventago.features.pos.provisioning.domain.model.PosDevicePermissions
+import com.teco.ventago.features.pos.provisioning.domain.model.PosLinkMode
+import com.teco.ventago.features.pos.provisioning.domain.model.PosProvisioningState
 import com.teco.ventago.utils.ApiResponse
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -25,7 +30,6 @@ import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.async
 import kotlinx.coroutines.test.runTest
 import kotlinx.serialization.json.Json
-import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.jsonObject
 
 class PosDeviceProvisioningTest {
@@ -85,23 +89,20 @@ class PosDeviceProvisioningTest {
 
     @Test
     fun validateLoginAcceptsMatchingProvisionedBusiness() = runTest {
-        val repository = FakeRepository(
-            PosDeviceConfig(
-                deviceId = "pos_123",
-                businessId = 7,
-                branchCode = "0000",
-                billingPointCode = "865",
-                status = "active",
-                permissions = PosDevicePermissions(deviceId = "pos_123", productsView = true)
-            )
-        )
-        val service = provisioningService(repository = repository)
+        val bindingStore = InMemoryPosDeviceBindingStore()
+        val repository = FakeRepository()
+        val service = provisioningService(repository = repository, bindingStore = bindingStore)
 
         service.validateLogin(authResponse(businessId = 7))
 
-        assertTrue(service.currentState().isProvisioned)
-        assertEquals("0000", service.currentState().fixedBranchCode)
-        assertEquals("865", service.currentState().fixedBillingPointCode)
+        val state = service.currentState()
+        assertTrue(state.isProvisioned)
+        assertTrue(state.locksBranchPoint)
+        assertEquals(PosLinkMode.Linked, state.linkMode)
+        assertEquals("0000", state.fixedBranchCode)
+        assertEquals("865", state.fixedBillingPointCode)
+        assertNull(state.bannerMessage)
+        assertEquals("pos_123", bindingStore.load()?.deviceId)
         assertEquals("access", repository.accessTokens.single())
     }
 
@@ -124,6 +125,7 @@ class PosDeviceProvisioningTest {
         backendRelease.complete(Unit)
         validation.await()
         assertTrue(service.currentState().isProvisioned)
+        assertEquals(PosLinkMode.Linked, service.currentState().linkMode)
     }
 
     @Test
@@ -159,24 +161,175 @@ class PosDeviceProvisioningTest {
     fun publicDistributionSkipsProvisioningValidation() = runTest {
         val service = PosDeviceProvisioningService(
             appDistribution = AppDistribution(isPosBuild = false),
-            agentConfigReader = FakeAgentReader(activated = false),
+            agentConfigReader = FakeAgentReader(result = null),
             repository = FakeRepository(),
-            logger = NoopLoggerService()
+            logger = NoopLoggerService(),
+            bindingStore = InMemoryPosDeviceBindingStore(),
         )
 
         service.validateLogin(authResponse(businessId = 8))
 
         assertTrue(service.currentState().isProvisioned)
+        assertEquals(PosLinkMode.NotRequired, service.currentState().linkMode)
+        assertFalse(service.currentState().locksBranchPoint)
+    }
+
+    @Test
+    fun validateLoginFallsBackToCachedDeviceWhenAgentIsDown() = runTest {
+        val bindingStore = InMemoryPosDeviceBindingStore(
+            initial = PosAgentDeviceConfig(
+                deviceId = "pos_123",
+                businessId = 7,
+                branchCode = "0000",
+                billingPointCode = "865",
+            )
+        )
+        val service = provisioningService(
+            agentConfigReader = FakeAgentReader(result = null),
+            bindingStore = bindingStore,
+        )
+
+        service.validateLogin(authResponse(businessId = 7))
+
+        val state = service.currentState()
+        assertTrue(state.isProvisioned)
+        assertTrue(state.locksBranchPoint)
+        assertEquals(PosLinkMode.Degraded, state.linkMode)
+        assertEquals(PosProvisioningState.BANNER_DEGRADED, state.bannerMessage)
+        assertEquals("0000", state.fixedBranchCode)
+        assertEquals("865", state.fixedBillingPointCode)
+    }
+
+    @Test
+    fun validateLoginEntersUnlinkedModeWhenAgentAndCacheAreMissing() = runTest {
+        val service = provisioningService(
+            agentConfigReader = FakeAgentReader(result = null),
+            bindingStore = InMemoryPosDeviceBindingStore(),
+        )
+
+        service.validateLogin(authResponse(businessId = 7))
+
+        val state = service.currentState()
+        assertTrue(state.isProvisioned)
+        assertFalse(state.locksBranchPoint)
+        assertEquals(PosLinkMode.Unlinked, state.linkMode)
+        assertEquals(PosProvisioningState.BANNER_UNLINKED, state.bannerMessage)
+        assertNull(state.fixedBranchCode)
+    }
+
+    @Test
+    fun validateLoginUsesCachedDeviceWhenAgentReportsInactive() = runTest {
+        val bindingStore = InMemoryPosDeviceBindingStore(
+            initial = PosAgentDeviceConfig(
+                deviceId = "pos_123",
+                businessId = 7,
+                branchCode = "0000",
+                billingPointCode = "865",
+            )
+        )
+        val service = provisioningService(
+            agentConfigReader = FakeAgentReader(
+                result = PosAgentConfigResult(activated = false, configJson = "{}")
+            ),
+            bindingStore = bindingStore,
+        )
+
+        service.validateLogin(authResponse(businessId = 7))
+
+        assertEquals(PosLinkMode.Degraded, service.currentState().linkMode)
+        assertTrue(service.currentState().locksBranchPoint)
+    }
+
+    @Test
+    fun validateLoginKeepsCachedScopeWhenPosConfigIsUnavailable() = runTest {
+        val bindingStore = InMemoryPosDeviceBindingStore(
+            initial = PosAgentDeviceConfig(
+                deviceId = "pos_123",
+                businessId = 7,
+                branchCode = "0000",
+                billingPointCode = "865",
+            )
+        )
+        val service = provisioningService(
+            agentConfigReader = FakeAgentReader(result = null),
+            repository = FailingRepository(),
+            bindingStore = bindingStore,
+        )
+
+        service.validateLogin(authResponse(businessId = 7))
+
+        val state = service.currentState()
+        assertTrue(state.isProvisioned)
+        assertTrue(state.locksBranchPoint)
+        assertEquals(PosLinkMode.Degraded, state.linkMode)
+        assertEquals("0000", state.fixedBranchCode)
+    }
+
+    @Test
+    fun validateLoginPrefersBackendScopeWhenCachedCodesDiffer() = runTest {
+        val bindingStore = InMemoryPosDeviceBindingStore(
+            initial = PosAgentDeviceConfig(
+                deviceId = "pos_123",
+                businessId = 7,
+                branchCode = "0000",
+                billingPointCode = "001",
+            )
+        )
+        val service = provisioningService(
+            agentConfigReader = FakeAgentReader(result = null),
+            repository = FakeRepository(
+                PosDeviceConfig(
+                    deviceId = "pos_123",
+                    businessId = 7,
+                    branchCode = "0001",
+                    billingPointCode = "002",
+                    status = "active",
+                    permissions = PosDevicePermissions(deviceId = "pos_123")
+                )
+            ),
+            bindingStore = bindingStore,
+        )
+
+        service.validateLogin(authResponse(businessId = 7))
+
+        val state = service.currentState()
+        assertEquals(PosLinkMode.Degraded, state.linkMode)
+        assertEquals("0001", state.fixedBranchCode)
+        assertEquals("002", state.fixedBillingPointCode)
+        assertEquals("0001", bindingStore.load()?.branchCode)
+    }
+
+    @Test
+    fun validateLoginRejectsLiveAgentMismatchWithBackend() = runTest {
+        val service = provisioningService(
+            repository = FakeRepository(
+                PosDeviceConfig(
+                    deviceId = "pos_123",
+                    businessId = 7,
+                    branchCode = "9999",
+                    billingPointCode = "999",
+                    status = "active",
+                    permissions = PosDevicePermissions(deviceId = "pos_123")
+                )
+            )
+        )
+
+        assertFailsWith<PosProvisioningException.DeviceConfigMismatch> {
+            service.validateLogin(authResponse(businessId = 7))
+        }
     }
 
     private fun provisioningService(
         repository: IPosDeviceProvisioningRepository = FakeRepository(),
+        agentConfigReader: IPosAgentConfigReader = FakeAgentReader(),
+        bindingStore: IPosDeviceBindingStore = InMemoryPosDeviceBindingStore(),
     ): PosDeviceProvisioningService =
         PosDeviceProvisioningService(
             appDistribution = AppDistribution(isPosBuild = true),
-            agentConfigReader = FakeAgentReader(),
+            agentConfigReader = agentConfigReader,
             repository = repository,
-            logger = NoopLoggerService()
+            logger = NoopLoggerService(),
+            bindingStore = bindingStore,
         )
 
     private fun authResponse(businessId: Int): AuthResponse =
@@ -196,20 +349,19 @@ class PosDeviceProvisioningTest {
         )
 
     private class FakeAgentReader(
-        private val activated: Boolean = true,
+        private val result: PosAgentConfigResult? = PosAgentConfigResult(
+            activated = true,
+            configJson = """
+                {
+                  "device_id": "pos_123",
+                  "business_id": 7,
+                  "branch_code": "0000",
+                  "billing_point_code": "865"
+                }
+            """.trimIndent()
+        )
     ) : IPosAgentConfigReader {
-        override suspend fun getDeviceConfig(): PosAgentConfigResult =
-            PosAgentConfigResult(
-                activated = activated,
-                configJson = """
-                    {
-                      "device_id": "pos_123",
-                      "business_id": 7,
-                      "branch_code": "0000",
-                      "billing_point_code": "865"
-                    }
-                """.trimIndent()
-            )
+        override suspend fun getDeviceConfig(): PosAgentConfigResult? = result
     }
 
     private class FakeRepository(
@@ -227,6 +379,12 @@ class PosDeviceProvisioningTest {
         override suspend fun getPosConfig(deviceId: String, accessToken: String?): PosDeviceConfig {
             accessTokens += accessToken
             return config
+        }
+    }
+
+    private class FailingRepository : IPosDeviceProvisioningRepository {
+        override suspend fun getPosConfig(deviceId: String, accessToken: String?): PosDeviceConfig {
+            error("pos-config unavailable")
         }
     }
 

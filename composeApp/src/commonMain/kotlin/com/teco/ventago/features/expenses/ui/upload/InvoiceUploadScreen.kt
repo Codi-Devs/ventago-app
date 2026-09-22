@@ -1,27 +1,19 @@
 package com.teco.ventago.features.expenses.ui.upload
 
-import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.CameraAlt
 import androidx.compose.material.icons.rounded.Collections
 import androidx.compose.material.icons.rounded.Description
-import androidx.compose.material.icons.rounded.PhotoCamera
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
-import androidx.compose.material3.Icon
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Text
+import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -30,37 +22,60 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import com.teco.ventago.core.SnackbarService
 import com.teco.ventago.core.camera.PermissionCallback
 import com.teco.ventago.core.camera.PermissionStatus
 import com.teco.ventago.core.camera.PermissionType
 import com.teco.ventago.core.camera.createPermissionsManager
-import com.teco.ventago.core.camera.rememberCameraManager
 import com.teco.ventago.core.camera.rememberGalleryManager
 import com.teco.ventago.core.file.SharedFile
 import com.teco.ventago.core.file.rememberDocumentPickerManager
-import com.teco.ventago.design_system.buttons.OutlinedButtonM
-import com.teco.ventago.design_system.theme.bodyMedium
+import com.teco.ventago.features.expenses.ui.components.ExpenseInvoiceCopy
+import com.teco.ventago.features.expenses.ui.components.ExpenseSheetOption
 import com.teco.ventago.features.expenses.ui.components.InvoiceReceivedScreen
 import com.teco.ventago.features.expenses.ui.components.InvoiceScanningScreen
-import com.teco.ventago.design_system.theme.cardContainerColor
-import com.teco.ventago.design_system.theme.labelSmall
-import com.teco.ventago.design_system.theme.titleMediumBold
 import com.teco.ventago.utils.randomUUID
 import kotlinx.coroutines.launch
+import org.koin.compose.koinInject
 
 @Composable
 fun InvoiceUploadScreen(
     viewModel: InvoiceUploadViewModel,
     onBack: () -> Unit
 ) {
+    var showSourceSheet by remember { mutableStateOf(true) }
+    InvoiceUploadCapture(
+        viewModel = viewModel,
+        showSourceSheet = showSourceSheet,
+        onDismissSourceSheet = { showSourceSheet = false },
+        onCancelSourceSheet = onBack,
+        onFinished = onBack,
+        onRequestAnotherUpload = { showSourceSheet = true }
+    )
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun InvoiceUploadCapture(
+    viewModel: InvoiceUploadViewModel,
+    showSourceSheet: Boolean,
+    onDismissSourceSheet: () -> Unit,
+    onCancelSourceSheet: () -> Unit = onDismissSourceSheet,
+    onFinished: () -> Unit,
+    onAcceptedAndContinue: () -> Unit = onFinished,
+    onRequestAnotherUpload: () -> Unit = {}
+) {
     val uiState by viewModel.uiState.collectAsState()
     var launchCamera by remember { mutableStateOf(false) }
     var launchGallery by remember { mutableStateOf(false) }
     var launchDocument by remember { mutableStateOf(false) }
     var launchSetting by remember { mutableStateOf(false) }
+    var showInvoiceCamera by remember { mutableStateOf(false) }
+    val sourceSheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+    val snackbarService: SnackbarService = koinInject()
 
     val permissionCallback = remember {
         object : PermissionCallback {
@@ -78,20 +93,6 @@ fun InvoiceUploadScreen(
     val permissionsManager = createPermissionsManager(permissionCallback)
 
     val scope = rememberCoroutineScope()
-    val cameraManager = rememberCameraManager { image ->
-        scope.launch {
-            val bytes = image?.toByteArray()
-            if (bytes != null) {
-                viewModel.uploadFile(
-                    SharedFile(
-                        bytes = bytes,
-                        fileName = "factura_${randomUUID()}.jpg",
-                        contentType = "image/jpeg"
-                    )
-                )
-            }
-        }
-    }
     val galleryManager = rememberGalleryManager { image ->
         scope.launch {
             val bytes = image?.toByteArray()
@@ -138,7 +139,7 @@ fun InvoiceUploadScreen(
     }
     LaunchedEffect(launchCamera, cameraGranted) {
         if (launchCamera && cameraGranted) {
-            cameraManager.launch()
+            showInvoiceCamera = true
             launchCamera = false
         }
     }
@@ -151,13 +152,27 @@ fun InvoiceUploadScreen(
         launchDocument = false
     }
 
+    LaunchedEffect(uiState.error) {
+        val error = uiState.error ?: return@LaunchedEffect
+        snackbarService.show(error)
+        viewModel.clearError()
+    }
+
     if (uiState.showAccepted) {
         InvoiceReceivedScreen(
+            message = if (uiState.acceptedFromDgi) {
+                ExpenseInvoiceCopy.DGI_RECEIVED
+            } else {
+                ExpenseInvoiceCopy.OCR_RECEIVED
+            },
             onUnderstood = {
                 viewModel.dismissAccepted()
-                onBack()
+                onAcceptedAndContinue()
             },
-            onScanAnother = { viewModel.dismissAccepted() }
+            onScanAnother = {
+                viewModel.dismissAccepted()
+                onRequestAnotherUpload()
+            }
         )
         return
     }
@@ -166,122 +181,73 @@ fun InvoiceUploadScreen(
         InvoiceScanningScreen(
             title = if (uiState.isUploading) "Enviando factura..." else "Escaneando documento...",
             subtitle = if (uiState.isUploading) {
-                "La IA la procesará en segundo plano."
+                ExpenseInvoiceCopy.OCR_SCANNING
             } else {
-                "Buscamos el QR y revisamos que la foto se pueda leer."
+                "Revisamos que la foto se pueda leer."
             }
         )
         return
     }
 
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .verticalScroll(rememberScrollState())
-            .padding(16.dp),
-        verticalArrangement = Arrangement.spacedBy(16.dp)
-    ) {
-        if (!uiState.hasInvoiceUploadAccess) {
-            Card(
-                modifier = Modifier.fillMaxWidth(),
-                elevation = CardDefaults.cardElevation(2.dp),
-                colors = CardDefaults.cardColors(containerColor = cardContainerColor())
-            ) {
-                Column(modifier = Modifier.padding(16.dp)) {
-                    Text("Función no disponible", style = titleMediumBold())
-                    Spacer(modifier = Modifier.height(8.dp))
-                    Text(
-                        "La carga de facturas está disponible para usuarios del beta expenses_ocr o expenses_qr.",
-                        style = bodyMedium()
+    if (showInvoiceCamera) {
+        InvoiceDocumentCamera(
+            onCaptured = { bytes ->
+                showInvoiceCamera = false
+                viewModel.uploadFile(
+                    SharedFile(
+                        bytes = bytes,
+                        fileName = "factura_${randomUUID()}.jpg",
+                        contentType = "image/jpeg"
                     )
-                }
-            }
-            return@Column
-        }
+                )
+            },
+            onClose = { showInvoiceCamera = false }
+        )
+        return
+    }
 
-        Card(
-            modifier = Modifier.fillMaxWidth(),
-            elevation = CardDefaults.cardElevation(2.dp),
-            colors = CardDefaults.cardColors(containerColor = cardContainerColor())
+    if (showSourceSheet) {
+        ModalBottomSheet(
+            onDismissRequest = onCancelSourceSheet,
+            sheetState = sourceSheetState
         ) {
-            Column(modifier = Modifier.padding(16.dp)) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Icon(
-                        imageVector = Icons.Rounded.PhotoCamera,
-                        contentDescription = null,
-                        tint = MaterialTheme.colorScheme.primary,
-                        modifier = Modifier.size(24.dp)
-                    )
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Text("Sube tu factura", style = titleMediumBold())
-                }
-                Spacer(modifier = Modifier.height(12.dp))
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp, vertical = 8.dp)
+            ) {
                 Text(
-                    "Toma una foto, elige una imagen o un PDF. La IA la escanea y el gasto aparece en la lista cuando está listo.",
-                    style = bodyMedium()
+                    text = "Sube tu factura",
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.SemiBold
                 )
-                Spacer(modifier = Modifier.height(4.dp))
-                Text(
-                    "PDF, JPEG o PNG. Máximo 10 MB.",
-                    style = labelSmall(color = MaterialTheme.colorScheme.onSurfaceVariant)
-                )
-                Spacer(modifier = Modifier.height(16.dp))
-
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                Spacer(modifier = Modifier.height(8.dp))
+                ExpenseSheetOption(
+                    icon = Icons.Rounded.CameraAlt,
+                    title = "Cámara",
+                    subtitle = "Toma una foto de la factura"
                 ) {
-                    OutlinedButtonM(
-                        onClick = { launchCamera = true },
-                        modifier = Modifier.weight(1f)
-                    ) {
-                        Icon(
-                            imageVector = Icons.Rounded.CameraAlt,
-                            contentDescription = null,
-                            modifier = Modifier.size(18.dp)
-                        )
-                        Spacer(modifier = Modifier.width(4.dp))
-                        Text("Cámara")
-                    }
-                    OutlinedButtonM(
-                        onClick = { launchGallery = true },
-                        modifier = Modifier.weight(1f)
-                    ) {
-                        Icon(
-                            imageVector = Icons.Rounded.Collections,
-                            contentDescription = null,
-                            modifier = Modifier.size(18.dp)
-                        )
-                        Spacer(modifier = Modifier.width(4.dp))
-                        Text("Galería")
-                    }
-                    OutlinedButtonM(
-                        onClick = { launchDocument = true },
-                        modifier = Modifier.weight(1f)
-                    ) {
-                        Icon(
-                            imageVector = Icons.Rounded.Description,
-                            contentDescription = null,
-                            modifier = Modifier.size(18.dp)
-                        )
-                        Spacer(modifier = Modifier.width(4.dp))
-                        Text("Archivo")
-                    }
+                    onDismissSourceSheet()
+                    launchCamera = true
                 }
-
-                uiState.selectedFileName?.takeIf { it.isNotBlank() }?.let { name ->
-                    Spacer(modifier = Modifier.height(12.dp))
-                    Text(name, style = labelSmall(color = MaterialTheme.colorScheme.onSurfaceVariant))
+                ExpenseSheetOption(
+                    icon = Icons.Rounded.Collections,
+                    title = "Galería",
+                    subtitle = "Elige una foto de tu galería"
+                ) {
+                    onDismissSourceSheet()
+                    launchGallery = true
                 }
+                ExpenseSheetOption(
+                    icon = Icons.Rounded.Description,
+                    title = "Archivo",
+                    subtitle = "Selecciona un PDF o una imagen"
+                ) {
+                    onDismissSourceSheet()
+                    launchDocument = true
+                }
+                Spacer(modifier = Modifier.height(16.dp))
             }
-        }
-
-        uiState.error?.let { error ->
-            Text(
-                text = error,
-                color = MaterialTheme.colorScheme.error,
-                style = bodyMedium()
-            )
         }
     }
 }

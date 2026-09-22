@@ -40,6 +40,7 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.rememberModalBottomSheetState
+import com.teco.ventago.core.keyboard.KeyboardDismissHost
 import com.teco.ventago.design_system.textfields.DMMoneyOutlinedTextField
 import com.teco.ventago.design_system.textfields.DMOutlinedTextField
 import com.teco.ventago.design_system.theme.bodyMedium
@@ -125,6 +126,7 @@ fun GlobalInvoiceSheet(
         containerColor = cardContainerColor(),
         dragHandle = null
     ) {
+        KeyboardDismissHost {
         Column(
             modifier = Modifier
                 .fillMaxSize()
@@ -270,26 +272,26 @@ fun GlobalInvoiceSheet(
                 Divider()
                 Spacer(Modifier.height(8.dp))
                 Text("Resumen", style = labelMediumBold())
-                Text("Subtotal: $currencySymbol${formatNumberToMoney((subtotalCents / 100.0).toString())}", style = bodyMedium())
+                Text("Subtotal: ${formatNumberToMoney((subtotalCents / 100.0).toString())}", style = bodyMedium())
                 if (discountCents > 0) {
                     val dLabel = when (mode) {
                         GlobalDiscountMode.PERCENT -> "Descuento (${discountValuePct}%)"
                         GlobalDiscountMode.FIXED   -> "Descuento fijo"
                         else -> "Descuento"
                     }
-                    Text("$dLabel: -$currencySymbol${formatNumberToMoney((discountCents / 100.0).toString())}", style = bodyMedium())
+                    Text("$dLabel: -${formatNumberToMoney((discountCents / 100.0).toString())}", style = bodyMedium())
                 }
                 if (globalShipping > 0) {
-                    Text("Acarreo: +$currencySymbol${formatNumberToMoney((globalShipping / 100.0).toString())}", style = bodyMedium())
+                    Text("Acarreo: +${formatNumberToMoney((globalShipping / 100.0).toString())}", style = bodyMedium())
                 }
                 if (globalInsurance > 0) {
-                    Text("Seguro: +$currencySymbol${formatNumberToMoney((globalInsurance / 100.0).toString())}", style = bodyMedium())
+                    Text("Seguro: +${formatNumberToMoney((globalInsurance / 100.0).toString())}", style = bodyMedium())
                 }
                 if (globalOther > 0) {
-                    Text("Otros cargos: +$currencySymbol${formatNumberToMoney((globalOther / 100.0).toString())}", style = bodyMedium())
+                    Text("Otros cargos: +${formatNumberToMoney((globalOther / 100.0).toString())}", style = bodyMedium())
                 }
                 Text(
-                    "Total estimado: $currencySymbol${formatNumberToMoney((previewTotal / 100.0).toString())}",
+                    "Total estimado: ${formatNumberToMoney((previewTotal / 100.0).toString())}",
                     style = headlineMediumBold(color = MaterialTheme.colorScheme.primary),
                     modifier = Modifier.padding(top = 6.dp, bottom = 16.dp)
                 )
@@ -328,6 +330,7 @@ fun GlobalInvoiceSheet(
                     ) { Text("Aplicar") }
                 }
             }
+        }
         }
     }
 }
