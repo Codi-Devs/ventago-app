@@ -7,6 +7,8 @@ import com.teco.ventago.features.expenses.domain.ExpenseItemConceptSelection
 import com.teco.ventago.features.expenses.domain.ExpensesErrorMapper
 import com.teco.ventago.features.expenses.domain.applyExpenseSummary
 import com.teco.ventago.features.expenses.domain.buildExpenseAccountsTree
+import com.teco.ventago.features.expenses.domain.compactExpenseAccountAncestors
+import com.teco.ventago.features.expenses.domain.selectableExpenseAccounts
 import com.teco.ventago.features.expenses.domain.buildExpenseCategorizationPayload
 import com.teco.ventago.features.expenses.domain.buildExpenseConceptLabel
 import com.teco.ventago.features.expenses.domain.buildExpenseCreatePayload
@@ -206,7 +208,7 @@ class ExpenseConceptsTest {
     }
 
     @Test
-    fun buildExpenseCategorizationPayloadFallsBackToGlobalItemsWhenPerItemHasOnlyDefault() {
+    fun buildExpenseCategorizationPayloadFallsBackToDefaultWhenPerItemHasOnlyDefault() {
         val payload = buildExpenseCategorizationPayload(
             defaultAccountId = 39L,
             mode = ExpenseConceptMode.PER_ITEM,
@@ -216,24 +218,54 @@ class ExpenseConceptsTest {
         )
 
         assertEquals(39L, payload.defaultAccountId)
-        assertEquals(1, payload.items.size)
-        assertEquals(163L, payload.items.first().itemId)
-        assertEquals(39L, payload.items.first().accountId)
+        assertEquals(false, payload.onlyUncategorized)
+        assertTrue(payload.items.isEmpty())
     }
 
     @Test
-    fun buildExpenseCategorizationPayloadTreatsZeroItemIdAsMissingAndUsesLineNumber() {
+    fun buildExpenseCategorizationPayloadGlobalSendsDefaultWithoutItemRows() {
         val payload = buildExpenseCategorizationPayload(
             defaultAccountId = 101L,
             mode = ExpenseConceptMode.GLOBAL,
             items = listOf(
-                ExpenseItemConceptSelection(itemId = 0L, lineNumber = 2, accountId = null)
+                ExpenseItemConceptSelection(itemId = 0L, lineNumber = 2, accountId = null),
+                ExpenseItemConceptSelection(itemId = 33010L, lineNumber = 1, accountId = 140L)
             )
         )
 
-        assertNull(payload.items.first().itemId)
-        assertEquals(2, payload.items.first().lineNumber)
-        assertEquals(101L, payload.items.first().accountId)
+        assertEquals(101L, payload.defaultAccountId)
+        assertEquals(false, payload.onlyUncategorized)
+        assertTrue(payload.items.isEmpty())
+    }
+
+    @Test
+    fun compactExpenseAccountAncestorsKeepsEndsWhenPathIsDeep() {
+        assertEquals("", compactExpenseAccountAncestors(emptyList()))
+        assertEquals("Costos", compactExpenseAccountAncestors(listOf("Costos")))
+        assertEquals(
+            "Costos / Costos de venta y operacion",
+            compactExpenseAccountAncestors(listOf("Costos", "Costos de venta y operacion"))
+        )
+        assertEquals(
+            "Costos / … / Operacion",
+            compactExpenseAccountAncestors(listOf("Costos", "Ventas", "Administracion", "Operacion"))
+        )
+    }
+
+    @Test
+    fun selectableExpenseAccountsListsLeavesWithAncestors() {
+        val accounts = listOf(
+            ExpenseAccount(id = 1, parentId = null, code = "1", name = "Costos"),
+            ExpenseAccount(id = 2, parentId = 1, code = "1.1", name = "Ventas"),
+            ExpenseAccount(id = 3, parentId = 2, code = "1.1.1", name = "Mercancia")
+        )
+
+        val options = selectableExpenseAccounts(accounts, leafOnly = true)
+
+        assertEquals(1, options.size)
+        assertEquals("Mercancia", options.first().account.name)
+        assertEquals(listOf("Costos", "Ventas"), options.first().ancestorNames)
+        assertEquals("Costos / Ventas", compactExpenseAccountAncestors(options.first().ancestorNames))
     }
 
     @Test

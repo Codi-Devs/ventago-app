@@ -966,10 +966,11 @@ class PosViewModel(
                 newCart[idx] = cur.copy(quantity = normalizeQuantity(newQty, minValue = 0.0001))
                 copy(
                     cart = newCart,
-                    productAddedSnackbarToken = if (shouldShowProductAddedSnackbar) {
-                        productAddedSnackbarToken + 1
+                    addedToCartItemId = if (shouldShowProductAddedSnackbar) item.itemId else addedToCartItemId,
+                    addedToCartPulse = if (shouldShowProductAddedSnackbar) {
+                        addedToCartPulse + 1
                     } else {
-                        productAddedSnackbarToken
+                        addedToCartPulse
                     }
                 )
             }
@@ -997,15 +998,24 @@ class PosViewModel(
             copy(
                 cart = cart + newLine,
                 personalizedItems = newPersonalizedItems,
-                productAddedSnackbarToken = if (shouldShowProductAddedSnackbar) {
-                    productAddedSnackbarToken + 1
+                addedToCartItemId = if (shouldShowProductAddedSnackbar) item.itemId else addedToCartItemId,
+                addedToCartPulse = if (shouldShowProductAddedSnackbar) {
+                    addedToCartPulse + 1
                 } else {
-                    productAddedSnackbarToken
+                    addedToCartPulse
                 }
             )
         }
-    }
+        }
         saveOrderCreationCheckpoint(OrderCreationStep.PRODUCTS)
+        if (deltaQty > 0) {
+            viewModelScope.launch {
+                delay(650)
+                updateState {
+                    if (addedToCartItemId != item.itemId) this else copy(addedToCartItemId = null)
+                }
+            }
+        }
     }
 
     fun updateCartLine(
@@ -1639,13 +1649,17 @@ class PosViewModel(
         if (saveAsDraft) {
             analyticsService.logOrderCreationPaymentOptionSelected(mode = "DRAFT")
         }
-        val saveAsNonFiscal = !saveAsDraft && uiState.value.paymentFlowMode == PaymentFlowMode.NON_FISCAL
+        val saveAsNonFiscal = !saveAsDraft && (
+            uiState.value.internalDocument ||
+                uiState.value.paymentFlowMode == PaymentFlowMode.NON_FISCAL
+            )
+        val isUnpaidInternal = !saveAsDraft && uiState.value.paymentFlowMode == PaymentFlowMode.NON_FISCAL
         val hasPaymentLinkAccess = canAction(ActionKey.ORDERS_PAYMENT_LINK)
         val hasYappyOnsiteAccess = canAction(ActionKey.ORDERS_YAPPY_ONSITE)
         val hasManualPaymentAccess = canAction(ActionKey.ORDERS_MANUAL_PAYMENT)
         val effectiveCreatePaymentLink = createPaymentLink && hasPaymentLinkAccess
         val effectiveCreateYappyOnsite = createYappyOnsite && hasYappyOnsiteAccess && selectedBillingPointHasYappyOnsiteDevice()
-        val isManualPayment = !saveAsDraft && !saveAsNonFiscal && !effectiveCreatePaymentLink && !effectiveCreateYappyOnsite
+        val isManualPayment = !saveAsDraft && !isUnpaidInternal && !effectiveCreatePaymentLink && !effectiveCreateYappyOnsite
         if (createPaymentLink && !hasPaymentLinkAccess) {
             updateState { copy(paymentFlowMode = PaymentFlowMode.MANUAL_OR_INSTALLMENTS) }
             viewModelScope.launch {
@@ -1682,7 +1696,7 @@ class PosViewModel(
             return
         }
         val stateBeforeSubmit = uiState.value
-        if (!saveAsDraft && !saveAsNonFiscal && !effectiveCreatePaymentLink && !effectiveCreateYappyOnsite && stateBeforeSubmit.installments.any { it.dueDateIso.isBlank() }) {
+        if (!saveAsDraft && !effectiveCreatePaymentLink && !effectiveCreateYappyOnsite && stateBeforeSubmit.installments.any { it.dueDateIso.isBlank() }) {
             viewModelScope.launch {
                 snackbarService.show("Selecciona fecha de vencimiento para cada pago a crédito.")
             }
@@ -2268,7 +2282,9 @@ class PosViewModel(
 
         var links: PaymentLinksBlock? = null
         val payments = mutableListOf<CreateOrderPayment>()
-        val saveAsNonFiscal = !saveAsDraft && state.paymentFlowMode == PaymentFlowMode.NON_FISCAL
+        val saveAsNonFiscal = !saveAsDraft && (
+            state.internalDocument || state.paymentFlowMode == PaymentFlowMode.NON_FISCAL
+            )
         if ((createPaymentLink || createYappyOnsite) && !saveAsDraft) {
             links = PaymentLinksBlock(
                 create = true,
@@ -2276,7 +2292,7 @@ class PosViewModel(
                 note = if (createYappyOnsite) yappyOnsitePaymentDescription() else "",
                 method = if (createYappyOnsite) "YAPPY_ONSITE" else "LINK"
             )
-        } else if (!saveAsDraft && !saveAsNonFiscal) {
+        } else if (!saveAsDraft) {
             for ((key, value) in state.charged) {
                 val methodLabel = manualMethodOptions().firstOrNull { it.first == key }?.second ?: "Método $key"
                 // For type 99 (OTHER), use custom description and ensure it's bigger than 10 characters
@@ -2523,6 +2539,11 @@ class PosViewModel(
                             invoiceStatus = invoiceStatus,
                             orderNumber = freshOrder.internalNumber.ifBlank { orderNumber },
                         )
+                    }
+
+                    if (paymentDetected && uiState.value.internalDocument) {
+                        printInternalDocumentTicket(orderId)
+                        return@launch
                     }
 
                     if (paymentDetected && !uiState.value.autoInvoiceOnPaymentSuccess) {
@@ -3703,9 +3724,16 @@ class PosViewModel(
 
     private fun maybePrintYappyOnsiteTicket(payload: com.teco.ventago.features.payments.domain.models.YappyOnsiteTransactionPayload) {
         if (payload.transaction.status.lowercase() != "succeeded") return
-        if (payload.invoice.status != 2) return
-        if (!payload.invoice.ticketEnabled) return
-        val ticket = payload.invoice.ticket ?: return
+        val internalDocument = uiState.value.internalDocument
+        if (!internalDocument && payload.invoice.status != 2) return
+        if (!internalDocument && !payload.invoice.ticketEnabled) return
+        val ticket = payload.invoice.ticket
+        if (ticket == null) {
+            if (internalDocument) {
+                payload.order.id?.let(::printInternalDocumentTicket)
+            }
+            return
+        }
         val transactionId = payload.transaction.transactionId
         if (uiState.value.yappyOnsitePrintAttemptedTransactionId == transactionId) return
 
@@ -3727,6 +3755,34 @@ class PosViewModel(
                 )
             }.onFailure {
                 loggerPrintFailure(payload.order.orderNumber, it)
+                withContext(Dispatchers.Main) {
+                    snackbarService.show("El pago fue exitoso, pero la impresión del ticket falló.")
+                }
+            }
+        }
+    }
+
+    private fun printInternalDocumentTicket(orderId: Int) {
+        if (orderId <= 0) return
+        if (uiState.value.yappyOnsitePrintAttemptedTransactionId == "internal-$orderId") return
+        val state = uiState.value
+        val branch = state.branches.getOrNull(state.selectedBranchIndex)?.branchCode ?: return
+        val billingPoint = state.billingPoints.getOrNull(state.selectedBillingPointIndex)?.billingPoint ?: return
+        val printer = printerService.resolveActivePrinter(branch, billingPoint) ?: return
+        val businessId = business?.businessId ?: return
+        updateState { copy(yappyOnsitePrintAttemptedTransactionId = "internal-$orderId") }
+        launchProtectedTicketPrint {
+            runCatching {
+                val ticket = printerService.fetchOrderTicketLayout(orderId = orderId, businessId = businessId)
+                printerService.printTicketPayload(
+                    printerConfig = printer,
+                    ticketPayload = ticket,
+                    context = PrintContext(
+                        source = "pos_internal_document_payment",
+                        orderId = orderId
+                    )
+                )
+            }.onFailure {
                 withContext(Dispatchers.Main) {
                     snackbarService.show("El pago fue exitoso, pero la impresión del ticket falló.")
                 }
@@ -4993,6 +5049,19 @@ class PosViewModel(
             } else {
                 copy(paymentFlowMode = mode)
             }
+        }
+    }
+
+    fun setDocumentKind(internal: Boolean) {
+        if (!internal && !uiState.value.canCreateInvoice && uiState.value.canCreateNonFiscal) return
+        if (internal && !uiState.value.canCreateNonFiscal) return
+        updateState {
+            val nextMode = when {
+                internal && paymentFlowMode == PaymentFlowMode.DRAFT -> PaymentFlowMode.MANUAL_OR_INSTALLMENTS
+                !internal && paymentFlowMode == PaymentFlowMode.NON_FISCAL -> PaymentFlowMode.MANUAL_OR_INSTALLMENTS
+                else -> paymentFlowMode
+            }
+            copy(internalDocument = internal, paymentFlowMode = nextMode)
         }
     }
 

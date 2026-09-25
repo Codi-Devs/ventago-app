@@ -236,7 +236,8 @@ data class ManualPaymentState(
     val totalToChargeCents: Long = 0L,
 
     val isSubmitting: Boolean = false,
-    val errorMessage: String? = null
+    val errorMessage: String? = null,
+    val confirmNonFiscal: Boolean = false,
 ) {
     val allocated: Long get() = charged.values.sum()
     val remaining: Long get() = (totalToChargeCents - allocated).coerceAtLeast(0L)

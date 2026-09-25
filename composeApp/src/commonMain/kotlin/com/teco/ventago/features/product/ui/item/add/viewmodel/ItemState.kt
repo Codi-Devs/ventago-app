@@ -84,6 +84,7 @@ data class ItemState(
     // Unit measure dialog
     val showUnitMeasureDialog: Boolean = false,
     val selectedUnitMeasureIndex: Int = -1,
+    val dgiUnitUserOverride: Boolean = false,
 
     // Personalized product mode
     val isPersonalizedProduct: Boolean = false,

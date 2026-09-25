@@ -204,5 +204,39 @@ class CreateOrderResponseParsingTest {
         assertEquals("2026-09-11T15:00:00Z", order.nonFiscalConfirmedAt)
         kotlin.test.assertTrue(order.hasCurrentNonFiscalDocument())
         kotlin.test.assertFalse(order.canConfirmNonFiscal())
+        assertEquals("Documento interno", order.listDocumentTypeLabel())
+        assertEquals("Sin Factura", order.listDocumentStatusLabel())
+        assertEquals("2026-09-11T15:00:00Z", order.listEmissionDateValue())
+    }
+
+    @Test
+    fun uninvoicedInternalDraftUsesCreationDateAndDraftStatus() {
+        val payload = """
+            {
+              "id": 45,
+              "order_type": "01",
+              "business_id": 9,
+              "internal_number": "ORD-9-0000-001-0000000045",
+              "currency_code": "USD",
+              "subtotal": "10.00",
+              "discount_total": "0.00",
+              "taxable_base": "10.00",
+              "tax_total": "0.00",
+              "tips_total": "0.00",
+              "total_amount": "10.00",
+              "status": 1,
+              "payment_status": 1,
+              "invoice_status": 0,
+              "invoicing_mode": "explicit",
+              "emission_date": "2026-09-20T00:00:00Z",
+              "created_at": "2026-09-11T15:00:00Z"
+            }
+        """.trimIndent()
+
+        val order = json.decodeFromString<Order>(payload)
+
+        assertEquals("Borrador", order.listDocumentStatusLabel())
+        assertEquals("2026-09-11T15:00:00Z", order.listEmissionDateValue())
+        assertEquals(1000L, order.unpaidBalanceCents())
     }
 }

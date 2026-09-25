@@ -325,7 +325,8 @@ data class PosState(
     val itemCategoryById: Map<Int, Int> = mapOf(),
     val cart: List<CartLine> = listOf(),
     val personalizedItems: Map<String, Item> = mapOf(), // Stores personalized products keyed by lineId (since all have itemId = -1)
-    val productAddedSnackbarToken: Long = 0L,
+    val addedToCartItemId: Int? = null,
+    val addedToCartPulse: Long = 0L,
     val taxExempt: Boolean = false,
     val currency: String = "USD",
     val currencySymbol: String = "$",
@@ -473,6 +474,7 @@ data class PosState(
 
     // === Payments view ===
     val paymentFlowMode: PaymentFlowMode = PaymentFlowMode.MANUAL_OR_INSTALLMENTS,
+    val internalDocument: Boolean = false,
     val showPaymentLinkNewBadge: Boolean = false,
     val otherPaymentDescription: String = "",
     val wantPaymentLink: Boolean = false,

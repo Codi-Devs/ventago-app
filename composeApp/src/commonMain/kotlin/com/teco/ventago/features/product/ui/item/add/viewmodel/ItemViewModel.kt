@@ -131,6 +131,17 @@ abstract class ItemViewModel(private val productService: ProductService) :
 
     fun onUomSelected(code: String) {
         updateState { copy(unitMeasureCode = code) }
+        syncDgiUnitFromProduct(code)
+    }
+
+    fun syncDgiUnitFromProduct(code: String) {
+        if (uiState.value.dgiUnitUserOverride) return
+        val uom = UomRegistry.byCode(code) ?: UomRegistry.byCode("und") ?: return
+        addOrReplaceAdditionalInfo(
+            key = AdditionalInfoKey.PANAMA_GOODS_SERVICES_UNIT_CODE,
+            value = uom.code,
+            title = "Unidad: ${uom.code} - ${uom.nameEs}"
+        )
     }
 
     fun onIscRateChange(input: String) {
@@ -224,8 +235,9 @@ abstract class ItemViewModel(private val productService: ProductService) :
     }
 
     fun onAdditionalKeySelected(idx: Int) {
-        val safeIdx = idx.coerceIn(0, AdditionalInfoCatalog.lastIndex)
-        val vt = AdditionalInfoCatalog[safeIdx].valueType
+        val catalog = extraAdditionalCatalog()
+        val safeIdx = idx.coerceIn(0, catalog.lastIndex)
+        val vt = catalog[safeIdx].valueType
         val defaultValue = when (vt) {
             AdditionalValueType.STRING -> ""
             AdditionalValueType.NUMBER -> ""
@@ -237,7 +249,8 @@ abstract class ItemViewModel(private val productService: ProductService) :
     }
 
     fun onAdditionalValueChanged(v: String) {
-        val vt = AdditionalInfoCatalog[uiState.value.additionalSelectedKeyIndex].valueType
+        val catalog = extraAdditionalCatalog()
+        val vt = catalog[uiState.value.additionalSelectedKeyIndex.coerceIn(0, catalog.lastIndex)].valueType
         val sanitized = when (vt) {
             AdditionalValueType.STRING -> v
             AdditionalValueType.NUMBER -> sanitizeDecimalInput(v)
@@ -248,7 +261,8 @@ abstract class ItemViewModel(private val productService: ProductService) :
 
     fun onAddAdditionalInfo() {
         val current = uiState.value
-        val key = AdditionalInfoCatalog[current.additionalSelectedKeyIndex]
+        val catalog = extraAdditionalCatalog()
+        val key = catalog[current.additionalSelectedKeyIndex.coerceIn(0, catalog.lastIndex)]
         val value = current.additionalInputValue.trim()
 
         // basic validation per type
@@ -281,17 +295,29 @@ abstract class ItemViewModel(private val productService: ProductService) :
     }
 
     fun additionalInfoOptions(): List<String> {
-        // What the user sees in the selector
-        return AdditionalInfoCatalog.map { it.title }
+        return AdditionalInfoCatalog
+            .filter { it != AdditionalInfoKey.PANAMA_GOODS_SERVICES_CODE && it != AdditionalInfoKey.PANAMA_GOODS_SERVICES_UNIT_CODE }
+            .map { it.title }
     }
 
     /** Parallel list of expected value types (useful for rendering appropriate input). */
     fun additionalInfoValueTypes(): List<AdditionalValueType> {
-        return AdditionalInfoCatalog.map { it.valueType }
+        return AdditionalInfoCatalog
+            .filter { it != AdditionalInfoKey.PANAMA_GOODS_SERVICES_CODE && it != AdditionalInfoKey.PANAMA_GOODS_SERVICES_UNIT_CODE }
+            .map { it.valueType }
+    }
+
+    private fun extraAdditionalCatalog(): List<AdditionalInfoKey> {
+        return AdditionalInfoCatalog.filter {
+            it != AdditionalInfoKey.PANAMA_GOODS_SERVICES_CODE &&
+                it != AdditionalInfoKey.PANAMA_GOODS_SERVICES_UNIT_CODE
+        }
     }
 
     fun currentAdditionalSelected(): AdditionalInfoKey =
-        AdditionalInfoCatalog[uiState.value.additionalSelectedKeyIndex.coerceIn(0, AdditionalInfoCatalog.lastIndex)]
+        extraAdditionalCatalog().let { catalog ->
+            catalog[uiState.value.additionalSelectedKeyIndex.coerceIn(0, catalog.lastIndex)]
+        }
 
 
     fun setEditMode(mode: ItemEditMode) {
@@ -319,7 +345,10 @@ abstract class ItemViewModel(private val productService: ProductService) :
     }
 
     fun onOpenUnitMeasureDialog() {
-        val currentCode = uiState.value.unitMeasureCode.ifBlank { "und" }
+        val saved = uiState.value.additionalInfo
+            .firstOrNull { it.keyName == AdditionalInfoKey.PANAMA_GOODS_SERVICES_UNIT_CODE.keyName }
+            ?.rawValue
+        val currentCode = saved?.ifBlank { null } ?: uiState.value.unitMeasureCode.ifBlank { "und" }
         val index = UomRegistry.all().indexOfFirst { it.code == currentCode }.takeIf { it >= 0 } ?: 0
         updateState { copy(showUnitMeasureDialog = true, selectedUnitMeasureIndex = index) }
     }
@@ -343,35 +372,19 @@ abstract class ItemViewModel(private val productService: ProductService) :
                 value = uom.code,
                 title = "Unidad: ${uom.code} - ${uom.nameEs}"
             )
-            // Also update the main unit measure code
-            updateState { copy(unitMeasureCode = uom.code) }
+            val followsProduct = uom.code == uiState.value.unitMeasureCode
+            updateState { copy(dgiUnitUserOverride = !followsProduct) }
         }
         
         updateState { copy(showUnitMeasureDialog = false) }
     }
 
-    fun onConfirmGoodsSelection() {
-        val state = uiState.value
-        val seg = state.goodsSegments.getOrNull(state.selectedSegmentIndex)
-        val fam = seg?.families?.getOrNull(state.selectedFamilyIndex)
-
-        if (seg != null && fam != null) {
-            val goodsCode = fam.code
-            val goodsTitle = "${seg.description} - ${fam.description}"
-
-            // Add automatically to additional info
-            addOrReplaceAdditionalInfo(
-                key = AdditionalInfoKey.PANAMA_GOODS_SERVICES_CODE,
-                value = goodsCode,
-                title = goodsTitle
-            )
-            addOrReplaceAdditionalInfo(
-                key = AdditionalInfoKey.PANAMA_GOODS_SERVICES_UNIT_CODE,
-                value = uiState.value.unitMeasureCode,
-                title = "Unidad: ${uiState.value.unitMeasureCode}"
-            )
-        }
-
+    fun onSelectGoodsFamily(code: String, description: String) {
+        addOrReplaceAdditionalInfo(
+            key = AdditionalInfoKey.PANAMA_GOODS_SERVICES_CODE,
+            value = code,
+            title = "$code - $description"
+        )
         updateState { copy(showGoodsDialog = false) }
     }
 

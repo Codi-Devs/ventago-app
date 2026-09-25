@@ -1,10 +1,16 @@
 package com.teco.ventago
 
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.WindowInsetsSides
+import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.navigationBars
+import androidx.compose.foundation.layout.only
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.layout.windowInsetsTopHeight
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -269,6 +275,7 @@ fun App(
             ){
             KeyboardDismissHost {
                 Scaffold(
+                    contentWindowInsets = WindowInsets.safeDrawing.only(WindowInsetsSides.Horizontal),
                     snackbarHost = {
                         SnackbarHost(hostState = snackbarHostState)
                     },
@@ -336,10 +343,17 @@ fun App(
                             // make sure your DMTopAppBar uses containerColor = Color.Transparent inside
                             actions = {
                                 // keep your existing actions routing logic
-                                if (currentScreen.isPosScreens()) {
+                                if (currentScreen.isPosScreens() && currentScreen != PosScreens.CustomersScreen) {
                                     val bse = remember { navController.getBackStackEntry(PosScreens.POS.name) }
                                     currentScreen.actions(
                                         bse,
+                                        { navController.navigate(it.name) },
+                                        { navController.navigate(it) }
+                                    )
+                                } else if (currentScreen == PosScreens.OrderDetailsScreen) {
+                                    val ordersEntry = remember { navController.getBackStackEntry(PosScreens.Orders.name) }
+                                    currentScreen.actions(
+                                        ordersEntry,
                                         { navController.navigate(it.name) },
                                         { navController.navigate(it) }
                                     )
@@ -388,9 +402,16 @@ fun App(
                                 }
                             },
                             actions = {
-                                if (currentScreen.isPosScreens()) {
+                                if (currentScreen.isPosScreens() && currentScreen != PosScreens.CustomersScreen) {
                                     val backStackEntryAux = remember { navController.getBackStackEntry(PosScreens.POS.name) }
                                     currentScreen.actions(backStackEntryAux, { destination ->
+                                        navController.navigate(destination.name)
+                                    }, { route ->
+                                        navController.navigate(route)
+                                    })
+                                } else if (currentScreen == PosScreens.OrderDetailsScreen) {
+                                    val ordersEntry = remember { navController.getBackStackEntry(PosScreens.Orders.name) }
+                                    currentScreen.actions(ordersEntry, { destination ->
                                         navController.navigate(destination.name)
                                     }, { route ->
                                         navController.navigate(route)
@@ -409,6 +430,8 @@ fun App(
 
                     },
                     bottomBar = {
+                    val navigationBarBottom = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
+                    Box(Modifier.fillMaxWidth().padding(bottom = navigationBarBottom)) {
                     currentScreen.bottomBar?.let {
                         if (currentScreen == PosScreens.POSScreen || currentScreen == PosScreens.POSProductScreen || currentScreen == PosScreens.CartScreen) {
                             val auxbackStackEntry = remember { navController.getBackStackEntry(PosScreens.POS.name) }
@@ -427,6 +450,7 @@ fun App(
                             return@Scaffold
 
                         NavigationBar(
+                            windowInsets = WindowInsets(0, 0, 0, 0),
                             modifier = Modifier.fillMaxWidth().shadow(
                                 elevation = 10.dp,
                                 shape = RoundedCornerShape(topStart = 10.dp, topEnd = 10.dp)
@@ -521,9 +545,16 @@ fun App(
                         }
                     }
                     }
+                    }
                 ) { innerPadding ->
+                    val navigationBarBottom = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
+                    val showsBottomChrome = currentScreen.bottomBar != null ||
+                        currentScreen in bottomNavKeys.map(BottomNavKey::selectedScreen)
                     Navigation(
-                        modifier = Modifier.fillMaxSize().padding(innerPadding),
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .padding(innerPadding)
+                            .padding(bottom = if (showsBottomChrome) 0.dp else navigationBarBottom),
                         navController = navController,
                         appViewModel = appViewModel,
                         analyticsService = koinInject<AnalyticsService>()

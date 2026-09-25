@@ -52,7 +52,8 @@ import androidx.compose.material.icons.rounded.Inventory2
 import androidx.compose.material.icons.rounded.KeyboardArrowDown
 import androidx.compose.material.icons.rounded.KeyboardArrowUp
 import androidx.compose.material.icons.rounded.Link
-import androidx.compose.material.icons.rounded.MoreVert
+import androidx.compose.material.icons.rounded.Add
+import androidx.compose.material.icons.rounded.Remove
 import androidx.compose.material.icons.rounded.OpenInNew
 import androidx.compose.material.icons.rounded.Payment
 import androidx.compose.material.icons.rounded.Person
@@ -67,8 +68,6 @@ import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Divider
-import androidx.compose.material3.DropdownMenu
-import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExposedDropdownMenuBox
 import androidx.compose.material3.ExposedDropdownMenuDefaults
@@ -115,7 +114,7 @@ import com.teco.ventago.design_system.buttons.ButtonM
 import com.teco.ventago.design_system.buttons.OutlinedButtonM
 import com.teco.ventago.design_system.buttons.TextButtonM
 import com.teco.ventago.design_system.buttons.TextButtonS
-import com.teco.ventago.design_system.molecules.orders.OrderStatusChip
+import com.teco.ventago.design_system.molecules.orders.DocumentStatusChip
 import com.teco.ventago.design_system.loaders.shimmerBrush
 import com.teco.ventago.design_system.molecules.InstallmentDueDateFieldKmp
 import com.teco.ventago.design_system.organism.LoadingSheet
@@ -236,8 +235,6 @@ fun OrderDetailsActions(backStackEntry: NavBackStackEntry?,  navigateAny: (Any) 
     val uiState by viewModel.uiState.collectAsState()
     val order = uiState.order
 
-    val phoneNumber = uiState.order?.displayCustomerPhone()
-
     if (uiState.canPhysicalReturn && order != null && order.orderType !in listOf("04", "4", "05", "5", "06", "6", "07", "7")) {
         IconButton(onClick = { viewModel.openPhysicalReturn() }) {
             Icon(
@@ -248,121 +245,14 @@ fun OrderDetailsActions(backStackEntry: NavBackStackEntry?,  navigateAny: (Any) 
         }
     }
 
-    IconButton(onClick = {
-        copyToClipboard("Order Details", viewModel.getOrderDetailsMessage())
-    }) {
-        Icon(
-            imageVector = Icons.Rounded.ContentCopy,
-            contentDescription = "",
-            tint = MaterialTheme.colorScheme.primary
-        )
-    }
-
-    IconButton(onClick = {
-        phoneNumber?.let {
-            viewModel.showShareSheet(true)
-        } ?: run {
-            shareLink(viewModel.getOrderDetailsMessage())
-        }
-
-    }) {
+    IconButton(onClick = { viewModel.shareDocument() }) {
         Icon(
             imageVector = Icons.Rounded.Share,
             contentDescription = "",
             tint = MaterialTheme.colorScheme.primary
         )
     }
-
-
-    if (order?.invoiceStatus == InvoiceStatus.ISSUED.id) {
-        val documentType = order.orderType.let { FEDocumentType.fromCode(it) }
-        val isCreditOrDebitNote = documentType in listOf(
-            FEDocumentType.CREDIT_NOTE_REFERENCING_FE,
-            FEDocumentType.DEBIT_NOTE_REFERENCING_FE,
-            FEDocumentType.GENERIC_CREDIT_NOTE,
-            FEDocumentType.GENERIC_DEBIT_NOTE
-        )
-
-        if (!isCreditOrDebitNote) {
-            var menuExpanded by remember { mutableStateOf(false) }
-            Box {
-                IconButton(onClick = { menuExpanded = true }) {
-                    Icon(
-                        imageVector = Icons.Rounded.MoreVert,
-                        contentDescription = "Más opciones",
-                        tint = MaterialTheme.colorScheme.primary
-                    )
-                }
-
-                DropdownMenu(
-                    expanded = menuExpanded,
-                    onDismissRequest = { menuExpanded = false }
-                ) {
-                    val remainingCreditNoteCents = order.remainingCreditNoteCapacityCents()
-                    val canCreateCreditNote = remainingCreditNoteCents > 0L
-                    DropdownMenuItem(
-                        text = {
-                            Text(
-                                if (canCreateCreditNote) {
-                                    "Generar nota de crédito"
-                                } else {
-                                    "Límite de notas de crédito alcanzado"
-                                }
-                            )
-                        },
-                        enabled = canCreateCreditNote,
-                        onClick = {
-                            menuExpanded = false
-                            val cufe = order.externalInvoiceNumber ?: return@DropdownMenuItem
-
-                            navigateAny(
-                                PosNoteRoute(
-                                    op = FEDocumentType.CREDIT_NOTE_REFERENCING_FE.code,
-                                    cufe = cufe,
-                                    createdAt = order.createdAt,
-                                    customerId = order.customer?.id,
-                                    customerName = order.displayCustomerName(),
-                                    customerEmail = order.customer?.email,
-                                    customerphone = order.displayCustomerPhone(),
-                                    customerRuc = order.customer?.ruc,
-                                    customerStatus = order.customer?.status ?: 1,
-                                    customerInvoiceID = order.customer?.customerInvoiceID,
-                                    orderLinesJson = Json.encodeToString(order.lines),
-                                    maxCreditNoteAmountCents = remainingCreditNoteCents,
-                                    sourceOrderNumber = order.internalNumber
-                                )
-                            )
-                        }
-                    )
-
-                    DropdownMenuItem(
-                        text = { Text("Generar nota de débito") },
-                        onClick = {
-                            menuExpanded = false
-                            val cufe = order.externalInvoiceNumber ?: return@DropdownMenuItem
-                            navigateAny(
-                                PosNoteRoute(
-                                    op = FEDocumentType.DEBIT_NOTE_REFERENCING_FE.code,
-                                    cufe = cufe,
-                                    createdAt = order.createdAt,
-                                    customerId = order.customer?.id,
-                                    customerName = order.displayCustomerName(),
-                                    customerEmail = order.customer?.email,
-                                    customerphone = order.displayCustomerPhone(),
-                                    customerRuc = order.customer?.ruc,
-                                    customerStatus = order.customer?.status ?: 1,
-                                    customerInvoiceID = order.customer?.customerInvoiceID,
-                                    orderLinesJson = Json.encodeToString(order.lines)
-                                )
-                            )
-                        }
-                    )
-                }
-            }
-        }
-    }
 }
-
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -372,7 +262,6 @@ fun OrderDetailsScreen(
 ) {
 
     var showCancelDialog by remember { mutableStateOf(false) }
-    var showConfirmNonFiscalDialog by remember { mutableStateOf(false) }
     var cancelReason by remember { mutableStateOf("") }
     var showDeleteDialog by remember { mutableStateOf(false) }
     var deleteReason by remember { mutableStateOf("") }
@@ -429,8 +318,7 @@ fun OrderDetailsScreen(
         viewModel.hydrateSelectedOrderDetailsIfNeeded()
     }
 
-    val canShowCancelButton = order.invoiceStatus != InvoiceStatus.ISSUED.id &&
-            viewModel.isOrderCancellable(order.status)
+    val canShowCancelButton = canCancelOrder(order)
     val canShowDeleteButton = canDeleteOrder(order)
     val canShowReprintButton = viewModel.canShowReprintAction(order)
     val pendingCents = viewModel.totalOpenReceivableCents(order)
@@ -490,13 +378,7 @@ fun OrderDetailsScreen(
 
         // Invoicing card
         if (order.invoiceStatus != 0 && order.externalInvoiceNumber != null) {
-            OrderInvoicingCard(
-                order = order,
-                onShowCancelDialog = {
-                    viewModel.clearCancelOrderError()
-                    showCancelDialog = true
-                }
-            )
+            OrderInvoicingCard(order = order)
         }
 
         OrderRelatedDocumentsCard(
@@ -513,6 +395,7 @@ fun OrderDetailsScreen(
 
         // Action buttons
         if (order.status != OrderStatus.CANCELLED) {
+            OrderActionsDivider()
             val hasCurrentNonFiscal = order.hasCurrentNonFiscalDocument()
             if (order.invoiceStatus == InvoiceStatus.ISSUED.id || hasCurrentNonFiscal) {
                 ButtonM(
@@ -521,14 +404,76 @@ fun OrderDetailsScreen(
                     contentColor = MaterialTheme.colorScheme.onSecondary
                 ) {
                     OrderActionButtonContent(
-                        icon = Icons.Rounded.Visibility,
+                        icon = Icons.Rounded.Description,
                         label = if (hasCurrentNonFiscal) "Ver documento PDF" else "Ver factura PDF"
                     )
                 }
             }
+            val documentType = FEDocumentType.fromCode(order.orderType)
+            val isCreditOrDebitNote = documentType in listOf(
+                FEDocumentType.CREDIT_NOTE_REFERENCING_FE,
+                FEDocumentType.DEBIT_NOTE_REFERENCING_FE,
+                FEDocumentType.GENERIC_CREDIT_NOTE,
+                FEDocumentType.GENERIC_DEBIT_NOTE
+            )
+            if (order.invoiceStatus == InvoiceStatus.ISSUED.id && !isCreditOrDebitNote) {
+                val remainingCreditNoteCents = order.remainingCreditNoteCapacityCents()
+                val canCreateCreditNote = remainingCreditNoteCents > 0L
+                OrderOutlinedActionButton(
+                    label = if (canCreateCreditNote) "Generar nota de crédito" else "Límite de notas de crédito alcanzado",
+                    icon = Icons.Rounded.Remove,
+                    color = MaterialTheme.colorScheme.primary,
+                    enabled = canCreateCreditNote,
+                    onClick = {
+                        val cufe = order.externalInvoiceNumber ?: return@OrderOutlinedActionButton
+                        navigate(
+                            PosNoteRoute(
+                                op = FEDocumentType.CREDIT_NOTE_REFERENCING_FE.code,
+                                cufe = cufe,
+                                createdAt = order.createdAt,
+                                customerId = order.customer?.id,
+                                customerName = order.displayCustomerName(),
+                                customerEmail = order.customer?.email,
+                                customerphone = order.displayCustomerPhone(),
+                                customerRuc = order.customer?.ruc,
+                                customerStatus = order.customer?.status ?: 1,
+                                customerInvoiceID = order.customer?.customerInvoiceID,
+                                orderLinesJson = Json.encodeToString(order.lines),
+                                maxCreditNoteAmountCents = remainingCreditNoteCents,
+                                sourceOrderNumber = order.internalNumber
+                            ),
+                            null
+                        )
+                    }
+                )
+                OrderOutlinedActionButton(
+                    label = "Generar nota de débito",
+                    icon = Icons.Rounded.Add,
+                    color = MaterialTheme.colorScheme.primary,
+                    onClick = {
+                        val cufe = order.externalInvoiceNumber ?: return@OrderOutlinedActionButton
+                        navigate(
+                            PosNoteRoute(
+                                op = FEDocumentType.DEBIT_NOTE_REFERENCING_FE.code,
+                                cufe = cufe,
+                                createdAt = order.createdAt,
+                                customerId = order.customer?.id,
+                                customerName = order.displayCustomerName(),
+                                customerEmail = order.customer?.email,
+                                customerphone = order.displayCustomerPhone(),
+                                customerRuc = order.customer?.ruc,
+                                customerStatus = order.customer?.status ?: 1,
+                                customerInvoiceID = order.customer?.customerInvoiceID,
+                                orderLinesJson = Json.encodeToString(order.lines)
+                            ),
+                            null
+                        )
+                    }
+                )
+            }
             if (viewModel.canConfirmNonFiscal(order)) {
                 ButtonM(
-                    onClick = { showConfirmNonFiscalDialog = true },
+                    onClick = { viewModel.openGenerateNonFiscal() },
                     containerColor = Color(0xFF2E7D32),
                     contentColor = Color.White
                 ) {
@@ -585,23 +530,6 @@ fun OrderDetailsScreen(
                 }
             }
 
-            val hasIssuedAdditionalActions = order.invoiceStatus == InvoiceStatus.ISSUED.id &&
-                    ((canShowReprintButton || uiState.reprintInFlight) ||
-                            (canManageReceivables && uiState.canMarkPaid && viewModel.totalOpenReceivableCents(order) > 0L))
-            val hasDraftAdditionalActions = (order.invoiceStatus == InvoiceStatus.NONE.id ||
-                    order.invoiceStatus == InvoiceStatus.PENDING.id) && canShowCancelButton
-            val hasPaymentLinkActions = canManageReceivables &&
-                    uiState.canCreatePaymentLink &&
-                    (canGeneratePaymentLink || canCopyOrSharePaymentLink || hasActiveYappyOnsiteIntent)
-            val hasAdditionalActions = hasIssuedAdditionalActions ||
-                    hasDraftAdditionalActions ||
-                    hasPaymentLinkActions ||
-                    canShowDeleteButton
-
-            if (hasAdditionalActions) {
-                OrderActionsDivider()
-            }
-
             if (order.invoiceStatus == InvoiceStatus.ISSUED.id) {
                 if (canShowReprintButton || uiState.reprintInFlight) {
                     OrderOutlinedActionButton(
@@ -622,11 +550,9 @@ fun OrderDetailsScreen(
                 }
             }
 
-            if ((order.invoiceStatus == InvoiceStatus.NONE.id ||
-                        order.invoiceStatus == InvoiceStatus.PENDING.id) && canShowCancelButton
-            ) {
+            if (canShowCancelButton) {
                 OrderOutlinedActionButton(
-                    label = "Anular pedido",
+                    label = "Anular documento",
                     icon = Icons.Rounded.Close,
                     color = MaterialTheme.colorScheme.error,
                     onClick = {
@@ -706,7 +632,7 @@ fun OrderDetailsScreen(
 
             if (canShowDeleteButton) {
                 OrderOutlinedActionButton(
-                    label = "Eliminar pedido",
+                    label = "Eliminar Orden",
                     icon = Icons.Rounded.Delete,
                     color = MaterialTheme.colorScheme.error,
                     onClick = {
@@ -1392,32 +1318,6 @@ fun OrderDetailsScreen(
             )
         }
 
-        if (showConfirmNonFiscalDialog) {
-            val confirmMessage = if (order.status == OrderStatus.DRAFT) {
-                "Generar el documento no fiscal confirmará la venta y moverá inventario. ¿Deseas continuar?"
-            } else {
-                "Se generará un documento no fiscal para esta orden. No es factura electrónica ni comprobante fiscal ante DGI. ¿Deseas continuar?"
-            }
-            AlertDialog(
-                onDismissRequest = { showConfirmNonFiscalDialog = false },
-                title = { Text("Generar documento no fiscal") },
-                text = { Text(confirmMessage) },
-                confirmButton = {
-                    ButtonM(onClick = {
-                        showConfirmNonFiscalDialog = false
-                        viewModel.confirmNonFiscal()
-                    }) {
-                        Text("Continuar")
-                    }
-                },
-                dismissButton = {
-                    TextButton(onClick = { showConfirmNonFiscalDialog = false }) {
-                        Text("Cancelar")
-                    }
-                }
-            )
-        }
-
         if (showCancelDialog) {
             ModalBottomSheet(
                 containerColor = MaterialTheme.colorScheme.background,
@@ -1448,7 +1348,7 @@ fun OrderDetailsScreen(
         if (showDeleteDialog) {
             AlertDialog(
                 onDismissRequest = { showDeleteDialog = false },
-                title = { Text("Eliminar pedido") },
+                title = { Text("Eliminar Orden") },
                 text = {
                     Column {
                         Text("Ingresa el motivo de eliminación del pedido.")
@@ -1623,7 +1523,10 @@ private fun OrderHeaderCard(
                         style = titleMediumBold()
                     )
                 }
-                OrderStatusChip(status = order.status, onClick = onStatusClick)
+                DocumentStatusChip(
+                    label = order.listDocumentStatusLabel(),
+                    onClick = onStatusClick
+                )
             }
             Spacer(modifier = Modifier.height(12.dp))
             InfoRow("Fecha", DateFormat.getOrdersFormattedDate(order.createdAt))
@@ -2131,7 +2034,7 @@ private fun OrderActionsDivider() {
     ) {
         Divider(modifier = Modifier.weight(1f))
         Text(
-            text = "Acciones del pedido",
+            text = "Acciones del documento",
             style = labelSmall(color = MaterialTheme.colorScheme.onSurfaceVariant),
             modifier = Modifier.padding(horizontal = 10.dp)
         )
@@ -2518,7 +2421,7 @@ private fun normalizeStatusToken(raw: String?): String {
 }
 
 @Composable
-private fun OrderInvoicingCard(order: Order, onShowCancelDialog: () -> Unit) {
+private fun OrderInvoicingCard(order: Order) {
     Card(
         modifier = Modifier.fillMaxWidth(),
         elevation = CardDefaults.cardElevation(2.dp),
@@ -2574,51 +2477,8 @@ private fun OrderInvoicingCard(order: Order, onShowCancelDialog: () -> Unit) {
 
             Row(
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween
+                horizontalArrangement = Arrangement.End
             ) {
-                val canCancel =
-                    canCancelInvoice(order.invoiceStatus ?: 0, order.createdAt)
-                var showCancelConfirmDialog by remember { mutableStateOf(false) }
-                if (canCancel) {
-                    TextButtonS(
-                        label = "Anular factura",
-                        color = if (canCancel) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.outline,
-                        prefixIcon = rememberVectorPainter(Icons.Rounded.Cancel),
-                    ) {
-                        showCancelConfirmDialog = true
-                    }
-                    if (showCancelConfirmDialog) {
-                        AlertDialog(
-                            onDismissRequest = { showCancelConfirmDialog = false },
-                            title = { Text("Confirmar anulación") },
-                            text = {
-                                Text(
-                                    "¿Deseas anular esta factura?\n" +
-                                            "• Solo es posible dentro de los 7 días de emitida.\n" +
-                                            "• Esta acción no se puede deshacer."
-                                )
-                            },
-                            confirmButton = {
-                                Button(
-                                    onClick = {
-                                        showCancelConfirmDialog = false
-                                        onShowCancelDialog()
-                                    },
-                                    colors = ButtonDefaults.buttonColors(
-                                        containerColor = MaterialTheme.colorScheme.error,
-                                        contentColor = MaterialTheme.colorScheme.onError
-                                    )
-                                ) { Text("Anular") }
-                            },
-                            dismissButton = {
-                                Button(
-                                    onClick = { showCancelConfirmDialog = false }
-                                ) { Text("Cancelar") }
-                            }
-                        )
-                    }
-                }
-                Spacer(modifier = Modifier.weight(1f, fill = true))
                 TextButtonS(
                     label = "Ver en la DGI",
                     color = MaterialTheme.colorScheme.secondary,
@@ -2777,7 +2637,7 @@ private fun CancelOrderBottomSheet(
             }
             Spacer(modifier = Modifier.width(10.dp))
             Column(modifier = Modifier.weight(1f)) {
-                Text("Anular pedido", style = titleMediumBold())
+                Text("Anular documento", style = titleMediumBold())
                 Text(
                     "Esta acción requiere un motivo para continuar.",
                     style = labelSmall(color = MaterialTheme.colorScheme.onSurfaceVariant)
@@ -2862,7 +2722,7 @@ private fun CancelOrderBottomSheet(
                 containerColor = MaterialTheme.colorScheme.error,
                 contentColor = MaterialTheme.colorScheme.onError
             ) {
-                Text("Anular")
+                Text("Anular documento")
             }
         }
     }
@@ -3272,7 +3132,7 @@ fun ManualPaymentBottomSheet(
             verticalAlignment = Alignment.CenterVertically
         ) {
             Text(
-                "Registrar pago manual",
+                if (uiState.manualPayment.confirmNonFiscal) "Generar documento" else "Registrar pago manual",
                 style = MaterialTheme.typography.titleLarge
             )
             Spacer(Modifier.weight(1f))
@@ -3385,7 +3245,11 @@ fun ManualPaymentBottomSheet(
                 enabled = allocated >= totalToCharge
             ) {
                 Text(
-                    if (uiState.invoicingEnabled) "Confirmar cobro y facturar" else "Confirmar cobro",
+                    when {
+                        uiState.manualPayment.confirmNonFiscal -> "Generar documento"
+                        uiState.invoicingEnabled -> "Confirmar cobro y facturar"
+                        else -> "Confirmar cobro"
+                    },
                     style = labelLarge().copy(color = MaterialTheme.colorScheme.onPrimary)
                 )
             }
@@ -3438,19 +3302,34 @@ fun paymentStatusLabel(paymentStatus: Int): String = when (paymentStatus) {
 }
 
 private fun canDeleteOrder(order: Order): Boolean {
-    val invoiceStatus = order.invoiceStatus ?: InvoiceStatus.NONE.id
-    val hasFailedOrNotInvoicedStatus = invoiceStatus == InvoiceStatus.FAILED.id ||
-            invoiceStatus == InvoiceStatus.NONE.id
-
-    val hasAutomaticPaymentRegistered = order.orderPayments.any { payment ->
-        payment.isAutomatic &&
-            payment.voidedAt.isNullOrBlank() &&
-            (payment.charged.toLongCents() - payment.refunded.toLongCents()) > 0L
+    if (order.orderPayments.any { payment ->
+            payment.isAutomatic &&
+                payment.voidedAt.isNullOrBlank() &&
+                (payment.charged.toLongCents() - payment.refunded.toLongCents()) > 0L
+        }
+    ) {
+        return false
     }
+    val invoiceStatus = order.invoiceStatus ?: InvoiceStatus.NONE.id
+    val isDraftWithoutInvoice = order.status == OrderStatus.DRAFT &&
+        invoiceStatus == InvoiceStatus.NONE.id &&
+        order.externalInvoiceNumber.isNullOrBlank()
+    return isDraftWithoutInvoice || invoiceStatus == InvoiceStatus.FAILED.id
+}
 
-    if (hasAutomaticPaymentRegistered) return false
-
-    return order.status == OrderStatus.DRAFT || hasFailedOrNotInvoicedStatus
+private fun canCancelOrder(order: Order): Boolean {
+    if (order.status == OrderStatus.CANCELLED) return false
+    if (order.isUninvoicedInternalDocument() &&
+        order.status == OrderStatus.CONFIRMED &&
+        order.externalInvoiceNumber.isNullOrBlank()
+    ) {
+        return true
+    }
+    val invoiceStatus = order.invoiceStatus ?: InvoiceStatus.NONE.id
+    if (invoiceStatus != InvoiceStatus.ISSUED.id) {
+        return order.paymentLinks.isNotEmpty()
+    }
+    return canCancelInvoice(invoiceStatus, order.createdAt)
 }
 
 fun paymentStatusChipColors(paymentStatus: Int): Pair<Color, Color> = when (paymentStatus) {

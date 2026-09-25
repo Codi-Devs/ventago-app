@@ -6,6 +6,7 @@ import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
@@ -16,6 +17,9 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
@@ -33,13 +37,16 @@ import androidx.compose.material.icons.outlined.Edit
 import androidx.compose.material.icons.outlined.Image
 import androidx.compose.material.icons.outlined.Inventory
 import androidx.compose.material.icons.rounded.Close
+import androidx.compose.material.icons.rounded.KeyboardArrowRight
 import androidx.compose.material.icons.rounded.ExpandMore
 import androidx.compose.material.icons.rounded.QrCodeScanner
+import androidx.compose.material.icons.rounded.Search
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -644,7 +651,9 @@ fun AddItemScreen(
                 keyOptions = viewModel.additionalInfoOptions(),
                 keyValueTypes = viewModel.additionalInfoValueTypes(),
                 onOpenGoodsDialog = { viewModel.onOpenGoodsDialog() },
-                onOpenUnitMeasureDialog = { viewModel.onOpenUnitMeasureDialog() }
+                onOpenUnitMeasureDialog = { viewModel.onOpenUnitMeasureDialog() },
+                productUnitCode = uiState.unitMeasureCode,
+                onSyncProductUnit = viewModel::syncDgiUnitFromProduct,
             )
         }
 
@@ -785,11 +794,7 @@ fun AddItemScreen(
     GoodsSelectorDialog(
         show = uiState.showGoodsDialog,
         goodsSegments = uiState.goodsSegments,
-        selectedSegmentIndex = uiState.selectedSegmentIndex,
-        selectedFamilyIndex = uiState.selectedFamilyIndex,
-        onSelectSegment = { viewModel.onSelectSegment(it) },
-        onSelectFamily = { viewModel.onSelectFamily(it) },
-        onConfirm = { viewModel.onConfirmGoodsSelection() },
+        onSelect = { code, description -> viewModel.onSelectGoodsFamily(code, description) },
         onDismiss = { viewModel.onCloseGoodsDialog() }
     )
 
@@ -1138,6 +1143,48 @@ internal fun OTITaxesContent(
 }
 
 @Composable
+private fun DgiSelectCard(
+    label: String,
+    value: String,
+    emptyLabel: String,
+    onClick: () -> Unit,
+) {
+    val hasValue = value.isNotBlank()
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .border(
+                BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.45f)),
+                RoundedCornerShape(14.dp)
+            )
+            .clickable(onClick = onClick)
+            .padding(horizontal = 14.dp, vertical = 12.dp)
+    ) {
+        Text(label, style = labelMedium(MaterialTheme.colorScheme.onSurfaceVariant))
+        Spacer(Modifier.height(4.dp))
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text(
+                text = if (hasValue) value else emptyLabel,
+                style = bodyMedium(
+                    if (hasValue) MaterialTheme.colorScheme.secondary
+                    else MaterialTheme.colorScheme.onSurfaceVariant
+                ),
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.weight(1f)
+            )
+            Text("Seleccionar", style = labelMedium(MaterialTheme.colorScheme.secondary))
+            Icon(
+                imageVector = Icons.Rounded.KeyboardArrowRight,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.secondary,
+                modifier = Modifier.size(18.dp)
+            )
+        }
+    }
+}
+
+@Composable
 fun InformacionAdicionalContent(
     entries: List<AdditionalEntryUI>,
     selectedKeyIndex: Int,
@@ -1149,59 +1196,83 @@ fun InformacionAdicionalContent(
     keyOptions: List<String>,
     keyValueTypes: List<AdditionalValueType>,
     onOpenGoodsDialog: () -> Unit,
-    onOpenUnitMeasureDialog: () -> Unit
+    onOpenUnitMeasureDialog: () -> Unit,
+    productUnitCode: String,
+    onSyncProductUnit: (String) -> Unit,
 ) {
-    // Selector de clave
-    DMDropDownField(
-        label = "Seleccionar dato",
-        items = keyOptions,
-        selectedIndex = selectedKeyIndex,
-        onItemSelected = { idx, _ -> onKeySelected(idx) },
-        modifier = Modifier.fillMaxWidth(),
-        isError = false
+    LaunchedEffect(productUnitCode) {
+        onSyncProductUnit(productUnitCode)
+    }
+
+    val goodsEntry = entries.firstOrNull { it.keyName == "panama_goods_services_code" }
+    val unitEntry = entries.firstOrNull { it.keyName == "panama_goods_services_unit_code" }
+    val extraEntries = entries.filter {
+        it.keyName != "panama_goods_services_code" && it.keyName != "panama_goods_services_unit_code"
+    }
+
+    DgiSelectCard(
+        label = "Código de bienes y servicios",
+        value = goodsEntry?.displayValue?.ifBlank { goodsEntry.rawValue }.orEmpty(),
+        emptyLabel = "Sin código seleccionado",
+        onClick = onOpenGoodsDialog,
+    )
+    Spacer(Modifier.height(8.dp))
+    DgiSelectCard(
+        label = "Unidad de medida",
+        value = unitEntry?.displayValue?.ifBlank { unitEntry.rawValue }.orEmpty(),
+        emptyLabel = "Sin unidad seleccionada",
+        onClick = onOpenUnitMeasureDialog,
     )
 
-    Spacer(Modifier.height(8.dp))
-
-    // Campo dinámico según tipo
-    val inputLabel = when (keyValueTypes.getOrNull(selectedKeyIndex)) {
-        AdditionalValueType.DATE -> "Valor (AAAA-MM-DD)"
-        AdditionalValueType.NUMBER -> "Valor numérico"
-        else -> "Valor (texto)"
+    Spacer(Modifier.height(16.dp))
+    var extrasExpanded by rememberSaveable { mutableStateOf(false) }
+    val extrasRotation by animateFloatAsState(if (extrasExpanded) 180f else 0f)
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable { extrasExpanded = !extrasExpanded }
+            .padding(vertical = 4.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text("Otros datos", style = bodyMediumBold())
+        Icon(
+            imageVector = Icons.Rounded.ExpandMore,
+            contentDescription = null,
+            modifier = Modifier
+                .padding(start = 4.dp)
+                .rotate(extrasRotation),
+            tint = MaterialTheme.colorScheme.secondary
+        )
     }
-    val kbType = when (keyValueTypes.getOrNull(selectedKeyIndex)) {
-        AdditionalValueType.NUMBER -> KeyboardType.Number
-        else -> KeyboardType.Text
-    }
+    AnimatedVisibility(visible = extrasExpanded) {
+        Column {
+            Text(
+                text = "Fechas, seguro u otra nota. Agrégalos solo si los necesitas.",
+                style = labelMedium(MaterialTheme.colorScheme.onSurfaceVariant),
+            )
+            Spacer(Modifier.height(8.dp))
 
-    val isGoodsServicesCodeKey = keyOptions.getOrNull(selectedKeyIndex)?.contains("Código bienes/servicios") == true
-    val goodsServicesCodeExists = entries.any { it.keyName == "panama_goods_services_code" }
-    val shouldShowGoodsDialogButton = keyValueTypes.getOrNull(selectedKeyIndex) == AdditionalValueType.STRING &&
-        isGoodsServicesCodeKey &&
-        !goodsServicesCodeExists
-
-    val isGoodsServicesUnitKey = keyOptions.getOrNull(selectedKeyIndex)?.contains("Unidad bienes/servicios") == true
-    val shouldShowUnitMeasureDialogButton = keyValueTypes.getOrNull(selectedKeyIndex) == AdditionalValueType.STRING &&
-        isGoodsServicesUnitKey
-
-    when {
-        shouldShowGoodsDialogButton -> {
-            TextButtonS(
-                label = "Seleccionar código de bienes/servicios",
+            DMDropDownField(
+                label = "Seleccionar dato",
+                items = keyOptions,
+                selectedIndex = selectedKeyIndex,
+                onItemSelected = { idx, _ -> onKeySelected(idx) },
                 modifier = Modifier.fillMaxWidth(),
-            ) {
-                onOpenGoodsDialog()
+                isError = false
+            )
+
+            Spacer(Modifier.height(8.dp))
+
+            val inputLabel = when (keyValueTypes.getOrNull(selectedKeyIndex)) {
+                AdditionalValueType.DATE -> "Valor (AAAA-MM-DD)"
+                AdditionalValueType.NUMBER -> "Valor numérico"
+                else -> "Valor (texto)"
             }
-        }
-        shouldShowUnitMeasureDialogButton -> {
-            TextButtonS(
-                label = "Seleccionar unidad de medida",
-                modifier = Modifier.fillMaxWidth(),
-            ) {
-                onOpenUnitMeasureDialog()
+            val kbType = when (keyValueTypes.getOrNull(selectedKeyIndex)) {
+                AdditionalValueType.NUMBER -> KeyboardType.Number
+                else -> KeyboardType.Text
             }
-        }
-        else -> {
+
             DMOutlinedTextField(
                 text = inputValue,
                 label = inputLabel,
@@ -1211,42 +1282,43 @@ fun InformacionAdicionalContent(
                 imeAction = ImeAction.Done,
                 keyboardType = kbType,
             )
-        }
-    }
 
-    Spacer(Modifier.height(8.dp))
+            Spacer(Modifier.height(8.dp))
 
-    ButtonM(
-        onClick = onAdd,
-        modifier = Modifier
-    ) { Text("Agregar") }
+            ButtonM(
+                onClick = onAdd,
+                modifier = Modifier
+            ) { Text("Agregar") }
 
-    if (entries.isNotEmpty()) {
-        Spacer(Modifier.height(12.dp))
-        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            entries.forEachIndexed { idx, e ->
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .background(
-                            vanishedBackgroundColor(),
-                            RoundedCornerShape(8.dp)
-                        )
-                        .dashedBorder(
-                            strokeWidth = 1.5.dp,
-                            color = MaterialTheme.colorScheme.secondary,
-                            cornerRadiusDp = 8.dp
-                        )
-                        .padding(12.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.SpaceBetween
-                ) {
-                    Column(Modifier.weight(1f)) {
-                        Text(e.title, style = bodyMedium(MaterialTheme.colorScheme.onSurface))
-                        Text(e.displayValue, style = bodyMedium(MaterialTheme.colorScheme.onSurfaceVariant))
-                    }
-                    IconButton(onClick = { onDelete(idx) }) {
-                        Icon(Icons.Outlined.Delete, contentDescription = "Eliminar")
+            if (extraEntries.isNotEmpty()) {
+                Spacer(Modifier.height(12.dp))
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    extraEntries.forEach { e ->
+                        val idx = entries.indexOf(e)
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .background(
+                                    vanishedBackgroundColor(),
+                                    RoundedCornerShape(8.dp)
+                                )
+                                .dashedBorder(
+                                    strokeWidth = 1.5.dp,
+                                    color = MaterialTheme.colorScheme.secondary,
+                                    cornerRadiusDp = 8.dp
+                                )
+                                .padding(12.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            Column(Modifier.weight(1f)) {
+                                Text(e.title, style = bodyMedium(MaterialTheme.colorScheme.onSurface))
+                                Text(e.displayValue, style = bodyMedium(MaterialTheme.colorScheme.onSurfaceVariant))
+                            }
+                            IconButton(onClick = { onDelete(idx) }) {
+                                Icon(Icons.Outlined.Delete, contentDescription = "Eliminar")
+                            }
+                        }
                     }
                 }
             }
@@ -1254,55 +1326,85 @@ fun InformacionAdicionalContent(
     }
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun GoodsSelectorDialog(
     show: Boolean,
     goodsSegments: List<GoodsSegment>,
-    selectedSegmentIndex: Int,
-    selectedFamilyIndex: Int,
-    onSelectSegment: (Int) -> Unit,
-    onSelectFamily: (Int) -> Unit,
-    onConfirm: () -> Unit,
+    onSelect: (String, String) -> Unit,
     onDismiss: () -> Unit,
 ) {
     if (!show) return
 
-    AlertDialog(
+    val families = remember(goodsSegments) {
+        goodsSegments.flatMap { it.families }.distinctBy { it.code }
+    }
+    var searchQuery by remember { mutableStateOf("") }
+    val normalizedQuery = remember(searchQuery) { searchQuery.normalizeGoodsSearch() }
+    val filtered = remember(families, normalizedQuery) {
+        if (normalizedQuery.isBlank()) families
+        else families.filter { family ->
+            "${family.code}${family.description}".normalizeGoodsSearch().contains(normalizedQuery)
+        }
+    }
+    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+
+    ModalBottomSheet(
         onDismissRequest = onDismiss,
-        confirmButton = {
-            TextButton(onClick = onConfirm) { Text("Confirmar") }
-        },
-        dismissButton = {
-            TextButton(onClick = onDismiss) { Text("Cancelar") }
-        },
-        title = { Text("Seleccionar código de bienes y servicios") },
-        text = {
-            Column(modifier = Modifier.fillMaxWidth()) {
-                Text("Seleccione el segmento:")
-                DMDropDownField(
-                    label = "Segmento",
-                    items = goodsSegments.map { "${it.code} - ${it.description}" },
-                    selectedIndex = selectedSegmentIndex,
-                    onItemSelected = { idx, _ -> onSelectSegment(idx) },
-                    modifier = Modifier.fillMaxWidth()
-                )
-
-                Spacer(Modifier.height(8.dp))
-
-                val families = goodsSegments.getOrNull(selectedSegmentIndex)?.families ?: emptyList()
-                if (families.isNotEmpty()) {
-                    Text("Seleccione la familia:")
-                    DMDropDownField(
-                        label = "Familia",
-                        items = families.map { "${it.code} - ${it.description}" },
-                        selectedIndex = selectedFamilyIndex,
-                        onItemSelected = { idx, _ -> onSelectFamily(idx) },
-                        modifier = Modifier.fillMaxWidth()
-                    )
+        sheetState = sheetState,
+        containerColor = MaterialTheme.colorScheme.background
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp, vertical = 8.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            Text("Selecciona un código", style = bodyMediumBold())
+            DMOutlinedTextField(
+                text = searchQuery,
+                label = "Buscar por código o nombre",
+                modifier = Modifier.fillMaxWidth(),
+                onChange = { searchQuery = it },
+                leadingIcon = Icons.Rounded.Search,
+                trailingIcon = if (searchQuery.isNotBlank()) Icons.Rounded.Close else null,
+                trailingIconClick = { searchQuery = "" }
+            )
+            LazyColumn(modifier = Modifier.heightIn(max = 420.dp)) {
+                if (filtered.isEmpty()) {
+                    item {
+                        Text(
+                            text = "No se encontraron códigos",
+                            style = labelMedium(MaterialTheme.colorScheme.onSurfaceVariant),
+                            modifier = Modifier.padding(vertical = 12.dp)
+                        )
+                    }
+                } else {
+                    items(filtered, key = { it.code }) { family ->
+                        Column(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable { onSelect(family.code, family.description) }
+                                .padding(vertical = 12.dp)
+                        ) {
+                            Text(
+                                text = "${family.code} - ${family.description}",
+                                style = bodyMediumBold(),
+                                maxLines = 2,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                        }
+                        HorizontalDivider()
+                    }
                 }
             }
+            Spacer(Modifier.height(16.dp))
         }
-    )
+    }
+}
+
+private fun String.normalizeGoodsSearch(): String {
+    return lowercase().replace("\\s+".toRegex(), "")
 }
 
 @Composable
@@ -1490,7 +1592,9 @@ fun InformacionAdicionalCard(
     keyOptions: List<String>,
     keyValueTypes: List<AdditionalValueType>,
     onOpenGoodsDialog: () -> Unit,
-    onOpenUnitMeasureDialog: () -> Unit
+    onOpenUnitMeasureDialog: () -> Unit,
+    productUnitCode: String = "und",
+    onSyncProductUnit: (String) -> Unit = {},
 ) {
     Card(
         modifier = Modifier
@@ -1515,7 +1619,9 @@ fun InformacionAdicionalCard(
                 keyOptions = keyOptions,
                 keyValueTypes = keyValueTypes,
                 onOpenGoodsDialog = onOpenGoodsDialog,
-                onOpenUnitMeasureDialog = onOpenUnitMeasureDialog
+                onOpenUnitMeasureDialog = onOpenUnitMeasureDialog,
+                productUnitCode = productUnitCode,
+                onSyncProductUnit = onSyncProductUnit,
             )
         }
     }

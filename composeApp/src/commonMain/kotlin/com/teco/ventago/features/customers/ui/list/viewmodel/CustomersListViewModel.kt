@@ -8,6 +8,8 @@ import com.teco.ventago.features.auth.domain.IAuthService
 import com.teco.ventago.features.customers.domain.CustomerService
 import com.teco.ventago.features.financialProfile.domain.FinancialProfileService
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.launchIn
 import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.launch
@@ -20,6 +22,7 @@ class CustomersListViewModel(
 ) : BaseViewModel<CustomersListState, CustomersListUiEvent>(CustomersListState()) {
 
     private var businessId: Int = -1
+    private var nameSearchJob: Job? = null
 
     init {
         viewModelScope.launch {
@@ -59,11 +62,29 @@ class CustomersListViewModel(
         }
     }
 
-    fun setNameFilter(value: String) = updateState { copy(nameFilter = value) }
+    fun setNameFilter(value: String) {
+        updateState { copy(nameFilter = value) }
+        nameSearchJob?.cancel()
+        nameSearchJob = viewModelScope.launch {
+            delay(300)
+            applyFilters()
+        }
+    }
+
+    fun clearNameFilter() {
+        nameSearchJob?.cancel()
+        updateState { copy(nameFilter = "") }
+        applyFilters()
+    }
+
+    fun openFilters() = updateState { copy(showFilters = true) }
+
+    fun dismissFilters() = updateState { copy(showFilters = false) }
     fun setRucFilter(value: String) = updateState { copy(rucFilter = value) }
     fun setEmailFilter(value: String) = updateState { copy(emailFilter = value) }
 
     fun clearFilters() {
+        nameSearchJob?.cancel()
         updateState {
             copy(
                 nameFilter = "",

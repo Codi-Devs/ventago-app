@@ -589,7 +589,9 @@ fun ItemScreenContent(
                 keyOptions = viewModel.additionalInfoOptions(),
                 keyValueTypes = viewModel.additionalInfoValueTypes(),
                 onOpenGoodsDialog = { viewModel.onOpenGoodsDialog() },
-                onOpenUnitMeasureDialog = { viewModel.onOpenUnitMeasureDialog() }
+                onOpenUnitMeasureDialog = { viewModel.onOpenUnitMeasureDialog() },
+                productUnitCode = uiState.unitMeasureCode,
+                onSyncProductUnit = viewModel::syncDgiUnitFromProduct,
             )
         }
 
@@ -698,11 +700,7 @@ fun ItemScreenContent(
     GoodsSelectorDialog(
         show = uiState.showGoodsDialog,
         goodsSegments = uiState.goodsSegments,
-        selectedSegmentIndex = uiState.selectedSegmentIndex,
-        selectedFamilyIndex = uiState.selectedFamilyIndex,
-        onSelectSegment = { viewModel.onSelectSegment(it) },
-        onSelectFamily = { viewModel.onSelectFamily(it) },
-        onConfirm = { viewModel.onConfirmGoodsSelection() },
+        onSelect = { code, description -> viewModel.onSelectGoodsFamily(code, description) },
         onDismiss = { viewModel.onCloseGoodsDialog() }
     )
 

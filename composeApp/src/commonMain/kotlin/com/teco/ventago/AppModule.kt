@@ -599,7 +599,9 @@ internal fun appModule() = module {
                 ),
                 logger = get()
             ),
-            posProvisioningService = get()
+            posProvisioningService = get(),
+            changesManager = get(),
+            storage = get(),
         )
     }
 

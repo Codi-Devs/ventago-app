@@ -3,12 +3,14 @@ package com.teco.ventago.features.expenses.ui.details
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -16,6 +18,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.AccountTree
 import androidx.compose.material.icons.rounded.Business
 import androidx.compose.material.icons.rounded.CalendarToday
 import androidx.compose.material.icons.rounded.CameraAlt
@@ -28,6 +31,7 @@ import androidx.compose.material.icons.rounded.Collections
 import androidx.compose.material.icons.rounded.History
 import androidx.compose.material.icons.rounded.Inventory2
 import androidx.compose.material.icons.rounded.KeyboardArrowDown
+import androidx.compose.material.icons.rounded.KeyboardArrowRight
 import androidx.compose.material.icons.rounded.KeyboardArrowUp
 import androidx.compose.material.icons.rounded.Notes
 import androidx.compose.material.icons.rounded.Payment
@@ -394,12 +398,12 @@ private fun ConceptSummaryCard(
     canEditConcepts: Boolean,
     onEditConcepts: () -> Unit
 ) {
-    val statusLabel = when (expense.categorizationStatus) {
-        "categorized" -> "Con concepto"
-        "partial" -> "Parcial"
-        else -> "Sin concepto"
-    }
-    val summary = "${expense.categorizedItemsCount ?: 0}/${expense.totalItemsCount ?: expense.items.orEmpty().size} items"
+    val itemSummary = "${expense.categorizedItemsCount ?: 0}/${expense.totalItemsCount ?: expense.items.orEmpty().size} ítems"
+    val conceptLabel = buildExpenseConceptLabel(expense)
+    val hasConcept = expense.categorizationStatus == "categorized" ||
+        expense.categorizationStatus == "partial" ||
+        expense.defaultAccountId != null ||
+        expense.items.orEmpty().any { it.expenseAccountId != null }
 
     Card(
         modifier = Modifier.fillMaxWidth(),
@@ -412,33 +416,81 @@ private fun ConceptSummaryCard(
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Text("Concepto", style = bodyMediumBold())
-                if (canEditConcepts) {
-                    TextButton(onClick = onEditConcepts) {
-                        Text(
-                            text = "Editar conceptos",
-                            color = MaterialTheme.colorScheme.secondary
-                        )
-                    }
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(
+                        imageVector = Icons.Rounded.AccountTree,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.secondary,
+                        modifier = Modifier.size(20.dp)
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text("Concepto", style = bodyMediumBold())
+                }
+                ConceptStatusBadge(expense.categorizationStatus)
+            }
+            Spacer(modifier = Modifier.height(12.dp))
+            Text(
+                text = if (hasConcept) conceptLabel else "Sin concepto seleccionado",
+                style = bodyMedium(
+                    if (hasConcept) MaterialTheme.colorScheme.secondary
+                    else MaterialTheme.colorScheme.onSurfaceVariant
+                ),
+                maxLines = 3,
+                overflow = TextOverflow.Ellipsis
+            )
+            Spacer(modifier = Modifier.height(4.dp))
+            Text(
+                text = itemSummary,
+                style = labelSmall(color = MaterialTheme.colorScheme.onSurfaceVariant)
+            )
+            if (canEditConcepts) {
+                Spacer(modifier = Modifier.height(8.dp))
+                TextButton(
+                    onClick = onEditConcepts,
+                    modifier = Modifier.padding(start = 0.dp)
+                ) {
+                    Text(
+                        text = "Editar",
+                        color = MaterialTheme.colorScheme.secondary
+                    )
+                    Icon(
+                        imageVector = Icons.Rounded.KeyboardArrowRight,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.secondary,
+                        modifier = Modifier.size(18.dp)
+                    )
                 }
             }
-            InfoRow("Estado", statusLabel)
-            Spacer(modifier = Modifier.height(4.dp))
-            InfoRow("Items", summary)
-            expense.defaultAccount?.name?.let {
-                Spacer(modifier = Modifier.height(4.dp))
-                InfoRow("Concepto factura", it, maxLines = 4)
-            } ?: expense.defaultAccountId?.let {
-                Spacer(modifier = Modifier.height(4.dp))
-                InfoRow("Concepto factura", "Concepto #$it", maxLines = 2)
-            }
-            Spacer(modifier = Modifier.height(8.dp))
-            Text(
-                text = buildExpenseConceptLabel(expense),
-                style = bodyMediumBold(color = MaterialTheme.colorScheme.primary)
-            )
         }
     }
+}
+
+@Composable
+private fun ConceptStatusBadge(status: String?) {
+    val (label, container, content) = when (status) {
+        "categorized" -> Triple(
+            "Con concepto",
+            MaterialTheme.colorScheme.secondary.copy(alpha = 0.16f),
+            MaterialTheme.colorScheme.secondary
+        )
+        "partial" -> Triple(
+            "Parcial",
+            Color(0xFFFF9800).copy(alpha = 0.16f),
+            Color(0xFFE65100)
+        )
+        else -> Triple(
+            "Sin concepto",
+            MaterialTheme.colorScheme.surfaceVariant,
+            MaterialTheme.colorScheme.onSurfaceVariant
+        )
+    }
+    Text(
+        text = label,
+        style = labelSmall(color = content),
+        modifier = Modifier
+            .background(container, RoundedCornerShape(999.dp))
+            .padding(horizontal = 8.dp, vertical = 3.dp)
+    )
 }
 
 private enum class PaymentSheetMode {
@@ -607,8 +659,16 @@ private fun ExpenseItemRow(item: ExpenseItem) {
                 )
             }
             Text(
-                text = "Concepto: ${item.expenseAccount?.name ?: item.expenseAccountId?.let { "Concepto #$it" } ?: "Sin concepto"}",
-                style = labelSmall(color = MaterialTheme.colorScheme.onSurfaceVariant),
+                text = item.expenseAccount?.name
+                    ?: item.expenseAccountId?.let { "Concepto #$it" }
+                    ?: "Sin concepto",
+                style = labelSmall(
+                    color = if (item.expenseAccountId != null) {
+                        MaterialTheme.colorScheme.secondary
+                    } else {
+                        MaterialTheme.colorScheme.onSurfaceVariant
+                    }
+                ),
                 maxLines = 2,
                 overflow = TextOverflow.Ellipsis
             )
@@ -632,34 +692,26 @@ private fun ExpenseConceptSheet(
     onDismiss: () -> Unit
 ) {
     val editor = state.conceptEditorState
+    BoxWithConstraints(modifier = Modifier.fillMaxWidth()) {
     Column(
         modifier = Modifier
             .fillMaxWidth()
+            .heightIn(max = maxHeight)
+            .verticalScroll(rememberScrollState())
             .padding(horizontal = 16.dp, vertical = 8.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
         Text("Conceptos de gasto", style = titleMediumBold())
 
         ExpenseAccountSelectorField(
-            label = if (editor.applyConceptPerItem) {
-                "Aplicar mismo concepto a todos los items"
-            } else {
-                "Concepto de gasto para toda la factura"
-            },
+            label = "",
             selectedText = editor.defaultAccountName.orEmpty(),
-            placeholder = "Sin concepto de gasto",
+            placeholder = "Sin concepto seleccionado",
             accounts = editor.expenseAccounts,
             isLoading = editor.isLoadingAccounts,
             leafOnly = true,
             emptyOptionLabel = "Sin concepto de gasto",
-            clickHintLabel = "Toca para asignar el concepto de gasto",
-            selectedTextColor = MaterialTheme.colorScheme.secondary,
-            placeholderTextColor = MaterialTheme.colorScheme.secondary,
-            hint = if (editor.applyConceptPerItem) {
-                "Toca el selector para elegir un concepto y luego presiona \"Aplicar a todos\" para asignarlo a cada item."
-            } else {
-                "Toca el selector para elegir un concepto. Al guardar en este modo, se aplicara el mismo concepto a todos los items."
-            },
+            compact = true,
             onSelected = onDefaultAccountSelected
         )
 
@@ -689,16 +741,14 @@ private fun ExpenseConceptSheet(
                         Text(item.description, style = bodyMediumBold())
                         Spacer(modifier = Modifier.height(8.dp))
                         ExpenseAccountSelectorField(
-                            label = "Concepto",
+                            label = "",
                             selectedText = item.expenseAccountName.orEmpty(),
-                            placeholder = "Sin concepto",
+                            placeholder = "Sin concepto seleccionado",
                             accounts = editor.expenseAccounts,
                             isLoading = editor.isLoadingAccounts,
                             leafOnly = true,
                             emptyOptionLabel = "Sin concepto",
-                            clickHintLabel = "Toca para asignar concepto",
-                            selectedTextColor = MaterialTheme.colorScheme.secondary,
-                            placeholderTextColor = MaterialTheme.colorScheme.secondary,
+                            compact = true,
                             onSelected = { accountId, accountName ->
                                 onItemAccountSelected(index, accountId, accountName)
                             }
@@ -723,6 +773,7 @@ private fun ExpenseConceptSheet(
             Text("Cancelar")
         }
         Spacer(modifier = Modifier.height(16.dp))
+    }
     }
 }
 

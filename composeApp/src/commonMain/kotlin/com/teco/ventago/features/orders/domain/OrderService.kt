@@ -1,6 +1,8 @@
 package com.teco.ventago.features.orders.domain
 
+import com.teco.ventago.core.LocalStorage
 import com.teco.ventago.core.Paged
+import com.teco.ventago.core.changes.IChangesManager
 import com.teco.ventago.features.business.domain.model.Business
 import com.teco.ventago.features.customers.domain.models.CustomerListItem
 import com.teco.ventago.features.orders.data.repository.IOrdersRepository
@@ -36,12 +38,17 @@ import com.teco.ventago.utils.toQuantityUiString
 import kotlinx.datetime.Clock
 import kotlinx.datetime.TimeZone
 import kotlinx.datetime.toLocalDateTime
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.emptyFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
+import kotlinx.serialization.Serializable
+import kotlinx.serialization.encodeToString
+import kotlinx.serialization.json.Json
 
 data class PaymentAllocation(
     val methodCode: Int,
@@ -70,10 +77,18 @@ data class ReceivableRescheduleTerm(
 class OrderService(
     private val repository: IOrdersRepository,
     private val posProvisioningService: PosDeviceProvisioningService,
+    private val changesManager: IChangesManager? = null,
+    private val storage: LocalStorage? = null,
 ) {
 
     private companion object {
         const val INITIAL_PAGE = 1
+        const val ORDERS_LIST_CACHE_KEY = "orders_list_pages"
+        const val ORDERS_LIST_CACHE_LIMIT = 4
+        val ordersListJson = Json {
+            ignoreUnknownKeys = true
+            encodeDefaults = true
+        }
     }
 
     val orders = mutableListOf<Order>()
@@ -103,6 +118,7 @@ class OrderService(
         emissionEndDate: String? = null,
         orderType: String? = null,
         customerRuc: String? = null,
+        force: Boolean = false,
     ): List<Order> {
         val request = withPosProvisioningFilters(
             ListOrdersRequest(
@@ -117,20 +133,77 @@ class OrderService(
                 customerRuc = customerRuc
             )
         ) ?: return emptyOrdersForUnprovisionedPos()
+        val cacheKey = ordersListCacheKey(request)
+        val token = changesManager?.ordersToken().orEmpty()
+        if (!force) {
+            val cached = peekOrdersList(cacheKey)
+            if (cached != null && token.isNotEmpty() && cached.token == token) {
+                if (request.page == INITIAL_PAGE) {
+                    replaceOrders(cached.items)
+                } else {
+                    appendOrders(cached.items)
+                }
+                page += 1
+                return ordersFlow.value
+            }
+            if (cached != null && request.page == INITIAL_PAGE) {
+                replaceOrders(cached.items)
+            }
+        }
         val newOrders = repository.loadOrders(request)
         if (newOrders.isEmpty()) {
             return emptyList()
         }
 
         mutex.withLock {
-            val combined = (orders + newOrders).associateBy { it.id }.values.toMutableList()
-            combined.sortByDescending { it.id }
+            val base = if (request.page == INITIAL_PAGE) emptyList() else orders.toList()
+            val combined = (base + newOrders).associateBy { it.id }.values.sortedByDescending { it.id }
             orders.clear()
             orders.addAll(combined)
             ordersFlow.value = orders.toList()
             page += 1
         }
+        rememberOrdersList(cacheKey, token, newOrders, request.businessId)
         return ordersFlow.value
+    }
+
+    fun observeOrderListInvalidation(): Flow<Int> = changesManager?.ordersListener() ?: emptyFlow()
+
+    suspend fun reloadVisibleOrders(
+        businessId: Int,
+        paymentStatus: Int? = null,
+        customerId: Long? = null,
+        emissionStartDate: String? = null,
+        emissionEndDate: String? = null,
+        orderType: String? = null,
+        customerRuc: String? = null,
+    ): List<Order> {
+        mutex.withLock {
+            page = INITIAL_PAGE
+        }
+        return loadOrders(
+            businessId = businessId,
+            paymentStatus = paymentStatus,
+            customerId = customerId,
+            emissionStartDate = emissionStartDate,
+            emissionEndDate = emissionEndDate,
+            orderType = orderType,
+            customerRuc = customerRuc,
+            force = false,
+        )
+    }
+
+    private fun replaceOrders(items: List<Order>) {
+        orders.clear()
+        orders.addAll(items.sortedByDescending { it.id })
+        ordersFlow.value = orders.toList()
+    }
+
+    private fun appendOrders(items: List<Order>) {
+        val combined = (orders + items).associateBy { it.id }.values.sortedByDescending { it.id }
+        orders.clear()
+        orders.addAll(combined)
+        ordersFlow.value = orders.toList()
     }
 
     suspend fun resetOrders(
@@ -154,7 +227,8 @@ class OrderService(
             emissionStartDate = emissionStartDate,
             emissionEndDate = emissionEndDate,
             orderType = orderType,
-            customerRuc = customerRuc
+            customerRuc = customerRuc,
+            force = true,
         )
     }
 
@@ -264,7 +338,8 @@ class OrderService(
         orderId: Int,
         allocations: List<PaymentAllocation>,
         otherDescription: String?, // not used by this endpoint
-        issueInvoice: Boolean      // not used by this endpoint
+        issueInvoice: Boolean,     // not used by this endpoint
+        skipInvoicing: Boolean = false,
     ): RegisterManualPaymentsDataResponse {
         val payments = allocations.map { allocation ->
             OrderPaymentSubmission(
@@ -277,14 +352,16 @@ class OrderService(
         return registerOrderPayments(
             businessId = businessId,
             orderId = orderId,
-            payments = payments
+            payments = payments,
+            skipInvoicing = skipInvoicing,
         )
     }
 
     suspend fun registerOrderPayments(
         businessId: Int,
         orderId: Int,
-        payments: List<OrderPaymentSubmission>
+        payments: List<OrderPaymentSubmission>,
+        skipInvoicing: Boolean = false,
     ): RegisterManualPaymentsDataResponse {
         val items = payments
             .filter { it.amountCents > 0L }
@@ -312,7 +389,10 @@ class OrderService(
                 )
             }
 
-        val req = RegisterManualPaymentsRequest(payments = items)
+        val req = RegisterManualPaymentsRequest(
+            payments = items,
+            skipInvoicing = skipInvoicing.takeIf { it },
+        )
         return repository.registerManualPayments(
             businessId = businessId,
             orderId = orderId,
@@ -625,4 +705,61 @@ class OrderService(
             order
         }
     }
+
+    private fun ordersListCacheKey(request: ListOrdersRequest): String {
+        return listOf(
+            request.businessId,
+            request.page,
+            request.pageSize,
+            request.paymentStatus ?: "",
+            request.customerId ?: "",
+            request.customerRuc.orEmpty(),
+            request.orderType.orEmpty(),
+            request.emissionStartDate.orEmpty(),
+            request.emissionEndDate.orEmpty(),
+            request.branchCode.orEmpty(),
+            request.billingPointCode.orEmpty(),
+        ).joinToString("|")
+    }
+
+    private fun peekOrdersList(key: String): OrdersListCachePage? {
+        val store = storage ?: return null
+        return readOrdersListCache(store)[key]
+    }
+
+    private fun rememberOrdersList(key: String, token: String, items: List<Order>, businessId: Int) {
+        val store = storage ?: return
+        if (token.isEmpty()) return
+        val cache = readOrdersListCache(store).toMutableMap()
+        val prefix = "$businessId|"
+        cache.keys.filter { it.startsWith(prefix) && cache[it]?.token != token }.toList()
+            .forEach { cache.remove(it) }
+        cache[key] = OrdersListCachePage(token = token, savedAt = kotlin.time.Clock.System.now().toEpochMilliseconds(), items = items)
+        val businessKeys = cache.keys.filter { it.startsWith(prefix) }
+            .sortedByDescending { cache[it]?.savedAt ?: 0L }
+        businessKeys.drop(ORDERS_LIST_CACHE_LIMIT).forEach { cache.remove(it) }
+        store.set(ORDERS_LIST_CACHE_KEY, ordersListJson.encodeToString(OrdersListCacheFile(cache)))
+    }
+
+    private fun readOrdersListCache(store: LocalStorage): Map<String, OrdersListCachePage> {
+        val raw = store.string(ORDERS_LIST_CACHE_KEY).orEmpty()
+        if (raw.isBlank()) return emptyMap()
+        return try {
+            ordersListJson.decodeFromString(OrdersListCacheFile.serializer(), raw).pages
+        } catch (_: Exception) {
+            emptyMap()
+        }
+    }
 }
+
+@Serializable
+private data class OrdersListCacheFile(
+    val pages: Map<String, OrdersListCachePage> = emptyMap(),
+)
+
+@Serializable
+private data class OrdersListCachePage(
+    val token: String = "",
+    val savedAt: Long = 0L,
+    val items: List<Order> = emptyList(),
+)

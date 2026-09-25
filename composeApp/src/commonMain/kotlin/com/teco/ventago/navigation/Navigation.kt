@@ -54,6 +54,7 @@ import com.teco.ventago.features.branches.ui.branches.manage.BranchesManageScree
 import com.teco.ventago.features.customers.domain.models.CustomerListItem
 import com.teco.ventago.features.customers.ui.details.CustomerDetailsScreen
 import com.teco.ventago.features.customers.ui.form.CustomerFormScreen
+import com.teco.ventago.features.customers.ui.list.CustomersListActions
 import com.teco.ventago.features.customers.ui.list.CustomersListScreen
 import com.teco.ventago.features.home.ui.HomeSummaryScreen
 import com.teco.ventago.features.home.ui.HomeScreen
@@ -295,14 +296,23 @@ enum class PosScreens(
             QuoteDetailsActions(backStackEntry, navigate, navigateAny)
         }
     ),
-    CustomersScreen(Res.string.pos_clients),
+    CustomersScreen(
+        Res.string.pos_clients,
+        actions = { backStackEntry, _, _ -> CustomersListActions(backStackEntry) },
+    ),
 
-    SearchCustomerScreen(Res.string.search),
+    SearchCustomerScreen(
+        Res.string.search,
+        actions = { backStackEntry, _, _ -> CustomersListActions(backStackEntry) },
+    ),
 
     AddCustomerScreen(Res.string.pos_clients),
 
     CustomersManage(Res.string.pos_clients),
-    CustomersListScreen(Res.string.pos_clients),
+    CustomersListScreen(
+        Res.string.pos_clients,
+        actions = { backStackEntry, _, _ -> CustomersListActions(backStackEntry) },
+    ),
     CustomerDetailsScreen(Res.string.details),
     CustomerCreateScreen(Res.string.pos_add_client),
     CustomerEditScreen(Res.string.edit),
@@ -1380,6 +1390,7 @@ private fun NavGraphBuilder.addOrdersNavigation(
                     is PosScreens -> navController.navigate(route, builder)
                     is AchPaymentDetailsRoute -> navController.navigate(route)
                     is OrdersScreenRoute -> navController.navigate(route)
+                    is PosNoteRoute -> navController.navigate(route)
                     else -> Unit
                 }
             }
