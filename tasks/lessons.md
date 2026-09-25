@@ -1,5 +1,6 @@
 # Lessons Learned
 
+- En cold start, no uses login como destino inicial ni trates `isAuthenticated = false` como “invitado” antes de terminar de leer cache/tokens; muestra un splash hasta `sessionResolved` y monta Home o Login como primer destino real.
 - En flujo POS compartido, cualquier bloqueo por provisioning de dispositivo debe depender de `posProvisioningActive`/`required && isProvisioned`, no solo de que existan codigos de sucursal/punto; la app publica debe poder seleccionar sucursal y punto de facturacion.
 - En Epson ePOS Android con R8, no basta preservar `com.epson.epos2.**`: el SDK incluye paquetes internos JNI como `com.epson.epsonio`, `com.epson.eposdevice` y `com.epson.eposprint` que pueden ser usados solo desde `libepos2.so`. Usar la regla del sample Epson `-keep class com.epson.** { *; }` + `-dontwarn com.epson.**` para evitar crashes de discovery/printing en release optimizado.
 - En MenuScreen, no cambies la categoria de un acceso (quick actions vs modulos) solo para ajustar imagen/tamano; si el usuario pide rollback de ubicacion, conserva el asset URL en el renderer correcto del grupo original.

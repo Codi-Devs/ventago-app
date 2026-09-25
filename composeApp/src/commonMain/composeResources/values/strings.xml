@@ -670,6 +670,7 @@
     <string name="pos_order_restore_dismiss">No, empezar de nuevo</string>
     <string name="pos_devices">Dispositivos POS</string>
     <string name="pos_device_details">Detalle de dispositivo POS</string>
+    <string name="app_logo_content_description">Logo de VentaGO</string>
 
     <string name="get_started">Empezar</string>
     <string name="quote_updated">Cotización actualizada</string>

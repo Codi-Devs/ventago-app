@@ -8,7 +8,6 @@ import com.teco.ventago.core.logger.Log
 import com.teco.ventago.core.logger.LogLevel
 import com.teco.ventago.features.auth.domain.IAuthService
 import com.teco.ventago.features.auth.domain.model.User
-import com.teco.ventago.features.auth.domain.model.firebase.FirebaseUserDM
 import com.teco.ventago.features.branches.domain.BranchService
 import com.teco.ventago.features.business.domain.BusinessService
 import com.teco.ventago.features.business.domain.model.Business
@@ -47,29 +46,35 @@ class AppViewModel(
 
     init {
         viewModelScope.launch {
-            authService.getFirebaseUser()
-                .combine(authService.getUser()) { fbUser: FirebaseUserDM?, user: User? ->
-                    Pair(fbUser, user)
-                }.collect { newState ->
-                val fbUser = newState.first
-                val user = newState.second
-                if (fbUser != null && user != null) {
-                    _mainState.value = _mainState.value.copy(
-                        isAuthenticated = true,
-                        missingBusiness = user.missingBusiness
-                    )
-                    if (businessService.business.value == null && !user.missingBusiness) {
-                        loadBusinessData(user = user)
-                    } else if (this@AppViewModel::loadDataJob.isInitialized) {
-                        if (loadDataJob.isActive) {
-                            loadDataJob.cancel()
-                        }
+            authService.sessionResolved()
+                .combine(authService.getUser()) { resolved, user ->
+                    resolved to user
+                }.collect { (resolved, user) ->
+                    if (!resolved) {
+                        _mainState.value = _mainState.value.copy(sessionResolved = false)
+                        return@collect
                     }
-                } else {
-                    _mainState.value = _mainState.value.copy(isAuthenticated = false)
-                    clearFeatureStateAfterSignOut()
+                    if (user != null) {
+                        _mainState.value = _mainState.value.copy(
+                            isAuthenticated = true,
+                            missingBusiness = user.missingBusiness,
+                            sessionResolved = true,
+                        )
+                        if (businessService.business.value == null && !user.missingBusiness) {
+                            loadBusinessData(user = user)
+                        } else if (this@AppViewModel::loadDataJob.isInitialized) {
+                            if (loadDataJob.isActive) {
+                                loadDataJob.cancel()
+                            }
+                        }
+                    } else {
+                        _mainState.value = _mainState.value.copy(
+                            isAuthenticated = false,
+                            sessionResolved = true,
+                        )
+                        clearFeatureStateAfterSignOut()
+                    }
                 }
-            }
         }
 
         viewModelScope.launch {
@@ -203,6 +208,7 @@ class AppViewModel(
 }
 
 data class MainState(
+    val sessionResolved: Boolean = false,
     val isAuthenticated: Boolean = false,
     val missingBusiness: Boolean = false,
     val hideAppVar: Boolean = false,

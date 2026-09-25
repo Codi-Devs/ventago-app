@@ -89,9 +89,11 @@ import com.teco.ventago.features.pos.ui.viewmodel.PosState
 import com.teco.ventago.features.pos.ui.viewmodel.PosViewModel
 import com.teco.ventago.navigation.BottomNavKey
 import com.teco.ventago.navigation.LocalNavController
+import com.teco.ventago.features.auth.ui.splash.SplashScreen
 import com.teco.ventago.navigation.Navigation
 import com.teco.ventago.navigation.PrinterOnboardingRoute
 import com.teco.ventago.navigation.PosScreens
+import com.teco.ventago.navigation.SessionNavigation
 import com.teco.ventago.navigation.fallbackScreenFor
 import com.teco.ventago.navigation.routeKeyForScreen
 import com.teco.ventago.navigation.toPosScreenOrNull
@@ -186,37 +188,37 @@ fun App(
     )
     var lastBucket by remember { mutableStateOf<AuthBucket?>(null) }
     var didInitialRedirect by remember { mutableStateOf(false) }
+    val sessionStart = remember(mainState.sessionResolved) {
+        SessionNavigation.resolveSessionStart(
+            isAuthenticated = mainState.isAuthenticated,
+            missingBusiness = mainState.missingBusiness,
+            invoicingConfigured = mainState.invoicingConfigured,
+        )
+    }
 
-    LaunchedEffect(graphReady, currentBucket) {
-        if (!graphReady) return@LaunchedEffect
+    LaunchedEffect(graphReady, mainState.sessionResolved, currentBucket) {
+        if (!graphReady || !mainState.sessionResolved) return@LaunchedEffect
 
         val prev = lastBucket
         val initial = prev == null && !didInitialRedirect
         val changed = prev != null && prev != currentBucket
+        val target = SessionNavigation.resolveAuthDestination(
+            isAuthenticated = currentBucket.authed,
+            missingBusiness = !currentBucket.hasBusiness,
+            invoicingConfigured = currentBucket.invoiceActive,
+        )
+        val currentRoute = backStackEntry?.destination?.route
 
-        if (initial || changed) {
+        if (SessionNavigation.shouldRedirect(currentRoute, target, initial, changed)) {
             lastBucket = currentBucket
             didInitialRedirect = true
-
-            val target = if (currentBucket.authed && currentBucket.hasBusiness && currentBucket.invoiceActive) {
-                PosScreens.HomeScreen.name
-            } else if (currentBucket.authed && !currentBucket.hasBusiness) {
-                PosScreens.BusinessRegisterScreen.name
-            } else if (!currentBucket.invoiceActive) {
-                PosScreens.InvoiceLandingScreen.name
-            } else {
-                PosScreens.LoginScreen.name
+            navController.navigate(target) {
+                popUpTo(navController.graph.findStartDestination().id) { inclusive = true }
+                launchSingleTop = true
             }
-
-            // Only jump if we're not already there
-            val currentRoute = backStackEntry?.destination?.route
-            if (currentRoute != target) {
-                navController.navigate(target) {
-                    // Clear the stack to the start of the graph (safe alternative to popUpTo(0))
-                    popUpTo(navController.graph.findStartDestination().id) { inclusive = true }
-                    launchSingleTop = true
-                }
-            }
+        } else if (initial || changed) {
+            lastBucket = currentBucket
+            didInitialRedirect = true
         }
     }
 
@@ -274,6 +276,10 @@ fun App(
             LocalNavController provides navController,
             ){
             KeyboardDismissHost {
+                if (!mainState.sessionResolved) {
+                    SplashScreen(Modifier.fillMaxSize())
+                    return@KeyboardDismissHost
+                }
                 Scaffold(
                     contentWindowInsets = WindowInsets.safeDrawing.only(WindowInsetsSides.Horizontal),
                     snackbarHost = {
@@ -557,7 +563,9 @@ fun App(
                             .padding(bottom = if (showsBottomChrome) 0.dp else navigationBarBottom),
                         navController = navController,
                         appViewModel = appViewModel,
-                        analyticsService = koinInject<AnalyticsService>()
+                        analyticsService = koinInject<AnalyticsService>(),
+                        startDestination = sessionStart.navHostStart,
+                        loginGraphStartDestination = sessionStart.loginGraphStart,
                     )
                 }
 

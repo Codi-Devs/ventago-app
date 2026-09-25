@@ -7,6 +7,7 @@ import com.teco.ventago.features.auth.domain.model.requests.EmailLoginRequest
 import com.teco.ventago.features.auth.domain.model.response.AuthResponse
 import io.ktor.client.HttpClient
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.flowOf
 
 interface IAuthService {
     suspend fun refreshToken(client: HttpClient, failedAccessToken: String? = null)
@@ -21,6 +22,7 @@ interface IAuthService {
     fun getUserSync(): User?
     fun getJwtToken(refresh: Boolean = false): String?
     fun isAuthenticated(): Boolean
+    fun sessionResolved(): Flow<Boolean> = flowOf(true)
     fun setPremium(premium: Boolean)
     suspend fun deleteAccount(token: String): Boolean
 }

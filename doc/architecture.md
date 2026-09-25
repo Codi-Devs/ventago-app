@@ -129,6 +129,7 @@ design_system/
 - **Route definitions**: `PosScreens` enum/sealed class with `@Serializable` routes
 - **Navigation graph**: `Navigation.kt` builds the full graph
 - **Deep links**: Supported via `ExternalUriHandler` service
+- **Cold start**: `AuthService.sessionResolved()` stays false until cache/token restore finishes. `App` shows `SplashScreen` (app logo) during that window and only then composes `NavHost`. Authenticated users start at `HomeScreen`; guests start at the login graph. Login/logout redirects still use the auth-bucket effect and do not hijack in-app routes on first composition.
 - **Pattern**: Screens receive `navigate: (PosScreens) -> Unit` callback
 - **Global access**: `LocalNavController` CompositionLocal
 

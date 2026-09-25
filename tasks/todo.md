@@ -1,3 +1,19 @@
+# Cold start session splash TODO
+
+## Plan
+- [x] Keep login from rendering until AuthService finishes restoring the cached session.
+- [x] Show a Compose splash with the app logo during that restore on Android and iOS.
+- [x] Start NavHost at Home when the restored user is authenticated; start at login only for guests.
+- [x] Keep later login/logout and in-app navigation on the existing auth-bucket redirect.
+
+## Verification Gates
+- [x] `./gradlew :composeApp:testAndroidHostTest --tests com.teco.ventago.navigation.SessionNavigationTest`
+- [x] `git diff --check` on files from this task (excluding pre-existing Platform.kt and AABs)
+
+## Review Notes
+- Root cause: `MainState.isAuthenticated` defaulted to false and NavHost always started at login, then a LaunchedEffect bounced authenticated users to Home.
+- Session restore now exposes `sessionResolved`; the splash stays up until that flag is true, and the first NavHost destination is computed from the restored user.
+
 # Expenses cache coherence (Trello 360) TODO
 
 ## Plan
