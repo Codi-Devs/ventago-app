@@ -46,9 +46,9 @@ import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -87,6 +87,8 @@ import com.teco.ventago.features.payments.ui.home.viewmodel.PaymentMethodsViewMo
 import com.teco.ventago.features.pos.ui.viewmodel.FlowMode
 import com.teco.ventago.features.pos.ui.viewmodel.PosState
 import com.teco.ventago.features.pos.ui.viewmodel.PosViewModel
+import com.teco.ventago.features.pos.ui.customer.add.viewmodel.AddCustomerViewModel
+import com.teco.ventago.features.customers.ui.form.viewmodel.CustomerFormViewModel
 import com.teco.ventago.navigation.BottomNavKey
 import com.teco.ventago.navigation.LocalNavController
 import com.teco.ventago.features.auth.ui.splash.SplashScreen
@@ -120,7 +122,6 @@ private const val SUMMARY_TAB_HINT_SEEN_KEY_PREFIX = "summary_tab_hint_seen"
 @Preview
 fun App(
     appViewModel: AppViewModel = koinViewModel<AppViewModel>(),
-    navController: NavHostController = rememberNavController()
 ) {
     setSingletonImageLoaderFactory { context ->
         ImageLoader.Builder(context)
@@ -131,13 +132,36 @@ fun App(
     }
 
     val mainState by appViewModel.mainState.collectAsState()
+    val appChrome = rememberAppChromeState()
+
+    DigitalMenuTheme {
+        CompositionLocalProvider(LocalAppChrome provides appChrome) {
+            KeyboardDismissHost {
+                if (!mainState.sessionResolved) {
+                    SplashScreen(Modifier.fillMaxSize())
+                    return@KeyboardDismissHost
+                }
+                key(mainState.sessionEpoch) {
+                    AppSessionHost(appViewModel = appViewModel)
+                }
+            }
+        }
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun AppSessionHost(
+    appViewModel: AppViewModel,
+    navController: NavHostController = rememberNavController(),
+) {
+    val mainState by appViewModel.mainState.collectAsState()
     val snackbarHostState = remember { SnackbarHostState() }
     val snackbarService: SnackbarService = koinInject()
     snackbarService.hostState = snackbarHostState
     val backStackEntry by navController.currentBackStackEntryAsState()
     val currentRoute = backStackEntry?.destination?.route
     val currentScreen = currentRoute?.toPosScreenOrNull() ?: PosScreens.LoginScreen
-    val appChrome = rememberAppChromeState()
     val flagsService = koinInject<IFlagsService>()
     val authService = koinInject<IAuthService>()
     val betaService = koinInject<BetaService>()
@@ -188,7 +212,11 @@ fun App(
     )
     var lastBucket by remember { mutableStateOf<AuthBucket?>(null) }
     var didInitialRedirect by remember { mutableStateOf(false) }
-    val sessionStart = remember(mainState.sessionResolved) {
+    val sessionStart = remember(
+        mainState.isAuthenticated,
+        mainState.missingBusiness,
+        mainState.invoicingConfigured,
+    ) {
         SessionNavigation.resolveSessionStart(
             isAuthenticated = mainState.isAuthenticated,
             missingBusiness = mainState.missingBusiness,
@@ -213,7 +241,7 @@ fun App(
             lastBucket = currentBucket
             didInitialRedirect = true
             navController.navigate(target) {
-                popUpTo(navController.graph.findStartDestination().id) { inclusive = true }
+                popUpTo(0) { inclusive = true }
                 launchSingleTop = true
             }
         } else if (initial || changed) {
@@ -270,16 +298,9 @@ fun App(
         }
     }
 
-    DigitalMenuTheme {
-        CompositionLocalProvider(
-            LocalAppChrome provides appChrome,
-            LocalNavController provides navController,
-            ){
-            KeyboardDismissHost {
-                if (!mainState.sessionResolved) {
-                    SplashScreen(Modifier.fillMaxSize())
-                    return@KeyboardDismissHost
-                }
+    CompositionLocalProvider(
+        LocalNavController provides navController,
+    ) {
                 Scaffold(
                     contentWindowInsets = WindowInsets.safeDrawing.only(WindowInsetsSides.Horizontal),
                     snackbarHost = {
@@ -306,6 +327,29 @@ fun App(
                     }
                     val posViewModel = posBackStackEntry?.let {
                         koinViewModel<PosViewModel>(viewModelStoreOwner = it)
+                    }
+                    val addCustomerEntry = remember(currentScreen, backStackEntry) {
+                        if (currentScreen == PosScreens.AddCustomerScreen) backStackEntry else null
+                    }
+                    val addCustomerViewModel = addCustomerEntry?.let {
+                        koinViewModel<AddCustomerViewModel>(viewModelStoreOwner = it)
+                    }
+                    val customerFormEntry = remember(currentScreen, backStackEntry) {
+                        if (
+                            currentScreen == PosScreens.CustomerCreateScreen ||
+                            currentScreen == PosScreens.CustomerEditScreen
+                        ) {
+                            backStackEntry
+                        } else {
+                            null
+                        }
+                    }
+                    val customerFormViewModel = customerFormEntry?.let {
+                        koinViewModel<CustomerFormViewModel>(viewModelStoreOwner = it)
+                    }
+                    val consumeCustomerWizardBack: () -> Boolean = {
+                        addCustomerViewModel?.consumeBack() == true ||
+                            customerFormViewModel?.consumeBack() == true
                     }
                     val posUiState by posViewModel?.uiState?.collectAsState()
                         ?: remember { mutableStateOf(PosState()) }
@@ -341,7 +385,7 @@ fun App(
                                 if (navController.previousBackStackEntry != null) {
                                     val handled = isYappyOnsitePaymentScreen &&
                                         posViewModel?.requestYappyOnsiteQrExit() == true
-                                    if (!handled) {
+                                    if (!handled && !consumeCustomerWizardBack()) {
                                         navController.navigateUp()
                                     }
                                 }
@@ -402,7 +446,7 @@ fun App(
                                     }
                                     val handled = isYappyOnsitePaymentScreen &&
                                         posViewModel?.requestYappyOnsiteQrExit() == true
-                                    if (!handled) {
+                                    if (!handled && !consumeCustomerWizardBack()) {
                                         navController.navigateUp()
                                     }
                                 }
@@ -599,10 +643,5 @@ fun App(
                     }
                 )
             }
-        }
-
-    }
-
-
 
 }

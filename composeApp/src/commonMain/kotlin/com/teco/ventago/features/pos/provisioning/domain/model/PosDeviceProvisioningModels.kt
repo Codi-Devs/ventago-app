@@ -85,7 +85,6 @@ data class PosProvisioningState(
         get() = when {
             !required || !valid -> null
             linkMode == PosLinkMode.Degraded -> BANNER_DEGRADED
-            linkMode == PosLinkMode.Unlinked -> BANNER_UNLINKED
             else -> null
         }
 

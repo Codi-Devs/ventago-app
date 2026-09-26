@@ -1008,9 +1008,10 @@ private fun NavGraphBuilder.addPOSNavigation(
 //                navController.navigateUp()
 //            }
 
-            AddCustomerScreen {
-                navController.navigateUp()
-            }
+            AddCustomerScreen(
+                navigateBack = { navController.navigateUp() },
+                onExistingCustomerSelected = ::returnSelectedCustomerToPos,
+            )
         }
 
 

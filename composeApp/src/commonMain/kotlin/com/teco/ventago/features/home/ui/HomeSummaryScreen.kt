@@ -302,7 +302,9 @@ private fun EmptySummaryCard(modifier: Modifier = Modifier) {
 }
 
 @Composable
-private fun TabletSalesCards(summary: HomeSummary) {
+private fun TabletSalesCards(
+    summary: HomeSummary
+) {
     Column(
         modifier = Modifier
             .padding(horizontal = 16.dp)
@@ -327,7 +329,9 @@ private fun TabletSalesCards(summary: HomeSummary) {
 }
 
 @Composable
-private fun MobileSalesCards(summary: HomeSummary) {
+private fun MobileSalesCards(
+    summary: HomeSummary
+) {
     Column(
         modifier = Modifier
             .padding(horizontal = 16.dp)
@@ -342,7 +346,10 @@ private fun MobileSalesCards(summary: HomeSummary) {
 }
 
 @Composable
-private fun YearSalesCard(summary: HomeSummary, modifier: Modifier = Modifier) {
+private fun YearSalesCard(
+    summary: HomeSummary,
+    modifier: Modifier = Modifier
+) {
     val cardShape = RoundedCornerShape(18.dp)
     val gradient = Brush.linearGradient(
         colors = listOf(
@@ -369,7 +376,7 @@ private fun YearSalesCard(summary: HomeSummary, modifier: Modifier = Modifier) {
             )
             Spacer(Modifier.height(8.dp))
             Text(
-                text = toMoney(summary.yearSalesTotal),
+                text = toMoney(summary.yearSalesAmount),
                 style = titleMediumBold(color = MaterialTheme.colorScheme.onPrimary)
             )
             Spacer(Modifier.height(4.dp))
@@ -383,7 +390,7 @@ private fun YearSalesCard(summary: HomeSummary, modifier: Modifier = Modifier) {
 
 @Composable
 private fun MonthSalesCard(summary: HomeSummary, modifier: Modifier = Modifier) {
-    val monthChangePositive = summary.monthSalesChangePerc >= 0.0
+    val monthChangePositive = summary.monthSalesChange >= 0.0
     val trendColor = if (monthChangePositive) Color(0xFF2E7D32) else Color(0xFFD32F2F)
     val trendBackground = if (monthChangePositive) {
         Color(0xFF2E7D32).copy(alpha = 0.12f)
@@ -403,14 +410,12 @@ private fun MonthSalesCard(summary: HomeSummary, modifier: Modifier = Modifier) 
         ) {
             Text(text = stringResource(Res.string.home_month_sales), style = bodyMediumBold())
             Spacer(Modifier.height(8.dp))
-            Text(text = toMoney(summary.monthSalesTotalWithTaxes), style = titleMediumBold())
+            Text(text = toMoney(summary.monthSalesAmount), style = titleMediumBold())
             Spacer(Modifier.height(4.dp))
             Text(
-                text = "${stringResource(Res.string.home_base)}: ${toMoney(summary.monthSalesTotal)} · ${
-                    stringResource(
-                        Res.string.home_itbms
-                    )
-                }: ${toMoney(summary.monthSalesTaxTotal)}",
+                text = "${stringResource(Res.string.home_base)}: ${toMoney(summary.monthSalesBaseAmount)} · ${
+                    stringResource(Res.string.home_itbms)
+                }: ${toMoney(summary.monthSalesTaxAmount)}",
                 style = labelSmall(color = MaterialTheme.colorScheme.onSurfaceVariant)
             )
             Spacer(Modifier.height(8.dp))
@@ -433,7 +438,7 @@ private fun MonthSalesCard(summary: HomeSummary, modifier: Modifier = Modifier) 
                     )
                     Spacer(Modifier.size(4.dp))
                     Text(
-                        text = "${abs(summary.monthSalesChangePerc).toOneDecimal()}%",
+                        text = "${abs(summary.monthSalesChange).toOneDecimal()}%",
                         style = labelSmall(color = trendColor)
                     )
                 }
@@ -444,7 +449,7 @@ private fun MonthSalesCard(summary: HomeSummary, modifier: Modifier = Modifier) 
                 )
                 Spacer(Modifier.weight(1f))
                 Text(
-                    text = "${summary.monthOrderCount} ${stringResource(Res.string.home_summary_orders_word)}",
+                    text = "${summary.monthOrders} ${stringResource(Res.string.home_summary_orders_word)}",
                     style = bodyMedium(color = MaterialTheme.colorScheme.onSurfaceVariant)
                 )
             }
@@ -455,7 +460,7 @@ private fun MonthSalesCard(summary: HomeSummary, modifier: Modifier = Modifier) 
 @Composable
 private fun TodaySalesCard(summary: HomeSummary, modifier: Modifier = Modifier) {
     val dayOfMonth = Clock.System.now().toLocalDateTime(TimeZone.currentSystemDefault()).date.dayOfMonth
-    val averagePerDay = if (dayOfMonth > 0) summary.monthSalesTotalWithTaxes / dayOfMonth else 0.0
+    val averagePerDay = if (dayOfMonth > 0) summary.monthSalesAmount / dayOfMonth else 0.0
 
     Card(
         modifier = modifier.fillMaxWidth(),
@@ -469,7 +474,7 @@ private fun TodaySalesCard(summary: HomeSummary, modifier: Modifier = Modifier) 
         ) {
             Text(text = stringResource(Res.string.home_today_sales), style = bodyMediumBold())
             Spacer(Modifier.height(8.dp))
-            Text(text = toMoney(summary.todaySalesTotal), style = titleMediumBold())
+            Text(text = toMoney(summary.todaySalesAmount), style = titleMediumBold())
             Spacer(Modifier.height(6.dp))
             Row(
                 modifier = Modifier.fillMaxWidth(),
@@ -481,7 +486,7 @@ private fun TodaySalesCard(summary: HomeSummary, modifier: Modifier = Modifier) 
                 )
                 Spacer(Modifier.weight(1f))
                 Text(
-                    text = "${summary.todayOrderCount} ${stringResource(Res.string.home_summary_orders_word)}",
+                    text = "${summary.todayOrders} ${stringResource(Res.string.home_summary_orders_word)}",
                     style = bodyMedium(color = MaterialTheme.colorScheme.onSurfaceVariant)
                 )
             }

@@ -9,6 +9,8 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.IntrinsicSize
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -515,12 +517,15 @@ private fun CustomerSelectorCard(
         Row(
             modifier = Modifier
                 .fillMaxWidth()
+                .height(IntrinsicSize.Max)
                 .selectableGroup(),
             horizontalArrangement = Arrangement.spacedBy(12.dp),
-            verticalAlignment = Alignment.CenterVertically
+            verticalAlignment = Alignment.Top
         ) {
             CustomerTypeOptionCard(
-                modifier = Modifier.weight(1f),
+                modifier = Modifier
+                    .weight(1f)
+                    .fillMaxHeight(),
                 selected = uiState.finalCustomer == true,
                 enabled = uiState.enabledSelectionDocType,
                 icon = Icons.Outlined.Person,
@@ -529,7 +534,9 @@ private fun CustomerSelectorCard(
                 onClick = { selectCustomerType(true) }
             )
             CustomerTypeOptionCard(
-                modifier = Modifier.weight(1f),
+                modifier = Modifier
+                    .weight(1f)
+                    .fillMaxHeight(),
                 selected = uiState.finalCustomer == false,
                 enabled = uiState.enabledSelectionDocType,
                 icon = Icons.Outlined.Business,
@@ -693,7 +700,6 @@ private fun CustomerTypeOptionCard(
 
     OutlinedCard(
         modifier = modifier
-            .height(118.dp)
             .selectable(
                 selected = selected,
                 enabled = enabled,
@@ -706,7 +712,7 @@ private fun CustomerTypeOptionCard(
     ) {
         Column(
             modifier = Modifier
-                .fillMaxSize()
+                .fillMaxHeight()
                 .padding(horizontal = 12.dp, vertical = 12.dp),
             verticalArrangement = Arrangement.Center,
             horizontalAlignment = Alignment.CenterHorizontally

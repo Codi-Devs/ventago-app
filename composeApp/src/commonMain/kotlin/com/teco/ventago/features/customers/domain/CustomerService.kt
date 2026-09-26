@@ -135,6 +135,23 @@ class CustomerService(
         ).items.take(limit)
     }
 
+    suspend fun findCustomersByRuc(
+        businessId: Int,
+        ruc: String,
+        limit: Int = 20
+    ): List<CustomerListItem> {
+        if (ruc.isBlank()) return emptyList()
+
+        return repository.listCustomers(
+            businessId = businessId,
+            page = 0,
+            size = limit,
+            ruc = ruc.trim(),
+            email = null,
+            name = null
+        ).items.take(limit)
+    }
+
     suspend fun validateRUC(ruc: String, businessId: Int): ValidateRucResponse {
         return repository.validateRUC(ruc, businessId)
     }

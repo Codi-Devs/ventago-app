@@ -1763,17 +1763,21 @@ class PosViewModel(
                           billingPointCode = request.branch.billingPoint
                       )
                       if (printer != null) {
-                          val ticketPayload = response.invoiceFiles?.ticket
-                              ?: if (saveAsNonFiscal) {
+                          val inlineTicket = response.invoiceFiles?.ticket
+                          val ticketPayload = if (saveAsNonFiscal) {
+                              if (inlineTicket != null && inlineTicket.hasIssuerPrintData()) {
+                                  inlineTicket
+                              } else {
                                   runCatching {
                                       printerService.fetchOrderTicketLayout(
                                           orderId = response.id,
                                           businessId = business!!.businessId
                                       )
-                                  }.getOrNull()
-                              } else {
-                                  null
+                                  }.getOrNull() ?: inlineTicket
                               }
+                          } else {
+                              inlineTicket
+                          }
                           if (ticketPayload != null) {
                               runCatching {
                                   printerService.printTicketPayload(
@@ -1798,22 +1802,6 @@ class PosViewModel(
                       }
                   }
 
-                  if (hasValidOrderNumber && saveAsNonFiscal) {
-                      val pdf = runCatching {
-                          posService.getInvoiceDocsRaw(
-                              businessId = business!!.businessId,
-                              cufe = "",
-                              orderId = response.id.toLong()
-                          ).pdfBase64.orEmpty()
-                      }.getOrElse { error ->
-                          if (error is CancellationException) throw error
-                          ""
-                      }
-                      if (pdf.isNotBlank()) {
-                          updateState { copy(pdfDocument = pdf) }
-                      }
-                  }
-                  
                   withContext(Dispatchers.Main) {
                       if (!hasValidOrderNumber) {
                           showError()
@@ -1821,6 +1809,12 @@ class PosViewModel(
                         clearOrderCreationCheckpoint()
                         showSuccess()
                       }
+                  }
+                  if (hasValidOrderNumber && saveAsNonFiscal) {
+                      prefetchNonFiscalPdf(
+                          businessId = business!!.businessId,
+                          orderId = response.id.toLong(),
+                      )
                   }
                 } catch (e: Exception) {
                     println("Error creating order: ${e.message}")
@@ -3692,6 +3686,25 @@ class PosViewModel(
 
     fun shareYappyOnsiteInvoicePdf() {
         loadYappyOnsiteInvoicePdf { sharePdfDocument() }
+    }
+
+    private fun prefetchNonFiscalPdf(businessId: Int, orderId: Long) {
+        if (orderId <= 0) return
+        viewModelScope.launch(Dispatchers.IO) {
+            val pdf = runCatching {
+                posService.getInvoiceDocsRaw(
+                    businessId = businessId,
+                    cufe = "",
+                    orderId = orderId,
+                ).pdfBase64.orEmpty()
+            }.getOrElse { error ->
+                if (error is CancellationException) throw error
+                ""
+            }
+            if (pdf.isNotBlank()) {
+                updateState { copy(pdfDocument = pdf) }
+            }
+        }
     }
 
     private fun loadYappyOnsiteInvoicePdf(onReady: () -> Unit) {

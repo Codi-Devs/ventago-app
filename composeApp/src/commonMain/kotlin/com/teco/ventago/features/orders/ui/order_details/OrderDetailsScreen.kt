@@ -33,15 +33,19 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Message
+import androidx.compose.material.icons.automirrored.rounded.FactCheck
 import androidx.compose.material.icons.filled.Share
 import androidx.compose.material.icons.filled.Whatsapp
 import androidx.compose.material.icons.outlined.CameraAlt
 import androidx.compose.material.icons.rounded.Business
 import androidx.compose.material.icons.rounded.Cancel
 import androidx.compose.material.icons.rounded.AccessTime
+import androidx.compose.material.icons.rounded.AccountBalance
+import androidx.compose.material.icons.rounded.AttachMoney
 import androidx.compose.material.icons.rounded.CheckCircle
 import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material.icons.rounded.ContentCopy
+import androidx.compose.material.icons.rounded.CreditCard
 import androidx.compose.material.icons.rounded.Delete
 import androidx.compose.material.icons.rounded.Description
 import androidx.compose.material.icons.rounded.Download
@@ -52,12 +56,14 @@ import androidx.compose.material.icons.rounded.Inventory2
 import androidx.compose.material.icons.rounded.KeyboardArrowDown
 import androidx.compose.material.icons.rounded.KeyboardArrowUp
 import androidx.compose.material.icons.rounded.Link
+import androidx.compose.material.icons.rounded.Loyalty
 import androidx.compose.material.icons.rounded.Add
 import androidx.compose.material.icons.rounded.Remove
 import androidx.compose.material.icons.rounded.OpenInNew
 import androidx.compose.material.icons.rounded.Payment
 import androidx.compose.material.icons.rounded.Person
 import androidx.compose.material.icons.rounded.Receipt
+import androidx.compose.material.icons.rounded.Redeem
 import androidx.compose.material.icons.rounded.Search
 import androidx.compose.material.icons.rounded.Share
 import androidx.compose.material.icons.rounded.Visibility
@@ -79,6 +85,7 @@ import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.SuggestionChip
 import androidx.compose.material3.SuggestionChipDefaults
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.rememberModalBottomSheetState
@@ -114,6 +121,7 @@ import com.teco.ventago.design_system.buttons.ButtonM
 import com.teco.ventago.design_system.buttons.OutlinedButtonM
 import com.teco.ventago.design_system.buttons.TextButtonM
 import com.teco.ventago.design_system.buttons.TextButtonS
+import com.teco.ventago.design_system.buttons.dashedBorder
 import com.teco.ventago.design_system.molecules.orders.DocumentStatusChip
 import com.teco.ventago.design_system.loaders.shimmerBrush
 import com.teco.ventago.design_system.molecules.InstallmentDueDateFieldKmp
@@ -483,17 +491,47 @@ fun OrderDetailsScreen(
                     )
                 }
             }
+            if (viewModel.canRegisterInternalPayment(order)) {
+                OrderOutlinedActionButton(
+                    label = "Registrar pago",
+                    icon = Icons.Rounded.Payment,
+                    color = MaterialTheme.colorScheme.secondary,
+                    onClick = { viewModel.openInternalRegisterPayment() }
+                )
+            }
             when (order.invoiceStatus) {
                 InvoiceStatus.ISSUED.id -> Unit
 
                 InvoiceStatus.FAILED.id -> {
-                    // No retry button and no cancel-order action for failed invoice orders.
+                    if (viewModel.canFacturarInternal(order)) {
+                        ButtonM(
+                            onClick = { viewModel.onFacturarInternal() },
+                            containerColor = Color(0xFF2E7D32),
+                            contentColor = Color.White
+                        ) {
+                            OrderActionButtonContent(
+                                icon = Icons.Rounded.Description,
+                                label = "Facturar"
+                            )
+                        }
+                    }
                 }
 
                 InvoiceStatus.NONE.id, InvoiceStatus.PENDING.id -> {
                     if (viewModel.canShowPaidPaymentLinkInvoiceButton(order)) {
                         ButtonM(
                             onClick = { viewModel.retryElectronicInvoice() },
+                            containerColor = Color(0xFF2E7D32),
+                            contentColor = Color.White
+                        ) {
+                            OrderActionButtonContent(
+                                icon = Icons.Rounded.Description,
+                                label = "Facturar"
+                            )
+                        }
+                    } else if (viewModel.canFacturarInternal(order)) {
+                        ButtonM(
+                            onClick = { viewModel.onFacturarInternal() },
                             containerColor = Color(0xFF2E7D32),
                             contentColor = Color.White
                         ) {
@@ -521,7 +559,7 @@ fun OrderDetailsScreen(
                 }
             }
 
-            if (viewModel.canShowRetryInvoiceButton(order)) {
+            if (viewModel.canShowRetryInvoiceButton(order) && !viewModel.canFacturarInternal(order)) {
                 ButtonM(onClick = { viewModel.retryElectronicInvoice() }) {
                     OrderActionButtonContent(
                         icon = Icons.Rounded.Receipt,
@@ -530,16 +568,23 @@ fun OrderDetailsScreen(
                 }
             }
 
+            if (canShowReprintButton || uiState.reprintInFlight) {
+                val isInternalTicket = order.hasCurrentNonFiscalDocument()
+                OrderOutlinedActionButton(
+                    label = when {
+                        uiState.reprintInFlight && isInternalTicket -> "Imprimiendo..."
+                        uiState.reprintInFlight -> "Reimprimiendo..."
+                        isInternalTicket -> "Imprimir ticket"
+                        else -> "Reimprimir ticket"
+                    },
+                    icon = Icons.Rounded.Receipt,
+                    color = MaterialTheme.colorScheme.primary,
+                    enabled = !uiState.reprintInFlight,
+                    onClick = { viewModel.reprintTicket() }
+                )
+            }
+
             if (order.invoiceStatus == InvoiceStatus.ISSUED.id) {
-                if (canShowReprintButton || uiState.reprintInFlight) {
-                    OrderOutlinedActionButton(
-                        label = if (uiState.reprintInFlight) "Reimprimiendo..." else "Reimprimir ticket",
-                        icon = Icons.Rounded.Receipt,
-                        color = MaterialTheme.colorScheme.primary,
-                        enabled = !uiState.reprintInFlight,
-                        onClick = { viewModel.reprintTicket() }
-                    )
-                }
                 if (canManageReceivables && uiState.canMarkPaid && viewModel.totalOpenReceivableCents(order) > 0L) {
                     OrderOutlinedActionButton(
                         label = "Registrar pago",
@@ -1300,7 +1345,7 @@ fun OrderDetailsScreen(
                     viewModel.resetManualPaymentFields()
                     viewModel.showManualPaymentSheet(false)
                 },
-                methodOptions = ManualPaymentMethodOption.getAllOptionsPairs(),
+                methodOptions = ManualPaymentMethodOption.getAllOptions().map { it.id to it.displayName },
                 charged = uiState.manualPayment.charged,
                 otherPaymentDescription = uiState.manualPayment.otherPaymentDescription,
                 onToggleMethod = { code, selected ->
@@ -3116,8 +3161,12 @@ fun ManualPaymentBottomSheet(
     if (!open) return
 
     val sheetState = rememberModalBottomSheetState(
-        skipPartiallyExpanded = false
+        skipPartiallyExpanded = true
     )
+    var pickingMethod by remember { mutableStateOf(false) }
+    val allocated = remember(charged) { charged.values.sum() }
+    val change = (allocated - totalToCharge).coerceAtLeast(0L)
+    val hasCharges = charged.isNotEmpty()
 
     ModalBottomSheet(
         onDismissRequest = onDismiss,
@@ -3125,139 +3174,378 @@ fun ManualPaymentBottomSheet(
         dragHandle = null
     ) {
         KeyboardDismissHost(Modifier.fillMaxWidth()) {
-            Column(Modifier.fillMaxWidth()) {
-        Row(
-            modifier = Modifier.fillMaxWidth()
-                .padding(horizontal = 16.dp, vertical = 8.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Text(
-                if (uiState.manualPayment.confirmNonFiscal) "Generar documento" else "Registrar pago manual",
-                style = MaterialTheme.typography.titleLarge
-            )
-            Spacer(Modifier.weight(1f))
-            IconButton(onClick = onDismiss) {
-                Icon(rememberVectorPainter(Icons.Rounded.Close), contentDescription = "Cerrar")
-            }
-        }
-
-        Divider()
-
-        // Content
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .navigationBarsPadding()
-                .imePadding()
-                .padding(horizontal = 16.dp, vertical = 12.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp)
-        ) {
-            // Methods
-            Text("Métodos de pago", style = MaterialTheme.typography.titleMedium)
-            FlowRow(
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                verticalArrangement = Arrangement.spacedBy(8.dp)
+            Column(
+                Modifier
+                    .fillMaxWidth()
+                    .navigationBarsPadding()
+                    .imePadding()
+                    .verticalScroll(rememberScrollState())
             ) {
-                methodOptions.forEach { (code, label) ->
-                    val selected = charged.containsKey(code)
-                    FilterChip(
-                        selected = selected,
-                        onClick = { onToggleMethod(code, !selected) },
-                        label = { Text(label) }
-                    )
-                }
-            }
-
-            // Amount inputs (for selected methods)
-            charged.keys.sorted().forEach { code ->
-                val label = methodOptions.find { it.first == code }?.second ?: code.toString()
-
                 Row(
-                    Modifier.fillMaxWidth(),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp, vertical = 8.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Text(label)
-                    Spacer(Modifier.weight(1f))
-                    DMMoneyOutlinedTextField(
-                        text = (charged[code] ?: 0L).toString(),
-                        label = "Monto",
-                        onChange = { raw ->
-                            val cents = raw.filter(Char::isDigit).toLongOrNull() ?: 0L
-                            onAmountChange(code, cents)
-                        },
-                        leadingIcon = null,
-                        modifier = Modifier.widthIn(min = 160.dp),
-                        maxLines = 1,
-                        imeAction = ImeAction.Done
-                    )
-                }
-
-                // "Otro" description when code == 11 (match your POS behavior)
-                if (code == 11) {
-                    DMOutlinedTextField(
-                        text = otherPaymentDescription,
-                        label = "Descripción (requerida para 'Otro')",
-                        onChange = onOtherDesc,
-                        modifier = Modifier.fillMaxWidth(),
-                        maxLines = 2
-                    )
-                } else if (code == 2) {
-                    // Cash note, same as POS
                     Text(
-                        "Se permite exceso de pago (se calculará cambio)",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                        when {
+                            uiState.manualPayment.confirmNonFiscal -> "Generar documento"
+                            uiState.manualPayment.paymentOnly -> "Registrar pago"
+                            uiState.manualPayment.invoiceAfterPayment -> "Facturar"
+                            else -> "Registrar pago manual"
+                        },
+                        style = MaterialTheme.typography.titleLarge
+                    )
+                    Spacer(Modifier.weight(1f))
+                    IconButton(onClick = onDismiss) {
+                        Icon(rememberVectorPainter(Icons.Rounded.Close), contentDescription = "Cerrar")
+                    }
+                }
+
+                Divider()
+
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp, vertical = 12.dp),
+                    verticalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    if (pickingMethod) {
+                        Text("Seleccionar método de pago", style = MaterialTheme.typography.titleMedium)
+                        methodOptions.forEach { (code, label) ->
+                            ManualPaymentMethodPickerRow(
+                                icon = manualPaymentMethodIcon(code),
+                                title = label,
+                                enabled = !charged.containsKey(code) && remaining > 0,
+                                onClick = {
+                                    onToggleMethod(code, true)
+                                    pickingMethod = false
+                                }
+                            )
+                        }
+                        TextButtonM(
+                            label = "Cerrar",
+                            enabled = true,
+                            onClick = { pickingMethod = false }
+                        )
+                    } else {
+                        Surface(
+                            modifier = Modifier.fillMaxWidth(),
+                            shape = RoundedCornerShape(22.dp),
+                            color = MaterialTheme.colorScheme.surface,
+                            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
+                            shadowElevation = 1.dp
+                        ) {
+                            Column(Modifier.padding(16.dp)) {
+                                Text(
+                                    "Distribución del cobro",
+                                    style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.W800)
+                                )
+                                Text(
+                                    "Puedes dividir el total entre métodos",
+                                    style = bodySmall(color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                )
+                                Spacer(Modifier.height(14.dp))
+
+                                if (!hasCharges) {
+                                    ManualSelectPaymentMethodButton { pickingMethod = true }
+                                } else {
+                                    charged.keys.sorted().forEachIndexed { index, code ->
+                                        val label = methodOptions.find { it.first == code }?.second
+                                            ?: "Método $code"
+                                        ManualPaymentChargedMethodRow(
+                                            title = label,
+                                            amountCents = charged[code] ?: 0L,
+                                            icon = manualPaymentMethodIcon(code),
+                                            onAmountChange = { onAmountChange(code, it) },
+                                            onRemove = { onToggleMethod(code, false) }
+                                        )
+                                        if (code == ManualPaymentMethodOption.OTHER_SPECIFY.id) {
+                                            Spacer(Modifier.height(8.dp))
+                                            DMOutlinedTextField(
+                                                text = otherPaymentDescription,
+                                                label = "Descripción (requerida para 'Otro')",
+                                                onChange = onOtherDesc,
+                                                modifier = Modifier.fillMaxWidth(),
+                                                maxLines = 2
+                                            )
+                                        } else if (code == ManualPaymentMethodOption.CASH.id) {
+                                            Text(
+                                                "Se permite exceso de pago (se calculará cambio)",
+                                                style = bodySmall(
+                                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                                )
+                                            )
+                                        }
+                                        if (index != charged.size - 1) {
+                                            Divider(Modifier.padding(vertical = 4.dp))
+                                        }
+                                    }
+                                    if (remaining > 0) {
+                                        Spacer(Modifier.height(10.dp))
+                                        ManualSelectPaymentMethodButton { pickingMethod = true }
+                                    }
+                                }
+
+                                if (remaining > 0 || change > 0 || hasCharges) {
+                                    Divider(Modifier.padding(top = 10.dp, bottom = 8.dp))
+                                    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                                        Row(
+                                            Modifier.fillMaxWidth(),
+                                            horizontalArrangement = Arrangement.SpaceBetween
+                                        ) {
+                                            Text("Asignado", style = bodyMedium())
+                                            Text(
+                                                formatNumberToMoney(allocated / 100.0),
+                                                style = bodyMediumBold()
+                                            )
+                                        }
+                                        Row(
+                                            Modifier.fillMaxWidth(),
+                                            horizontalArrangement = Arrangement.SpaceBetween
+                                        ) {
+                                            Text("Pendiente por asignar", style = bodyMedium())
+                                            Text(
+                                                formatNumberToMoney(remaining / 100.0),
+                                                style = bodyMediumBold(
+                                                    color = if (remaining > 0) {
+                                                        MaterialTheme.colorScheme.error
+                                                    } else {
+                                                        MaterialTheme.colorScheme.primary
+                                                    }
+                                                )
+                                            )
+                                        }
+                                        if (change > 0) {
+                                            Row(
+                                                Modifier.fillMaxWidth(),
+                                                horizontalArrangement = Arrangement.SpaceBetween
+                                            ) {
+                                                Text(
+                                                    "Cambio",
+                                                    style = bodyMedium(
+                                                        color = MaterialTheme.colorScheme.secondary
+                                                    )
+                                                )
+                                                Text(
+                                                    formatNumberToMoney(change / 100.0),
+                                                    style = bodyMediumBold(
+                                                        color = MaterialTheme.colorScheme.secondary
+                                                    )
+                                                )
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+
+                ButtonM(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp, vertical = 12.dp),
+                    onClick = onConfirm,
+                    enabled = uiState.manualPayment.isConfirmEnabled
+                ) {
+                    Text(
+                        when {
+                            uiState.manualPayment.confirmNonFiscal -> "Generar documento"
+                            uiState.manualPayment.paymentOnly -> "Registrar pago"
+                            uiState.manualPayment.invoiceAfterPayment || uiState.invoicingEnabled ->
+                                "Confirmar cobro y facturar"
+                            else -> "Confirmar cobro"
+                        },
+                        style = labelLarge().copy(color = MaterialTheme.colorScheme.onPrimary)
                     )
                 }
+                Spacer(Modifier.height(16.dp))
             }
+        }
+    }
+}
 
-            Divider()
+private fun manualPaymentMethodIcon(code: Int): ImageVector {
+    return when (code) {
+        ManualPaymentMethodOption.BANK_TRANSFER.id -> Icons.Rounded.AccountBalance
+        ManualPaymentMethodOption.CREDIT_CARD.id,
+        ManualPaymentMethodOption.DEBIT_CARD.id -> Icons.Rounded.CreditCard
+        ManualPaymentMethodOption.CASH.id,
+        ManualPaymentMethodOption.PUNTO_PAGO.id -> Icons.Rounded.AttachMoney
+        ManualPaymentMethodOption.LOYALTY_CARD.id,
+        ManualPaymentMethodOption.VOUCHER.id -> Icons.Rounded.Loyalty
+        ManualPaymentMethodOption.GIFT_CARD.id -> Icons.Rounded.Redeem
+        ManualPaymentMethodOption.CHECK.id -> Icons.AutoMirrored.Rounded.FactCheck
+        else -> Icons.Rounded.Add
+    }
+}
 
-            // Allocation summary (NO installments here)
-            val allocated = remember(charged) { charged.values.sum() }
-            val change = (allocated - totalToCharge).coerceAtLeast(0L)
+@Composable
+private fun ManualSelectPaymentMethodButton(onClick: () -> Unit) {
+    val accent = MaterialTheme.colorScheme.secondary
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(56.dp)
+            .background(
+                color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.24f),
+                shape = RoundedCornerShape(16.dp)
+            )
+            .dashedBorder(
+                strokeWidth = 1.4.dp,
+                color = accent.copy(alpha = 0.75f),
+                cornerRadiusDp = 16.dp
+            )
+            .clickable(onClick = onClick)
+            .padding(horizontal = 16.dp),
+        horizontalArrangement = Arrangement.Center,
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Icon(
+            imageVector = Icons.Rounded.Add,
+            contentDescription = null,
+            tint = accent,
+            modifier = Modifier.size(18.dp)
+        )
+        Spacer(Modifier.width(8.dp))
+        Text(
+            "Seleccionar método de pago",
+            style = bodyMediumBold(color = accent)
+        )
+    }
+}
 
-            Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                    Text("Asignado")
-                    Text(formatNumberToMoney((allocated / 100.0).toString()))
-                }
-
-                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                    Text("Restante")
-                    Text(formatNumberToMoney((remaining / 100.0).toString()))
-                }
-
-                if (change > 0) {
-                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                        Text("Cambio", color = MaterialTheme.colorScheme.secondary)
-                        Text(
-                            formatNumberToMoney((change / 100.0).toString()),
-                            style = bodyMediumBold(color = MaterialTheme.colorScheme.secondary)
+@Composable
+private fun ManualPaymentMethodPickerRow(
+    icon: ImageVector,
+    title: String,
+    enabled: Boolean,
+    onClick: () -> Unit,
+) {
+    Surface(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 5.dp)
+            .clickable(enabled = enabled, onClick = onClick),
+        shape = RoundedCornerShape(16.dp),
+        color = if (enabled) {
+            MaterialTheme.colorScheme.surface
+        } else {
+            MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.24f)
+        },
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant)
+    ) {
+        Row(
+            Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 14.dp, vertical = 12.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Row(
+                modifier = Modifier.weight(1f),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Surface(
+                    modifier = Modifier.size(34.dp),
+                    shape = RoundedCornerShape(13.dp),
+                    color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.55f)
+                ) {
+                    Row(
+                        Modifier.fillMaxSize(),
+                        horizontalArrangement = Arrangement.Center,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(
+                            imageVector = icon,
+                            contentDescription = title,
+                            tint = MaterialTheme.colorScheme.onSurface,
+                            modifier = Modifier.size(18.dp)
                         )
                     }
                 }
-            }
-
-            // Confirm button (enabled only if fully covered)
-            ButtonM(
-                onClick = onConfirm,
-                enabled = allocated >= totalToCharge
-            ) {
+                Spacer(Modifier.width(10.dp))
                 Text(
-                    when {
-                        uiState.manualPayment.confirmNonFiscal -> "Generar documento"
-                        uiState.invoicingEnabled -> "Confirmar cobro y facturar"
-                        else -> "Confirmar cobro"
-                    },
-                    style = labelLarge().copy(color = MaterialTheme.colorScheme.onPrimary)
+                    title,
+                    style = bodyMediumBold(
+                        color = if (enabled) {
+                            MaterialTheme.colorScheme.onSurface
+                        } else {
+                            MaterialTheme.colorScheme.onSurfaceVariant
+                        }
+                    )
                 )
             }
-
-            Spacer(Modifier.height(8.dp))
+            Text(
+                if (enabled) "Agregar" else "Agregado",
+                style = bodySmall(
+                    color = if (enabled) {
+                        MaterialTheme.colorScheme.secondary
+                    } else {
+                        MaterialTheme.colorScheme.onSurfaceVariant
+                    }
+                )
+            )
         }
+    }
+}
+
+@Composable
+private fun ManualPaymentChargedMethodRow(
+    title: String,
+    amountCents: Long,
+    icon: ImageVector,
+    onAmountChange: (Long) -> Unit,
+    onRemove: () -> Unit,
+) {
+    Column(Modifier.fillMaxWidth()) {
+        Row(
+            Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Surface(
+                modifier = Modifier.size(34.dp),
+                shape = RoundedCornerShape(13.dp),
+                color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.55f)
+            ) {
+                Row(
+                    Modifier.fillMaxSize(),
+                    horizontalArrangement = Arrangement.Center,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Icon(
+                        imageVector = icon,
+                        contentDescription = title,
+                        tint = MaterialTheme.colorScheme.onSurface,
+                        modifier = Modifier.size(18.dp)
+                    )
+                }
+            }
+            Spacer(Modifier.width(10.dp))
+            Text(title, style = bodyMediumBold(), modifier = Modifier.weight(1f))
+            IconButton(onClick = onRemove) {
+                Icon(
+                    imageVector = Icons.Rounded.Close,
+                    contentDescription = "Eliminar método",
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.size(20.dp)
+                )
             }
         }
+        Spacer(Modifier.height(8.dp))
+        DMMoneyOutlinedTextField(
+            text = if (amountCents == 0L) "" else amountCents.toString(),
+            label = "Monto",
+            onChange = { raw ->
+                val cents = raw.filter(Char::isDigit).toLongOrNull() ?: 0L
+                onAmountChange(cents)
+            },
+            leadingIcon = null,
+            modifier = Modifier.fillMaxWidth(),
+            maxLines = 1,
+            imeAction = ImeAction.Done
+        )
     }
 }
 

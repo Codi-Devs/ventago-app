@@ -5,6 +5,10 @@ import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.contentOrNull
+import kotlinx.serialization.json.jsonArray
+import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.jsonPrimitive
 
 @Serializable
 data class TicketDocumentPayload(
@@ -14,6 +18,30 @@ data class TicketDocumentPayload(
 ) {
     fun resolvedLayoutElement(): JsonElement? {
         return ticketLayout ?: ticketLayoutCamel ?: blocks?.let { JsonObject(mapOf("blocks" to it)) }
+    }
+
+    fun hasIssuerPrintData(): Boolean {
+        val root = ticketLayout ?: ticketLayoutCamel
+        val blockList = root?.get("blocks")?.jsonArray ?: blocks ?: return false
+        for (block in blockList) {
+            val obj = runCatching { block.jsonObject }.getOrNull() ?: continue
+            val type = obj["type"]?.jsonPrimitive?.contentOrNull
+            if (type == "image") {
+                val source = obj["image"]?.jsonObject?.get("source")?.jsonPrimitive?.contentOrNull
+                    ?: obj["source"]?.jsonPrimitive?.contentOrNull
+                if (!source.isNullOrBlank()) return true
+            }
+            val values = obj["values"]?.jsonArray ?: continue
+            for (value in values) {
+                val row = runCatching { value.jsonObject }.getOrNull() ?: continue
+                if (row["key"]?.jsonPrimitive?.contentOrNull == "issuer_name" &&
+                    !row["value"]?.jsonPrimitive?.contentOrNull.isNullOrBlank()
+                ) {
+                    return true
+                }
+            }
+        }
+        return false
     }
 }
 

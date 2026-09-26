@@ -8,6 +8,7 @@ import com.teco.ventago.core.logger.Log
 import com.teco.ventago.core.logger.LogLevel
 import com.teco.ventago.features.customers.domain.CustomerService
 import com.teco.ventago.features.customers.domain.models.Customer
+import com.teco.ventago.features.customers.domain.models.CustomerListItem
 import com.teco.ventago.features.customers.domain.models.CustomerTaxRetentionCatalog
 import com.teco.ventago.features.customers.ui.form.viewmodel.CustomerCountries
 import com.teco.ventago.features.financialProfile.domain.FinancialProfileService
@@ -69,16 +70,18 @@ class AddCustomerViewModel(
     }
 
     fun onStepBack() {
+        consumeBack()
+    }
+
+    fun consumeBack(): Boolean {
+        val previous = previousAddCustomerStep(uiState.value.currentStep) ?: return false
         updateState {
             copy(
-                currentStep = when (currentStep) {
-                    AddCustomerStep.TYPE -> AddCustomerStep.TYPE
-                    AddCustomerStep.MAIN_INFO -> AddCustomerStep.TYPE
-                    AddCustomerStep.OPTIONAL_INFO -> AddCustomerStep.MAIN_INFO
-                },
+                currentStep = previous,
                 validationMessage = null,
             )
         }
+        return true
     }
 
     fun onCustomerTypeSelected(customerType: FeCustomerType) {
@@ -580,7 +583,6 @@ class AddCustomerViewModel(
                 updateState { copy(errorMessage = "El RUC ingresado no es valido. Verifica el numero e intentalo nuevamente.") }
                 hideLoading()
             } catch (e: DuplicateCustomerException) {
-                val duplicateMessage = duplicateCustomerMessage(state.name, state.ruc)
                 logger.sendLog(
                     Log(
                         level = LogLevel.WARNING,
@@ -588,8 +590,16 @@ class AddCustomerViewModel(
                         message = "Duplicate customer on create. businessId: $businessId, name: ${state.name}, ruc: ${state.ruc}"
                     )
                 )
-                updateState { copy(errorMessage = duplicateMessage) }
-                hideLoading()
+                val existing = resolveExistingCustomerByRuc(businessId, state.ruc)
+                if (existing != null) {
+                    withContext(Dispatchers.Main) {
+                        hideLoading()
+                        emitEvent(AddCustomerStateUiEvent.ExistingCustomerSelected(existing))
+                    }
+                } else {
+                    updateState { copy(errorMessage = duplicateCustomerMessage(state.name, state.ruc)) }
+                    hideLoading()
+                }
             } catch (e: Exception) {
                 e.printStackTrace()
                 logger.sendLog(
@@ -652,7 +662,7 @@ class AddCustomerViewModel(
             CustomerTaxRetentionCatalog.normalizeCode(state.taxRetentionCode) == "8" &&
             state.taxRetentionPercent.toIntOrNull() == null
         ) {
-            "Ingresa el porcentaje de retencion"
+            "Ingresa el porcentaje de retención"
         } else {
             null
         }
@@ -718,4 +728,28 @@ class AddCustomerViewModel(
         ).any { it != null }
     }
 
+    private suspend fun resolveExistingCustomerByRuc(
+        businessId: Int,
+        ruc: String?,
+    ): CustomerListItem? {
+        val normalizedRuc = normalizeCustomerRuc(ruc)
+        if (businessId == -1 || normalizedRuc.isBlank()) return null
+        val matches = runCatching {
+            customerService.findCustomersByRuc(businessId, normalizedRuc)
+        }.getOrElse { emptyList() }
+        return pickExistingCustomerByRuc(normalizedRuc, matches)
+    }
+
+}
+
+internal fun normalizeCustomerRuc(ruc: String?): String =
+    ruc.orEmpty().filterNot { it.isWhitespace() }.uppercase()
+
+internal fun pickExistingCustomerByRuc(
+    ruc: String?,
+    candidates: List<CustomerListItem>,
+): CustomerListItem? {
+    val target = normalizeCustomerRuc(ruc)
+    if (target.isBlank()) return null
+    return candidates.firstOrNull { normalizeCustomerRuc(it.ruc) == target }
 }

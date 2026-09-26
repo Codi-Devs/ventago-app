@@ -3,6 +3,7 @@ package com.teco.ventago.features.pos.ui.customer.add.viewmodel
 import com.teco.ventago.core.LoadableState
 import com.teco.ventago.core.location.PanamaLocations
 import com.teco.ventago.design_system.organism.LoadingBottomSheetState
+import com.teco.ventago.features.customers.domain.models.CustomerListItem
 import com.teco.ventago.features.invoicing.domain.models.FeCustomerType
 import com.teco.ventago.features.invoicing.domain.TaxPayerType
 
@@ -21,6 +22,12 @@ enum class AddCustomerStep {
     TYPE,
     MAIN_INFO,
     OPTIONAL_INFO
+}
+
+internal fun previousAddCustomerStep(step: AddCustomerStep): AddCustomerStep? = when (step) {
+    AddCustomerStep.TYPE -> null
+    AddCustomerStep.MAIN_INFO -> AddCustomerStep.TYPE
+    AddCustomerStep.OPTIONAL_INFO -> AddCustomerStep.MAIN_INFO
 }
 
 enum class ForeignIdType(val code: String, val description: String) {
@@ -98,5 +105,6 @@ data class AddCustomerState(
 sealed class AddCustomerStateUiEvent {
     data object InvalidRucNumber : AddCustomerStateUiEvent()
     data object CustomerCreated : AddCustomerStateUiEvent()
+    data class ExistingCustomerSelected(val customer: CustomerListItem) : AddCustomerStateUiEvent()
     data class ValidationError(val message: String) : AddCustomerStateUiEvent()
 }

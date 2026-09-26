@@ -90,6 +90,34 @@ class CreateOrderResponseParsingTest {
     }
 
     @Test
+    fun createOrderResponseParsesNonFiscalTicketWithoutPdf() {
+        val payload = """
+            {
+              "id": 11543,
+              "order_number": "ORD-4-0000-001-0000011543",
+              "order_date": "2026-09-25T23:24:38-05:00",
+              "order_amount": "10.00",
+              "tax_amount": "0.70",
+              "payment_status": 0,
+              "invoice_status": 0,
+              "invoice_files": {
+                "TICKET": {
+                  "kind": "invoice_ticket_layout",
+                  "document_kind": "non_fiscal",
+                  "blocks": [{"type": "text", "text": "Documento interno"}]
+                }
+              }
+            }
+        """.trimIndent()
+
+        val response = json.decodeFromString<CreateOrderResponse>(payload)
+
+        assertEquals(11543, response.id)
+        assertEquals(null, response.invoiceFiles?.pdf)
+        assertEquals(1, response.invoiceFiles?.ticket?.blocks?.size)
+    }
+
+    @Test
     fun retryInvoiceResponseParsesSnakeAndCamelInvoiceWarningFields() {
         val snakePayload = """
             {

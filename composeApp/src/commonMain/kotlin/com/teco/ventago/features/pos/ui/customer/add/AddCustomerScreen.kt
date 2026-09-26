@@ -39,6 +39,8 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.ExperimentalComposeUiApi
+import androidx.compose.ui.backhandler.BackHandler
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.text.input.ImeAction
@@ -54,6 +56,7 @@ import com.teco.ventago.design_system.textfields.helpers.DMDropDownField
 import com.teco.ventago.design_system.theme.vanishedBackgroundColor
 import com.teco.ventago.features.invoicing.domain.models.FeCustomerType
 import com.teco.ventago.features.invoicing.domain.models.rucNeeded
+import com.teco.ventago.features.customers.domain.models.CustomerListItem
 import com.teco.ventago.features.pos.ui.dismissKeyboardOnOutsideTap
 import com.teco.ventago.features.pos.ui.customer.add.viewmodel.AddCustomerStep
 import com.teco.ventago.features.pos.ui.customer.add.viewmodel.AddCustomerStateUiEvent
@@ -66,6 +69,8 @@ import ventago.composeapp.generated.resources.customers_address_line
 import ventago.composeapp.generated.resources.customers_corregimiento
 import ventago.composeapp.generated.resources.customers_district
 import ventago.composeapp.generated.resources.customers_province
+import ventago.composeapp.generated.resources.customers_tax_retention
+import ventago.composeapp.generated.resources.customers_tax_retention_percent
 import ventago.composeapp.generated.resources.name
 import ventago.composeapp.generated.resources.phone
 import ventago.composeapp.generated.resources.pos_clients_email
@@ -73,15 +78,28 @@ import ventago.composeapp.generated.resources.pos_clients_ruc
 import ventago.composeapp.generated.resources.pos_clients_tag
 import ventago.composeapp.generated.resources.understood
 
+@OptIn(ExperimentalComposeUiApi::class)
 @Composable
-fun AddCustomerScreen(viewModel: AddCustomerViewModel = koinViewModel(), navigateBack: () -> Unit) {
+fun AddCustomerScreen(
+    viewModel: AddCustomerViewModel = koinViewModel(),
+    navigateBack: () -> Unit,
+    onExistingCustomerSelected: (CustomerListItem) -> Unit = { navigateBack() },
+) {
     val uiState by viewModel.uiState.collectAsState()
+
+    BackHandler(enabled = uiState.currentStep != AddCustomerStep.TYPE) {
+        viewModel.onStepBack()
+    }
 
     LaunchedEffect(Unit) {
         viewModel.events.collect {
             when (it) {
                 is AddCustomerStateUiEvent.CustomerCreated -> {
                     navigateBack()
+                }
+
+                is AddCustomerStateUiEvent.ExistingCustomerSelected -> {
+                    onExistingCustomerSelected(it.customer)
                 }
 
                 is AddCustomerStateUiEvent.InvalidRucNumber -> {
@@ -362,8 +380,8 @@ private fun GuidedProgressHeader(
         Text(
             text = when (currentStep) {
                 AddCustomerStep.TYPE -> "Tipo de cliente"
-                AddCustomerStep.MAIN_INFO -> "Informacion principal"
-                AddCustomerStep.OPTIONAL_INFO -> "Informacion opcional"
+                AddCustomerStep.MAIN_INFO -> "Información principal"
+                AddCustomerStep.OPTIONAL_INFO -> "Información opcional"
             },
             style = MaterialTheme.typography.titleMedium,
             fontWeight = FontWeight.Bold,
@@ -478,7 +496,7 @@ private fun MainInfoStep(viewModel: AddCustomerViewModel) {
                 modifier = Modifier.weight(1f),
                 onClick = viewModel::onStepBack,
             ) {
-                Text(text = "Atras")
+                Text(text = "Atrás")
             }
             ButtonM(
                 modifier = Modifier.weight(1f),
@@ -648,7 +666,7 @@ private fun OptionalInfoStep(viewModel: AddCustomerViewModel) {
         }
 
         DMDropDownField(
-            label = "Retencion",
+            label = stringResource(Res.string.customers_tax_retention),
             items = viewModel.taxRetentionLabels(),
             selectedIndex = viewModel.selectedTaxRetentionIndex(),
             modifier = Modifier.fillMaxWidth(),
@@ -659,7 +677,7 @@ private fun OptionalInfoStep(viewModel: AddCustomerViewModel) {
         if (viewModel.selectedTaxRetentionRequiresManualPercent()) {
             DMOutlinedTextField(
                 text = uiState.taxRetentionPercent,
-                label = "Porcentaje de retencion",
+                label = stringResource(Res.string.customers_tax_retention_percent),
                 modifier = Modifier.fillMaxWidth(),
                 onChange = viewModel::onTaxRetentionPercentChange,
                 maxLines = 1,
@@ -684,7 +702,7 @@ private fun OptionalInfoStep(viewModel: AddCustomerViewModel) {
                 modifier = Modifier.weight(1f),
                 onClick = viewModel::onStepBack,
             ) {
-                Text(text = "Atras")
+                Text(text = "Atrás")
             }
             ButtonM(
                 modifier = Modifier.weight(1f),

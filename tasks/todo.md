@@ -6964,3 +6964,22 @@
 - The sheet builds full internal numbers like `ORD-4-0000-865-0000000870` from the selected branch, selected billing point, current business id, and zero-padded user input.
 - Search submits through the existing `findOrderByOrderNumber` flow and opens order details when found.
 - Common metadata compilation passed. Existing project warnings remain unrelated.
+
+# Home Operational Sales Breakdown TODO
+
+## Plan
+
+- [ ] Parse operational year, month and today sales and fiscal/internal splits with legacy-total fallback.
+- [ ] Show operational totals in the active HomeSummaryScreen for phone and tablet.
+- [ ] Make month and today cards fully tappable with a help mark and a shared three-row dialog.
+- [ ] Verify parser arithmetic, focused tests, common Kotlin compilation and task-only diffs.
+
+## Verification Gates
+
+- [ ] Focused home summary test.
+- [ ] Common Kotlin metadata compilation.
+- [ ] `git diff --check` on task files.
+
+## Review Notes
+
+- Pending implementation.

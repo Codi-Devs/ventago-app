@@ -32,6 +32,7 @@ class ChangesManager(private val storage: LocalStorage): IChangesManager {
     private val menuChanged = MutableStateFlow(1)
     private val inventoryChanged = MutableStateFlow(1)
     private val ordersChanged = MutableStateFlow(1)
+    private val homeSummaryChanged = MutableStateFlow(1)
     private val businessChanged = MutableStateFlow(1)
     private val financialChanged = MutableStateFlow(1)
     private val customerChanged = MutableStateFlow(1)
@@ -53,6 +54,7 @@ class ChangesManager(private val storage: LocalStorage): IChangesManager {
     override fun productsListener(): Flow<Int> = menuChanged
     override fun inventoryListener(): Flow<Int> = inventoryChanged
     override fun ordersListener(): Flow<Int> = ordersChanged
+    override fun homeSummaryListener(): Flow<Int> = homeSummaryChanged
     override fun ordersToken(): String = storage.string("changed_orders") ?: ""
     override fun businessListener(): Flow<Int> = businessChanged
     override fun financialListener(): Flow<Int> = financialChanged
@@ -131,10 +133,16 @@ class ChangesManager(private val storage: LocalStorage): IChangesManager {
                     changedOrdersDB = it.child("changed_orders").value<String?>() ?: ""
                 }
 
+                var homeSummaryCacheDB = ""
+                if (it.child("home_summary_cache").value != null) {
+                    homeSummaryCacheDB = it.child("home_summary_cache").value<String?>() ?: ""
+                }
+
                 val changedBusinessCache = storage.string("changed_business") ?: ""
                 val changedMenuCache = storage.string("changed_menu") ?: ""
                 val changedInventoryCache = storage.string("changed_inventory") ?: ""
                 val changedOrdersCache = storage.string("changed_orders") ?: ""
+                val homeSummaryCacheLocal = storage.string("home_summary_cache") ?: ""
                 val changedFinancialCache = storage.string("changed_financial") ?: ""
                 val changedCustomerCache = storage.string("customer_cache") ?: ""
                 val changedBranchCache = storage.string("branches_cache") ?: ""
@@ -182,6 +190,17 @@ class ChangesManager(private val storage: LocalStorage): IChangesManager {
                     InventoryChangeTokenAction.EmitInvalidate -> {
                         ordersChanged.update { actual -> actual + 1 }
                         storage.set("changed_orders", changedOrdersDB)
+                    }
+                    InventoryChangeTokenAction.Ignore -> Unit
+                }
+
+                when (resolveInventoryChangeToken(homeSummaryCacheLocal, homeSummaryCacheDB)) {
+                    InventoryChangeTokenAction.StoreOnly -> {
+                        storage.set("home_summary_cache", homeSummaryCacheDB)
+                    }
+                    InventoryChangeTokenAction.EmitInvalidate -> {
+                        homeSummaryChanged.update { actual -> actual + 1 }
+                        storage.set("home_summary_cache", homeSummaryCacheDB)
                     }
                     InventoryChangeTokenAction.Ignore -> Unit
                 }

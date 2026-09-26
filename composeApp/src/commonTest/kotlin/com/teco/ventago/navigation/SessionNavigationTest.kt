@@ -146,4 +146,68 @@ class SessionNavigationTest {
             )
         )
     }
+
+    @Test
+    fun logoutAndLoginRecreateNavHostAfterSessionIsResolved() {
+        assertFalse(
+            SessionNavigation.shouldRecreateNavHost(
+                previousAuthenticated = null,
+                nextAuthenticated = true,
+            )
+        )
+        assertTrue(
+            SessionNavigation.shouldRecreateNavHost(
+                previousAuthenticated = true,
+                nextAuthenticated = false,
+            )
+        )
+        assertTrue(
+            SessionNavigation.shouldRecreateNavHost(
+                previousAuthenticated = false,
+                nextAuthenticated = true,
+            )
+        )
+        assertFalse(
+            SessionNavigation.shouldRecreateNavHost(
+                previousAuthenticated = true,
+                nextAuthenticated = true,
+            )
+        )
+        assertEquals(
+            1,
+            SessionNavigation.nextSessionEpoch(
+                currentEpoch = 0,
+                previousAuthenticated = true,
+                nextAuthenticated = false,
+            )
+        )
+        assertEquals(
+            0,
+            SessionNavigation.nextSessionEpoch(
+                currentEpoch = 0,
+                previousAuthenticated = null,
+                nextAuthenticated = true,
+            )
+        )
+    }
+
+    @Test
+    fun signedOutSessionStartIsLoginEvenWithStaleInvoicingFlags() {
+        val start = SessionNavigation.resolveSessionStart(
+            isAuthenticated = false,
+            missingBusiness = false,
+            invoicingConfigured = false,
+        )
+
+        assertEquals(PosScreens.LoginRegister.name, start.navHostStart)
+        assertEquals(PosScreens.LoginScreen.name, start.loginGraphStart)
+        assertEquals(
+            PosScreens.LoginScreen.name,
+            SessionNavigation.resolveAuthDestination(
+                isAuthenticated = false,
+                missingBusiness = true,
+                invoicingConfigured = false,
+            )
+        )
+    }
 }

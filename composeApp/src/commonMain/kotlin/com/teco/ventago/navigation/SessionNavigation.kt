@@ -74,4 +74,23 @@ object SessionNavigation {
         }
         return isInitial && isStartupRoute(currentRoute)
     }
+
+    fun shouldRecreateNavHost(
+        previousAuthenticated: Boolean?,
+        nextAuthenticated: Boolean,
+    ): Boolean {
+        return previousAuthenticated != null && previousAuthenticated != nextAuthenticated
+    }
+
+    fun nextSessionEpoch(
+        currentEpoch: Int,
+        previousAuthenticated: Boolean?,
+        nextAuthenticated: Boolean,
+    ): Int {
+        return if (shouldRecreateNavHost(previousAuthenticated, nextAuthenticated)) {
+            currentEpoch + 1
+        } else {
+            currentEpoch
+        }
+    }
 }

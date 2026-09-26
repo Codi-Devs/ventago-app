@@ -27,7 +27,16 @@ data class HomeSummary(
     @SerialName("recurring_customer_count") val recurringCustomerCount: Int = 0,
     @SerialName("top_customers") val topCustomers: List<TopCustomer> = emptyList(),
     @SerialName("daily_sales_chart") val dailySalesChart: List<DailySalesPoint> = emptyList()
-)
+) {
+    val monthSalesAmount: Double get() = monthSalesTotalWithTaxes
+    val monthSalesBaseAmount: Double get() = monthSalesTotal
+    val monthSalesTaxAmount: Double get() = monthSalesTaxTotal
+    val yearSalesAmount: Double get() = yearSalesTotal
+    val todaySalesAmount: Double get() = todaySalesTotal
+    val monthOrders: Int get() = monthOrderCount
+    val todayOrders: Int get() = todayOrderCount
+    val monthSalesChange: Double get() = monthSalesChangePerc
+}
 
 @Serializable
 data class DailySalesPoint(

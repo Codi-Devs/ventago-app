@@ -8,6 +8,7 @@ interface IChangesManager {
     fun productsListener(): Flow<Int>
     fun inventoryListener(): Flow<Int> = emptyFlow()
     fun ordersListener(): Flow<Int> = emptyFlow()
+    fun homeSummaryListener(): Flow<Int> = emptyFlow()
     fun ordersToken(): String = ""
     fun businessListener(): Flow<Int>
     fun financialListener(): Flow<Int>

@@ -44,17 +44,22 @@ class BusinessService(
                 }
             }
             changesJob?.cancel()
-            changesJob = changesManager.businessListener().onEach { value ->
-                if (value != 1) {
-                    business.value?.let {
-                        getBusinessById(it.businessId)
-                    }
-                }
-            }.launchIn(this)
+            startBusinessListener(this)
         }
     }
 
     fun getBusiness(): Flow<Business?> = business
+
+    private fun startBusinessListener(scope: CoroutineScope = CoroutineScope(Dispatchers.IO)) {
+        changesJob?.cancel()
+        changesJob = changesManager.businessListener().onEach { value ->
+            if (value != 1) {
+                business.value?.let {
+                    getBusinessById(it.businessId)
+                }
+            }
+        }.launchIn(scope)
+    }
 
     fun clear() {
         changesJob?.cancel()
@@ -83,6 +88,16 @@ class BusinessService(
             business
         }
         saveCache(ignoreChange = true)
+        authService.getUserSync()?.let { user ->
+            val menuId = productService.state.value?.id
+                ?: user.businessIds.firstOrNull { it.businessId == businessId }?.menuId
+            if (menuId != null && menuId > 0) {
+                changesManager.initialize(businessId, menuId, user.userId)
+            }
+        }
+        if (changesJob?.isActive != true) {
+            startBusinessListener()
+        }
         return business
     }
 

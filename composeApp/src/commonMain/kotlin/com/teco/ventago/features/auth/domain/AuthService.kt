@@ -65,7 +65,7 @@ class AuthService(
     private val sessionIdService: ISessionIdService,
     private val posProvisioningService: PosDeviceProvisioningService
 ) : IAuthService {
-    var user = MutableStateFlow<User?>(null)
+    val user = MutableStateFlow<User?>(null)
     private var userChangesJob: Job? = null
     private val refreshSingleFlight = RefreshTokenSingleFlight()
     private val _sessionResolved = MutableStateFlow(false)
@@ -93,7 +93,6 @@ class AuthService(
                             }
                         }
                         user.tryEmit(cachedUser)
-                        user = MutableStateFlow(cachedUser)
                         val business = cache.getCache(Business::class)
                         val products = cache.getCache(Products::class)
                         if (business != null && products != null) {
@@ -232,6 +231,7 @@ class AuthService(
                 user.update {
                     userData
                 }
+                listenUserChanges()
             } else {
                 throw AuthException(ApiError.F_AUTH_007)
             }
@@ -267,6 +267,7 @@ class AuthService(
                 user.update {
                     userData
                 }
+                listenUserChanges()
             } else {
                 throw AuthException(ApiError.F_AUTH_007)
             }
@@ -301,6 +302,7 @@ class AuthService(
                 user.update {
                     userData
                 }
+                listenUserChanges()
             } else {
                 throw AuthException(ApiError.F_AUTH_007)
             }
@@ -331,10 +333,8 @@ class AuthService(
             cache.clearAllCache()
             // Sign out from Firebase
             firebase.signOut()
-            // Clear user state
-            if (user.value != null) {
-                user.update { null }
-            }
+            user.value = null
+            refreshSingleFlight.resetFailureState()
             // Delete JWT tokens
             store.deleteObject(SecureConstants.JWT_TOKEN)
             store.deleteObject(SecureConstants.REFRESH_JWT_TOKEN)

@@ -371,6 +371,14 @@
     <string name="home_year_sales">Ventas del año</string>
     <string name="home_month_sales">Ventas del mes</string>
     <string name="home_today_sales">Ventas de hoy</string>
+    <string name="home_sales_breakdown_total">Total</string>
+    <string name="home_sales_breakdown_fe">Facturas electrónicas</string>
+    <string name="home_sales_breakdown_internal">Documentos internos</string>
+    <string name="home_sales_breakdown_fe_hint">Emitidas a la DGI</string>
+    <string name="home_sales_breakdown_internal_hint">Sin emisión fiscal</string>
+    <string name="home_sales_breakdown_note">Los importes incluyen ITBMS. Una venta interna facturada después cuenta una sola vez, en la fecha de la venta.</string>
+    <string name="home_sales_breakdown_unavailable">El desglose estará disponible cuando se actualicen los datos del resumen.</string>
+    <string name="home_sales_breakdown_close">Cerrar</string>
     <string name="home_month_expenses">Gastos del mes</string>
     <string name="home_includes_itbms">Incluye ITBMS</string>
     <string name="home_base">Base</string>
