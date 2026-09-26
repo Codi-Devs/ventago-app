@@ -11,6 +11,8 @@ import com.teco.ventago.core.authz.RouteKey
 import com.teco.ventago.core.beta.BetaFeature
 import com.teco.ventago.core.beta.BetaService
 import com.teco.ventago.core.firebase.AnalyticsService
+import com.teco.ventago.design_system.organism.LoadingBottomSheetState
+import com.teco.ventago.design_system.organism.LoadingState
 import com.teco.ventago.features.auth.domain.IAuthService
 import com.teco.ventago.features.inventory.data.InventoryProvider
 import com.teco.ventago.features.inventory.domain.InventoryAvailabilityStore
@@ -37,6 +39,7 @@ import com.teco.ventago.features.orders.domain.models.requests.RetryInvoiceRespo
 import com.teco.ventago.features.payments.domain.PaymentService
 import com.teco.ventago.features.printers.domain.PrinterService
 import com.teco.ventago.utils.doubleTryParse
+import com.teco.ventago.utils.shareLink
 import com.teco.ventago.utils.toDecimalString
 import com.teco.ventago.utils.toLongCents
 import com.teco.ventago.viewModels
@@ -118,6 +121,11 @@ class OrdersDetailsViewModel(
                     copy(
                         canMarkPaid = AuthzEvaluator.canAction(
                             ActionKey.ORDERS_MARK_PAID,
+                            user,
+                            beta
+                        ),
+                        canCreateNonFiscal = AuthzEvaluator.canAction(
+                            ActionKey.ORDERS_CREATE_NON_FISCAL,
                             user,
                             beta
                         ),
@@ -210,21 +218,21 @@ class OrdersDetailsViewModel(
                 snackbarService.show("El módulo de inventario no está activo.")
                 return@launch
             }
-            val match = Regex("^ORD-([^-]+)-([^-]+)-").find(order.internalNumber)
-            val branchCode = match?.groupValues?.getOrNull(1).orEmpty()
-            val billingPoint = match?.groupValues?.getOrNull(2).orEmpty()
+            val (branchCode, billingPoint) = orderScope(order.internalNumber) ?: ("" to "")
             inventoryAvailabilityStore.refresh(
                 businessId,
                 branchCode,
                 billingPoint,
                 order.lines.map { it.itemId }
             )
-            val locationId = inventoryAvailabilityStore.snapshot.value.locationId
+            val snapshot = inventoryAvailabilityStore.snapshot.value
+            val locationId = snapshot.locationId
             if (locationId == null || locationId <= 0) {
                 snackbarService.show("No hay una ubicación de inventario configurada para esta sucursal.")
                 return@launch
             }
-            val lines = order.lines.filter { it.itemId > 0 }.map { line ->
+            val trackedIds = snapshot.byItemId.filterValues { it.tracked }.keys
+            val lines = order.lines.filter { it.itemId > 0 && it.itemId in trackedIds }.map { line ->
                 PhysicalReturnLineState(
                     itemId = line.itemId,
                     itemName = line.itemName,
@@ -995,6 +1003,7 @@ class OrdersDetailsViewModel(
 
     fun canInvoiceDraftOrder(order: Order? = uiState.value.order): Boolean {
         val safeOrder = order ?: return false
+        if (canFacturarInternal(safeOrder)) return false
         if (!safeOrder.supportsReceivableActions()) return false
         val invoiceStatus = safeOrder.invoiceStatus ?: InvoiceStatus.NONE.id
         val isNotInvoiced = invoiceStatus == InvoiceStatus.NONE.id ||
@@ -1008,6 +1017,35 @@ class OrdersDetailsViewModel(
                 (isDraftNotInvoiced || isConfirmedPaymentLinkNotInvoiced) &&
                 hasOutstandingPayment &&
                 safeOrder.totalAmount.toLongCents() > 0L
+    }
+
+    fun canRegisterInternalPayment(order: Order? = uiState.value.order): Boolean {
+        return evaluateCanRegisterInternalPayment(
+            order = order,
+            canCreateNonFiscal = uiState.value.canCreateNonFiscal
+        )
+    }
+
+    fun canFacturarInternal(order: Order? = uiState.value.order): Boolean {
+        return evaluateCanFacturarInternal(
+            order = order,
+            canMarkPaid = uiState.value.canMarkPaid
+        )
+    }
+
+    fun openInternalRegisterPayment() {
+        if (!canRegisterInternalPayment()) return
+        showManualPaymentSheet(show = true, paymentOnly = true)
+    }
+
+    fun onFacturarInternal() {
+        val order = uiState.value.order ?: return
+        if (!canFacturarInternal(order)) return
+        if (order.unpaidBalanceCents() <= 1L) {
+            retryElectronicInvoice()
+            return
+        }
+        showManualPaymentSheet(show = true, invoiceAfterPayment = true)
     }
 
     fun achRejectReasonOptions(): List<Pair<String, String>> = listOf(
@@ -1528,16 +1566,16 @@ class OrdersDetailsViewModel(
 
     fun getDocumentByCufe() {
         val order = uiState.value.order ?: return
-        val cufe = order.externalInvoiceNumber ?: return
         val businessId = business?.businessId ?: return
         showLoading()
         viewModelScope.launch {
             withContext(Dispatchers.IO) {
                 try {
                     val docs = orderService.getDocumentByCufe(
-                        businessId,
-                        cufe
-                    ) // must return pdf in base64
+                        businessId = businessId,
+                        cufe = order.externalInvoiceNumber.orEmpty(),
+                        orderId = order.id.toLong()
+                    )
                     val pdfB64 = docs.pdfBase64 ?: error("No PDF in response")
 
                     @OptIn(ExperimentalEncodingApi::class)
@@ -1559,15 +1597,127 @@ class OrdersDetailsViewModel(
         }
     }
 
+    fun shareDocument() {
+        val order = uiState.value.order ?: return
+        val canSharePdf = order.invoiceStatus == InvoiceStatus.ISSUED.id || order.hasCurrentNonFiscalDocument()
+        if (!canSharePdf) {
+            val message = getOrderDetailsMessage()
+            if (message.isNotBlank()) shareLink(message)
+            return
+        }
+        val businessId = business?.businessId ?: return
+        updateState {
+            withLoading(LoadingBottomSheetState(LoadingState.LOADING, "Descargando PDF"))
+        }
+        viewModelScope.launch {
+            withContext(Dispatchers.IO) {
+                try {
+                    val docs = orderService.getDocumentByCufe(
+                        businessId = businessId,
+                        cufe = order.externalInvoiceNumber.orEmpty(),
+                        orderId = order.id.toLong()
+                    )
+                    val pdfB64 = docs.pdfBase64 ?: error("No PDF in response")
+
+                    @OptIn(ExperimentalEncodingApi::class)
+                    val pdfBytes = Base64.decode(pdfB64)
+                    withContext(Dispatchers.Main) {
+                        hideLoading()
+                        pdfSharer.sharePdf("${order.internalNumber}.pdf", pdfBytes)
+                    }
+                } catch (e: Exception) {
+                    println("Error sharing document: ${e.message}")
+                    withContext(Dispatchers.Main) {
+                        showError()
+                    }
+                }
+            }
+        }
+    }
+
     fun canShowReprintAction(order: Order? = uiState.value.order): Boolean {
         val safeOrder = order ?: return false
         val businessId = business?.businessId ?: safeOrder.businessId
-        return !uiState.value.hideReprintTicketAction &&
-            !uiState.value.reprintInFlight &&
-            safeOrder.invoiceStatus == InvoiceStatus.ISSUED.id &&
-            safeOrder.id > 0 &&
-            businessId > 0 &&
-            safeOrder.ticketEnabled == true
+        return evaluateCanShowReprintAction(
+            order = safeOrder,
+            hideReprintTicketAction = uiState.value.hideReprintTicketAction,
+            reprintInFlight = uiState.value.reprintInFlight,
+            businessId = businessId,
+            hasLocalPrintCapability = printerService.resolveSelectionOptions().isNotEmpty(),
+        )
+    }
+
+    fun canConfirmNonFiscal(order: Order? = uiState.value.order): Boolean {
+        val safeOrder = order ?: return false
+        return uiState.value.canCreateNonFiscal && safeOrder.canConfirmNonFiscal()
+    }
+
+    fun openGenerateNonFiscal() {
+        val order = uiState.value.order ?: return
+        if (!canConfirmNonFiscal(order)) {
+            viewModelScope.launch {
+                snackbarService.show("No tienes permisos para generar documentos no fiscales.")
+            }
+            return
+        }
+        if (order.unpaidBalanceCents() > 1L) {
+            showManualPaymentSheet(show = true, confirmNonFiscal = true)
+            return
+        }
+        confirmNonFiscal()
+    }
+
+    fun confirmNonFiscal() {
+        val order = uiState.value.order ?: return
+        val businessId = business?.businessId ?: order.businessId
+        if (!canConfirmNonFiscal(order) || businessId <= 0) return
+        showLoading()
+        viewModelScope.launch {
+            runCatching {
+                withContext(Dispatchers.IO) {
+                    orderService.confirmNonFiscal(businessId, order.id)
+                }
+            }.onSuccess { fresh ->
+                updateState { copy(order = fresh) }
+                snackbarService.show("Documento no fiscal generado.")
+                showSuccess()
+                autoPrintNonFiscalTicket(fresh)
+            }.onFailure { error ->
+                snackbarService.show(mapOrderMutationError(error, "No se pudo generar el documento no fiscal."))
+                showError()
+            }
+        }
+    }
+
+    private fun orderScope(internalNumber: String): Pair<String, String>? {
+        val match = Regex("^ORD-[^-]+-([^-]+)-([^-]+)-").find(internalNumber) ?: return null
+        val branchCode = match.groupValues.getOrNull(1).orEmpty()
+        val billingPoint = match.groupValues.getOrNull(2).orEmpty()
+        if (branchCode.isBlank() || billingPoint.isBlank()) return null
+        return branchCode to billingPoint
+    }
+
+    private fun autoPrintNonFiscalTicket(order: Order) {
+        if (!order.hasCurrentNonFiscalDocument()) return
+        val (branchCode, billingPointCode) = orderScope(order.internalNumber) ?: return
+        if (branchCode.isBlank() || billingPointCode.isBlank()) return
+        viewModelScope.launch {
+            runCatching {
+                val printer = printerService.resolveActivePrinter(branchCode, billingPointCode) ?: return@runCatching
+                if (!printer.printByDefault) return@runCatching
+                val payload = withContext(Dispatchers.IO) {
+                    printerService.fetchOrderTicketLayout(order.id, order.businessId)
+                }
+                printerService.printTicketPayload(
+                    printerConfig = printer,
+                    ticketPayload = payload,
+                    context = com.teco.ventago.features.printers.domain.model.PrintContext(
+                        source = "order_details_non_fiscal",
+                        orderId = order.id
+                    )
+                )
+            }
+        }
     }
 
     fun reprintTicket() {
@@ -2546,14 +2696,34 @@ class OrdersDetailsViewModel(
 
 
     /// Payment methods sheet handling
-    fun showManualPaymentSheet(show: Boolean) {
-        if (show && !uiState.value.canMarkPaid) return
+    fun showManualPaymentSheet(
+        show: Boolean,
+        confirmNonFiscal: Boolean = false,
+        paymentOnly: Boolean = false,
+        invoiceAfterPayment: Boolean = false,
+    ) {
+        if (show && confirmNonFiscal && !uiState.value.canCreateNonFiscal) return
+        if (show && paymentOnly && !uiState.value.canCreateNonFiscal) return
+        if (show && !confirmNonFiscal && !paymentOnly && !uiState.value.canMarkPaid) return
         if (show) {
-            analyticsService.logOrderPaymentActionOpened(mode = "operational")
+            val mode = when {
+                confirmNonFiscal -> "non_fiscal"
+                paymentOnly -> "internal_payment"
+                invoiceAfterPayment -> "internal_invoice"
+                else -> "operational"
+            }
+            analyticsService.logOrderPaymentActionOpened(mode = mode)
         }
         val order = uiState.value.order
+        val remainingCents = order?.unpaidBalanceCents() ?: 0L
         val orderTotalCents = order?.let { safeOrder ->
-            totalOpenReceivableCents(safeOrder).takeIf { it > 0L } ?: safeOrder.totalAmount.toLongCents()
+            if (confirmNonFiscal || paymentOnly || invoiceAfterPayment) {
+                remainingCents
+            } else {
+                totalOpenReceivableCents(safeOrder).takeIf { it > 0L }
+                    ?: remainingCents.takeIf { it > 0L }
+                    ?: safeOrder.totalAmount.toLongCents()
+            }
         }
         val current = uiState.value.manualPayment
         updateState {
@@ -2565,7 +2735,10 @@ class OrdersDetailsViewModel(
                     methodOptions = ManualPaymentMethodOption.getAllOptions(),
                     charged = if (show) emptyMap() else current.charged,
                     otherPaymentDescription = if (show) "" else current.otherPaymentDescription,
-                    errorMessage = null
+                    errorMessage = null,
+                    confirmNonFiscal = if (show) confirmNonFiscal else false,
+                    paymentOnly = if (show) paymentOnly else false,
+                    invoiceAfterPayment = if (show) invoiceAfterPayment else false,
                 )
             )
         }
@@ -2630,7 +2803,13 @@ class OrdersDetailsViewModel(
     /* ---------- Confirm action ---------- */
 
     fun onConfirmManualPayment() {
-        if (!uiState.value.canMarkPaid) return
+        val confirmingNonFiscal = uiState.value.manualPayment.confirmNonFiscal
+        val paymentOnly = uiState.value.manualPayment.paymentOnly
+        if (confirmingNonFiscal || paymentOnly) {
+            if (!uiState.value.canCreateNonFiscal) return
+        } else if (!uiState.value.canMarkPaid) {
+            return
+        }
         val state = _uiState.value
         val order = state.order ?: return
         val mp = state.manualPayment
@@ -2644,7 +2823,14 @@ class OrdersDetailsViewModel(
             return
         }
 
-        analyticsService.logOrderPaymentSubmitAttempted(mode = "operational")
+        analyticsService.logOrderPaymentSubmitAttempted(
+            mode = when {
+                mp.confirmNonFiscal -> "non_fiscal"
+                paymentOnly -> "internal_payment"
+                mp.invoiceAfterPayment -> "internal_invoice"
+                else -> "operational"
+            }
+        )
         updateState {
             copy(
                 manualPayment = mp.copy(
@@ -2665,7 +2851,54 @@ class OrdersDetailsViewModel(
                 .ifBlank { null } else null
 
             val issueInvoice = state.invoicingEnabled
+            val confirmNonFiscal = mp.confirmNonFiscal
 
+            if (confirmNonFiscal) {
+                val confirmed = runCatching {
+                    withContext(Dispatchers.IO) {
+                        orderService.confirmNonFiscal(businessId, order.id)
+                    }
+                }
+                val fresh = confirmed.getOrElse { error ->
+                    snackbarService.show(mapOrderMutationError(error, "No se pudo generar el documento no fiscal."))
+                    showError()
+                    return@launch
+                }
+                updateState { copy(order = fresh) }
+                val paymentResult = runCatching {
+                    withContext(Dispatchers.IO) {
+                        orderService.registerManualPayment(
+                            businessId = businessId,
+                            orderId = order.id,
+                            allocations = allocations,
+                            otherDescription = otherDesc,
+                            issueInvoice = false,
+                            skipInvoicing = true,
+                        )
+                    }
+                }
+                paymentResult.onSuccess {
+                    analyticsService.logOrderPaymentSubmitSucceeded(mode = "non_fiscal")
+                    snackbarService.show("Documento no fiscal generado.")
+                    refreshOrder(order.id)
+                    autoPrintNonFiscalTicket(fresh)
+                }.onFailure { error ->
+                    analyticsService.logOrderPaymentSubmitFailed(
+                        mode = "non_fiscal",
+                        errorCode = analyticsService.extractErrorCode(error)
+                    )
+                    val paymentError = mapOrderMutationError(error, "No se pudo registrar el pago.")
+                    snackbarService.show("El documento no fiscal ya se generó, pero no se pudo registrar el pago. $paymentError")
+                    refreshOrder(order.id)
+                }
+                return@launch
+            }
+
+            val submitMode = when {
+                paymentOnly -> "internal_payment"
+                mp.invoiceAfterPayment -> "internal_invoice"
+                else -> "operational"
+            }
             val result = runCatching {
                 releaseOpenIntentForReplacement(
                     businessId = businessId,
@@ -2673,22 +2906,90 @@ class OrdersDetailsViewModel(
                     reason = "customer_selected_cash",
                     expectedNextAction = "manual_payment_allowed",
                 )
-                orderService.registerManualPayment(
-                    businessId = businessId,
-                    orderId = order.id,
-                    allocations = allocations,
-                    otherDescription = otherDesc,
-                    issueInvoice = issueInvoice
-                )
+                withContext(Dispatchers.IO) {
+                    orderService.registerManualPayment(
+                        businessId = businessId,
+                        orderId = order.id,
+                        allocations = allocations,
+                        otherDescription = otherDesc,
+                        issueInvoice = issueInvoice,
+                    )
+                }
             }
 
-            result.onSuccess {
-                analyticsService.logOrderPaymentSubmitSucceeded(mode = "operational")
-                // Refresh order details if needed
-                refreshOrder(order.id)
+            result.onSuccess { paymentResponse ->
+                analyticsService.logOrderPaymentSubmitSucceeded(mode = submitMode)
+                val freshAfterPay = runCatching {
+                    withContext(Dispatchers.IO) {
+                        orderService.refreshOrder(businessId, order.id)
+                    }
+                }.getOrNull()
+                if (freshAfterPay != null) {
+                    updateState { copy(order = freshAfterPay) }
+                }
+                val invoiceStatus = paymentResponse.resolvedInvoiceStatus(
+                    freshOrderInvoiceStatus = freshAfterPay?.invoiceStatus,
+                    freshOrderExternalInvoiceNumber = freshAfterPay?.externalInvoiceNumber,
+                )
+                if (
+                    mp.invoiceAfterPayment &&
+                    shouldInvoiceAfterInternalPayment(order, invoiceStatus)
+                ) {
+                    runCatching {
+                        withContext(Dispatchers.IO) {
+                            val retryResponse = orderService.retryElectronicInvoice(businessId, order.id)
+                            val freshAfterInvoice = runCatching {
+                                orderService.refreshOrder(businessId, order.id)
+                            }.getOrNull()
+                            retryResponse to freshAfterInvoice
+                        }
+                    }.onSuccess { retryResult ->
+                        val retryResponse = retryResult.first
+                        val freshOrder = retryResult.second ?: uiState.value.order
+                        when (val feedback = resolveRetryInvoiceFeedback(freshOrder, retryResponse)) {
+                            RetryInvoiceFeedback.Success -> {
+                                updateState {
+                                    copy(
+                                        order = freshOrder,
+                                        invoiceRetryState = invoiceRetryState.copy(
+                                            showSuccessDialog = true,
+                                            showWarningDialog = false,
+                                            warningMessage = null
+                                        )
+                                    )
+                                }
+                                showSuccess()
+                            }
+
+                            is RetryInvoiceFeedback.Warning -> {
+                                updateState {
+                                    copy(
+                                        order = freshOrder,
+                                        invoiceRetryState = invoiceRetryState.copy(
+                                            showSuccessDialog = false,
+                                            showWarningDialog = true,
+                                            warningMessage = feedback.message
+                                        )
+                                    )
+                                }
+                                hideLoading()
+                            }
+                        }
+                    }.onFailure { error ->
+                        snackbarService.show(
+                            mapOrderMutationError(error, "No se pudo reintentar la facturación.")
+                        )
+                        showError()
+                    }
+                    return@launch
+                }
+                if (paymentOnly) {
+                    snackbarService.show("Pago registrado correctamente.")
+                }
+                showSuccess()
             }.onFailure { e ->
                 analyticsService.logOrderPaymentSubmitFailed(
-                    mode = "operational",
+                    mode = submitMode,
                     errorCode = analyticsService.extractErrorCode(e)
                 )
                 showError()
@@ -2794,4 +3095,63 @@ internal fun shouldShowRetryInvoiceButton(order: Order?): Boolean {
         invoiceStatus == InvoiceStatus.FAILED.id
 
     return isPaid && isInvoiceAttemptedButNotIssued
+}
+
+internal fun isInternalOpenOrder(order: Order?): Boolean {
+    val safeOrder = order ?: return false
+    if (!safeOrder.isExplicitInternal()) return false
+    if (safeOrder.isCreditNoteDocument()) return false
+    if (safeOrder.status == OrderStatus.CANCELLED) return false
+    val invoiceStatus = safeOrder.invoiceStatus ?: InvoiceStatus.NONE.id
+    if (invoiceStatus == InvoiceStatus.ISSUED.id || invoiceStatus == InvoiceStatus.CANCELLED.id) {
+        return false
+    }
+    return safeOrder.paymentStatus != PaymentStatus.CANCELLED.id
+}
+
+internal fun evaluateCanRegisterInternalPayment(
+    order: Order?,
+    canCreateNonFiscal: Boolean,
+): Boolean {
+    if (!canCreateNonFiscal) return false
+    if (!isInternalOpenOrder(order)) return false
+    val safeOrder = order ?: return false
+    return safeOrder.paymentStatus != PaymentStatus.PAID.id &&
+        safeOrder.paymentStatus != PaymentStatus.REFUNDED.id
+}
+
+internal fun evaluateCanFacturarInternal(
+    order: Order?,
+    canMarkPaid: Boolean,
+): Boolean {
+    if (!canMarkPaid) return false
+    if (!isInternalOpenOrder(order)) return false
+    val safeOrder = order ?: return false
+    return safeOrder.paymentStatus != PaymentStatus.REFUNDED.id
+}
+
+internal fun shouldInvoiceAfterInternalPayment(
+    order: Order,
+    invoiceStatus: Int,
+): Boolean {
+    if (!order.isExplicitInternal()) return false
+    return invoiceStatus != InvoiceStatus.ISSUED.id &&
+        invoiceStatus != InvoiceStatus.PENDING.id
+}
+
+internal fun evaluateCanShowReprintAction(
+    order: Order?,
+    hideReprintTicketAction: Boolean,
+    reprintInFlight: Boolean,
+    businessId: Int,
+    hasLocalPrintCapability: Boolean,
+): Boolean {
+    val safeOrder = order ?: return false
+    if (hideReprintTicketAction || reprintInFlight) return false
+    if (safeOrder.id <= 0 || businessId <= 0) return false
+    val hasPrintableDocument =
+        safeOrder.invoiceStatus == InvoiceStatus.ISSUED.id ||
+            safeOrder.hasCurrentNonFiscalDocument()
+    if (!hasPrintableDocument) return false
+    return safeOrder.ticketEnabled == true || hasLocalPrintCapability
 }

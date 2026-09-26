@@ -1,13 +1,24 @@
 package com.teco.ventago.design_system.molecules
 
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.scaleIn
+import androidx.compose.animation.scaleOut
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.Check
 import androidx.compose.material.icons.rounded.Menu
 import androidx.compose.material.icons.rounded.MoreHoriz
 import androidx.compose.material3.Card
@@ -17,13 +28,20 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.draw.scale
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.teco.ventago.design_system.theme.bodySmall
 import com.teco.ventago.design_system.theme.bodyMediumBold
 import com.teco.ventago.features.product.domain.model.Item
+import kotlinx.coroutines.delay
 
 @Composable
 fun ItemRow(
@@ -104,6 +122,7 @@ fun PosItemRow(
     item: Item,
     currency: String = "USD",
     availabilityLabel: String? = null,
+    addedPulse: Long = 0L,
     onClick: (Int) -> Unit = {},
 ) {
 
@@ -148,7 +167,9 @@ fun PosItemRow(
                 }
             }
         },
-        trailingSlot = {}
+        trailingSlot = {
+            AddedToCartMark(pulse = addedPulse)
+        }
     )
 }
 
@@ -158,6 +179,7 @@ fun PosItemGridCard(
     item: Item,
     currency: String = "USD",
     availabilityLabel: String? = null,
+    addedPulse: Long = 0L,
     onClick: (Int) -> Unit = {},
 ) {
     Card(
@@ -186,16 +208,61 @@ fun PosItemGridCard(
                     style = bodySmall(color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f))
                 )
             }
-            Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                Text(
-                    text = item.price.toString(),
-                    style = bodyMediumBold(color = MaterialTheme.colorScheme.secondary)
-                )
-                Text(
-                    text = currency,
-                    style = bodySmall(color = MaterialTheme.colorScheme.secondary)
-                )
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                    Text(
+                        text = item.price.toString(),
+                        style = bodyMediumBold(color = MaterialTheme.colorScheme.secondary)
+                    )
+                    Text(
+                        text = currency,
+                        style = bodySmall(color = MaterialTheme.colorScheme.secondary)
+                    )
+                }
+                AddedToCartMark(pulse = addedPulse)
             }
         }
+    }
+}
+
+@Composable
+private fun AddedToCartMark(pulse: Long) {
+    var playedPulse by remember { mutableStateOf(0L) }
+    var visible by remember { mutableStateOf(false) }
+    val scale by animateFloatAsState(
+        targetValue = if (visible) 1f else 0.55f,
+        animationSpec = tween(durationMillis = 180, easing = FastOutSlowInEasing),
+        label = "added-check-scale",
+    )
+    LaunchedEffect(pulse) {
+        if (pulse <= 0L || pulse == playedPulse) {
+            if (pulse <= 0L) {
+                visible = false
+                playedPulse = 0L
+            }
+            return@LaunchedEffect
+        }
+        playedPulse = pulse
+        visible = true
+        delay(520)
+        visible = false
+    }
+    AnimatedVisibility(
+        visible = visible,
+        enter = fadeIn(tween(80)) + scaleIn(initialScale = 0.4f, animationSpec = tween(160)),
+        exit = fadeOut(tween(140)) + scaleOut(targetScale = 0.85f, animationSpec = tween(140)),
+    ) {
+        Icon(
+            imageVector = Icons.Rounded.Check,
+            contentDescription = "Agregado",
+            tint = MaterialTheme.colorScheme.secondary,
+            modifier = Modifier
+                .size(22.dp)
+                .scale(scale),
+        )
     }
 }

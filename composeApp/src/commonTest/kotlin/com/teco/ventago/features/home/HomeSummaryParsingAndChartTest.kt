@@ -90,8 +90,48 @@ class HomeSummaryParsingAndChartTest {
         assertEquals(25501.82, parsed.yearSalesTotal)
         assertEquals(71, parsed.monthOrderCount)
         assertEquals(-83.9, parsed.monthSalesChangePerc)
+        assertEquals(3539.64, parsed.monthSalesAmount)
+        assertEquals(3330.93, parsed.monthSalesBaseAmount)
+        assertEquals(208.71, parsed.monthSalesTaxAmount)
+        assertEquals(25501.82, parsed.yearSalesAmount)
+        assertEquals(824.78, parsed.todaySalesAmount)
         assertEquals(2, parsed.dailySalesChart.size)
         assertEquals(2, parsed.fiscalMonthlySales.size)
+    }
+
+    @Test
+    fun parserIgnoresOperationalSplitAndUsesUnifiedTotals() {
+        val data = Json.parseToJsonElement(
+            """
+            {
+              "month_sales_total": "500.00",
+              "month_sales_tax_total": "35.00",
+              "month_sales_total_with_taxes": "535.00",
+              "month_order_count": 7,
+              "month_sales_change_perc": "10.5",
+              "today_sales_total": "60.00",
+              "today_order_count": 1,
+              "year_sales_total": "1000.00",
+              "operational_month_sales_total": "607.00",
+              "operational_month_sales_base": "567.29",
+              "operational_month_sales_tax_total": "39.71",
+              "operational_month_order_count": 8,
+              "operational_today_sales_total": "167.00",
+              "operational_year_sales_total": "1107.00"
+            }
+            """.trimIndent()
+        ) as JsonObject
+
+        val parsed = HomeSummaryParser.parse(data)
+
+        assertEquals(535.0, parsed.monthSalesAmount)
+        assertEquals(500.0, parsed.monthSalesBaseAmount)
+        assertEquals(35.0, parsed.monthSalesTaxAmount)
+        assertEquals(60.0, parsed.todaySalesAmount)
+        assertEquals(1000.0, parsed.yearSalesAmount)
+        assertEquals(7, parsed.monthOrders)
+        assertEquals(1, parsed.todayOrders)
+        assertEquals(10.5, parsed.monthSalesChange)
     }
 
     @Test

@@ -1,9 +1,11 @@
 package com.teco.ventago.features.pos.ui
 
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.border
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -37,7 +39,11 @@ import androidx.compose.material.icons.rounded.Loyalty
 import androidx.compose.material.icons.rounded.Payments
 import androidx.compose.material.icons.rounded.RadioButtonUnchecked
 import androidx.compose.material.icons.rounded.Redeem
+import androidx.compose.material.icons.rounded.KeyboardArrowDown
+import androidx.compose.material.icons.rounded.KeyboardArrowUp
 import androidx.compose.material3.Divider
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -56,6 +62,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -267,11 +274,18 @@ fun PaymentScreenContent(
         {
         val isCreditOrDebitNote = ui.selectedDocType in setOf("04", "05", "06")
         val isReplacementMode = replacementConfig != null
+        val showDocumentTabs = !isCreditOrDebitNote && !isReplacementMode && ui.canCreateNonFiscal
         val showDraftOption = shouldShowPendingPaymentChangeOption(
             mode = PaymentFlowMode.DRAFT,
             sourceMethod = replacementConfig?.sourceMethod,
-            normallyVisible = !isCreditOrDebitNote && ui.canCreateDraft,
+            normallyVisible = !isCreditOrDebitNote && ui.canCreateDraft && !ui.internalDocument,
         )
+        val showNonFiscalOption = shouldShowPendingPaymentChangeOption(
+            mode = PaymentFlowMode.NON_FISCAL,
+            sourceMethod = replacementConfig?.sourceMethod,
+            normallyVisible = !showDocumentTabs && !isCreditOrDebitNote && ui.canCreateNonFiscal,
+        )
+        val showUnpaidOption = showDocumentTabs && ui.internalDocument
         val showPaymentLinkOption = shouldShowPendingPaymentChangeOption(
             mode = PaymentFlowMode.PAYMENT_LINK,
             sourceMethod = replacementConfig?.sourceMethod,
@@ -285,8 +299,9 @@ fun PaymentScreenContent(
         val paymentLinkReady = ui.canCreatePaymentLink && ui.paymentLinkConfigured
         val paymentLinkNeedsConfiguration = ui.canCreatePaymentLink && !ui.paymentLinkConfigured
         val selectedBillingPointHasYappyOnsite = viewModel.selectedBillingPointHasYappyOnsiteDevice()
+        val canIssueSelectedDocument = if (ui.internalDocument) ui.canCreateNonFiscal else ui.canCreateInvoice
         val yappyOnsiteReady = ui.canCreateYappyOnsiteQr &&
-            ui.canCreateInvoice &&
+            canIssueSelectedDocument &&
             selectedBillingPointHasYappyOnsite
         val canUseOrConfigureYappyOnsite = ui.canCreateYappyOnsiteQr
         val yappyOnsiteAvailabilityLoading = canUseOrConfigureYappyOnsite && (
@@ -294,7 +309,7 @@ fun PaymentScreenContent(
                 (
                     ui.yappyOnsiteConfigured &&
                         ui.canCreateYappyOnsiteQr &&
-                        ui.canCreateInvoice &&
+                        canIssueSelectedDocument &&
                         !ui.yappyOnsiteDevicesResolved
                     )
             )
@@ -321,6 +336,7 @@ fun PaymentScreenContent(
             ui.paymentFlowMode,
             isCreditOrDebitNote,
             showDraftOption,
+            showNonFiscalOption,
             showManualOption,
             paymentLinkReady,
             yappyOnsiteReady,
@@ -347,6 +363,9 @@ fun PaymentScreenContent(
             if (ui.paymentFlowMode == PaymentFlowMode.DRAFT && !showDraftOption) {
                 viewModel.setPaymentFlow(PaymentFlowMode.MANUAL_OR_INSTALLMENTS)
             }
+            if (ui.paymentFlowMode == PaymentFlowMode.NON_FISCAL && !showNonFiscalOption && !showUnpaidOption) {
+                viewModel.setPaymentFlow(PaymentFlowMode.MANUAL_OR_INSTALLMENTS)
+            }
             if (ui.paymentFlowMode == PaymentFlowMode.MANUAL_OR_INSTALLMENTS && !showManualOption) {
                 selectedPaymentMode = null
             }
@@ -357,6 +376,7 @@ fun PaymentScreenContent(
             isCreditOrDebitNote,
             isReplacementMode,
             showDraftOption,
+            showNonFiscalOption,
             showManualOption,
             paymentLinkReady,
             yappyOnsiteReady,
@@ -367,7 +387,20 @@ fun PaymentScreenContent(
                 PaymentFlowMode.PAYMENT_LINK -> if (!paymentLinkReady) selectedPaymentMode = null
                 PaymentFlowMode.YAPPY_ONSITE -> if (!yappyOnsiteReady) selectedPaymentMode = null
                 PaymentFlowMode.DRAFT -> if (!showDraftOption) selectedPaymentMode = null
+                PaymentFlowMode.NON_FISCAL -> if (!showNonFiscalOption && !showUnpaidOption) selectedPaymentMode = null
                 else -> Unit
+            }
+        }
+
+        LaunchedEffect(showDocumentTabs, ui.canCreateInvoice, ui.internalDocument) {
+            if (showDocumentTabs && !ui.canCreateInvoice && ui.canCreateNonFiscal && !ui.internalDocument) {
+                viewModel.setDocumentKind(true)
+            }
+            if (ui.internalDocument && selectedPaymentMode == PaymentFlowMode.DRAFT) {
+                selectedPaymentMode = PaymentFlowMode.MANUAL_OR_INSTALLMENTS
+            }
+            if (!ui.internalDocument && selectedPaymentMode == PaymentFlowMode.NON_FISCAL) {
+                selectedPaymentMode = PaymentFlowMode.MANUAL_OR_INSTALLMENTS
             }
         }
 
@@ -430,14 +463,28 @@ fun PaymentScreenContent(
             viewModel.setPaymentFlow(PaymentFlowMode.DRAFT)
         }
 
+        fun selectNonFiscal() {
+            selectedPaymentMode = PaymentFlowMode.NON_FISCAL
+            viewModel.setPaymentFlow(PaymentFlowMode.NON_FISCAL)
+        }
+
             Column(
                 modifier = Modifier.onSizeChanged { selectorHeightPx = it.height }
             ) {
                 if (!isCreditOrDebitNote) {
+                    if (showDocumentTabs) {
+                        DocumentKindDropdown(
+                            internalDocument = ui.internalDocument,
+                            onSelect = viewModel::setDocumentKind,
+                        )
+                        Spacer(Modifier.height(12.dp))
+                    }
                     PaymentMethodSelector(
                         selectedMode = effectivePaymentMode,
                         showManualOption = showManualOption,
                         showDraftOption = showDraftOption,
+                        showNonFiscalOption = showNonFiscalOption,
+                        showUnpaidOption = showUnpaidOption,
                         showPaymentLinkOption = showPaymentLinkOption,
                         linkEnabled = paymentLinkReady,
                         paymentLinkNeedsConfiguration = paymentLinkNeedsConfiguration,
@@ -448,6 +495,7 @@ fun PaymentScreenContent(
                         yappyOnsiteNeedsConfiguration = yappyOnsiteNeedsConfiguration,
                         yappyOnsiteConfigureEnabled = ui.canConfigureYappyOnsite,
                         draftEnabled = ui.canCreateDraft,
+                        nonFiscalEnabled = ui.canCreateNonFiscal,
                         onManual = { selectManualPayment() },
                         onPaymentLink = { selectPaymentLink() },
                         onConfigurePaymentLinks = {
@@ -458,6 +506,7 @@ fun PaymentScreenContent(
                             navigateToPaymentConfiguration(PaymentConfigurationTarget.YappyOnsite)
                         },
                         onDraft = { selectDraft() },
+                        onNonFiscal = { selectNonFiscal() },
                     )
                 }
             }
@@ -490,14 +539,19 @@ fun PaymentScreenContent(
                     }
                 },
                 // Disable save draft for credit/debit notes
-                canCreateInvoice = ui.canCreateInvoice,
+                canCreateInvoice = if (ui.internalDocument) ui.canCreateNonFiscal else ui.canCreateInvoice,
                 minHeight = manualSectionMinHeight,
-                createInvoiceLabelOverride = if (isReplacementMode) "Registrar pago" else null,
+                createInvoiceLabelOverride = when {
+                    isReplacementMode -> "Registrar pago"
+                    ui.internalDocument -> "Generar documento interno"
+                    else -> null
+                },
+                autoOpenMethodSheet = !isCreditOrDebitNote && !isReplacementMode,
             )
         } else if (effectivePaymentMode == PaymentFlowMode.PAYMENT_LINK) {
             PaymentLinkSection(
                 totalToCharge = totalToCharge,
-                enabled = hasPositiveAmount && ui.canCreateInvoice,
+                enabled = hasPositiveAmount && canIssueSelectedDocument,
                 onConfirm = {
                     if (replacementConfig != null) {
                         viewModel.checkPaymentMethodsConfigured { configured ->
@@ -524,6 +578,7 @@ fun PaymentScreenContent(
             YappyOnsiteCreateSection(
                 totalToCharge = totalToCharge,
                 enabled = hasPositiveAmount && yappyOnsiteReady,
+                issuesElectronicInvoice = !ui.internalDocument,
                 onConfirm = {
                     if (replacementConfig != null) {
                         replacementConfig.onConfirmYappyOnsite()
@@ -542,6 +597,43 @@ fun PaymentScreenContent(
                         viewModel.createOrder(createPaymentLink = false, saveAsDraft = true)
                     }
                 }
+            )
+        } else if (effectivePaymentMode == PaymentFlowMode.NON_FISCAL && showDocumentTabs) {
+            UnpaidInternalSection(
+                enabled = hasPositiveAmount && ui.canCreateNonFiscal,
+                onConfirm = {
+                    requestGovernmentWarningOrProceed {
+                        viewModel.createOrder(createPaymentLink = false, saveAsDraft = false)
+                    }
+                }
+            )
+        } else if (effectivePaymentMode == PaymentFlowMode.NON_FISCAL) {
+            ManualAndInstallmentsSection(
+                viewModel = viewModel,
+                totalToCharge = totalToCharge,
+                remaining = remaining,
+                onToggleMethod = viewModel::toggleManualMethod,
+                onAmountChange = viewModel::setManualAmount,
+                onOtherDesc = viewModel::setOtherDescription,
+                onAddInstallment = { dueDateIso, amountCents ->
+                    viewModel.addInstallment(dueDateIso = dueDateIso, amountCents = amountCents)
+                },
+                onRemoveInstallment = viewModel::removeInstallment,
+                onInstallmentAmount = viewModel::setInstallmentAmount,
+                onInstallmentDate = viewModel::setInstallmentDueDate,
+                methodOptions = viewModel.manualMethodOptions(),
+                selectedDocType = ui.selectedDocType,
+                onConfirm = {
+                    requestGovernmentWarningOrProceed {
+                        viewModel.createOrder(createPaymentLink = false, saveAsDraft = false)
+                    }
+                },
+                canCreateInvoice = ui.canCreateNonFiscal,
+                minHeight = manualSectionMinHeight,
+                createInvoiceLabelOverride = "Generar documento no fiscal",
+                allowPartialCoverage = true,
+                helperText = "Puedes agregar un pago ahora o dejar la orden pendiente.",
+                autoOpenMethodSheet = true,
             )
         }
 
@@ -668,10 +760,119 @@ fun PaymentScreenContent(
 }
 
 @Composable
+private fun DocumentKindDropdown(
+    internalDocument: Boolean,
+    onSelect: (Boolean) -> Unit,
+) {
+    var expanded by remember { mutableStateOf(false) }
+    val accent = MaterialTheme.colorScheme.secondary
+    val label = if (internalDocument) "Documento interno" else "Factura electrónica"
+    val icon = if (internalDocument) Icons.AutoMirrored.Rounded.FactCheck else Icons.Rounded.Description
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp),
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .clip(RoundedCornerShape(14.dp))
+                .border(1.5.dp, accent, RoundedCornerShape(14.dp))
+                .clickable { expanded = true }
+                .padding(horizontal = 12.dp, vertical = 10.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Box(
+                modifier = Modifier
+                    .size(28.dp)
+                    .clip(RoundedCornerShape(8.dp))
+                    .background(accent.copy(alpha = 0.12f)),
+                contentAlignment = Alignment.Center,
+            ) {
+                Icon(
+                    imageVector = icon,
+                    contentDescription = null,
+                    tint = accent,
+                    modifier = Modifier.size(16.dp),
+                )
+            }
+            Text(
+                text = label,
+                modifier = Modifier
+                    .weight(1f)
+                    .padding(start = 8.dp),
+                color = accent,
+                style = MaterialTheme.typography.labelLarge,
+                maxLines = 1,
+            )
+            Icon(
+                imageVector = if (expanded) Icons.Rounded.KeyboardArrowUp else Icons.Rounded.KeyboardArrowDown,
+                contentDescription = null,
+                tint = accent,
+                modifier = Modifier.size(22.dp),
+            )
+        }
+        DropdownMenu(
+            expanded = expanded,
+            onDismissRequest = { expanded = false },
+            modifier = Modifier.fillMaxWidth(),
+        ) {
+            DocumentKindMenuItem(
+                label = "Factura electrónica",
+                icon = Icons.Rounded.Description,
+                selected = !internalDocument,
+                onClick = {
+                    expanded = false
+                    onSelect(false)
+                },
+            )
+            DocumentKindMenuItem(
+                label = "Documento interno",
+                icon = Icons.AutoMirrored.Rounded.FactCheck,
+                selected = internalDocument,
+                onClick = {
+                    expanded = false
+                    onSelect(true)
+                },
+            )
+        }
+    }
+}
+
+@Composable
+private fun DocumentKindMenuItem(
+    label: String,
+    icon: ImageVector,
+    selected: Boolean,
+    onClick: () -> Unit,
+) {
+    val accent = MaterialTheme.colorScheme.secondary
+    DropdownMenuItem(
+        text = {
+            Text(
+                text = label,
+                color = if (selected) accent else MaterialTheme.colorScheme.onSurface,
+                style = MaterialTheme.typography.bodyLarge,
+            )
+        },
+        leadingIcon = {
+            Icon(
+                imageVector = icon,
+                contentDescription = null,
+                tint = if (selected) accent else MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        },
+        onClick = onClick,
+    )
+}
+
+@Composable
 private fun PaymentMethodSelector(
     selectedMode: PaymentFlowMode?,
     showManualOption: Boolean,
     showDraftOption: Boolean,
+    showNonFiscalOption: Boolean,
+    showUnpaidOption: Boolean,
     showPaymentLinkOption: Boolean,
     linkEnabled: Boolean,
     paymentLinkNeedsConfiguration: Boolean,
@@ -682,12 +883,14 @@ private fun PaymentMethodSelector(
     yappyOnsiteNeedsConfiguration: Boolean,
     yappyOnsiteConfigureEnabled: Boolean,
     draftEnabled: Boolean,
+    nonFiscalEnabled: Boolean,
     onManual: () -> Unit,
     onPaymentLink: () -> Unit,
     onConfigurePaymentLinks: () -> Unit,
     onYappyOnsite: () -> Unit,
     onConfigureYappyOnsite: () -> Unit,
     onDraft: () -> Unit,
+    onNonFiscal: () -> Unit,
 ) {
     var hasRenderedOption = false
     Column(
@@ -749,6 +952,30 @@ private fun PaymentMethodSelector(
                 selected = selectedMode == PaymentFlowMode.DRAFT,
                 enabled = draftEnabled,
                 onClick = onDraft,
+            )
+            hasRenderedOption = true
+        }
+        if (showUnpaidOption) {
+            if (hasRenderedOption) Spacer(Modifier.height(10.dp))
+            PaymentMethodOptionCard(
+                title = "Sin pago",
+                subtitle = "Confirma el documento interno y déjalo pendiente de cobro",
+                icon = Icons.AutoMirrored.Rounded.FactCheck,
+                selected = selectedMode == PaymentFlowMode.NON_FISCAL,
+                enabled = nonFiscalEnabled,
+                onClick = onNonFiscal,
+            )
+            hasRenderedOption = true
+        }
+        if (showNonFiscalOption) {
+            if (hasRenderedOption) Spacer(Modifier.height(10.dp))
+            PaymentMethodOptionCard(
+                title = "Documento no fiscal",
+                subtitle = "Confirma la venta sin factura electrónica ni comprobante ante DGI",
+                icon = Icons.AutoMirrored.Rounded.FactCheck,
+                selected = selectedMode == PaymentFlowMode.NON_FISCAL,
+                enabled = nonFiscalEnabled,
+                onClick = onNonFiscal,
             )
         }
     }
@@ -879,9 +1106,17 @@ private fun ManualAndInstallmentsSection(
     canCreateInvoice: Boolean,
     minHeight: Dp = 0.dp,
     createInvoiceLabelOverride: String? = null,
+    allowPartialCoverage: Boolean = false,
+    helperText: String? = null,
+    autoOpenMethodSheet: Boolean = false,
 ) {
     val ui by viewModel.uiState.collectAsState()
     var showMethodSheet by remember { mutableStateOf(false) }
+    LaunchedEffect(autoOpenMethodSheet) {
+        if (autoOpenMethodSheet && ui.charged.isEmpty() && ui.installments.isEmpty()) {
+            showMethodSheet = true
+        }
+    }
     var amountEditTarget by remember { mutableStateOf<PaymentAmountEditTarget?>(null) }
     var creditPaymentDraft by remember { mutableStateOf<CreditPaymentDraft?>(null) }
     var otherPaymentDraft by remember { mutableStateOf<OtherPaymentDraft?>(null) }
@@ -890,8 +1125,11 @@ private fun ManualAndInstallmentsSection(
     val creditDatesComplete = ui.installments.all { it.dueDateIso.isNotBlank() }
     val otherDescriptionComplete =
         !ui.charged.containsKey(99) || ui.otherPaymentDescription.trim().length >= 15
+    val cashAllocated = ui.charged[com.teco.ventago.features.orders.domain.models.ManualPaymentMethodOption.CASH.id] ?: 0L
+    val nonCashAllocated = (allocated - cashAllocated).coerceAtLeast(0L)
+    val coverageOk = if (allowPartialCoverage) nonCashAllocated <= totalToCharge else allocated >= totalToCharge
     val canConfirm = totalToCharge > 0L &&
-        allocated >= totalToCharge &&
+        coverageOk &&
         creditDatesComplete &&
         otherDescriptionComplete
 
@@ -901,6 +1139,13 @@ private fun ManualAndInstallmentsSection(
             .padding(horizontal = 16.dp, vertical = 8.dp)
     ) {
         val contentMinHeight = (minHeight - 16.dp).coerceAtLeast(0.dp)
+        if (!helperText.isNullOrBlank()) {
+            Text(
+                helperText,
+                modifier = Modifier.padding(bottom = 8.dp),
+                style = bodySmall(color = MaterialTheme.colorScheme.onSurfaceVariant)
+            )
+        }
         if (canCreateInvoice) {
             val confirmButtonText = when (selectedDocType) {
                 "04", "06" -> "Generar nota de crédito"
@@ -1834,6 +2079,7 @@ private fun PaymentLinkSection(
 private fun YappyOnsiteCreateSection(
     totalToCharge: Long,
     enabled: Boolean,
+    issuesElectronicInvoice: Boolean = true,
     onConfirm: () -> Unit
 ) {
     Surface(
@@ -1851,7 +2097,11 @@ private fun YappyOnsiteCreateSection(
                 style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.W800)
             )
             Text(
-                "Genera un QR para que el cliente pague frente al cajero. VentaGo detectará el pago y emitirá la factura automáticamente.",
+                if (issuesElectronicInvoice) {
+                    "Genera un QR para que el cliente pague frente al cajero. VentaGo detectará el pago y emitirá la factura automáticamente."
+                } else {
+                    "Genera un QR para que el cliente pague frente al cajero. Al confirmarse el pago se conserva el documento interno."
+                },
                 style = bodySmall(color = MaterialTheme.colorScheme.onSurfaceVariant)
             )
             Spacer(Modifier.height(16.dp))
@@ -1875,6 +2125,40 @@ private fun YappyOnsiteCreateSection(
             PaymentFilledActionButton(
                 label = "Generar QR",
                 icon = Icons.Rounded.CreditCard,
+                enabled = enabled,
+                onClick = onConfirm,
+            )
+        }
+    }
+}
+
+@Composable
+private fun UnpaidInternalSection(
+    enabled: Boolean,
+    onConfirm: () -> Unit,
+) {
+    Surface(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp, vertical = 8.dp),
+        shape = RoundedCornerShape(22.dp),
+        color = MaterialTheme.colorScheme.surface,
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
+        shadowElevation = 1.dp
+    ) {
+        Column(Modifier.padding(16.dp)) {
+            Text(
+                "Sin pago",
+                style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.W800)
+            )
+            Text(
+                "Confirma el documento interno y déjalo pendiente. No se genera enlace ni QR.",
+                style = bodySmall(color = MaterialTheme.colorScheme.onSurfaceVariant)
+            )
+            Spacer(Modifier.height(16.dp))
+            PaymentFilledActionButton(
+                label = "Confirmar sin pago",
+                icon = Icons.AutoMirrored.Rounded.FactCheck,
                 enabled = enabled,
                 onClick = onConfirm,
             )
@@ -1915,3 +2199,4 @@ private fun DraftPaymentSection(
         }
     }
 }
+

@@ -1,5 +1,12 @@
 package com.teco.ventago.features.customers.ui.list
 
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.scaleIn
+import androidx.compose.animation.scaleOut
+import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -17,6 +24,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Add
+import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material.icons.rounded.Person
 import androidx.compose.material.icons.rounded.Search
 import androidx.compose.material.icons.rounded.Tune
@@ -27,10 +35,13 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -49,6 +60,7 @@ import com.teco.ventago.design_system.textfields.DMOutlinedTextField
 import com.teco.ventago.features.customers.domain.models.CustomerListItem
 import com.teco.ventago.features.customers.ui.list.viewmodel.CustomersListViewModel
 import org.jetbrains.compose.resources.stringResource
+import androidx.navigation.NavBackStackEntry
 import org.koin.compose.viewmodel.koinViewModel
 import ventago.composeapp.generated.resources.Res
 import ventago.composeapp.generated.resources.apply_filters
@@ -61,6 +73,20 @@ import ventago.composeapp.generated.resources.email
 import ventago.composeapp.generated.resources.name
 import ventago.composeapp.generated.resources.see_more
 
+@Composable
+fun CustomersListActions(backStackEntry: NavBackStackEntry?) {
+    val viewModel: CustomersListViewModel = backStackEntry?.let {
+        koinViewModel(viewModelStoreOwner = it)
+    } ?: return
+    IconButton(onClick = viewModel::openFilters) {
+        Icon(
+            imageVector = Icons.Rounded.Tune,
+            contentDescription = "Filtros",
+            tint = MaterialTheme.colorScheme.primary,
+        )
+    }
+}
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun CustomersListScreen(
@@ -70,7 +96,6 @@ fun CustomersListScreen(
     enforceInvoiceCustomerSelection: Boolean = false,
 ) {
     val uiState by viewModel.uiState.collectAsState()
-    var showFilters by remember { mutableStateOf(false) }
     val filterSheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
 
     var nameFilterDraft by remember { mutableStateOf("") }
@@ -78,51 +103,25 @@ fun CustomersListScreen(
     var emailFilterDraft by remember { mutableStateOf("") }
     val isSearchLoading = uiState.isLoading && uiState.isRefreshing
 
+    LaunchedEffect(uiState.showFilters) {
+        if (uiState.showFilters) {
+            nameFilterDraft = uiState.nameFilter
+            rucFilterDraft = uiState.rucFilter
+            emailFilterDraft = uiState.emailFilter
+        }
+    }
+
     Column(
         modifier = Modifier
             .fillMaxSize()
             .padding(top = 8.dp)
     ) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 16.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            DMOutlinedTextField(
-                text = uiState.nameFilter,
-                label = stringResource(Res.string.customers_search_placeholder),
-                modifier = Modifier.weight(1f),
-                onChange = viewModel::setNameFilter,
-                leadingIcon = Icons.Rounded.Search,
-                trailingIcon = Icons.Rounded.Tune,
-                trailingIconClick = {
-                    nameFilterDraft = uiState.nameFilter
-                    rucFilterDraft = uiState.rucFilter
-                    emailFilterDraft = uiState.emailFilter
-                    showFilters = true
-                }
-            )
-            Spacer(modifier = Modifier.size(8.dp))
-            IconButton(
-                onClick = viewModel::applyFilters,
-                enabled = !isSearchLoading
-            ) {
-                if (isSearchLoading) {
-                    CircularProgressIndicator(
-                        modifier = Modifier.size(22.dp),
-                        color = MaterialTheme.colorScheme.secondary,
-                        strokeWidth = 2.dp
-                    )
-                } else {
-                    Icon(
-                        imageVector = Icons.Rounded.Search,
-                        contentDescription = null,
-                        tint = MaterialTheme.colorScheme.primary
-                    )
-                }
-            }
-        }
+        CustomerNameSearchField(
+            name = uiState.nameFilter,
+            isSearching = isSearchLoading,
+            onQueryChanged = viewModel::setNameFilter,
+            onClear = viewModel::clearNameFilter,
+        )
 
         uiState.errorMessage?.let { error ->
             Text(
@@ -193,8 +192,8 @@ fun CustomersListScreen(
                     modifier = Modifier
                         .align(Alignment.BottomEnd)
                         .padding(16.dp),
-                    containerColor = MaterialTheme.colorScheme.primary,
-                    contentColor = MaterialTheme.colorScheme.onPrimary
+                    containerColor = MaterialTheme.colorScheme.secondary,
+                    contentColor = MaterialTheme.colorScheme.onSecondary
                 ) {
                     Icon(imageVector = Icons.Rounded.Add, contentDescription = null)
                 }
@@ -202,9 +201,9 @@ fun CustomersListScreen(
         }
     }
 
-    if (showFilters) {
+    if (uiState.showFilters) {
         ModalBottomSheet(
-            onDismissRequest = { showFilters = false },
+            onDismissRequest = { viewModel.dismissFilters() },
             sheetState = filterSheetState,
             containerColor = MaterialTheme.colorScheme.background
         ) {
@@ -216,19 +215,86 @@ fun CustomersListScreen(
                 email = emailFilterDraft,
                 onEmailChange = { emailFilterDraft = it },
                 onApply = {
-                    viewModel.setNameFilter(nameFilterDraft)
                     viewModel.setRucFilter(rucFilterDraft)
                     viewModel.setEmailFilter(emailFilterDraft)
-                    showFilters = false
-                    viewModel.applyFilters()
+                    viewModel.setNameFilter(nameFilterDraft)
+                    viewModel.dismissFilters()
                 },
                 onClear = {
-                    showFilters = false
+                    viewModel.dismissFilters()
                     viewModel.clearFilters()
                 }
             )
         }
     }
+}
+
+@Composable
+private fun CustomerNameSearchField(
+    name: String,
+    isSearching: Boolean,
+    onQueryChanged: (String) -> Unit,
+    onClear: () -> Unit,
+) {
+    OutlinedTextField(
+        value = name,
+        onValueChange = onQueryChanged,
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp),
+        singleLine = true,
+        textStyle = MaterialTheme.typography.bodyMedium,
+        label = {
+            Text(
+                text = stringResource(Res.string.customers_search_placeholder),
+                style = MaterialTheme.typography.bodyMedium,
+            )
+        },
+        trailingIcon = {
+            val hasValue = name.isNotBlank()
+            if (isSearching && hasValue) {
+                CircularProgressIndicator(
+                    modifier = Modifier
+                        .padding(12.dp)
+                        .size(20.dp),
+                    strokeWidth = 2.dp,
+                    color = MaterialTheme.colorScheme.primary,
+                )
+            } else {
+                AnimatedContent(
+                    targetState = hasValue,
+                    transitionSpec = {
+                        (fadeIn(tween(160)) + scaleIn(initialScale = 0.82f, animationSpec = tween(160)))
+                            .togetherWith(fadeOut(tween(120)) + scaleOut(targetScale = 0.82f, animationSpec = tween(120)))
+                    },
+                    label = "customer-search-icon",
+                ) { filled ->
+                    if (filled) {
+                        IconButton(onClick = onClear) {
+                            Icon(
+                                imageVector = Icons.Rounded.Close,
+                                contentDescription = "Quitar búsqueda",
+                                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        }
+                    } else {
+                        Icon(
+                            imageVector = Icons.Rounded.Search,
+                            contentDescription = "Buscar cliente",
+                            tint = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier.padding(12.dp),
+                        )
+                    }
+                }
+            }
+        },
+        colors = OutlinedTextFieldDefaults.colors(
+            focusedBorderColor = MaterialTheme.colorScheme.primary,
+            focusedLabelColor = MaterialTheme.colorScheme.primary,
+            cursorColor = MaterialTheme.colorScheme.primary,
+        ),
+        shape = RoundedCornerShape(12.dp),
+    )
 }
 
 @Composable

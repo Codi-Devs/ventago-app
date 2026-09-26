@@ -70,47 +70,17 @@ fun buildExpenseCategorizationPayload(
     mode: ExpenseConceptMode,
     items: List<ExpenseItemConceptSelection>
 ): CategorizeExpenseRequest {
-    fun toGlobalItems(globalId: Long): List<CategorizeExpenseItemRequest> {
-        return items.mapNotNull { item ->
-            val normalizedItemId = item.itemId?.takeIf { it > 0 }
-            val lineNumber = item.lineNumber
-            if (normalizedItemId == null && lineNumber == null) {
-                null
-            } else {
-                CategorizeExpenseItemRequest(
-                    itemId = normalizedItemId,
-                    lineNumber = if (normalizedItemId == null) lineNumber else null,
-                    accountId = globalId
-                )
-            }
-        }
-    }
-
     val payloadItems = when (mode) {
-        ExpenseConceptMode.GLOBAL -> {
-            val globalId = defaultAccountId ?: return CategorizeExpenseRequest(
-                defaultAccountId = null,
-                onlyUncategorized = false,
-                items = emptyList()
+        ExpenseConceptMode.GLOBAL -> emptyList()
+        ExpenseConceptMode.PER_ITEM -> items.mapNotNull { item ->
+            val accountId = item.accountId ?: return@mapNotNull null
+            val normalizedItemId = item.itemId?.takeIf { it > 0 }
+            if (normalizedItemId == null && item.lineNumber == null) return@mapNotNull null
+            CategorizeExpenseItemRequest(
+                itemId = normalizedItemId,
+                lineNumber = if (normalizedItemId == null) item.lineNumber else null,
+                accountId = accountId
             )
-            toGlobalItems(globalId)
-        }
-        ExpenseConceptMode.PER_ITEM -> {
-            val perItemSelections = items.mapNotNull { item ->
-                val accountId = item.accountId ?: return@mapNotNull null
-                val normalizedItemId = item.itemId?.takeIf { it > 0 }
-                if (normalizedItemId == null && item.lineNumber == null) return@mapNotNull null
-                CategorizeExpenseItemRequest(
-                    itemId = normalizedItemId,
-                    lineNumber = if (normalizedItemId == null) item.lineNumber else null,
-                    accountId = accountId
-                )
-            }
-            if (perItemSelections.isEmpty() && defaultAccountId != null) {
-                toGlobalItems(defaultAccountId)
-            } else {
-                perItemSelections
-            }
         }
     }
 
@@ -136,6 +106,41 @@ fun buildExpenseConceptLabel(expense: Expense): String {
     return expense.defaultAccount?.name
         ?: expense.defaultAccountId?.let { "Concepto #$it" }
         ?: "Sin concepto"
+}
+
+data class SelectableExpenseAccount(
+    val account: ExpenseAccount,
+    val ancestorNames: List<String>
+)
+
+fun compactExpenseAccountAncestors(ancestorNames: List<String>): String {
+    val names = ancestorNames.map { it.trim() }.filter { it.isNotEmpty() }
+    return when {
+        names.isEmpty() -> ""
+        names.size <= 2 -> names.joinToString(" / ")
+        else -> "${names.first()} / … / ${names.last()}"
+    }
+}
+
+fun selectableExpenseAccounts(
+    accounts: List<ExpenseAccount>,
+    leafOnly: Boolean
+): List<SelectableExpenseAccount> {
+    val result = mutableListOf<SelectableExpenseAccount>()
+
+    fun walk(nodes: List<ExpenseAccountTreeNode>, ancestors: List<String>) {
+        nodes.forEach { node ->
+            if (!leafOnly || node.isLeaf) {
+                result += SelectableExpenseAccount(node.account, ancestors)
+            }
+            if (node.children.isNotEmpty()) {
+                walk(node.children, ancestors + node.account.name)
+            }
+        }
+    }
+
+    walk(buildExpenseAccountsTree(accounts), emptyList())
+    return result
 }
 
 fun buildExpenseAccountsTree(accounts: List<ExpenseAccount>): List<ExpenseAccountTreeNode> {

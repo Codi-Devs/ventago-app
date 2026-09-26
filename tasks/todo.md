@@ -1,3 +1,19 @@
+# Cold start session splash TODO
+
+## Plan
+- [x] Keep login from rendering until AuthService finishes restoring the cached session.
+- [x] Show a Compose splash with the app logo during that restore on Android and iOS.
+- [x] Start NavHost at Home when the restored user is authenticated; start at login only for guests.
+- [x] Keep later login/logout and in-app navigation on the existing auth-bucket redirect.
+
+## Verification Gates
+- [x] `./gradlew :composeApp:testAndroidHostTest --tests com.teco.ventago.navigation.SessionNavigationTest`
+- [x] `git diff --check` on files from this task (excluding pre-existing Platform.kt and AABs)
+
+## Review Notes
+- Root cause: `MainState.isAuthenticated` defaulted to false and NavHost always started at login, then a LaunchedEffect bounced authenticated users to Home.
+- Session restore now exposes `sessionResolved`; the splash stays up until that flag is true, and the first NavHost destination is computed from the restored user.
+
 # Expenses cache coherence (Trello 360) TODO
 
 ## Plan
@@ -6949,6 +6965,24 @@
 - Search submits through the existing `findOrderByOrderNumber` flow and opens order details when found.
 - Common metadata compilation passed. Existing project warnings remain unrelated.
 
+# Home Operational Sales Breakdown TODO
+
+## Plan
+
+- [ ] Parse operational year, month and today sales and fiscal/internal splits with legacy-total fallback.
+- [ ] Show operational totals in the active HomeSummaryScreen for phone and tablet.
+- [ ] Make month and today cards fully tappable with a help mark and a shared three-row dialog.
+- [ ] Verify parser arithmetic, focused tests, common Kotlin compilation and task-only diffs.
+
+## Verification Gates
+
+- [ ] Focused home summary test.
+- [ ] Common Kotlin metadata compilation.
+- [ ] `git diff --check` on task files.
+
+## Review Notes
+
+- Pending implementation.
 
 ## Crashlytics live — 2026-09-22
 

@@ -1,6 +1,15 @@
 package com.teco.ventago.features.orders.ui.orders
 
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.scaleIn
+import androidx.compose.animation.scaleOut
+import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.Image
+import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.background
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
@@ -39,6 +48,8 @@ import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.SheetState
@@ -49,13 +60,16 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.zIndex
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
@@ -93,7 +107,6 @@ import com.teco.ventago.features.orders.ui.orders.viewmodel.OrdersViewModel
 import com.teco.ventago.navigation.LocalNavController
 import com.teco.ventago.navigation.PosScreens
 import com.teco.ventago.utils.BarcodeScannerScreen
-import com.teco.ventago.utils.DateFormat.getFormattedDate
 import com.teco.ventago.utils.KmpBarcodeFormat
 import org.jetbrains.compose.resources.painterResource
 import org.jetbrains.compose.resources.stringResource
@@ -151,14 +164,6 @@ fun OrdersScreenActions(backStackEntry: NavBackStackEntry?) {
         }
     }
 
-    IconButton(onClick = { viewModel.showOrderSearchSheet(true) }) {
-        Icon(
-            imageVector = Icons.Rounded.Search,
-            contentDescription = "Buscar orden",
-            tint = MaterialTheme.colorScheme.primary
-        )
-    }
-
     Box {
         IconButton(onClick = { viewModel.showFiltersSheet(true) }) {
             Icon(
@@ -197,7 +202,6 @@ fun OrdersScreen(
 ) {
     val uiState by viewModel.uiState.collectAsState()
     val filterSheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
-    val orderSearchSheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
 
     val loadingSheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     val pullRefreshState = rememberPullRefreshState(uiState.refreshingOrder, { viewModel.refreshOrders() })
@@ -277,6 +281,16 @@ fun OrdersScreen(
         modifier = Modifier
             .fillMaxSize(),
     ) {
+        OrdersCustomerSearchField(
+            customerName = uiState.customerNameFilter,
+            selectedCustomerId = uiState.customerIdFilter,
+            isSearchingCustomers = uiState.isSearchingCustomers,
+            customers = uiState.customerSearchResults.take(4),
+            onQueryChanged = viewModel::setCustomerNameFilter,
+            onCustomerSelected = viewModel::selectCustomerFilter,
+            onClearCustomer = viewModel::clearCustomerFilter,
+        )
+        Box(modifier = Modifier.weight(1f).fillMaxWidth()) {
         if (uiState.isLoadingOrders && uiState.orders.isEmpty()) {
             LoadingOrdersView()
         } else if (uiState.orders.isEmpty()) {
@@ -308,47 +322,21 @@ fun OrdersScreen(
         } else {
             Box(Modifier.pullRefresh(pullRefreshState)) {
                 LazyColumn(
+                    contentPadding = PaddingValues(vertical = 12.dp),
                     verticalArrangement = Arrangement.spacedBy(12.dp),
                 ) {
-                    val dataGroup =
-                        uiState.orders.groupBy { dat -> getFormattedDate(dat.createdAt, "yyyy-MM-dd'T'HH:mm:ss", "dd MMMM yyyy") }
+                    items(uiState.orders.size) { i ->
+                        val order = uiState.orders[i]
 
-                    dataGroup.forEach { (date, orders) ->
-                        item {
-                            Row(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .padding(bottom = 16.dp, top = 16.dp),
-                                horizontalArrangement = Arrangement.Center,
-                            ) {
-                                Text(
-                                    text = date,
-                                    style = TextStyle(
-                                        fontSize = 12.sp,
-                                        lineHeight = 20.sp,
-                                        fontFamily = latoFontFamily(),
-                                        fontWeight = FontWeight(400),
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                        textAlign = TextAlign.Center,
-                                        letterSpacing = 0.08.sp,
-                                    )
-                                )
+                        OrderListItem(
+                            order,
+                            onClick = {
+                                viewModel.selectOrder(order)
+                                navigate(PosScreens.OrderDetailsScreen, null)
+                            },
+                            statusOnClick = {
                             }
-                        }
-
-                        items(orders.size) { i ->
-                            val order = orders[i]
-
-                            OrderListItem(
-                                order,
-                                onClick = {
-                                    viewModel.selectOrder(order)
-                                    navigate(PosScreens.OrderDetailsScreen, null)
-                                },
-                                statusOnClick = {
-                                }
-                            )
-                        }
+                        )
                     }
 
                     item {
@@ -382,6 +370,7 @@ fun OrdersScreen(
             }
 
         }
+        }
 
         if (uiState.loadingBottomSheet.isLoading()) {
             LoadingSheet(
@@ -411,38 +400,29 @@ fun OrdersScreen(
     if (uiState.showFiltersSheet) {
         OrdersFilterSheet(
             viewModel = viewModel,
-            onDismiss = { viewModel.showFiltersSheet(false) },
-            sheetState = filterSheetState
-        )
-    }
-
-    if (uiState.showOrderSearchSheet) {
-        OrderNumberSearchSheet(
             businessId = viewModel.businessId,
             branches = uiState.branches,
-            onDismiss = { viewModel.showOrderSearchSheet(false) },
-            onSearch = { orderNumber ->
-                viewModel.showOrderSearchSheet(false)
+            onDismiss = { viewModel.showFiltersSheet(false) },
+            onSearchOrder = { orderNumber ->
+                viewModel.showFiltersSheet(false)
                 viewModel.findOrderByOrderNumber(orderNumber)
             },
             onScanQr = {
-                viewModel.showOrderSearchSheet(false)
+                viewModel.showFiltersSheet(false)
                 launchCamera = true
             },
-            sheetState = orderSearchSheetState
+            sheetState = filterSheetState
         )
     }
 }
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun OrderNumberSearchSheet(
+private fun OrderNumberSearchContent(
     businessId: Int,
     branches: List<Branch>,
     onDismiss: () -> Unit,
     onSearch: (String) -> Unit,
     onScanQr: () -> Unit,
-    sheetState: SheetState,
 ) {
     val selectableBranches = branches.filter { it.branchCode.isNotBlank() }
     var selectedBranchIndex by remember(selectableBranches) { mutableStateOf(0) }
@@ -465,22 +445,10 @@ private fun OrderNumberSearchSheet(
         selectedBillingPoint != null &&
         sequenceDigits.isNotBlank()
 
-    ModalBottomSheet(
-        onDismissRequest = onDismiss,
-        sheetState = sheetState,
-        containerColor = MaterialTheme.colorScheme.background
+    Column(
+        modifier = Modifier.fillMaxWidth(),
+        verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .navigationBarsPadding()
-                .padding(24.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp)
-        ) {
-            Text(
-                text = "Buscar orden",
-                style = MaterialTheme.typography.titleMedium
-            )
 
             if (selectableBranches.size > 1) {
                 DMDropDownField(
@@ -560,7 +528,6 @@ private fun OrderNumberSearchSheet(
                 }
             }
         }
-    }
 }
 
 private fun buildInternalOrderNumber(
@@ -589,7 +556,11 @@ private fun billingPointSearchLabel(point: FiscalBillingPoint): String {
 @Composable
 private fun OrdersFilterSheet(
     viewModel: OrdersViewModel,
+    businessId: Int,
+    branches: List<Branch>,
     onDismiss: () -> Unit,
+    onSearchOrder: (String) -> Unit,
+    onScanQr: () -> Unit,
     sheetState: SheetState,
 ) {
     val uiState by viewModel.uiState.collectAsState()
@@ -597,6 +568,7 @@ private fun OrdersFilterSheet(
     val selectedDocumentTypeIndex = documentTypes.indexOfFirst { it?.code == uiState.orderTypeFilter }
         .takeIf { it >= 0 } ?: 0
     val allInvoiceTypesLabel = stringResource(Res.string.all_invoice_types)
+    var selectedTab by remember { mutableIntStateOf(0) }
 
     ModalBottomSheet(
         onDismissRequest = onDismiss,
@@ -611,11 +583,28 @@ private fun OrdersFilterSheet(
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
             item {
-                Text(
-                    text = stringResource(Res.string.filters),
-                    style = MaterialTheme.typography.titleMedium
-                )
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    SheetModeTab(
+                        label = stringResource(Res.string.filters),
+                        icon = Icons.Rounded.Tune,
+                        selected = selectedTab == 0,
+                        onClick = { selectedTab = 0 },
+                        modifier = Modifier.weight(1f),
+                    )
+                    SheetModeTab(
+                        label = "Búsqueda",
+                        icon = Icons.Rounded.Search,
+                        selected = selectedTab == 1,
+                        onClick = { selectedTab = 1 },
+                        modifier = Modifier.weight(1f),
+                    )
+                }
             }
+            if (selectedTab == 0) {
             item {
                 PaymentStatusFilterChips(
                     paymentStatusFilter = uiState.paymentStatusFilter,
@@ -632,17 +621,6 @@ private fun OrdersFilterSheet(
                         item?.let { "${it.code} - ${it.description}" }
                             ?: allInvoiceTypesLabel
                     }
-                )
-            }
-            item {
-                OrdersCustomerSearchField(
-                    customerName = uiState.customerNameFilter,
-                    selectedCustomerId = uiState.customerIdFilter,
-                    isSearchingCustomers = uiState.isSearchingCustomers,
-                    customers = uiState.customerSearchResults.take(4),
-                    onQueryChanged = viewModel::setCustomerNameFilter,
-                    onCustomerSelected = viewModel::selectCustomerFilter,
-                    onClearCustomer = viewModel::clearCustomerFilter
                 )
             }
             item {
@@ -690,7 +668,6 @@ private fun OrdersFilterSheet(
                     }
                     ButtonM(
                         modifier = Modifier.weight(1f),
-                        enabled = uiState.customerNameFilter.isBlank() || uiState.customerIdFilter != null,
                         onClick = {
                             viewModel.applyFilters()
                             onDismiss()
@@ -702,7 +679,65 @@ private fun OrdersFilterSheet(
                     }
                 }
             }
+            } else {
+                item {
+                    OrderNumberSearchContent(
+                        businessId = businessId,
+                        branches = branches,
+                        onDismiss = onDismiss,
+                        onSearch = onSearchOrder,
+                        onScanQr = onScanQr,
+                    )
+                }
+            }
         }
+    }
+}
+
+@Composable
+private fun SheetModeTab(
+    label: String,
+    icon: ImageVector,
+    selected: Boolean,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val accent = MaterialTheme.colorScheme.secondary
+    val idle = MaterialTheme.colorScheme.onSurfaceVariant
+    Row(
+        modifier = modifier
+            .clip(RoundedCornerShape(14.dp))
+            .then(
+                if (selected) Modifier.border(1.5.dp, accent, RoundedCornerShape(14.dp))
+                else Modifier
+            )
+            .clickable(onClick = onClick)
+            .padding(horizontal = 12.dp, vertical = 8.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.Center,
+    ) {
+        Box(
+            modifier = Modifier
+                .size(28.dp)
+                .clip(RoundedCornerShape(8.dp))
+                .background(if (selected) accent.copy(alpha = 0.12f) else Color.Transparent),
+            contentAlignment = Alignment.Center,
+        ) {
+            Icon(
+                imageVector = icon,
+                contentDescription = null,
+                tint = if (selected) accent else idle,
+                modifier = Modifier.size(16.dp),
+            )
+        }
+        Text(
+            text = label,
+            modifier = Modifier.padding(start = 8.dp),
+            color = if (selected) accent else idle,
+            style = MaterialTheme.typography.labelLarge,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+        )
     }
 }
 
@@ -754,72 +789,118 @@ private fun OrdersCustomerSearchField(
     onCustomerSelected: (CustomerListItem) -> Unit,
     onClearCustomer: () -> Unit,
 ) {
-    val displayCustomerName = customerName.ifBlank {
-        selectedCustomerId?.let { "Cliente #$it" }.orEmpty()
-    }
+    val query = customerName.trim()
+    val showSuggestions = selectedCustomerId == null && (isSearchingCustomers || customers.isNotEmpty() || query.length == 1)
 
-    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        DMOutlinedTextField(
-            text = displayCustomerName,
-            label = stringResource(Res.string.customer_name_label),
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .zIndex(2f)
+            .background(MaterialTheme.colorScheme.background)
+            .padding(horizontal = 16.dp, vertical = 8.dp),
+    ) {
+        OutlinedTextField(
+            value = customerName,
+            onValueChange = onQueryChanged,
             modifier = Modifier.fillMaxWidth(),
-            onChange = onQueryChanged,
-            trailingIcon = if (displayCustomerName.isNotBlank()) Icons.Rounded.Close else null,
-            trailingIconClick = onClearCustomer,
-            supportingText = when {
-                selectedCustomerId != null -> "Cliente seleccionado"
-                isSearchingCustomers -> "Buscando clientes..."
-                customerName.length == 1 -> "Escribe al menos 2 caracteres"
-                customerName.isNotBlank() -> "Selecciona un cliente para filtrar sus órdenes"
-                else -> "Busca por nombre y selecciona un cliente"
-            }
+            singleLine = true,
+            textStyle = MaterialTheme.typography.bodyMedium,
+            label = {
+                Text(
+                    text = "Buscar por cliente",
+                    style = MaterialTheme.typography.bodyMedium,
+                )
+            },
+            trailingIcon = {
+                val hasValue = customerName.isNotBlank()
+                AnimatedContent(
+                    targetState = hasValue,
+                    transitionSpec = {
+                        (fadeIn(tween(160)) + scaleIn(initialScale = 0.82f, animationSpec = tween(160)))
+                            .togetherWith(fadeOut(tween(120)) + scaleOut(targetScale = 0.82f, animationSpec = tween(120)))
+                    },
+                    label = "customer-search-icon",
+                ) { filled ->
+                    if (filled) {
+                        IconButton(onClick = onClearCustomer) {
+                            Icon(
+                                imageVector = Icons.Rounded.Close,
+                                contentDescription = "Quitar cliente",
+                                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        }
+                    } else {
+                        Icon(
+                            imageVector = Icons.Rounded.Search,
+                            contentDescription = "Buscar por cliente",
+                            tint = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier.padding(12.dp),
+                        )
+                    }
+                }
+            },
+            colors = OutlinedTextFieldDefaults.colors(
+                focusedBorderColor = MaterialTheme.colorScheme.primary,
+                focusedLabelColor = MaterialTheme.colorScheme.primary,
+                cursorColor = MaterialTheme.colorScheme.primary,
+            ),
+            shape = RoundedCornerShape(12.dp),
         )
 
-        if (isSearchingCustomers) {
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-                CircularProgressIndicator(modifier = Modifier.size(16.dp), strokeWidth = 2.dp)
-                Text(
-                    text = "Buscando coincidencias",
-                    style = labelSmall(color = MaterialTheme.colorScheme.onSurfaceVariant)
-                )
-            }
-        }
-
-        if (customers.isNotEmpty()) {
+        if (showSuggestions) {
             Card(
-                modifier = Modifier.fillMaxWidth(),
-                elevation = CardDefaults.cardElevation(2.dp),
-                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(top = 4.dp),
+                elevation = CardDefaults.cardElevation(defaultElevation = 6.dp),
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+                shape = RoundedCornerShape(12.dp),
             ) {
                 Column(modifier = Modifier.padding(vertical = 4.dp)) {
-                    customers.take(4).forEachIndexed { index, customer ->
+                    if (isSearchingCustomers) {
+                        Row(
+                            modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        ) {
+                            CircularProgressIndicator(modifier = Modifier.size(16.dp), strokeWidth = 2.dp)
+                            Text(
+                                text = "Buscando clientes...",
+                                style = labelSmall(color = MaterialTheme.colorScheme.onSurfaceVariant),
+                            )
+                        }
+                    } else if (query.length == 1) {
+                        Text(
+                            modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
+                            text = "Escribe al menos 2 caracteres",
+                            style = labelSmall(color = MaterialTheme.colorScheme.onSurfaceVariant),
+                        )
+                    }
+                    customers.forEachIndexed { index, customer ->
                         Surface(
                             onClick = { onCustomerSelected(customer) },
                             color = Color.Transparent,
-                            modifier = Modifier.fillMaxWidth()
+                            modifier = Modifier.fillMaxWidth(),
                         ) {
                             Column(
                                 modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
-                                verticalArrangement = Arrangement.spacedBy(2.dp)
+                                verticalArrangement = Arrangement.spacedBy(2.dp),
                             ) {
                                 Text(
                                     text = customer.name,
-                                    style = bodyMediumBold(color = MaterialTheme.colorScheme.secondary),
+                                    style = bodyMediumBold(color = MaterialTheme.colorScheme.onSurface),
                                     maxLines = 1,
-                                    overflow = TextOverflow.Ellipsis
+                                    overflow = TextOverflow.Ellipsis,
                                 )
                                 Text(
                                     text = customer.ruc?.ifBlank { null } ?: "Sin RUC",
                                     style = labelSmall(color = MaterialTheme.colorScheme.onSurfaceVariant),
                                     maxLines = 1,
-                                    overflow = TextOverflow.Ellipsis
+                                    overflow = TextOverflow.Ellipsis,
                                 )
                             }
                         }
-                        if (index < customers.take(4).lastIndex) {
+                        if (index < customers.lastIndex) {
                             HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
                         }
                     }

@@ -211,8 +211,12 @@ val client = httpClient {
     }
     install(HttpCache)
     install(HttpRequestRetry) {
-        retryOnServerErrors(maxRetries = 2)
+        maxRetries = 2
         exponentialDelay()
+        retryIf { request, response ->
+            response.status.value in 500..599 &&
+                !request.url.encodedPath.endsWith("/invoices/docs")
+        }
     }
     install(DefaultRequest) {
         header(HttpHeaders.Accept, "*/*")
@@ -471,7 +475,9 @@ internal fun appModule() = module {
             repository = get(),
             storage = get(),
             logger = get(),
-            json = json
+            json = json,
+            changesManager = get(),
+            appScope = get(named("AppScope")),
         )
     }
 
@@ -599,7 +605,9 @@ internal fun appModule() = module {
                 ),
                 logger = get()
             ),
-            posProvisioningService = get()
+            posProvisioningService = get(),
+            changesManager = get(),
+            storage = get(),
         )
     }
 

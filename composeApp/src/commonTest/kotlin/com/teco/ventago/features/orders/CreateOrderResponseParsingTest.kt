@@ -90,6 +90,34 @@ class CreateOrderResponseParsingTest {
     }
 
     @Test
+    fun createOrderResponseParsesNonFiscalTicketWithoutPdf() {
+        val payload = """
+            {
+              "id": 11543,
+              "order_number": "ORD-4-0000-001-0000011543",
+              "order_date": "2026-09-25T23:24:38-05:00",
+              "order_amount": "10.00",
+              "tax_amount": "0.70",
+              "payment_status": 0,
+              "invoice_status": 0,
+              "invoice_files": {
+                "TICKET": {
+                  "kind": "invoice_ticket_layout",
+                  "document_kind": "non_fiscal",
+                  "blocks": [{"type": "text", "text": "Documento interno"}]
+                }
+              }
+            }
+        """.trimIndent()
+
+        val response = json.decodeFromString<CreateOrderResponse>(payload)
+
+        assertEquals(11543, response.id)
+        assertEquals(null, response.invoiceFiles?.pdf)
+        assertEquals(1, response.invoiceFiles?.ticket?.blocks?.size)
+    }
+
+    @Test
     fun retryInvoiceResponseParsesSnakeAndCamelInvoiceWarningFields() {
         val snakePayload = """
             {
@@ -152,5 +180,91 @@ class CreateOrderResponseParsingTest {
 
         assertEquals("buyer_ruc_invalid", order.invoiceWarningCode)
         assertEquals("Factura inválida", order.invoiceWarningMessage)
+    }
+
+    @Test
+    fun invoiceDocsParsesNonFiscalPayloadWithoutFiscalIdentifiers() {
+        val payload = """
+            {
+              "document_kind": "non_fiscal",
+              "order_id": 44,
+              "pdf_base64": "abc"
+            }
+        """.trimIndent()
+
+        val docs = json.decodeFromString<com.teco.ventago.features.orders.domain.models.responses.InvoiceDocsDto>(payload)
+
+        assertEquals("non_fiscal", docs.documentKind)
+        assertEquals(44L, docs.orderId)
+        assertEquals(null, docs.invoiceId)
+        assertEquals(null, docs.cufe)
+        assertEquals("abc", docs.pdfBase64)
+        assertEquals(null, docs.xmlBase64)
+    }
+
+    @Test
+    fun orderParsesNonFiscalLifecycleFields() {
+        val payload = """
+            {
+              "id": 44,
+              "order_type": "01",
+              "business_id": 9,
+              "internal_number": "ORD-9-0000-001-0000000044",
+              "currency_code": "USD",
+              "subtotal": "10.00",
+              "discount_total": "0.00",
+              "taxable_base": "10.00",
+              "tax_total": "0.00",
+              "tips_total": "0.00",
+              "total_amount": "10.00",
+              "status": 2,
+              "payment_status": 1,
+              "invoice_status": 0,
+              "invoicing_mode": "explicit",
+              "non_fiscal_confirmed_at": "2026-09-11T15:00:00Z",
+              "created_at": "2026-09-11T15:00:00Z"
+            }
+        """.trimIndent()
+
+        val order = json.decodeFromString<Order>(payload)
+
+        assertEquals("explicit", order.invoicingMode)
+        assertEquals("2026-09-11T15:00:00Z", order.nonFiscalConfirmedAt)
+        kotlin.test.assertTrue(order.hasCurrentNonFiscalDocument())
+        kotlin.test.assertFalse(order.canConfirmNonFiscal())
+        assertEquals("Documento interno", order.listDocumentTypeLabel())
+        assertEquals("Sin Factura", order.listDocumentStatusLabel())
+        assertEquals("2026-09-11T15:00:00Z", order.listEmissionDateValue())
+    }
+
+    @Test
+    fun uninvoicedInternalDraftUsesCreationDateAndDraftStatus() {
+        val payload = """
+            {
+              "id": 45,
+              "order_type": "01",
+              "business_id": 9,
+              "internal_number": "ORD-9-0000-001-0000000045",
+              "currency_code": "USD",
+              "subtotal": "10.00",
+              "discount_total": "0.00",
+              "taxable_base": "10.00",
+              "tax_total": "0.00",
+              "tips_total": "0.00",
+              "total_amount": "10.00",
+              "status": 1,
+              "payment_status": 1,
+              "invoice_status": 0,
+              "invoicing_mode": "explicit",
+              "emission_date": "2026-09-20T00:00:00Z",
+              "created_at": "2026-09-11T15:00:00Z"
+            }
+        """.trimIndent()
+
+        val order = json.decodeFromString<Order>(payload)
+
+        assertEquals("Borrador", order.listDocumentStatusLabel())
+        assertEquals("2026-09-11T15:00:00Z", order.listEmissionDateValue())
+        assertEquals(1000L, order.unpaidBalanceCents())
     }
 }

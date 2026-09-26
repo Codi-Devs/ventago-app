@@ -40,7 +40,9 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.ExperimentalComposeUiApi
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.backhandler.BackHandler
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
@@ -87,7 +89,7 @@ import ventago.composeapp.generated.resources.phone
 import ventago.composeapp.generated.resources.pos_add_client
 import ventago.composeapp.generated.resources.understood
 
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalComposeUiApi::class)
 @Composable
 fun CustomerFormScreen(
     customerId: Long? = null,
@@ -97,6 +99,10 @@ fun CustomerFormScreen(
 ) {
     val uiState by viewModel.uiState.collectAsState()
     val loadingSheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+
+    BackHandler(enabled = uiState.currentStep != CustomerFormStep.TYPE) {
+        viewModel.onStepBack()
+    }
 
     LaunchedEffect(customerId) {
         if (customerId == null) {
@@ -418,8 +424,8 @@ private fun GuidedCustomerProgressHeader(
         Text(
             text = when (currentStep) {
                 CustomerFormStep.TYPE -> stringResource(Res.string.customers_customer_type)
-                CustomerFormStep.MAIN_INFO -> "Informacion principal"
-                CustomerFormStep.OPTIONAL_INFO -> "Informacion opcional"
+                CustomerFormStep.MAIN_INFO -> "Información principal"
+                CustomerFormStep.OPTIONAL_INFO -> "Información opcional"
             },
             style = MaterialTheme.typography.titleMedium,
             fontWeight = FontWeight.Bold,
@@ -530,7 +536,7 @@ private fun CustomerFormMainInfoStep(viewModel: CustomerFormViewModel) {
                 modifier = Modifier.weight(1f),
                 onClick = viewModel::onStepBack,
             ) {
-                Text(text = "Atras")
+                Text(text = "Atrás")
             }
             ButtonM(
                 modifier = Modifier.weight(1f),
@@ -723,7 +729,7 @@ private fun CustomerFormOptionalInfoStep(viewModel: CustomerFormViewModel) {
                 modifier = Modifier.weight(1f),
                 onClick = viewModel::onStepBack,
             ) {
-                Text(text = "Atras")
+                Text(text = "Atrás")
             }
             ButtonM(
                 modifier = Modifier.weight(1f),

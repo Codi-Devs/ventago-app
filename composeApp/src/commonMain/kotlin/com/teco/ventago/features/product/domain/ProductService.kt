@@ -48,25 +48,29 @@ class ProductService(
             }
 
             listenerJob?.cancel()
-            listenerJob = changesManager.productsListener().onEach { value ->
-                if (value != 1) {
-                    state.value?.let { menuAux ->
-                        authService.getUserSync()?.businessIds?.let {
-                            val businessId =
-                                it.firstOrNull { item -> item.menuId == menuAux.id }?.businessId
-                            if (businessId != null) {
-                                getProductsByBusinessId(businessId)
-                            }
-                        }
-                    }
-
-                }
-            }.launchIn(serviceScope)
+            startProductsListener()
         }
     }
 
     fun observe(): StateFlow<Products?> = state.asStateFlow()
     fun getMenu(): Flow<Products?> = state
+
+    private fun startProductsListener() {
+        listenerJob?.cancel()
+        listenerJob = changesManager.productsListener().onEach { value ->
+            if (value != 1) {
+                state.value?.let { menuAux ->
+                    authService.getUserSync()?.businessIds?.let {
+                        val businessId =
+                            it.firstOrNull { item -> item.menuId == menuAux.id }?.businessId
+                        if (businessId != null) {
+                            getProductsByBusinessId(businessId)
+                        }
+                    }
+                }
+            }
+        }.launchIn(serviceScope)
+    }
 
 
     fun getAllActiveItems(products: Products): List<Item> {
@@ -250,6 +254,9 @@ class ProductService(
         val res = productsRepository.getProductsByBusinessId(businessId)
         state.update {
             res
+        }
+        if (listenerJob?.isActive != true) {
+            startProductsListener()
         }
         CoroutineScope(Dispatchers.IO).launch {
             cache.saveCache(state.value)

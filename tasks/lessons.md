@@ -1,5 +1,6 @@
 # Lessons Learned
 
+- En cold start, no uses login como destino inicial ni trates `isAuthenticated = false` como “invitado” antes de terminar de leer cache/tokens; muestra un splash hasta `sessionResolved` y monta Home o Login como primer destino real.
 - En flujo POS compartido, cualquier bloqueo por provisioning de dispositivo debe depender de `posProvisioningActive`/`required && isProvisioned`, no solo de que existan codigos de sucursal/punto; la app publica debe poder seleccionar sucursal y punto de facturacion.
 - En Epson ePOS Android con R8, no basta preservar `com.epson.epos2.**`: el SDK incluye paquetes internos JNI como `com.epson.epsonio`, `com.epson.eposdevice` y `com.epson.eposprint` que pueden ser usados solo desde `libepos2.so`. Usar la regla del sample Epson `-keep class com.epson.** { *; }` + `-dontwarn com.epson.**` para evitar crashes de discovery/printing en release optimizado.
 - En MenuScreen, no cambies la categoria de un acceso (quick actions vs modulos) solo para ajustar imagen/tamano; si el usuario pide rollback de ubicacion, conserva el asset URL en el renderer correcto del grupo original.
@@ -253,3 +254,4 @@
 - Do not rely on POS device list payloads for admin permission editing. Load permissions from the app-facing `GET /api/v1/devices/{deviceId}/pos-config` endpoint when opening device details, and keep permission editing disabled while that config is unavailable.
 - En Kotlin/Native `iosMain`, `UIView.endEditing` del UIKit commonizado es una extensión: hay que `import platform.UIKit.endEditing`. `VNImageRequestHandler` usa el parámetro `cGImage`, no `cgImage`; APIs CInterop del archivo necesitan `@file:OptIn(ExperimentalForeignApi::class)`.
 - En iOS, no uses Skia `Image.makeFromEncoded(...).peekPixels()` para validar fotos de factura: el JPEG encoded no trae pixmap y el gate local responde `UNREADABLE`. Decodifica con `UIImage`/`CGImage` y un bitmap context.
+- En KPI operativos de home, mantener el card enfocado en el total; trasladar el desglose fiscal/interno a un diálogo accesible desde toda la tarjeta y aplicar el mismo contrato en web y app.

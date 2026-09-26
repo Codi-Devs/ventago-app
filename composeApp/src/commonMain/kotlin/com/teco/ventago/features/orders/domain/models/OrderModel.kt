@@ -1,5 +1,6 @@
 package com.teco.ventago.features.orders.domain.models
 
+import com.teco.ventago.features.invoicing.domain.models.FEDocumentType
 import com.teco.ventago.features.invoicing.domain.models.InvoiceStatus
 import com.teco.ventago.features.invoicing.domain.models.FeCustomerType
 import com.teco.ventago.features.orders.domain.models.requests.NameValue
@@ -65,6 +66,10 @@ data class Order(
     @SerialName("external_uuid") val externalUuid: String? = null,
     @SerialName("payment_flow_type") val paymentFlowType: String? = null,
     @SerialName("ticket_enabled") val ticketEnabled: Boolean? = null,
+    @SerialName("invoicing_mode") val invoicingMode: String? = null,
+    @SerialName("emission_date") val emissionDate: String? = null,
+    @SerialName("non_fiscal_confirmed_at") val nonFiscalConfirmedAt: String? = null,
+    @SerialName("non_fiscal_invalidated_at") val nonFiscalInvalidatedAt: String? = null,
 
     val customer: CustomerSnapshot? = null,
 
@@ -74,6 +79,60 @@ data class Order(
 
     fun formattedInternalNumber(): String {
         return internalNumber.substringAfterLast('-')
+    }
+
+    fun isExplicitInternal(): Boolean =
+        invoicingMode.equals("explicit", ignoreCase = true)
+
+    fun isUninvoicedInternalDocument(): Boolean {
+        val invoice = invoiceStatus ?: InvoiceStatus.NONE.id
+        return isExplicitInternal() && invoice != InvoiceStatus.ISSUED.id
+    }
+
+    fun listDocumentTypeLabel(): String {
+        if (isUninvoicedInternalDocument()) return "Documento interno"
+        return FEDocumentType.fromCode(orderType).description
+    }
+
+    fun listDocumentStatusLabel(): String {
+        val invoice = invoiceStatus ?: InvoiceStatus.NONE.id
+        if (invoice == InvoiceStatus.ISSUED.id) return "Facturado"
+        if (invoice == InvoiceStatus.FAILED.id) return "Fallida"
+        if (status == OrderStatus.DRAFT) return "Borrador"
+        return "Sin Factura"
+    }
+
+    fun listEmissionDateValue(): String {
+        val emission = emissionDate?.takeIf { it.isNotBlank() }
+        return if (isUninvoicedInternalDocument()) createdAt else emission ?: createdAt
+    }
+
+    fun unpaidBalanceCents(): Long {
+        val paid = orderPayments
+            .filter { it.voidedAt.isNullOrBlank() }
+            .sumOf { payment ->
+                val charged = payment.charged.toLongCents()
+                if (charged > 0L) charged else payment.totalAmount.toLongCents()
+            }
+        return (totalAmount.toLongCents() - paid).coerceAtLeast(0L)
+    }
+
+    fun hasCurrentNonFiscalDocument(): Boolean {
+        if (!isExplicitInternal()) return false
+        if (nonFiscalConfirmedAt.isNullOrBlank()) return false
+        if (!nonFiscalInvalidatedAt.isNullOrBlank()) return false
+        if (status != OrderStatus.CONFIRMED) return false
+        return invoiceStatus != InvoiceStatus.ISSUED.id
+    }
+
+    fun canConfirmNonFiscal(): Boolean {
+        if (orderType in setOf("04", "05", "06", "07")) return false
+        if (status == OrderStatus.CANCELLED) return false
+        val invoice = invoiceStatus ?: InvoiceStatus.NONE.id
+        if (invoice != InvoiceStatus.NONE.id && invoice != InvoiceStatus.FAILED.id) return false
+        if (!externalInvoiceNumber.isNullOrBlank()) return false
+        if (status != OrderStatus.DRAFT && status != OrderStatus.CONFIRMED) return false
+        return !hasCurrentNonFiscalDocument()
     }
 
     fun displayCustomerName(): String? {

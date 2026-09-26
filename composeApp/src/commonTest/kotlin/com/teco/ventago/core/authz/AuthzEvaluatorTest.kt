@@ -235,4 +235,20 @@ class AuthzEvaluatorTest {
         val customerSubUserWithoutJwtScope = subUser()
         assertFalse(AuthzEvaluator.canRoute(RouteKey.CUSTOMERS_LIST, customerSubUserWithoutJwtScope, emptySet()))
     }
+
+    @Test
+    fun nonFiscalDocumentsRequireBetaAndDedicatedScope() {
+        val owner = owner()
+        val scopedUser = subUser(setOf(ScopeKey.INVOICE_CREATE_NON_FISCAL))
+        val beta = setOf(BetaFeature.NON_FISCAL_DOCUMENTS)
+
+        assertFalse(AuthzEvaluator.canAction(ActionKey.ORDERS_CREATE_NON_FISCAL, owner, emptySet()))
+        assertFalse(AuthzEvaluator.canAction(ActionKey.ORDERS_CREATE_NON_FISCAL, scopedUser, emptySet()))
+        assertTrue(AuthzEvaluator.canAction(ActionKey.ORDERS_CREATE_NON_FISCAL, owner, beta))
+        assertTrue(AuthzEvaluator.canAction(ActionKey.ORDERS_CREATE_NON_FISCAL, scopedUser, beta))
+        assertTrue(AuthzEvaluator.canAction(ActionKey.ORDERS_OPEN_CREATE, scopedUser, emptySet()))
+        assertTrue(AuthzEvaluator.canMenu(MenuKey.ORDERS_CREATE, scopedUser, emptySet()))
+        assertTrue(AuthzEvaluator.canRoute(RouteKey.ORDERS_NEW, scopedUser, emptySet()))
+        assertTrue(AuthzEvaluator.canAction(ActionKey.ORDERS_MARK_PAID, scopedUser, emptySet()))
+    }
 }

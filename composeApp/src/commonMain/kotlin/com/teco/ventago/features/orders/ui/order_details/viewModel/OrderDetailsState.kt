@@ -26,6 +26,7 @@ data class OrderDetailsState(
     val havePaymentsConfigured: Boolean = false,
     val invoicingEnabled: Boolean = false,
     val canMarkPaid: Boolean = false,
+    val canCreateNonFiscal: Boolean = false,
     val canCreatePaymentLink: Boolean = false,
     val canViewAchPayment: Boolean = false,
     val canApproveAchPayment: Boolean = false,
@@ -222,7 +223,7 @@ internal object OrderCxcValidators {
 data class ManualPaymentState(
     val showSheet: Boolean = false,
 
-    // options shown as chips
+    // options shown in the payment picker
     val methodOptions: List<ManualPaymentMethodOption> = ManualPaymentMethodOption.getAllOptions(),
 
     // selected methods with amounts in cents (e.g., 2->1500)
@@ -235,16 +236,22 @@ data class ManualPaymentState(
     val totalToChargeCents: Long = 0L,
 
     val isSubmitting: Boolean = false,
-    val errorMessage: String? = null
+    val errorMessage: String? = null,
+    val confirmNonFiscal: Boolean = false,
+    val paymentOnly: Boolean = false,
+    val invoiceAfterPayment: Boolean = false,
 ) {
     val allocated: Long get() = charged.values.sum()
     val remaining: Long get() = (totalToChargeCents - allocated).coerceAtLeast(0L)
     val change: Long get() = (allocated - totalToChargeCents).coerceAtLeast(0L)
+    val allowPartial: Boolean get() = paymentOnly
 
     val requiresOtherDesc: Boolean get() = charged.containsKey(ManualPaymentMethodOption.OTHER_SPECIFY.id)
     val isConfirmEnabled: Boolean
-        get() = allocated >= totalToChargeCents &&
-            (!requiresOtherDesc || otherPaymentDescription.trim().length >= 15)
+        get() {
+            val amountOk = if (allowPartial) allocated > 0L else allocated >= totalToChargeCents
+            return amountOk && (!requiresOtherDesc || otherPaymentDescription.trim().length >= 15)
+        }
 }
 
 data class GeneratePaymentLinkState(

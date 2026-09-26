@@ -14,7 +14,9 @@ data class InAppNotification(
     @SerialName("status") val status: String? = null,
     @SerialName("action_type") val actionType: String? = null,
     @SerialName("action_url") val actionUrl: String? = null,
-    @SerialName("metadata") val metadata: JsonObject = JsonObject(emptyMap()),
+    @SerialName("metadata")
+    @Serializable(with = NotificationMetadataSerializer::class)
+    val metadata: JsonObject = JsonObject(emptyMap()),
     @SerialName("seen") val seen: Boolean = false,
     @SerialName("dismissed") val dismissed: Boolean = false,
     @SerialName("removed") val removed: Boolean = false,
@@ -24,7 +26,9 @@ data class InAppNotification(
 
 @Serializable
 data class NotificationsPage(
-    @SerialName("items") val items: List<InAppNotification> = emptyList(),
+    @SerialName("items")
+    @Serializable(with = NotificationItemsSerializer::class)
+    val items: List<InAppNotification> = emptyList(),
     @SerialName("total") val total: Int = 0,
     @SerialName("limit") val limit: Int = 20,
     @SerialName("offset") val offset: Int = 0,

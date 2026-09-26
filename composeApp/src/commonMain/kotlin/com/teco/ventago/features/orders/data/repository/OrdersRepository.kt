@@ -407,9 +407,27 @@ class OrdersRepository(private val provider: IOrdersProvider, private val logger
         }
     }
 
-    override suspend fun getInvoiceDocsRaw(businessId: Int, cufe: String): InvoiceDocsDto {
+    override suspend fun confirmNonFiscal(businessId: Int, orderId: Int) {
         try {
-            val response = provider.getInvoiceDocsRaw(businessId, cufe)
+            val response = provider.confirmNonFiscal(businessId, orderId)
+            if (response.error.isError()) {
+                throw BadRequestException(response.toJson())
+            }
+        } catch (e: Exception) {
+            logger.sendLog(
+                Log(
+                    LogLevel.ERROR,
+                    "confirmNonFiscal",
+                    "Error confirming non-fiscal document. Error: ${e.message ?: "UNKNOWN"}. BusinessId: $businessId, orderId: $orderId"
+                )
+            )
+            throw e
+        }
+    }
+
+    override suspend fun getInvoiceDocsRaw(businessId: Int, cufe: String, orderId: Long?): InvoiceDocsDto {
+        try {
+            val response = provider.getInvoiceDocsRaw(businessId, cufe, orderId)
 
             if (response.error.isError()) {
                 throw BadRequestException(response.toJson())
@@ -425,7 +443,7 @@ class OrdersRepository(private val provider: IOrdersProvider, private val logger
             logger.sendLog(
                 Log(
                     LogLevel.ERROR, "getInvoiceDocsRaw",
-                    "Error getting invoice docs raw. Error: ${e.message ?: "UNKNOWN"}, businessId: $businessId, cufe: $cufe"
+                    "Error getting invoice docs raw. Error: ${e.message ?: "UNKNOWN"}, businessId: $businessId, cufe: $cufe, orderId: $orderId"
                 )
             )
             throw e

@@ -213,7 +213,7 @@ class PosDeviceProvisioningTest {
         assertTrue(state.isProvisioned)
         assertFalse(state.locksBranchPoint)
         assertEquals(PosLinkMode.Unlinked, state.linkMode)
-        assertEquals(PosProvisioningState.BANNER_UNLINKED, state.bannerMessage)
+        assertNull(state.bannerMessage)
         assertNull(state.fixedBranchCode)
     }
 

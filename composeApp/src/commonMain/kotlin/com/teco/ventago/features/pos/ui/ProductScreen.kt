@@ -24,15 +24,12 @@ import androidx.compose.material.icons.rounded.FlashOn
 import androidx.compose.material.icons.rounded.QrCodeScanner
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
-import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Snackbar
 import androidx.compose.material3.SnackbarDuration
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
-import androidx.compose.material3.SnackbarResult
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -112,25 +109,6 @@ fun PosProductScreenBottomBar(backStackEntry: NavBackStackEntry?, navigate: (Pos
 
     val uiState by viewModel.uiState.collectAsState()
     val isQuoteFlow = uiState.flowMode == FlowMode.QUOTE
-    val snackbarHostState = remember { SnackbarHostState() }
-    var lastShownProductAddedSnackbarToken by remember {
-        mutableStateOf(uiState.productAddedSnackbarToken)
-    }
-
-    LaunchedEffect(uiState.productAddedSnackbarToken) {
-        val token = uiState.productAddedSnackbarToken
-        if (token == 0L || token == lastShownProductAddedSnackbarToken) return@LaunchedEffect
-        lastShownProductAddedSnackbarToken = token
-
-        val result = snackbarHostState.showSnackbar(
-            message = "Producto agregado",
-            actionLabel = "Facturar",
-            duration = SnackbarDuration.Short,
-        )
-        if (result == SnackbarResult.ActionPerformed) {
-            navigate(PosScreens.CartScreen)
-        }
-    }
 
     if (isTablet()) {
         val actionLabel = when {
@@ -159,12 +137,6 @@ fun PosProductScreenBottomBar(backStackEntry: NavBackStackEntry?, navigate: (Pos
                     }"
                 )
             }
-            ProductAddedSnackbarHost(
-                hostState = snackbarHostState,
-                modifier = Modifier
-                    .align(Alignment.BottomCenter)
-                    .padding(start = 16.dp, end = 16.dp, bottom = 16.dp)
-            )
         }
     } else {
         Box(
@@ -187,41 +159,6 @@ fun PosProductScreenBottomBar(backStackEntry: NavBackStackEntry?, navigate: (Pos
                     }"
                 )
             }
-            ProductAddedSnackbarHost(
-                hostState = snackbarHostState,
-                modifier = Modifier
-                    .align(Alignment.BottomCenter)
-                    .padding(start = 16.dp, end = 16.dp, bottom = 16.dp)
-            )
-        }
-    }
-}
-
-@Composable
-private fun ProductAddedSnackbarHost(
-    hostState: SnackbarHostState,
-    modifier: Modifier = Modifier
-) {
-    SnackbarHost(
-        hostState = hostState,
-        modifier = modifier
-    ) { snackbarData ->
-        Snackbar(
-            modifier = Modifier.height(56.dp),
-            action = {
-                snackbarData.visuals.actionLabel?.let { actionLabel ->
-                    TextButton(
-                        onClick = { snackbarData.performAction() },
-                        colors = ButtonDefaults.textButtonColors(
-                            contentColor = MaterialTheme.colorScheme.secondary
-                        )
-                    ) {
-                        Text(text = actionLabel)
-                    }
-                }
-            }
-        ) {
-            Text(snackbarData.visuals.message)
         }
     }
 }

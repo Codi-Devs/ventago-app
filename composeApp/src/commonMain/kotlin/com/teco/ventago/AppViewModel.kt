@@ -8,7 +8,6 @@ import com.teco.ventago.core.logger.Log
 import com.teco.ventago.core.logger.LogLevel
 import com.teco.ventago.features.auth.domain.IAuthService
 import com.teco.ventago.features.auth.domain.model.User
-import com.teco.ventago.features.auth.domain.model.firebase.FirebaseUserDM
 import com.teco.ventago.features.branches.domain.BranchService
 import com.teco.ventago.features.business.domain.BusinessService
 import com.teco.ventago.features.business.domain.model.Business
@@ -17,6 +16,7 @@ import com.teco.ventago.features.financialProfile.domain.FinancialProfileService
 import com.teco.ventago.features.payments.domain.PaymentService
 import com.teco.ventago.features.product.domain.ProductService
 import com.teco.ventago.features.product.domain.model.Products
+import com.teco.ventago.navigation.SessionNavigation
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.IO
 import kotlinx.coroutines.Job
@@ -47,29 +47,52 @@ class AppViewModel(
 
     init {
         viewModelScope.launch {
-            authService.getFirebaseUser()
-                .combine(authService.getUser()) { fbUser: FirebaseUserDM?, user: User? ->
-                    Pair(fbUser, user)
-                }.collect { newState ->
-                val fbUser = newState.first
-                val user = newState.second
-                if (fbUser != null && user != null) {
-                    _mainState.value = _mainState.value.copy(
-                        isAuthenticated = true,
-                        missingBusiness = user.missingBusiness
-                    )
-                    if (businessService.business.value == null && !user.missingBusiness) {
-                        loadBusinessData(user = user)
-                    } else if (this@AppViewModel::loadDataJob.isInitialized) {
-                        if (loadDataJob.isActive) {
-                            loadDataJob.cancel()
-                        }
+            authService.sessionResolved()
+                .combine(authService.getUser()) { resolved, user ->
+                    resolved to user
+                }.collect { (resolved, user) ->
+                    if (!resolved) {
+                        _mainState.value = _mainState.value.copy(sessionResolved = false)
+                        return@collect
                     }
-                } else {
-                    _mainState.value = _mainState.value.copy(isAuthenticated = false)
-                    clearFeatureStateAfterSignOut()
+                    val wasAuthenticated = _mainState.value.isAuthenticated
+                    val previousAuthenticated =
+                        if (_mainState.value.sessionResolved) wasAuthenticated else null
+                    val nextAuthenticated = user != null
+                    val nextEpoch = SessionNavigation.nextSessionEpoch(
+                        currentEpoch = _mainState.value.sessionEpoch,
+                        previousAuthenticated = previousAuthenticated,
+                        nextAuthenticated = nextAuthenticated,
+                    )
+                    if (user != null) {
+                        val loginTransition = _mainState.value.sessionResolved && !wasAuthenticated
+                        _mainState.value = _mainState.value.copy(
+                            isAuthenticated = true,
+                            missingBusiness = user.missingBusiness,
+                            sessionResolved = true,
+                            sessionEpoch = nextEpoch,
+                        )
+                        val shouldLoadBusiness =
+                            !user.missingBusiness &&
+                                (loginTransition || businessService.business.value == null)
+                        if (shouldLoadBusiness) {
+                            if (this@AppViewModel::loadDataJob.isInitialized && loadDataJob.isActive) {
+                                loadDataJob.cancel()
+                            }
+                            loadBusinessData(user = user)
+                        } else if (this@AppViewModel::loadDataJob.isInitialized) {
+                            if (loadDataJob.isActive) {
+                                loadDataJob.cancel()
+                            }
+                        }
+                    } else {
+                        _mainState.value = MainState(
+                            sessionResolved = true,
+                            sessionEpoch = nextEpoch,
+                        )
+                        clearFeatureStateAfterSignOut()
+                    }
                 }
-            }
         }
 
         viewModelScope.launch {
@@ -203,6 +226,8 @@ class AppViewModel(
 }
 
 data class MainState(
+    val sessionResolved: Boolean = false,
+    val sessionEpoch: Int = 0,
     val isAuthenticated: Boolean = false,
     val missingBusiness: Boolean = false,
     val hideAppVar: Boolean = false,

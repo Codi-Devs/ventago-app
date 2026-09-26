@@ -19,6 +19,24 @@ class YappyOnsitePollingPolicyTest {
     }
 
     @Test
+    fun stopsPollingWhenInternalDocumentPaymentSucceeds() {
+        assertTrue(
+            yappyOnsiteShouldStopPolling(
+                status = "succeeded",
+                invoiceStatus = 0,
+                internalDocument = true,
+            )
+        )
+        assertFalse(
+            yappyOnsiteShouldStopPolling(
+                status = "pending",
+                invoiceStatus = 0,
+                internalDocument = true,
+            )
+        )
+    }
+
+    @Test
     fun stopsPollingForTerminalTransactionStates() {
         assertTrue(yappyOnsiteShouldStopPolling(status = "cancelled", invoiceStatus = 0))
         assertTrue(yappyOnsiteShouldStopPolling(status = "canceled", invoiceStatus = 0))

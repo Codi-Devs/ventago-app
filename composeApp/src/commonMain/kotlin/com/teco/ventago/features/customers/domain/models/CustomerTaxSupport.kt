@@ -27,13 +27,13 @@ data class CustomerTaxRetentionOption(
 
 object CustomerTaxRetentionCatalog {
     val options: List<CustomerTaxRetentionOption> = listOf(
-        CustomerTaxRetentionOption("", "Sin retencion"),
+        CustomerTaxRetentionOption("", "Sin retención"),
         CustomerTaxRetentionOption("1", "Pago por servicio profesional al estado 100%", 100),
         CustomerTaxRetentionOption("2", "Pago por venta de bienes/servicios al estado 50%", 50),
-        CustomerTaxRetentionOption("3", "Pago o acreditacion a no domiciliado o empresa constituida en el exterior 100%", 100),
-        CustomerTaxRetentionOption("4", "Pago o acreditacion por compra de bienes/servicios 50%", 50),
+        CustomerTaxRetentionOption("3", "Pago o acreditación a no domiciliado o empresa constituida en el exterior 100%", 100),
+        CustomerTaxRetentionOption("4", "Pago o acreditación por compra de bienes/servicios 50%", 50),
         CustomerTaxRetentionOption("7", "Pago a comercio afiliado a sistema de TC/TD 50%", 50),
-        CustomerTaxRetentionOption("8", "Otros (disminucion de la retencion)"),
+        CustomerTaxRetentionOption("8", "Otros (disminución de la retención)"),
     )
 
     fun normalizeCode(value: String?): String {

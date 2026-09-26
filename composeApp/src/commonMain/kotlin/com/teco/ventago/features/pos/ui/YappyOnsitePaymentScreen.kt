@@ -143,7 +143,11 @@ fun YappyOnsitePaymentScreen(
         if (onsite?.transactionId.isNullOrBlank() || ui.yappyOnsitePollingSuppressed) return@LaunchedEffect
         while (
             !ui.yappyOnsitePollingSuppressed &&
-            !yappyOnsiteShouldStopPolling(status = status, invoiceStatus = invoiceStatus)
+            !yappyOnsiteShouldStopPolling(
+                status = status,
+                invoiceStatus = invoiceStatus,
+                internalDocument = ui.internalDocument,
+            )
         ) {
             val now = Clock.System.now().toEpochMilliseconds()
             val succeeded = status.equals("succeeded", ignoreCase = true)
@@ -838,13 +842,21 @@ private fun DetailRow(label: String, value: String) {
     }
 }
 
-internal fun yappyOnsiteShouldStopPolling(status: String, invoiceStatus: Int): Boolean {
-    return status.equals("cancelled", ignoreCase = true) ||
+internal fun yappyOnsiteShouldStopPolling(
+    status: String,
+    invoiceStatus: Int,
+    internalDocument: Boolean = false,
+): Boolean {
+    if (
+        status.equals("cancelled", ignoreCase = true) ||
         status.equals("canceled", ignoreCase = true) ||
         status.equals("expired", ignoreCase = true) ||
-        status.equals("returned", ignoreCase = true) ||
-        invoiceStatus == 2 ||
-        invoiceStatus == 3
+        status.equals("returned", ignoreCase = true)
+    ) {
+        return true
+    }
+    if (internalDocument && status.equals("succeeded", ignoreCase = true)) return true
+    return invoiceStatus == 2 || invoiceStatus == 3
 }
 
 private fun invoiceLabel(status: Int): String {

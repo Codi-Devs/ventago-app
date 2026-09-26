@@ -30,7 +30,8 @@ data class ManualPaymentItemRequest(
 
 @Serializable
 data class RegisterManualPaymentsRequest(
-    @SerialName("payments") val payments: List<ManualPaymentItemRequest>
+    @SerialName("payments") val payments: List<ManualPaymentItemRequest>,
+    @SerialName("skip_invoicing") val skipInvoicing: Boolean? = null,
 )
 
 @Serializable

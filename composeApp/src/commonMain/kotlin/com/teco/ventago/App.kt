@@ -1,10 +1,16 @@
 package com.teco.ventago
 
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.WindowInsetsSides
+import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.navigationBars
+import androidx.compose.foundation.layout.only
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.layout.windowInsetsTopHeight
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -40,9 +46,9 @@ import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -81,11 +87,15 @@ import com.teco.ventago.features.payments.ui.home.viewmodel.PaymentMethodsViewMo
 import com.teco.ventago.features.pos.ui.viewmodel.FlowMode
 import com.teco.ventago.features.pos.ui.viewmodel.PosState
 import com.teco.ventago.features.pos.ui.viewmodel.PosViewModel
+import com.teco.ventago.features.pos.ui.customer.add.viewmodel.AddCustomerViewModel
+import com.teco.ventago.features.customers.ui.form.viewmodel.CustomerFormViewModel
 import com.teco.ventago.navigation.BottomNavKey
 import com.teco.ventago.navigation.LocalNavController
+import com.teco.ventago.features.auth.ui.splash.SplashScreen
 import com.teco.ventago.navigation.Navigation
 import com.teco.ventago.navigation.PrinterOnboardingRoute
 import com.teco.ventago.navigation.PosScreens
+import com.teco.ventago.navigation.SessionNavigation
 import com.teco.ventago.navigation.fallbackScreenFor
 import com.teco.ventago.navigation.routeKeyForScreen
 import com.teco.ventago.navigation.toPosScreenOrNull
@@ -112,7 +122,6 @@ private const val SUMMARY_TAB_HINT_SEEN_KEY_PREFIX = "summary_tab_hint_seen"
 @Preview
 fun App(
     appViewModel: AppViewModel = koinViewModel<AppViewModel>(),
-    navController: NavHostController = rememberNavController()
 ) {
     setSingletonImageLoaderFactory { context ->
         ImageLoader.Builder(context)
@@ -123,13 +132,36 @@ fun App(
     }
 
     val mainState by appViewModel.mainState.collectAsState()
+    val appChrome = rememberAppChromeState()
+
+    DigitalMenuTheme {
+        CompositionLocalProvider(LocalAppChrome provides appChrome) {
+            KeyboardDismissHost {
+                if (!mainState.sessionResolved) {
+                    SplashScreen(Modifier.fillMaxSize())
+                    return@KeyboardDismissHost
+                }
+                key(mainState.sessionEpoch) {
+                    AppSessionHost(appViewModel = appViewModel)
+                }
+            }
+        }
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun AppSessionHost(
+    appViewModel: AppViewModel,
+    navController: NavHostController = rememberNavController(),
+) {
+    val mainState by appViewModel.mainState.collectAsState()
     val snackbarHostState = remember { SnackbarHostState() }
     val snackbarService: SnackbarService = koinInject()
     snackbarService.hostState = snackbarHostState
     val backStackEntry by navController.currentBackStackEntryAsState()
     val currentRoute = backStackEntry?.destination?.route
     val currentScreen = currentRoute?.toPosScreenOrNull() ?: PosScreens.LoginScreen
-    val appChrome = rememberAppChromeState()
     val flagsService = koinInject<IFlagsService>()
     val authService = koinInject<IAuthService>()
     val betaService = koinInject<BetaService>()
@@ -180,37 +212,41 @@ fun App(
     )
     var lastBucket by remember { mutableStateOf<AuthBucket?>(null) }
     var didInitialRedirect by remember { mutableStateOf(false) }
+    val sessionStart = remember(
+        mainState.isAuthenticated,
+        mainState.missingBusiness,
+        mainState.invoicingConfigured,
+    ) {
+        SessionNavigation.resolveSessionStart(
+            isAuthenticated = mainState.isAuthenticated,
+            missingBusiness = mainState.missingBusiness,
+            invoicingConfigured = mainState.invoicingConfigured,
+        )
+    }
 
-    LaunchedEffect(graphReady, currentBucket) {
-        if (!graphReady) return@LaunchedEffect
+    LaunchedEffect(graphReady, mainState.sessionResolved, currentBucket) {
+        if (!graphReady || !mainState.sessionResolved) return@LaunchedEffect
 
         val prev = lastBucket
         val initial = prev == null && !didInitialRedirect
         val changed = prev != null && prev != currentBucket
+        val target = SessionNavigation.resolveAuthDestination(
+            isAuthenticated = currentBucket.authed,
+            missingBusiness = !currentBucket.hasBusiness,
+            invoicingConfigured = currentBucket.invoiceActive,
+        )
+        val currentRoute = backStackEntry?.destination?.route
 
-        if (initial || changed) {
+        if (SessionNavigation.shouldRedirect(currentRoute, target, initial, changed)) {
             lastBucket = currentBucket
             didInitialRedirect = true
-
-            val target = if (currentBucket.authed && currentBucket.hasBusiness && currentBucket.invoiceActive) {
-                PosScreens.HomeScreen.name
-            } else if (currentBucket.authed && !currentBucket.hasBusiness) {
-                PosScreens.BusinessRegisterScreen.name
-            } else if (!currentBucket.invoiceActive) {
-                PosScreens.InvoiceLandingScreen.name
-            } else {
-                PosScreens.LoginScreen.name
+            navController.navigate(target) {
+                popUpTo(0) { inclusive = true }
+                launchSingleTop = true
             }
-
-            // Only jump if we're not already there
-            val currentRoute = backStackEntry?.destination?.route
-            if (currentRoute != target) {
-                navController.navigate(target) {
-                    // Clear the stack to the start of the graph (safe alternative to popUpTo(0))
-                    popUpTo(navController.graph.findStartDestination().id) { inclusive = true }
-                    launchSingleTop = true
-                }
-            }
+        } else if (initial || changed) {
+            lastBucket = currentBucket
+            didInitialRedirect = true
         }
     }
 
@@ -262,13 +298,11 @@ fun App(
         }
     }
 
-    DigitalMenuTheme {
-        CompositionLocalProvider(
-            LocalAppChrome provides appChrome,
-            LocalNavController provides navController,
-            ){
-            KeyboardDismissHost {
+    CompositionLocalProvider(
+        LocalNavController provides navController,
+    ) {
                 Scaffold(
+                    contentWindowInsets = WindowInsets.safeDrawing.only(WindowInsetsSides.Horizontal),
                     snackbarHost = {
                         SnackbarHost(hostState = snackbarHostState)
                     },
@@ -293,6 +327,29 @@ fun App(
                     }
                     val posViewModel = posBackStackEntry?.let {
                         koinViewModel<PosViewModel>(viewModelStoreOwner = it)
+                    }
+                    val addCustomerEntry = remember(currentScreen, backStackEntry) {
+                        if (currentScreen == PosScreens.AddCustomerScreen) backStackEntry else null
+                    }
+                    val addCustomerViewModel = addCustomerEntry?.let {
+                        koinViewModel<AddCustomerViewModel>(viewModelStoreOwner = it)
+                    }
+                    val customerFormEntry = remember(currentScreen, backStackEntry) {
+                        if (
+                            currentScreen == PosScreens.CustomerCreateScreen ||
+                            currentScreen == PosScreens.CustomerEditScreen
+                        ) {
+                            backStackEntry
+                        } else {
+                            null
+                        }
+                    }
+                    val customerFormViewModel = customerFormEntry?.let {
+                        koinViewModel<CustomerFormViewModel>(viewModelStoreOwner = it)
+                    }
+                    val consumeCustomerWizardBack: () -> Boolean = {
+                        addCustomerViewModel?.consumeBack() == true ||
+                            customerFormViewModel?.consumeBack() == true
                     }
                     val posUiState by posViewModel?.uiState?.collectAsState()
                         ?: remember { mutableStateOf(PosState()) }
@@ -328,7 +385,7 @@ fun App(
                                 if (navController.previousBackStackEntry != null) {
                                     val handled = isYappyOnsitePaymentScreen &&
                                         posViewModel?.requestYappyOnsiteQrExit() == true
-                                    if (!handled) {
+                                    if (!handled && !consumeCustomerWizardBack()) {
                                         navController.navigateUp()
                                     }
                                 }
@@ -336,10 +393,17 @@ fun App(
                             // make sure your DMTopAppBar uses containerColor = Color.Transparent inside
                             actions = {
                                 // keep your existing actions routing logic
-                                if (currentScreen.isPosScreens()) {
+                                if (currentScreen.isPosScreens() && currentScreen != PosScreens.CustomersScreen) {
                                     val bse = remember { navController.getBackStackEntry(PosScreens.POS.name) }
                                     currentScreen.actions(
                                         bse,
+                                        { navController.navigate(it.name) },
+                                        { navController.navigate(it) }
+                                    )
+                                } else if (currentScreen == PosScreens.OrderDetailsScreen) {
+                                    val ordersEntry = remember { navController.getBackStackEntry(PosScreens.Orders.name) }
+                                    currentScreen.actions(
+                                        ordersEntry,
                                         { navController.navigate(it.name) },
                                         { navController.navigate(it) }
                                     )
@@ -382,15 +446,22 @@ fun App(
                                     }
                                     val handled = isYappyOnsitePaymentScreen &&
                                         posViewModel?.requestYappyOnsiteQrExit() == true
-                                    if (!handled) {
+                                    if (!handled && !consumeCustomerWizardBack()) {
                                         navController.navigateUp()
                                     }
                                 }
                             },
                             actions = {
-                                if (currentScreen.isPosScreens()) {
+                                if (currentScreen.isPosScreens() && currentScreen != PosScreens.CustomersScreen) {
                                     val backStackEntryAux = remember { navController.getBackStackEntry(PosScreens.POS.name) }
                                     currentScreen.actions(backStackEntryAux, { destination ->
+                                        navController.navigate(destination.name)
+                                    }, { route ->
+                                        navController.navigate(route)
+                                    })
+                                } else if (currentScreen == PosScreens.OrderDetailsScreen) {
+                                    val ordersEntry = remember { navController.getBackStackEntry(PosScreens.Orders.name) }
+                                    currentScreen.actions(ordersEntry, { destination ->
                                         navController.navigate(destination.name)
                                     }, { route ->
                                         navController.navigate(route)
@@ -409,6 +480,8 @@ fun App(
 
                     },
                     bottomBar = {
+                    val navigationBarBottom = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
+                    Box(Modifier.fillMaxWidth().padding(bottom = navigationBarBottom)) {
                     currentScreen.bottomBar?.let {
                         if (currentScreen == PosScreens.POSScreen || currentScreen == PosScreens.POSProductScreen || currentScreen == PosScreens.CartScreen) {
                             val auxbackStackEntry = remember { navController.getBackStackEntry(PosScreens.POS.name) }
@@ -427,6 +500,7 @@ fun App(
                             return@Scaffold
 
                         NavigationBar(
+                            windowInsets = WindowInsets(0, 0, 0, 0),
                             modifier = Modifier.fillMaxWidth().shadow(
                                 elevation = 10.dp,
                                 shape = RoundedCornerShape(topStart = 10.dp, topEnd = 10.dp)
@@ -521,12 +595,21 @@ fun App(
                         }
                     }
                     }
+                    }
                 ) { innerPadding ->
+                    val navigationBarBottom = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
+                    val showsBottomChrome = currentScreen.bottomBar != null ||
+                        currentScreen in bottomNavKeys.map(BottomNavKey::selectedScreen)
                     Navigation(
-                        modifier = Modifier.fillMaxSize().padding(innerPadding),
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .padding(innerPadding)
+                            .padding(bottom = if (showsBottomChrome) 0.dp else navigationBarBottom),
                         navController = navController,
                         appViewModel = appViewModel,
-                        analyticsService = koinInject<AnalyticsService>()
+                        analyticsService = koinInject<AnalyticsService>(),
+                        startDestination = sessionStart.navHostStart,
+                        loginGraphStartDestination = sessionStart.loginGraphStart,
                     )
                 }
 
@@ -560,10 +643,5 @@ fun App(
                     }
                 )
             }
-        }
-
-    }
-
-
 
 }

@@ -23,6 +23,12 @@ enum class CustomerFormStep {
     OPTIONAL_INFO
 }
 
+internal fun previousCustomerFormStep(step: CustomerFormStep): CustomerFormStep? = when (step) {
+    CustomerFormStep.TYPE -> null
+    CustomerFormStep.MAIN_INFO -> CustomerFormStep.TYPE
+    CustomerFormStep.OPTIONAL_INFO -> CustomerFormStep.MAIN_INFO
+}
+
 enum class CustomerForeignIdType(val code: String, val description: String) {
     PASSPORT("PASAPORTE", "Pasaporte"),
     OTHER("OTRO", "Otro")

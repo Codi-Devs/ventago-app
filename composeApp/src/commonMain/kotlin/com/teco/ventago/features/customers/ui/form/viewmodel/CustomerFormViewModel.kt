@@ -174,16 +174,18 @@ class CustomerFormViewModel(
     }
 
     fun onStepBack() {
+        consumeBack()
+    }
+
+    fun consumeBack(): Boolean {
+        val previous = previousCustomerFormStep(uiState.value.currentStep) ?: return false
         updateState {
             copy(
-                currentStep = when (currentStep) {
-                    CustomerFormStep.TYPE -> CustomerFormStep.TYPE
-                    CustomerFormStep.MAIN_INFO -> CustomerFormStep.TYPE
-                    CustomerFormStep.OPTIONAL_INFO -> CustomerFormStep.MAIN_INFO
-                },
+                currentStep = previous,
                 validationMessage = null,
             )
         }
+        return true
     }
 
     fun toggleAddressExpanded() {
@@ -637,7 +639,7 @@ class CustomerFormViewModel(
             CustomerTaxRetentionCatalog.normalizeCode(state.taxRetentionCode) == "8" &&
             state.taxRetentionPercent.toIntOrNull() == null
         ) {
-            "Ingresa el porcentaje de retencion"
+            "Ingresa el porcentaje de retención"
         } else {
             null
         }

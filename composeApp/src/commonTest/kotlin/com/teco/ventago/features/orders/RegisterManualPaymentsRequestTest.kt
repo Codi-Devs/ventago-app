@@ -32,6 +32,25 @@ class RegisterManualPaymentsRequestTest {
         val encoded = json.encodeToString(request)
 
         assertTrue(encoded.contains(""""due_date":"2026-07-18T00:00:00-05:00""""))
+        assertTrue(!encoded.contains("skip_invoicing"))
+    }
+
+    @Test
+    fun serializesSkipInvoicingWhenGeneratingNonFiscal() {
+        val request = RegisterManualPaymentsRequest(
+            payments = listOf(
+                ManualPaymentItemRequest(
+                    type = 2,
+                    amount = "10.00",
+                    paymentDate = "2026-09-22T10:30:00-05:00",
+                )
+            ),
+            skipInvoicing = true,
+        )
+
+        val encoded = json.encodeToString(request)
+
+        assertTrue(encoded.contains(""""skip_invoicing":true""""))
     }
 
     @Test

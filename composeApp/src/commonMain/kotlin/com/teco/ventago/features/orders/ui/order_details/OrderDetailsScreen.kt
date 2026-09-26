@@ -33,15 +33,19 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Message
+import androidx.compose.material.icons.automirrored.rounded.FactCheck
 import androidx.compose.material.icons.filled.Share
 import androidx.compose.material.icons.filled.Whatsapp
 import androidx.compose.material.icons.outlined.CameraAlt
 import androidx.compose.material.icons.rounded.Business
 import androidx.compose.material.icons.rounded.Cancel
 import androidx.compose.material.icons.rounded.AccessTime
+import androidx.compose.material.icons.rounded.AccountBalance
+import androidx.compose.material.icons.rounded.AttachMoney
 import androidx.compose.material.icons.rounded.CheckCircle
 import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material.icons.rounded.ContentCopy
+import androidx.compose.material.icons.rounded.CreditCard
 import androidx.compose.material.icons.rounded.Delete
 import androidx.compose.material.icons.rounded.Description
 import androidx.compose.material.icons.rounded.Download
@@ -52,11 +56,14 @@ import androidx.compose.material.icons.rounded.Inventory2
 import androidx.compose.material.icons.rounded.KeyboardArrowDown
 import androidx.compose.material.icons.rounded.KeyboardArrowUp
 import androidx.compose.material.icons.rounded.Link
-import androidx.compose.material.icons.rounded.MoreVert
+import androidx.compose.material.icons.rounded.Loyalty
+import androidx.compose.material.icons.rounded.Add
+import androidx.compose.material.icons.rounded.Remove
 import androidx.compose.material.icons.rounded.OpenInNew
 import androidx.compose.material.icons.rounded.Payment
 import androidx.compose.material.icons.rounded.Person
 import androidx.compose.material.icons.rounded.Receipt
+import androidx.compose.material.icons.rounded.Redeem
 import androidx.compose.material.icons.rounded.Search
 import androidx.compose.material.icons.rounded.Share
 import androidx.compose.material.icons.rounded.Visibility
@@ -67,8 +74,6 @@ import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Divider
-import androidx.compose.material3.DropdownMenu
-import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExposedDropdownMenuBox
 import androidx.compose.material3.ExposedDropdownMenuDefaults
@@ -80,6 +85,7 @@ import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.SuggestionChip
 import androidx.compose.material3.SuggestionChipDefaults
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.rememberModalBottomSheetState
@@ -115,7 +121,8 @@ import com.teco.ventago.design_system.buttons.ButtonM
 import com.teco.ventago.design_system.buttons.OutlinedButtonM
 import com.teco.ventago.design_system.buttons.TextButtonM
 import com.teco.ventago.design_system.buttons.TextButtonS
-import com.teco.ventago.design_system.molecules.orders.OrderStatusChip
+import com.teco.ventago.design_system.buttons.dashedBorder
+import com.teco.ventago.design_system.molecules.orders.DocumentStatusChip
 import com.teco.ventago.design_system.loaders.shimmerBrush
 import com.teco.ventago.design_system.molecules.InstallmentDueDateFieldKmp
 import com.teco.ventago.design_system.organism.LoadingSheet
@@ -236,8 +243,6 @@ fun OrderDetailsActions(backStackEntry: NavBackStackEntry?,  navigateAny: (Any) 
     val uiState by viewModel.uiState.collectAsState()
     val order = uiState.order
 
-    val phoneNumber = uiState.order?.displayCustomerPhone()
-
     if (uiState.canPhysicalReturn && order != null && order.orderType !in listOf("04", "4", "05", "5", "06", "6", "07", "7")) {
         IconButton(onClick = { viewModel.openPhysicalReturn() }) {
             Icon(
@@ -248,121 +253,14 @@ fun OrderDetailsActions(backStackEntry: NavBackStackEntry?,  navigateAny: (Any) 
         }
     }
 
-    IconButton(onClick = {
-        copyToClipboard("Order Details", viewModel.getOrderDetailsMessage())
-    }) {
-        Icon(
-            imageVector = Icons.Rounded.ContentCopy,
-            contentDescription = "",
-            tint = MaterialTheme.colorScheme.primary
-        )
-    }
-
-    IconButton(onClick = {
-        phoneNumber?.let {
-            viewModel.showShareSheet(true)
-        } ?: run {
-            shareLink(viewModel.getOrderDetailsMessage())
-        }
-
-    }) {
+    IconButton(onClick = { viewModel.shareDocument() }) {
         Icon(
             imageVector = Icons.Rounded.Share,
             contentDescription = "",
             tint = MaterialTheme.colorScheme.primary
         )
     }
-
-
-    if (order?.invoiceStatus == InvoiceStatus.ISSUED.id) {
-        val documentType = order.orderType.let { FEDocumentType.fromCode(it) }
-        val isCreditOrDebitNote = documentType in listOf(
-            FEDocumentType.CREDIT_NOTE_REFERENCING_FE,
-            FEDocumentType.DEBIT_NOTE_REFERENCING_FE,
-            FEDocumentType.GENERIC_CREDIT_NOTE,
-            FEDocumentType.GENERIC_DEBIT_NOTE
-        )
-
-        if (!isCreditOrDebitNote) {
-            var menuExpanded by remember { mutableStateOf(false) }
-            Box {
-                IconButton(onClick = { menuExpanded = true }) {
-                    Icon(
-                        imageVector = Icons.Rounded.MoreVert,
-                        contentDescription = "Más opciones",
-                        tint = MaterialTheme.colorScheme.primary
-                    )
-                }
-
-                DropdownMenu(
-                    expanded = menuExpanded,
-                    onDismissRequest = { menuExpanded = false }
-                ) {
-                    val remainingCreditNoteCents = order.remainingCreditNoteCapacityCents()
-                    val canCreateCreditNote = remainingCreditNoteCents > 0L
-                    DropdownMenuItem(
-                        text = {
-                            Text(
-                                if (canCreateCreditNote) {
-                                    "Generar nota de crédito"
-                                } else {
-                                    "Límite de notas de crédito alcanzado"
-                                }
-                            )
-                        },
-                        enabled = canCreateCreditNote,
-                        onClick = {
-                            menuExpanded = false
-                            val cufe = order.externalInvoiceNumber ?: return@DropdownMenuItem
-
-                            navigateAny(
-                                PosNoteRoute(
-                                    op = FEDocumentType.CREDIT_NOTE_REFERENCING_FE.code,
-                                    cufe = cufe,
-                                    createdAt = order.createdAt,
-                                    customerId = order.customer?.id,
-                                    customerName = order.displayCustomerName(),
-                                    customerEmail = order.customer?.email,
-                                    customerphone = order.displayCustomerPhone(),
-                                    customerRuc = order.customer?.ruc,
-                                    customerStatus = order.customer?.status ?: 1,
-                                    customerInvoiceID = order.customer?.customerInvoiceID,
-                                    orderLinesJson = Json.encodeToString(order.lines),
-                                    maxCreditNoteAmountCents = remainingCreditNoteCents,
-                                    sourceOrderNumber = order.internalNumber
-                                )
-                            )
-                        }
-                    )
-
-                    DropdownMenuItem(
-                        text = { Text("Generar nota de débito") },
-                        onClick = {
-                            menuExpanded = false
-                            val cufe = order.externalInvoiceNumber ?: return@DropdownMenuItem
-                            navigateAny(
-                                PosNoteRoute(
-                                    op = FEDocumentType.DEBIT_NOTE_REFERENCING_FE.code,
-                                    cufe = cufe,
-                                    createdAt = order.createdAt,
-                                    customerId = order.customer?.id,
-                                    customerName = order.displayCustomerName(),
-                                    customerEmail = order.customer?.email,
-                                    customerphone = order.displayCustomerPhone(),
-                                    customerRuc = order.customer?.ruc,
-                                    customerStatus = order.customer?.status ?: 1,
-                                    customerInvoiceID = order.customer?.customerInvoiceID,
-                                    orderLinesJson = Json.encodeToString(order.lines)
-                                )
-                            )
-                        }
-                    )
-                }
-            }
-        }
-    }
 }
-
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -428,8 +326,7 @@ fun OrderDetailsScreen(
         viewModel.hydrateSelectedOrderDetailsIfNeeded()
     }
 
-    val canShowCancelButton = order.invoiceStatus != InvoiceStatus.ISSUED.id &&
-            viewModel.isOrderCancellable(order.status)
+    val canShowCancelButton = canCancelOrder(order)
     val canShowDeleteButton = canDeleteOrder(order)
     val canShowReprintButton = viewModel.canShowReprintAction(order)
     val pendingCents = viewModel.totalOpenReceivableCents(order)
@@ -489,13 +386,7 @@ fun OrderDetailsScreen(
 
         // Invoicing card
         if (order.invoiceStatus != 0 && order.externalInvoiceNumber != null) {
-            OrderInvoicingCard(
-                order = order,
-                onShowCancelDialog = {
-                    viewModel.clearCancelOrderError()
-                    showCancelDialog = true
-                }
-            )
+            OrderInvoicingCard(order = order)
         }
 
         OrderRelatedDocumentsCard(
@@ -512,28 +403,135 @@ fun OrderDetailsScreen(
 
         // Action buttons
         if (order.status != OrderStatus.CANCELLED) {
-            when (order.invoiceStatus) {
-                InvoiceStatus.ISSUED.id -> {
-                    ButtonM(
-                        onClick = { viewModel.getDocumentByCufe() },
-                        containerColor = MaterialTheme.colorScheme.secondary,
-                        contentColor = MaterialTheme.colorScheme.onSecondary
-                    ) {
-                        OrderActionButtonContent(
-                            icon = Icons.Rounded.Visibility,
-                            label = "Ver factura PDF"
+            OrderActionsDivider()
+            val hasCurrentNonFiscal = order.hasCurrentNonFiscalDocument()
+            if (order.invoiceStatus == InvoiceStatus.ISSUED.id || hasCurrentNonFiscal) {
+                ButtonM(
+                    onClick = { viewModel.getDocumentByCufe() },
+                    containerColor = MaterialTheme.colorScheme.secondary,
+                    contentColor = MaterialTheme.colorScheme.onSecondary
+                ) {
+                    OrderActionButtonContent(
+                        icon = Icons.Rounded.Description,
+                        label = if (hasCurrentNonFiscal) "Ver documento PDF" else "Ver factura PDF"
+                    )
+                }
+            }
+            val documentType = FEDocumentType.fromCode(order.orderType)
+            val isCreditOrDebitNote = documentType in listOf(
+                FEDocumentType.CREDIT_NOTE_REFERENCING_FE,
+                FEDocumentType.DEBIT_NOTE_REFERENCING_FE,
+                FEDocumentType.GENERIC_CREDIT_NOTE,
+                FEDocumentType.GENERIC_DEBIT_NOTE
+            )
+            if (order.invoiceStatus == InvoiceStatus.ISSUED.id && !isCreditOrDebitNote) {
+                val remainingCreditNoteCents = order.remainingCreditNoteCapacityCents()
+                val canCreateCreditNote = remainingCreditNoteCents > 0L
+                OrderOutlinedActionButton(
+                    label = if (canCreateCreditNote) "Generar nota de crédito" else "Límite de notas de crédito alcanzado",
+                    icon = Icons.Rounded.Remove,
+                    color = MaterialTheme.colorScheme.primary,
+                    enabled = canCreateCreditNote,
+                    onClick = {
+                        val cufe = order.externalInvoiceNumber ?: return@OrderOutlinedActionButton
+                        navigate(
+                            PosNoteRoute(
+                                op = FEDocumentType.CREDIT_NOTE_REFERENCING_FE.code,
+                                cufe = cufe,
+                                createdAt = order.createdAt,
+                                customerId = order.customer?.id,
+                                customerName = order.displayCustomerName(),
+                                customerEmail = order.customer?.email,
+                                customerphone = order.displayCustomerPhone(),
+                                customerRuc = order.customer?.ruc,
+                                customerStatus = order.customer?.status ?: 1,
+                                customerInvoiceID = order.customer?.customerInvoiceID,
+                                orderLinesJson = Json.encodeToString(order.lines),
+                                maxCreditNoteAmountCents = remainingCreditNoteCents,
+                                sourceOrderNumber = order.internalNumber
+                            ),
+                            null
                         )
                     }
+                )
+                OrderOutlinedActionButton(
+                    label = "Generar nota de débito",
+                    icon = Icons.Rounded.Add,
+                    color = MaterialTheme.colorScheme.primary,
+                    onClick = {
+                        val cufe = order.externalInvoiceNumber ?: return@OrderOutlinedActionButton
+                        navigate(
+                            PosNoteRoute(
+                                op = FEDocumentType.DEBIT_NOTE_REFERENCING_FE.code,
+                                cufe = cufe,
+                                createdAt = order.createdAt,
+                                customerId = order.customer?.id,
+                                customerName = order.displayCustomerName(),
+                                customerEmail = order.customer?.email,
+                                customerphone = order.displayCustomerPhone(),
+                                customerRuc = order.customer?.ruc,
+                                customerStatus = order.customer?.status ?: 1,
+                                customerInvoiceID = order.customer?.customerInvoiceID,
+                                orderLinesJson = Json.encodeToString(order.lines)
+                            ),
+                            null
+                        )
+                    }
+                )
+            }
+            if (viewModel.canConfirmNonFiscal(order)) {
+                ButtonM(
+                    onClick = { viewModel.openGenerateNonFiscal() },
+                    containerColor = Color(0xFF2E7D32),
+                    contentColor = Color.White
+                ) {
+                    OrderActionButtonContent(
+                        icon = Icons.Rounded.Description,
+                        label = "Generar documento no fiscal"
+                    )
                 }
+            }
+            if (viewModel.canRegisterInternalPayment(order)) {
+                OrderOutlinedActionButton(
+                    label = "Registrar pago",
+                    icon = Icons.Rounded.Payment,
+                    color = MaterialTheme.colorScheme.secondary,
+                    onClick = { viewModel.openInternalRegisterPayment() }
+                )
+            }
+            when (order.invoiceStatus) {
+                InvoiceStatus.ISSUED.id -> Unit
 
                 InvoiceStatus.FAILED.id -> {
-                    // No retry button and no cancel-order action for failed invoice orders.
+                    if (viewModel.canFacturarInternal(order)) {
+                        ButtonM(
+                            onClick = { viewModel.onFacturarInternal() },
+                            containerColor = Color(0xFF2E7D32),
+                            contentColor = Color.White
+                        ) {
+                            OrderActionButtonContent(
+                                icon = Icons.Rounded.Description,
+                                label = "Facturar"
+                            )
+                        }
+                    }
                 }
 
                 InvoiceStatus.NONE.id, InvoiceStatus.PENDING.id -> {
                     if (viewModel.canShowPaidPaymentLinkInvoiceButton(order)) {
                         ButtonM(
                             onClick = { viewModel.retryElectronicInvoice() },
+                            containerColor = Color(0xFF2E7D32),
+                            contentColor = Color.White
+                        ) {
+                            OrderActionButtonContent(
+                                icon = Icons.Rounded.Description,
+                                label = "Facturar"
+                            )
+                        }
+                    } else if (viewModel.canFacturarInternal(order)) {
+                        ButtonM(
+                            onClick = { viewModel.onFacturarInternal() },
                             containerColor = Color(0xFF2E7D32),
                             contentColor = Color.White
                         ) {
@@ -561,7 +559,7 @@ fun OrderDetailsScreen(
                 }
             }
 
-            if (viewModel.canShowRetryInvoiceButton(order)) {
+            if (viewModel.canShowRetryInvoiceButton(order) && !viewModel.canFacturarInternal(order)) {
                 ButtonM(onClick = { viewModel.retryElectronicInvoice() }) {
                     OrderActionButtonContent(
                         icon = Icons.Rounded.Receipt,
@@ -570,33 +568,23 @@ fun OrderDetailsScreen(
                 }
             }
 
-            val hasIssuedAdditionalActions = order.invoiceStatus == InvoiceStatus.ISSUED.id &&
-                    ((canShowReprintButton || uiState.reprintInFlight) ||
-                            (canManageReceivables && uiState.canMarkPaid && viewModel.totalOpenReceivableCents(order) > 0L))
-            val hasDraftAdditionalActions = (order.invoiceStatus == InvoiceStatus.NONE.id ||
-                    order.invoiceStatus == InvoiceStatus.PENDING.id) && canShowCancelButton
-            val hasPaymentLinkActions = canManageReceivables &&
-                    uiState.canCreatePaymentLink &&
-                    (canGeneratePaymentLink || canCopyOrSharePaymentLink || hasActiveYappyOnsiteIntent)
-            val hasAdditionalActions = hasIssuedAdditionalActions ||
-                    hasDraftAdditionalActions ||
-                    hasPaymentLinkActions ||
-                    canShowDeleteButton
-
-            if (hasAdditionalActions) {
-                OrderActionsDivider()
+            if (canShowReprintButton || uiState.reprintInFlight) {
+                val isInternalTicket = order.hasCurrentNonFiscalDocument()
+                OrderOutlinedActionButton(
+                    label = when {
+                        uiState.reprintInFlight && isInternalTicket -> "Imprimiendo..."
+                        uiState.reprintInFlight -> "Reimprimiendo..."
+                        isInternalTicket -> "Imprimir ticket"
+                        else -> "Reimprimir ticket"
+                    },
+                    icon = Icons.Rounded.Receipt,
+                    color = MaterialTheme.colorScheme.primary,
+                    enabled = !uiState.reprintInFlight,
+                    onClick = { viewModel.reprintTicket() }
+                )
             }
 
             if (order.invoiceStatus == InvoiceStatus.ISSUED.id) {
-                if (canShowReprintButton || uiState.reprintInFlight) {
-                    OrderOutlinedActionButton(
-                        label = if (uiState.reprintInFlight) "Reimprimiendo..." else "Reimprimir ticket",
-                        icon = Icons.Rounded.Receipt,
-                        color = MaterialTheme.colorScheme.primary,
-                        enabled = !uiState.reprintInFlight,
-                        onClick = { viewModel.reprintTicket() }
-                    )
-                }
                 if (canManageReceivables && uiState.canMarkPaid && viewModel.totalOpenReceivableCents(order) > 0L) {
                     OrderOutlinedActionButton(
                         label = "Registrar pago",
@@ -607,11 +595,9 @@ fun OrderDetailsScreen(
                 }
             }
 
-            if ((order.invoiceStatus == InvoiceStatus.NONE.id ||
-                        order.invoiceStatus == InvoiceStatus.PENDING.id) && canShowCancelButton
-            ) {
+            if (canShowCancelButton) {
                 OrderOutlinedActionButton(
-                    label = "Anular pedido",
+                    label = "Anular documento",
                     icon = Icons.Rounded.Close,
                     color = MaterialTheme.colorScheme.error,
                     onClick = {
@@ -691,7 +677,7 @@ fun OrderDetailsScreen(
 
             if (canShowDeleteButton) {
                 OrderOutlinedActionButton(
-                    label = "Eliminar pedido",
+                    label = "Eliminar Orden",
                     icon = Icons.Rounded.Delete,
                     color = MaterialTheme.colorScheme.error,
                     onClick = {
@@ -1359,7 +1345,7 @@ fun OrderDetailsScreen(
                     viewModel.resetManualPaymentFields()
                     viewModel.showManualPaymentSheet(false)
                 },
-                methodOptions = ManualPaymentMethodOption.getAllOptionsPairs(),
+                methodOptions = ManualPaymentMethodOption.getAllOptions().map { it.id to it.displayName },
                 charged = uiState.manualPayment.charged,
                 otherPaymentDescription = uiState.manualPayment.otherPaymentDescription,
                 onToggleMethod = { code, selected ->
@@ -1407,7 +1393,7 @@ fun OrderDetailsScreen(
         if (showDeleteDialog) {
             AlertDialog(
                 onDismissRequest = { showDeleteDialog = false },
-                title = { Text("Eliminar pedido") },
+                title = { Text("Eliminar Orden") },
                 text = {
                     Column {
                         Text("Ingresa el motivo de eliminación del pedido.")
@@ -1582,7 +1568,10 @@ private fun OrderHeaderCard(
                         style = titleMediumBold()
                     )
                 }
-                OrderStatusChip(status = order.status, onClick = onStatusClick)
+                DocumentStatusChip(
+                    label = order.listDocumentStatusLabel(),
+                    onClick = onStatusClick
+                )
             }
             Spacer(modifier = Modifier.height(12.dp))
             InfoRow("Fecha", DateFormat.getOrdersFormattedDate(order.createdAt))
@@ -2090,7 +2079,7 @@ private fun OrderActionsDivider() {
     ) {
         Divider(modifier = Modifier.weight(1f))
         Text(
-            text = "Acciones del pedido",
+            text = "Acciones del documento",
             style = labelSmall(color = MaterialTheme.colorScheme.onSurfaceVariant),
             modifier = Modifier.padding(horizontal = 10.dp)
         )
@@ -2477,7 +2466,7 @@ private fun normalizeStatusToken(raw: String?): String {
 }
 
 @Composable
-private fun OrderInvoicingCard(order: Order, onShowCancelDialog: () -> Unit) {
+private fun OrderInvoicingCard(order: Order) {
     Card(
         modifier = Modifier.fillMaxWidth(),
         elevation = CardDefaults.cardElevation(2.dp),
@@ -2533,51 +2522,8 @@ private fun OrderInvoicingCard(order: Order, onShowCancelDialog: () -> Unit) {
 
             Row(
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween
+                horizontalArrangement = Arrangement.End
             ) {
-                val canCancel =
-                    canCancelInvoice(order.invoiceStatus ?: 0, order.createdAt)
-                var showCancelConfirmDialog by remember { mutableStateOf(false) }
-                if (canCancel) {
-                    TextButtonS(
-                        label = "Anular factura",
-                        color = if (canCancel) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.outline,
-                        prefixIcon = rememberVectorPainter(Icons.Rounded.Cancel),
-                    ) {
-                        showCancelConfirmDialog = true
-                    }
-                    if (showCancelConfirmDialog) {
-                        AlertDialog(
-                            onDismissRequest = { showCancelConfirmDialog = false },
-                            title = { Text("Confirmar anulación") },
-                            text = {
-                                Text(
-                                    "¿Deseas anular esta factura?\n" +
-                                            "• Solo es posible dentro de los 7 días de emitida.\n" +
-                                            "• Esta acción no se puede deshacer."
-                                )
-                            },
-                            confirmButton = {
-                                Button(
-                                    onClick = {
-                                        showCancelConfirmDialog = false
-                                        onShowCancelDialog()
-                                    },
-                                    colors = ButtonDefaults.buttonColors(
-                                        containerColor = MaterialTheme.colorScheme.error,
-                                        contentColor = MaterialTheme.colorScheme.onError
-                                    )
-                                ) { Text("Anular") }
-                            },
-                            dismissButton = {
-                                Button(
-                                    onClick = { showCancelConfirmDialog = false }
-                                ) { Text("Cancelar") }
-                            }
-                        )
-                    }
-                }
-                Spacer(modifier = Modifier.weight(1f, fill = true))
                 TextButtonS(
                     label = "Ver en la DGI",
                     color = MaterialTheme.colorScheme.secondary,
@@ -2736,7 +2682,7 @@ private fun CancelOrderBottomSheet(
             }
             Spacer(modifier = Modifier.width(10.dp))
             Column(modifier = Modifier.weight(1f)) {
-                Text("Anular pedido", style = titleMediumBold())
+                Text("Anular documento", style = titleMediumBold())
                 Text(
                     "Esta acción requiere un motivo para continuar.",
                     style = labelSmall(color = MaterialTheme.colorScheme.onSurfaceVariant)
@@ -2821,7 +2767,7 @@ private fun CancelOrderBottomSheet(
                 containerColor = MaterialTheme.colorScheme.error,
                 contentColor = MaterialTheme.colorScheme.onError
             ) {
-                Text("Anular")
+                Text("Anular documento")
             }
         }
     }
@@ -3215,8 +3161,12 @@ fun ManualPaymentBottomSheet(
     if (!open) return
 
     val sheetState = rememberModalBottomSheetState(
-        skipPartiallyExpanded = false
+        skipPartiallyExpanded = true
     )
+    var pickingMethod by remember { mutableStateOf(false) }
+    val allocated = remember(charged) { charged.values.sum() }
+    val change = (allocated - totalToCharge).coerceAtLeast(0L)
+    val hasCharges = charged.isNotEmpty()
 
     ModalBottomSheet(
         onDismissRequest = onDismiss,
@@ -3224,135 +3174,378 @@ fun ManualPaymentBottomSheet(
         dragHandle = null
     ) {
         KeyboardDismissHost(Modifier.fillMaxWidth()) {
-            Column(Modifier.fillMaxWidth()) {
-        Row(
-            modifier = Modifier.fillMaxWidth()
-                .padding(horizontal = 16.dp, vertical = 8.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Text(
-                "Registrar pago manual",
-                style = MaterialTheme.typography.titleLarge
-            )
-            Spacer(Modifier.weight(1f))
-            IconButton(onClick = onDismiss) {
-                Icon(rememberVectorPainter(Icons.Rounded.Close), contentDescription = "Cerrar")
-            }
-        }
-
-        Divider()
-
-        // Content
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .navigationBarsPadding()
-                .imePadding()
-                .padding(horizontal = 16.dp, vertical = 12.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp)
-        ) {
-            // Methods
-            Text("Métodos de pago", style = MaterialTheme.typography.titleMedium)
-            FlowRow(
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                verticalArrangement = Arrangement.spacedBy(8.dp)
+            Column(
+                Modifier
+                    .fillMaxWidth()
+                    .navigationBarsPadding()
+                    .imePadding()
+                    .verticalScroll(rememberScrollState())
             ) {
-                methodOptions.forEach { (code, label) ->
-                    val selected = charged.containsKey(code)
-                    FilterChip(
-                        selected = selected,
-                        onClick = { onToggleMethod(code, !selected) },
-                        label = { Text(label) }
-                    )
-                }
-            }
-
-            // Amount inputs (for selected methods)
-            charged.keys.sorted().forEach { code ->
-                val label = methodOptions.find { it.first == code }?.second ?: code.toString()
-
                 Row(
-                    Modifier.fillMaxWidth(),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp, vertical = 8.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Text(label)
-                    Spacer(Modifier.weight(1f))
-                    DMMoneyOutlinedTextField(
-                        text = (charged[code] ?: 0L).toString(),
-                        label = "Monto",
-                        onChange = { raw ->
-                            val cents = raw.filter(Char::isDigit).toLongOrNull() ?: 0L
-                            onAmountChange(code, cents)
-                        },
-                        leadingIcon = null,
-                        modifier = Modifier.widthIn(min = 160.dp),
-                        maxLines = 1,
-                        imeAction = ImeAction.Done
-                    )
-                }
-
-                // "Otro" description when code == 11 (match your POS behavior)
-                if (code == 11) {
-                    DMOutlinedTextField(
-                        text = otherPaymentDescription,
-                        label = "Descripción (requerida para 'Otro')",
-                        onChange = onOtherDesc,
-                        modifier = Modifier.fillMaxWidth(),
-                        maxLines = 2
-                    )
-                } else if (code == 2) {
-                    // Cash note, same as POS
                     Text(
-                        "Se permite exceso de pago (se calculará cambio)",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                        when {
+                            uiState.manualPayment.confirmNonFiscal -> "Generar documento"
+                            uiState.manualPayment.paymentOnly -> "Registrar pago"
+                            uiState.manualPayment.invoiceAfterPayment -> "Facturar"
+                            else -> "Registrar pago manual"
+                        },
+                        style = MaterialTheme.typography.titleLarge
+                    )
+                    Spacer(Modifier.weight(1f))
+                    IconButton(onClick = onDismiss) {
+                        Icon(rememberVectorPainter(Icons.Rounded.Close), contentDescription = "Cerrar")
+                    }
+                }
+
+                Divider()
+
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp, vertical = 12.dp),
+                    verticalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    if (pickingMethod) {
+                        Text("Seleccionar método de pago", style = MaterialTheme.typography.titleMedium)
+                        methodOptions.forEach { (code, label) ->
+                            ManualPaymentMethodPickerRow(
+                                icon = manualPaymentMethodIcon(code),
+                                title = label,
+                                enabled = !charged.containsKey(code) && remaining > 0,
+                                onClick = {
+                                    onToggleMethod(code, true)
+                                    pickingMethod = false
+                                }
+                            )
+                        }
+                        TextButtonM(
+                            label = "Cerrar",
+                            enabled = true,
+                            onClick = { pickingMethod = false }
+                        )
+                    } else {
+                        Surface(
+                            modifier = Modifier.fillMaxWidth(),
+                            shape = RoundedCornerShape(22.dp),
+                            color = MaterialTheme.colorScheme.surface,
+                            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
+                            shadowElevation = 1.dp
+                        ) {
+                            Column(Modifier.padding(16.dp)) {
+                                Text(
+                                    "Distribución del cobro",
+                                    style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.W800)
+                                )
+                                Text(
+                                    "Puedes dividir el total entre métodos",
+                                    style = bodySmall(color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                )
+                                Spacer(Modifier.height(14.dp))
+
+                                if (!hasCharges) {
+                                    ManualSelectPaymentMethodButton { pickingMethod = true }
+                                } else {
+                                    charged.keys.sorted().forEachIndexed { index, code ->
+                                        val label = methodOptions.find { it.first == code }?.second
+                                            ?: "Método $code"
+                                        ManualPaymentChargedMethodRow(
+                                            title = label,
+                                            amountCents = charged[code] ?: 0L,
+                                            icon = manualPaymentMethodIcon(code),
+                                            onAmountChange = { onAmountChange(code, it) },
+                                            onRemove = { onToggleMethod(code, false) }
+                                        )
+                                        if (code == ManualPaymentMethodOption.OTHER_SPECIFY.id) {
+                                            Spacer(Modifier.height(8.dp))
+                                            DMOutlinedTextField(
+                                                text = otherPaymentDescription,
+                                                label = "Descripción (requerida para 'Otro')",
+                                                onChange = onOtherDesc,
+                                                modifier = Modifier.fillMaxWidth(),
+                                                maxLines = 2
+                                            )
+                                        } else if (code == ManualPaymentMethodOption.CASH.id) {
+                                            Text(
+                                                "Se permite exceso de pago (se calculará cambio)",
+                                                style = bodySmall(
+                                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                                )
+                                            )
+                                        }
+                                        if (index != charged.size - 1) {
+                                            Divider(Modifier.padding(vertical = 4.dp))
+                                        }
+                                    }
+                                    if (remaining > 0) {
+                                        Spacer(Modifier.height(10.dp))
+                                        ManualSelectPaymentMethodButton { pickingMethod = true }
+                                    }
+                                }
+
+                                if (remaining > 0 || change > 0 || hasCharges) {
+                                    Divider(Modifier.padding(top = 10.dp, bottom = 8.dp))
+                                    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                                        Row(
+                                            Modifier.fillMaxWidth(),
+                                            horizontalArrangement = Arrangement.SpaceBetween
+                                        ) {
+                                            Text("Asignado", style = bodyMedium())
+                                            Text(
+                                                formatNumberToMoney(allocated / 100.0),
+                                                style = bodyMediumBold()
+                                            )
+                                        }
+                                        Row(
+                                            Modifier.fillMaxWidth(),
+                                            horizontalArrangement = Arrangement.SpaceBetween
+                                        ) {
+                                            Text("Pendiente por asignar", style = bodyMedium())
+                                            Text(
+                                                formatNumberToMoney(remaining / 100.0),
+                                                style = bodyMediumBold(
+                                                    color = if (remaining > 0) {
+                                                        MaterialTheme.colorScheme.error
+                                                    } else {
+                                                        MaterialTheme.colorScheme.primary
+                                                    }
+                                                )
+                                            )
+                                        }
+                                        if (change > 0) {
+                                            Row(
+                                                Modifier.fillMaxWidth(),
+                                                horizontalArrangement = Arrangement.SpaceBetween
+                                            ) {
+                                                Text(
+                                                    "Cambio",
+                                                    style = bodyMedium(
+                                                        color = MaterialTheme.colorScheme.secondary
+                                                    )
+                                                )
+                                                Text(
+                                                    formatNumberToMoney(change / 100.0),
+                                                    style = bodyMediumBold(
+                                                        color = MaterialTheme.colorScheme.secondary
+                                                    )
+                                                )
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+
+                ButtonM(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp, vertical = 12.dp),
+                    onClick = onConfirm,
+                    enabled = uiState.manualPayment.isConfirmEnabled
+                ) {
+                    Text(
+                        when {
+                            uiState.manualPayment.confirmNonFiscal -> "Generar documento"
+                            uiState.manualPayment.paymentOnly -> "Registrar pago"
+                            uiState.manualPayment.invoiceAfterPayment || uiState.invoicingEnabled ->
+                                "Confirmar cobro y facturar"
+                            else -> "Confirmar cobro"
+                        },
+                        style = labelLarge().copy(color = MaterialTheme.colorScheme.onPrimary)
                     )
                 }
+                Spacer(Modifier.height(16.dp))
             }
+        }
+    }
+}
 
-            Divider()
+private fun manualPaymentMethodIcon(code: Int): ImageVector {
+    return when (code) {
+        ManualPaymentMethodOption.BANK_TRANSFER.id -> Icons.Rounded.AccountBalance
+        ManualPaymentMethodOption.CREDIT_CARD.id,
+        ManualPaymentMethodOption.DEBIT_CARD.id -> Icons.Rounded.CreditCard
+        ManualPaymentMethodOption.CASH.id,
+        ManualPaymentMethodOption.PUNTO_PAGO.id -> Icons.Rounded.AttachMoney
+        ManualPaymentMethodOption.LOYALTY_CARD.id,
+        ManualPaymentMethodOption.VOUCHER.id -> Icons.Rounded.Loyalty
+        ManualPaymentMethodOption.GIFT_CARD.id -> Icons.Rounded.Redeem
+        ManualPaymentMethodOption.CHECK.id -> Icons.AutoMirrored.Rounded.FactCheck
+        else -> Icons.Rounded.Add
+    }
+}
 
-            // Allocation summary (NO installments here)
-            val allocated = remember(charged) { charged.values.sum() }
-            val change = (allocated - totalToCharge).coerceAtLeast(0L)
+@Composable
+private fun ManualSelectPaymentMethodButton(onClick: () -> Unit) {
+    val accent = MaterialTheme.colorScheme.secondary
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(56.dp)
+            .background(
+                color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.24f),
+                shape = RoundedCornerShape(16.dp)
+            )
+            .dashedBorder(
+                strokeWidth = 1.4.dp,
+                color = accent.copy(alpha = 0.75f),
+                cornerRadiusDp = 16.dp
+            )
+            .clickable(onClick = onClick)
+            .padding(horizontal = 16.dp),
+        horizontalArrangement = Arrangement.Center,
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Icon(
+            imageVector = Icons.Rounded.Add,
+            contentDescription = null,
+            tint = accent,
+            modifier = Modifier.size(18.dp)
+        )
+        Spacer(Modifier.width(8.dp))
+        Text(
+            "Seleccionar método de pago",
+            style = bodyMediumBold(color = accent)
+        )
+    }
+}
 
-            Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                    Text("Asignado")
-                    Text(formatNumberToMoney((allocated / 100.0).toString()))
-                }
-
-                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                    Text("Restante")
-                    Text(formatNumberToMoney((remaining / 100.0).toString()))
-                }
-
-                if (change > 0) {
-                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                        Text("Cambio", color = MaterialTheme.colorScheme.secondary)
-                        Text(
-                            formatNumberToMoney((change / 100.0).toString()),
-                            style = bodyMediumBold(color = MaterialTheme.colorScheme.secondary)
+@Composable
+private fun ManualPaymentMethodPickerRow(
+    icon: ImageVector,
+    title: String,
+    enabled: Boolean,
+    onClick: () -> Unit,
+) {
+    Surface(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 5.dp)
+            .clickable(enabled = enabled, onClick = onClick),
+        shape = RoundedCornerShape(16.dp),
+        color = if (enabled) {
+            MaterialTheme.colorScheme.surface
+        } else {
+            MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.24f)
+        },
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant)
+    ) {
+        Row(
+            Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 14.dp, vertical = 12.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Row(
+                modifier = Modifier.weight(1f),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Surface(
+                    modifier = Modifier.size(34.dp),
+                    shape = RoundedCornerShape(13.dp),
+                    color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.55f)
+                ) {
+                    Row(
+                        Modifier.fillMaxSize(),
+                        horizontalArrangement = Arrangement.Center,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(
+                            imageVector = icon,
+                            contentDescription = title,
+                            tint = MaterialTheme.colorScheme.onSurface,
+                            modifier = Modifier.size(18.dp)
                         )
                     }
                 }
-            }
-
-            // Confirm button (enabled only if fully covered)
-            ButtonM(
-                onClick = onConfirm,
-                enabled = allocated >= totalToCharge
-            ) {
+                Spacer(Modifier.width(10.dp))
                 Text(
-                    if (uiState.invoicingEnabled) "Confirmar cobro y facturar" else "Confirmar cobro",
-                    style = labelLarge().copy(color = MaterialTheme.colorScheme.onPrimary)
+                    title,
+                    style = bodyMediumBold(
+                        color = if (enabled) {
+                            MaterialTheme.colorScheme.onSurface
+                        } else {
+                            MaterialTheme.colorScheme.onSurfaceVariant
+                        }
+                    )
                 )
             }
-
-            Spacer(Modifier.height(8.dp))
+            Text(
+                if (enabled) "Agregar" else "Agregado",
+                style = bodySmall(
+                    color = if (enabled) {
+                        MaterialTheme.colorScheme.secondary
+                    } else {
+                        MaterialTheme.colorScheme.onSurfaceVariant
+                    }
+                )
+            )
         }
+    }
+}
+
+@Composable
+private fun ManualPaymentChargedMethodRow(
+    title: String,
+    amountCents: Long,
+    icon: ImageVector,
+    onAmountChange: (Long) -> Unit,
+    onRemove: () -> Unit,
+) {
+    Column(Modifier.fillMaxWidth()) {
+        Row(
+            Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Surface(
+                modifier = Modifier.size(34.dp),
+                shape = RoundedCornerShape(13.dp),
+                color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.55f)
+            ) {
+                Row(
+                    Modifier.fillMaxSize(),
+                    horizontalArrangement = Arrangement.Center,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Icon(
+                        imageVector = icon,
+                        contentDescription = title,
+                        tint = MaterialTheme.colorScheme.onSurface,
+                        modifier = Modifier.size(18.dp)
+                    )
+                }
+            }
+            Spacer(Modifier.width(10.dp))
+            Text(title, style = bodyMediumBold(), modifier = Modifier.weight(1f))
+            IconButton(onClick = onRemove) {
+                Icon(
+                    imageVector = Icons.Rounded.Close,
+                    contentDescription = "Eliminar método",
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.size(20.dp)
+                )
             }
         }
+        Spacer(Modifier.height(8.dp))
+        DMMoneyOutlinedTextField(
+            text = if (amountCents == 0L) "" else amountCents.toString(),
+            label = "Monto",
+            onChange = { raw ->
+                val cents = raw.filter(Char::isDigit).toLongOrNull() ?: 0L
+                onAmountChange(cents)
+            },
+            leadingIcon = null,
+            modifier = Modifier.fillMaxWidth(),
+            maxLines = 1,
+            imeAction = ImeAction.Done
+        )
     }
 }
 
@@ -3397,19 +3590,34 @@ fun paymentStatusLabel(paymentStatus: Int): String = when (paymentStatus) {
 }
 
 private fun canDeleteOrder(order: Order): Boolean {
-    val invoiceStatus = order.invoiceStatus ?: InvoiceStatus.NONE.id
-    val hasFailedOrNotInvoicedStatus = invoiceStatus == InvoiceStatus.FAILED.id ||
-            invoiceStatus == InvoiceStatus.NONE.id
-
-    val hasAutomaticPaymentRegistered = order.orderPayments.any { payment ->
-        payment.isAutomatic &&
-            payment.voidedAt.isNullOrBlank() &&
-            (payment.charged.toLongCents() - payment.refunded.toLongCents()) > 0L
+    if (order.orderPayments.any { payment ->
+            payment.isAutomatic &&
+                payment.voidedAt.isNullOrBlank() &&
+                (payment.charged.toLongCents() - payment.refunded.toLongCents()) > 0L
+        }
+    ) {
+        return false
     }
+    val invoiceStatus = order.invoiceStatus ?: InvoiceStatus.NONE.id
+    val isDraftWithoutInvoice = order.status == OrderStatus.DRAFT &&
+        invoiceStatus == InvoiceStatus.NONE.id &&
+        order.externalInvoiceNumber.isNullOrBlank()
+    return isDraftWithoutInvoice || invoiceStatus == InvoiceStatus.FAILED.id
+}
 
-    if (hasAutomaticPaymentRegistered) return false
-
-    return order.status == OrderStatus.DRAFT || hasFailedOrNotInvoicedStatus
+private fun canCancelOrder(order: Order): Boolean {
+    if (order.status == OrderStatus.CANCELLED) return false
+    if (order.isUninvoicedInternalDocument() &&
+        order.status == OrderStatus.CONFIRMED &&
+        order.externalInvoiceNumber.isNullOrBlank()
+    ) {
+        return true
+    }
+    val invoiceStatus = order.invoiceStatus ?: InvoiceStatus.NONE.id
+    if (invoiceStatus != InvoiceStatus.ISSUED.id) {
+        return order.paymentLinks.isNotEmpty()
+    }
+    return canCancelInvoice(invoiceStatus, order.createdAt)
 }
 
 fun paymentStatusChipColors(paymentStatus: Int): Pair<Color, Color> = when (paymentStatus) {

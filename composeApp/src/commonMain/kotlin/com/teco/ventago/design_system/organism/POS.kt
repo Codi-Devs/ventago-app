@@ -975,6 +975,7 @@ fun PosListOrganism(
                         item = item,
                         currency = uiState.currency,
                         availabilityLabel = uiState.inventoryAvailableByItemId[item.itemId],
+                        addedPulse = if (uiState.addedToCartItemId == item.itemId) uiState.addedToCartPulse else 0L,
                         modifier = Modifier.padding(
                             start = 16.dp, end = 16.dp, top = 8.dp, bottom = 8.dp
                         ),
@@ -1014,6 +1015,7 @@ fun PosListOrganism(
                             item = item,
                             currency = uiState.currency,
                             availabilityLabel = uiState.inventoryAvailableByItemId[item.itemId],
+                            addedPulse = if (uiState.addedToCartItemId == item.itemId) uiState.addedToCartPulse else 0L,
                             modifier = Modifier.padding(horizontal = 8.dp),
                             onClick = { addItemToCart(item) }
                         )

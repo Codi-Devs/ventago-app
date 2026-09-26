@@ -11,6 +11,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
+import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
@@ -88,6 +89,10 @@ fun DMOutlinedTextField(
             maxLines = maxLines,
             singleLine = maxLines == 1,
             keyboardOptions = getKeyboardType(keyboardType, imeAction, capitalization),
+            keyboardActions = KeyboardActions(
+                onSearch = { trailingIconClick() },
+                onGo = { trailingIconClick() },
+            ),
             visualTransformation = prefix?.let { PrefixTransformation(it) }?:  visualTransformation,
         )
     } ?: run {
@@ -100,6 +105,10 @@ fun DMOutlinedTextField(
             maxLines = maxLines,
             singleLine = maxLines == 1,
             keyboardOptions = getKeyboardType(keyboardType, imeAction, capitalization),
+            keyboardActions = KeyboardActions(
+                onSearch = { trailingIconClick() },
+                onGo = { trailingIconClick() },
+            ),
             enabled = enabled,
             supportingText = { Text(text = supportingText) },
             readOnly = readOnly,

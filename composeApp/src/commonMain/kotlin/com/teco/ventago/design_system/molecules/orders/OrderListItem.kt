@@ -1,7 +1,6 @@
 package com.teco.ventago.design_system.molecules.orders
 
 import androidx.compose.foundation.Image
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.IntrinsicSize
@@ -27,6 +26,8 @@ import androidx.compose.material.icons.rounded.ShoppingCart
 import androidx.compose.material.icons.rounded.ShoppingCartCheckout
 import androidx.compose.material.icons.rounded.TrendingUp
 import androidx.compose.material.icons.rounded.Undo
+import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.SuggestionChip
@@ -39,6 +40,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -66,16 +68,16 @@ import com.teco.ventago.design_system.theme.RejectedContainer
 import com.teco.ventago.design_system.theme.RejectedLabel
 import com.teco.ventago.design_system.theme.bodyMediumBold
 import com.teco.ventago.design_system.theme.labelMedium
-import com.teco.ventago.design_system.theme.outlineLight
+import com.teco.ventago.design_system.theme.labelSmall
 import com.teco.ventago.features.invoicing.domain.models.FEDocumentType
 import com.teco.ventago.features.invoicing.domain.models.InvoiceStatus
 import com.teco.ventago.features.orders.domain.models.OrderStatus
 import com.teco.ventago.features.orders.domain.models.PaymentStatus
+import com.teco.ventago.utils.DateFormat.getFormattedDate
 import com.teco.ventago.utils.formatNumberToMoney
 import org.jetbrains.compose.resources.DrawableResource
 import org.jetbrains.compose.resources.StringResource
 import org.jetbrains.compose.resources.painterResource
-import org.jetbrains.compose.resources.stringResource
 import ventago.composeapp.generated.resources.Res
 import ventago.composeapp.generated.resources.accepted
 import ventago.composeapp.generated.resources.cancelled
@@ -95,20 +97,12 @@ import ventago.composeapp.generated.resources.rejected
 
 @Composable
 fun OrderListItem(order: Order, onClick: () -> Unit, statusOnClick: () -> Unit) {
-
-    val totalItems = order.lines.size
-    val customerName = order.displayCustomerName()
-    val paymentMethodLabel = run {
-        val methods = order.orderPayments
-            .mapNotNull { it.paymentMethod.name.takeIf { name -> name.isNotBlank() } }
-            .distinct()
-        when {
-            methods.size > 1 -> stringResource(Res.string.pos_mixed)
-            methods.size == 1 -> methods.first()
-            else -> "N/A"
-        }
-    }
-
+    val customerName = order.displayCustomerName()?.takeIf { it.isNotBlank() } ?: "Consumidor final"
+    val invoiceDate = getFormattedDate(
+        order.listEmissionDateValue().take(19),
+        "yyyy-MM-dd'T'HH:mm:ss",
+        "d MMM yyyy",
+    ).replace(".", "").lowercase()
     val (icon, tint) = getOrderStatusIcon(
         order.status,
         order.paymentStatus,
@@ -116,101 +110,103 @@ fun OrderListItem(order: Order, onClick: () -> Unit, statusOnClick: () -> Unit) 
         order.orderType
     )
 
-    Column {
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp),
+        shape = RoundedCornerShape(16.dp),
+        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+        onClick = onClick,
+    ) {
         Row(
-            modifier = Modifier
-                .height(IntrinsicSize.Max)
-                .padding(top = 8.dp, start = 16.dp, end = 16.dp, bottom = 8.dp)
-                .clickable { onClick() },
+            modifier = Modifier.padding(horizontal = 12.dp, vertical = 12.dp),
             verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.SpaceBetween
         ) {
             Surface(
-                modifier = Modifier.size(50.dp),
-                shape = RoundedCornerShape(10),
+                modifier = Modifier.size(44.dp),
+                shape = RoundedCornerShape(12.dp),
                 color = Gray80,
             ) {
-
                 Icon(
                     imageVector = icon,
                     contentDescription = "Order state icon",
                     tint = tint,
-                    modifier = Modifier
-                        .padding(10.dp, 10.dp)
-                        .size(40.dp),
+                    modifier = Modifier.padding(10.dp),
                 )
-//                Image(
-//                    painter = painterResource(getOrderDrawable(order)),
-//                    contentDescription = null,
-//                    modifier = Modifier
-//                        .padding(10.dp, 10.dp)
-//                        .size(40.dp),
-//                    contentScale = ContentScale.Fit,
-//                )
             }
 
             Column(
                 modifier = Modifier
-                    .padding(horizontal = 8.dp)
-                    .weight(1f, fill = true)
-                    .fillMaxHeight()
-                    .fillMaxWidth(),
-                verticalArrangement = Arrangement.Top
+                    .padding(start = 12.dp)
+                    .weight(1f),
             ) {
                 Text(
+                    text = order.formattedInternalNumber(),
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
-                    text = "#${order.formattedInternalNumber()}",
-                    style = bodyMediumBold(color = MaterialTheme.colorScheme.primary),
+                    style = bodyMediumBold(color = MaterialTheme.colorScheme.onSurface),
                 )
-                if (!customerName.isNullOrBlank()) {
-                    Text(
-                        modifier = Modifier.padding(top = 6.dp),
-                        text = customerName,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                        style = labelMedium(color = MaterialTheme.colorScheme.onSurfaceVariant),
-                    )
-                }
                 Text(
-                    modifier = Modifier.padding(top = 6.dp),
-                    text = "$totalItems ${stringResource(Res.string.items)}",
+                    modifier = Modifier.padding(top = 2.dp),
+                    text = customerName,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    style = labelMedium(color = MaterialTheme.colorScheme.onSurfaceVariant),
+                )
+                Text(
+                    modifier = Modifier.padding(top = 2.dp),
+                    text = invoiceDate,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                     style = labelMedium(color = MaterialTheme.colorScheme.onSurfaceVariant),
                 )
             }
 
-            Spacer(modifier = Modifier)
-
             Column(
-                modifier = Modifier
-                    .width(IntrinsicSize.Min)
-                    .fillMaxHeight(),
                 horizontalAlignment = Alignment.End,
-                verticalArrangement = Arrangement.SpaceBetween
-
+                verticalArrangement = Arrangement.spacedBy(6.dp),
             ) {
-                OrderStatusChip(order.status)   {
-                    statusOnClick()
-                }
                 Text(
-                    modifier = Modifier.padding(top = 8.dp),
                     text = formatNumberToMoney(order.totalAmount),
-                    style = bodyMediumBold(color = MaterialTheme.colorScheme.primary)
-                )
-                Text(
-                    modifier = Modifier.padding(top = 6.dp),
-                    text = paymentMethodLabel,
                     maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                    style = labelMedium(color = MaterialTheme.colorScheme.onSurfaceVariant),
-                    textAlign = TextAlign.End,
+                    style = bodyMediumBold(color = MaterialTheme.colorScheme.onSurface),
                 )
+                DocumentStatusChip(order.listDocumentStatusLabel(), onClick = statusOnClick)
             }
         }
     }
+}
 
+@Composable
+fun DocumentStatusChip(label: String, onClick: () -> Unit) {
+    val (textColor, background) = when (label) {
+        "Facturado" -> Color(0xFF2E7D32) to Color(0xFFE8F5E9)
+        "Fallida" -> Color(0xFFD32F2F) to Color(0xFFFFEBEE)
+        else -> Color(0xFF757575) to Color(0xFFF5F5F5)
+    }
+    SuggestionChip(
+        modifier = Modifier.height(20.dp),
+        onClick = onClick,
+        colors = SuggestionChipDefaults.suggestionChipColors(
+            containerColor = background,
+            labelColor = textColor,
+        ),
+        border = SuggestionChipDefaults.suggestionChipBorder(
+            enabled = true,
+            borderColor = background,
+            disabledBorderColor = background,
+            borderWidth = 1.dp
+        ),
+        label = {
+            Text(
+                text = label,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                style = labelSmall(textColor).copy(fontWeight = FontWeight.Bold),
+            )
+        },
+    )
 }
 
 @Composable

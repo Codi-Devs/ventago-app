@@ -56,7 +56,7 @@ object Configs {
 }
 
 object ReleaseConfigs {
-//    const val serverBasePath: String = "http://10.0.2.2:8080/index.php?r="
+//    const val serverBasePath: String = "http://192.168.40.165:8000/index.php?r="
     const val serverBasePath: String = "https://business-vg.tecodigi.com/index.php?r="
 
 //       const val ordersBasePath: String = "http://192.168.40.165:5001"
@@ -64,7 +64,7 @@ object ReleaseConfigs {
 }
 
 object SandboxConfigs {
-//    const val serverBasePath: String = "http://10.0.2.2:8080/index.php?r="
+//    const val serverBasePath: String = "http://192.168.40.165:8000/index.php?r="
     const val serverBasePath: String = "https://business-vg.tecodigi.com/index.php?r="
 
 //       const val ordersBasePath: String = "http://192.168.40.165:5001"

@@ -38,6 +38,7 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.launchIn
 import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.flow.update
@@ -64,49 +65,55 @@ class AuthService(
     private val sessionIdService: ISessionIdService,
     private val posProvisioningService: PosDeviceProvisioningService
 ) : IAuthService {
-    var user = MutableStateFlow<User?>(null)
+    val user = MutableStateFlow<User?>(null)
     private var userChangesJob: Job? = null
     private val refreshSingleFlight = RefreshTokenSingleFlight()
+    private val _sessionResolved = MutableStateFlow(false)
 
     init {
         CoroutineScope(Dispatchers.IO+ SupervisorJob()).launch {
-            cache.getCache(User::class)?.let {
-                val cachedUser = enrichUserWithCurrentToken(it)
-                if (cachedUser.missingBusiness) {
-                    user.tryEmit(null)
-                    signOut()
-                } else {
-                    try {
-                        val accessToken = getValidAccessTokenForCachedSession()
-                        posProvisioningService.validateBusinessIds(
-                            businessIds = cachedUser.businessIds.map { it.businessId },
-                            accessToken = accessToken
-                        )
-                    } catch (e: PosProvisioningException) {
-                        if (e.shouldAbortPosLogin()) {
-                            user.tryEmit(null)
-                            signOut()
-                            return@launch
+            try {
+                cache.getCache(User::class)?.let {
+                    val cachedUser = enrichUserWithCurrentToken(it)
+                    if (cachedUser.missingBusiness) {
+                        user.tryEmit(null)
+                        signOut()
+                    } else {
+                        try {
+                            val accessToken = getValidAccessTokenForCachedSession()
+                            posProvisioningService.validateBusinessIds(
+                                businessIds = cachedUser.businessIds.map { it.businessId },
+                                accessToken = accessToken
+                            )
+                        } catch (e: PosProvisioningException) {
+                            if (e.shouldAbortPosLogin()) {
+                                user.tryEmit(null)
+                                signOut()
+                                return@launch
+                            }
+                        }
+                        user.tryEmit(cachedUser)
+                        val business = cache.getCache(Business::class)
+                        val products = cache.getCache(Products::class)
+                        if (business != null && products != null) {
+                            val businessId = business.businessId
+                            val productsId = products.id
+                            changesManager.initialize(businessId, productsId, cachedUser.userId)
+                            listenUserChanges()
                         }
                     }
-                    user.tryEmit(cachedUser)
-                    user = MutableStateFlow(cachedUser)
-                    val business = cache.getCache(Business::class)
-                    val products = cache.getCache(Products::class)
-                    if (business != null && products != null) {
-                        val businessId = business.businessId
-                        val productsId = products.id
-                        changesManager.initialize(businessId, productsId, cachedUser.userId)
-                        listenUserChanges()
-                    }
+                } ?: run {
+                    user.tryEmit(null)
+                    signOut()
                 }
-            } ?: run {
-                user.tryEmit(null)
-                signOut()
+            } finally {
+                _sessionResolved.value = true
             }
         }
 
     }
+
+    override fun sessionResolved(): Flow<Boolean> = _sessionResolved.asStateFlow()
 
     private suspend fun getValidAccessTokenForCachedSession(): String? {
         val accessToken = getJwtToken()
@@ -224,6 +231,7 @@ class AuthService(
                 user.update {
                     userData
                 }
+                listenUserChanges()
             } else {
                 throw AuthException(ApiError.F_AUTH_007)
             }
@@ -259,6 +267,7 @@ class AuthService(
                 user.update {
                     userData
                 }
+                listenUserChanges()
             } else {
                 throw AuthException(ApiError.F_AUTH_007)
             }
@@ -293,6 +302,7 @@ class AuthService(
                 user.update {
                     userData
                 }
+                listenUserChanges()
             } else {
                 throw AuthException(ApiError.F_AUTH_007)
             }
@@ -323,10 +333,8 @@ class AuthService(
             cache.clearAllCache()
             // Sign out from Firebase
             firebase.signOut()
-            // Clear user state
-            if (user.value != null) {
-                user.update { null }
-            }
+            user.value = null
+            refreshSingleFlight.resetFailureState()
             // Delete JWT tokens
             store.deleteObject(SecureConstants.JWT_TOKEN)
             store.deleteObject(SecureConstants.REFRESH_JWT_TOKEN)

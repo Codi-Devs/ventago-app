@@ -101,11 +101,17 @@ class EditItemViewModel (
                                     iscRate = item.iscRate?.toString(),     // shown as text in the optional field
                                     otiTaxes = mappedOtiTaxes,
 //                                    isPharma = item.isPharma,
-                                    additionalInfo = mappedAdditional,      // List<AdditionalEntryUI>
-                                    additionalSelectedKeyIndex = 0,                 // default selection for the picker
-                                    additionalInputValue = ""                    // empty input until user edits
+                                    additionalInfo = mappedAdditional,
+                                    additionalSelectedKeyIndex = 0,
+                                    additionalInputValue = "",
+                                    dgiUnitUserOverride = mappedAdditional.any {
+                                        it.keyName == AdditionalInfoKey.PANAMA_GOODS_SERVICES_UNIT_CODE.keyName &&
+                                            it.rawValue.isNotBlank() &&
+                                            it.rawValue != item.unitMeasureCode
+                                    }
                                 )
                             }
+                            syncDgiUnitFromProduct(item.unitMeasureCode)
 
                             loadInventorySection(item.itemId)
 

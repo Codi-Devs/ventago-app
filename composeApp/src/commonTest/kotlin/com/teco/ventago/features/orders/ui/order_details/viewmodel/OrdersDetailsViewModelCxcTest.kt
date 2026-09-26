@@ -161,7 +161,8 @@ class OrdersDetailsViewModelCxcTest {
 
     @Test
     fun shouldShowRetryInvoiceButtonRequiresPaidPendingOrFailedInvoiceAndNotCancelled() {
-        assertTrue(
+        assertEquals(
+            false,
             shouldShowRetryInvoiceButton(
                 sampleOrder(
                     paymentStatus = PaymentStatus.PAID.id,
@@ -198,6 +199,16 @@ class OrdersDetailsViewModelCxcTest {
                 sampleOrder(
                     paymentStatus = PaymentStatus.PAID.id,
                     invoiceStatus = InvoiceStatus.FAILED.id,
+                    status = OrderStatus.CONFIRMED
+                )
+            )
+        )
+        assertEquals(
+            true,
+            shouldShowRetryInvoiceButton(
+                sampleOrder(
+                    paymentStatus = PaymentStatus.PAID.id,
+                    invoiceStatus = InvoiceStatus.PENDING.id,
                     status = OrderStatus.CONFIRMED
                 )
             )

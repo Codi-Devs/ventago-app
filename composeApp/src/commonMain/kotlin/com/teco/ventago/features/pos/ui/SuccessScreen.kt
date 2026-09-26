@@ -264,11 +264,14 @@ private fun FriendlySuccessScreen(
     val isDraftOrder = uiState.paymentFlowMode == PaymentFlowMode.DRAFT &&
         !isPaymentLink &&
         !uiState.orderCreationFailed
+    val isNonFiscalOrder = uiState.paymentFlowMode == PaymentFlowMode.NON_FISCAL &&
+        !isPaymentLink &&
+        !uiState.orderCreationFailed
     val isCreditNote = uiState.selectedDocType in setOf("04", "06")
-    val completedDocumentTitle = if (isCreditNote) {
-        "¡Nota de crédito completada!"
-    } else {
-        "¡Factura completada!"
+    val completedDocumentTitle = when {
+        isCreditNote -> "¡Nota de crédito completada!"
+        isNonFiscalOrder -> "¡Documento no fiscal generado!"
+        else -> "¡Factura completada!"
     }
     val paymentLinkInvoiceIssued = isPaymentLink && uiState.invoiceStatus == InvoiceStatus.ISSUED
     val paymentLinkInvoiceFailed = isPaymentLink && uiState.invoiceStatus == InvoiceStatus.FAILED
@@ -289,11 +292,11 @@ private fun FriendlySuccessScreen(
         !paymentLinkInvoiceIssued &&
         !paymentLinkInvoiceFailed
     val invoiceWarningState = uiState.postCreateInvoiceWarning
-    val showInvoiceWarning = !isPaymentLink && !isDraftOrder && invoiceWarningState.isWarning
+    val showInvoiceWarning = !isPaymentLink && !isDraftOrder && !isNonFiscalOrder && invoiceWarningState.isWarning
     val canOpenInvoiceActions = !isPaymentLink &&
         !isDraftOrder &&
-        invoiceWarningState.invoiceActionsEnabled &&
-        uiState.pdfDocument.isNotBlank()
+        uiState.pdfDocument.isNotBlank() &&
+        (isNonFiscalOrder || invoiceWarningState.invoiceActionsEnabled)
     val paymentLinkInvoiceActionsEnabled = paymentLinkInvoiceIssued && uiState.pdfDocument.isNotBlank()
     val canShareFinalInvoice = canOpenInvoiceActions || paymentLinkInvoiceActionsEnabled
     val successGreen = Color(0xFF087A16)
@@ -394,6 +397,7 @@ private fun FriendlySuccessScreen(
                 },
                 subtitle = when {
                     isDraftOrder -> "Puedes completar la factura y el cobro más tarde."
+                    isNonFiscalOrder -> "No es factura electrónica ni comprobante fiscal ante DGI."
                     showReleasedPaymentLinkManualPanel -> "El link fue cancelado. Completa el cobro manual."
                     paymentLinkInvoiceIssued -> "Tu pago fue procesado correctamente."
                     paymentLinkManualInvoiceRequired -> "La factura debe realizarse manualmente."
@@ -491,6 +495,8 @@ private fun FriendlySuccessScreen(
             } else if (paymentLinkInvoiceIssued || canOpenInvoiceActions) {
                 InvoiceDownloadCard(
                     enabled = if (isPaymentLink) paymentLinkInvoiceActionsEnabled else true,
+                    title = if (isNonFiscalOrder) "Descargar documento" else "Descargar factura",
+                    subtitle = if (isNonFiscalOrder) "Guarda el documento no fiscal en PDF" else "Guarda tu factura en PDF",
                     onClick = { viewModel.openPdfDocument() }
                 )
             }
@@ -540,7 +546,7 @@ private fun FriendlySuccessScreen(
                 Spacer(modifier = Modifier.height(12.dp))
             }
 
-            if (isDraftOrder && uiState.orderNumber.isNotBlank()) {
+            if ((isDraftOrder || isNonFiscalOrder) && uiState.orderNumber.isNotBlank()) {
                 OutlinedButtonM(
                     onClick = {
                         navController.navigate(OrdersScreenRoute(orderNumber = uiState.orderNumber))
@@ -879,6 +885,8 @@ private fun PaymentSummaryContent(
 @Composable
 private fun InvoiceDownloadCard(
     enabled: Boolean,
+    title: String = "Descargar factura",
+    subtitle: String = "Guarda tu factura en PDF",
     onClick: () -> Unit
 ) {
     SuccessCard(
@@ -899,11 +907,11 @@ private fun InvoiceDownloadCard(
             Spacer(modifier = Modifier.width(14.dp))
             Column(modifier = Modifier.weight(1f)) {
                 Text(
-                    text = "Descargar factura",
+                    text = title,
                     style = bodyMediumBold(color = MaterialTheme.colorScheme.secondary)
                 )
                 Text(
-                    text = "Guarda tu factura en PDF",
+                    text = subtitle,
                     style = labelSmall(color = MaterialTheme.colorScheme.onSurfaceVariant)
                 )
             }

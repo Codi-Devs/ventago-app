@@ -68,6 +68,33 @@ class OrdersViewModel(
             betaService.getFeatures()
         }
         viewModelScope.launch {
+            var skipInitialOrdersSignal = true
+            orderService.observeOrderListInvalidation().collect {
+                if (skipInitialOrdersSignal) {
+                    skipInitialOrdersSignal = false
+                    return@collect
+                }
+                if (businessId <= 0) return@collect
+                withContext(Dispatchers.IO) {
+                    try {
+                        val refreshed = orderService.reloadVisibleOrders(
+                            businessId = businessId,
+                            paymentStatus = uiState.value.paymentStatusFilter,
+                            customerId = uiState.value.customerIdFilter,
+                            emissionStartDate = orderEmissionStartDate(uiState.value.emissionStartDate),
+                            emissionEndDate = orderEmissionEndDate(uiState.value.emissionEndDate),
+                            orderType = uiState.value.orderTypeFilter,
+                        )
+                        withContext(Dispatchers.Main) {
+                            updateState { copy(noMoreOrders = refreshed.isEmpty() && orders.isEmpty()) }
+                            filterOrders(uiState.value.filterSelected)
+                        }
+                    } catch (_: Exception) {
+                    }
+                }
+            }
+        }
+        viewModelScope.launch {
             authService.getUser()
                 .combine(betaService.features()) { user, betaResponse ->
                     val betaSnapshot = betaResponse?.features.orEmpty()
@@ -420,9 +447,12 @@ class OrdersViewModel(
                 customerIdFilter = customer.id,
                 customerNameFilter = customer.name,
                 customerSearchResults = emptyList(),
-                isSearchingCustomers = false
+                isSearchingCustomers = false,
+                orders = emptyList(),
+                noMoreOrders = false,
             )
         }
+        refreshOrders()
     }
 
     fun clearCustomerFilter() {
@@ -432,9 +462,12 @@ class OrdersViewModel(
                 customerIdFilter = null,
                 customerNameFilter = "",
                 customerSearchResults = emptyList(),
-                isSearchingCustomers = false
+                isSearchingCustomers = false,
+                orders = emptyList(),
+                noMoreOrders = false,
             )
         }
+        refreshOrders()
     }
 
     fun setEmissionStartDate(value: String) {
@@ -510,7 +543,6 @@ class OrdersViewModel(
         val state = uiState.value
         return listOf(
             state.paymentStatusFilter != null,
-            state.customerIdFilter != null,
             state.orderTypeFilter != null,
             state.emissionStartDate.isNotBlank() || state.emissionEndDate.isNotBlank()
         ).count { it }

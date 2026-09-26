@@ -178,7 +178,7 @@ fun FullAddCustomerScreen(viewModel: EditCustomerViewModel, navigateBack: () -> 
         if (uiState.taxInfoIncomplete) {
             OutlinedCard {
                 Text(
-                    text = "La informacion tributaria esta incompleta. Por favor seleccione el tipo de cliente correcto.",
+                    text = "La información tributaria está incompleta. Por favor seleccione el tipo de cliente correcto.",
                     color = MaterialTheme.colorScheme.error,
                     modifier = Modifier
                         .padding(start = 16.dp, end = 16.dp, top = 16.dp, bottom = 8.dp)

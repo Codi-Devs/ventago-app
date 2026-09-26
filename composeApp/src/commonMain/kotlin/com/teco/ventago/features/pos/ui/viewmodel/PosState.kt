@@ -32,7 +32,7 @@ import kotlinx.datetime.toLocalDateTime
 import kotlinx.serialization.Serializable
 import kotlin.math.roundToLong
 
-enum class PaymentFlowMode { MANUAL_OR_INSTALLMENTS, PAYMENT_LINK, YAPPY_ONSITE, DRAFT }
+enum class PaymentFlowMode { MANUAL_OR_INSTALLMENTS, PAYMENT_LINK, YAPPY_ONSITE, DRAFT, NON_FISCAL }
 enum class PendingPaymentIntentMethod { PAYMENT_LINK, YAPPY_ONSITE }
 enum class PendingPaymentChangeExitAction { POS_START, HOME }
 enum class ProductViewMode { LIST, GRID }
@@ -50,7 +50,7 @@ fun shouldShowPendingPaymentChangeOption(
     normallyVisible: Boolean,
 ): Boolean {
     if (!normallyVisible) return false
-    if (mode == PaymentFlowMode.DRAFT) return sourceMethod == null
+    if (mode == PaymentFlowMode.DRAFT || mode == PaymentFlowMode.NON_FISCAL) return sourceMethod == null
     return sourceMethod?.hiddenPaymentFlowMode() != mode
 }
 
@@ -325,7 +325,8 @@ data class PosState(
     val itemCategoryById: Map<Int, Int> = mapOf(),
     val cart: List<CartLine> = listOf(),
     val personalizedItems: Map<String, Item> = mapOf(), // Stores personalized products keyed by lineId (since all have itemId = -1)
-    val productAddedSnackbarToken: Long = 0L,
+    val addedToCartItemId: Int? = null,
+    val addedToCartPulse: Long = 0L,
     val taxExempt: Boolean = false,
     val currency: String = "USD",
     val currencySymbol: String = "$",
@@ -350,6 +351,7 @@ data class PosState(
     val autoInvoiceOnPaymentSuccess: Boolean = false,
     val canCreateInvoice: Boolean = false,
     val canCreateDraft: Boolean = false,
+    val canCreateNonFiscal: Boolean = false,
     val canCreatePaymentLink: Boolean = false,
     val canUseManualPaymentMethods: Boolean = false,
     val canConfigurePayments: Boolean = false,
@@ -472,6 +474,7 @@ data class PosState(
 
     // === Payments view ===
     val paymentFlowMode: PaymentFlowMode = PaymentFlowMode.MANUAL_OR_INSTALLMENTS,
+    val internalDocument: Boolean = false,
     val showPaymentLinkNewBadge: Boolean = false,
     val otherPaymentDescription: String = "",
     val wantPaymentLink: Boolean = false,
