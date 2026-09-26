@@ -3812,7 +3812,15 @@ class PosViewModel(
             !state.orderCreationFailed &&
             (
                 state.invoiceStatus == InvoiceStatus.ISSUED ||
-                    state.paymentFlowMode == PaymentFlowMode.NON_FISCAL
+                    state.paymentFlowMode == PaymentFlowMode.NON_FISCAL ||
+                    paymentLinkSuccessPresentation(
+                        isPaymentLink = state.paymentLink.isNotBlank() ||
+                            state.paymentFlowMode == PaymentFlowMode.PAYMENT_LINK,
+                        paymentDetected = state.paymentLinkPaymentDetected,
+                        invoiceStatus = state.invoiceStatus,
+                        autoInvoiceOnPaymentSuccess = state.autoInvoiceOnPaymentSuccess,
+                        internalDocument = state.internalDocument,
+                    ).completedInternalDocument
                 )
     }
 

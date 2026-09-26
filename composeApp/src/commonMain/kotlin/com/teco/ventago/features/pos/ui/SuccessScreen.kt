@@ -106,6 +106,7 @@ import com.teco.ventago.features.orders.domain.models.Order
 import com.teco.ventago.features.pos.ui.viewmodel.PendingPaymentChangeExitAction
 import com.teco.ventago.features.pos.ui.viewmodel.PendingPaymentIntentMethod
 import com.teco.ventago.features.pos.ui.viewmodel.PaymentFlowMode
+import com.teco.ventago.features.pos.ui.viewmodel.paymentLinkSuccessPresentation
 import com.teco.ventago.features.pos.ui.viewmodel.PosState
 import com.teco.ventago.features.pos.ui.viewmodel.PosViewModel
 import com.teco.ventago.isTablet
@@ -277,14 +278,17 @@ private fun FriendlySuccessScreen(
     val paymentLinkInvoiceFailed = isPaymentLink && uiState.invoiceStatus == InvoiceStatus.FAILED
     val showReleasedPaymentLinkManualPanel = uiState.paymentLinkManualPanelVisible
     val paymentMethodChangeOpen = uiState.pendingPaymentChangeOpen
-    val paymentLinkAwaitingInvoice = isPaymentLink &&
-        uiState.paymentLinkPaymentDetected &&
-        !paymentLinkInvoiceIssued &&
-        !paymentLinkInvoiceFailed
-    val paymentLinkManualInvoiceRequired = paymentLinkAwaitingInvoice &&
-        !uiState.autoInvoiceOnPaymentSuccess
-    val paymentLinkInvoiceProcessing = paymentLinkAwaitingInvoice &&
-        uiState.autoInvoiceOnPaymentSuccess
+    val paymentLinkPresentation = paymentLinkSuccessPresentation(
+        isPaymentLink = isPaymentLink,
+        paymentDetected = uiState.paymentLinkPaymentDetected,
+        invoiceStatus = uiState.invoiceStatus,
+        autoInvoiceOnPaymentSuccess = uiState.autoInvoiceOnPaymentSuccess,
+        internalDocument = uiState.internalDocument,
+    )
+    val paymentLinkAwaitingInvoice = paymentLinkPresentation.awaitingElectronicInvoice
+    val paymentLinkManualInvoiceRequired = paymentLinkPresentation.showManualInvoiceRequired
+    val paymentLinkInvoiceProcessing = paymentLinkPresentation.showGeneratingInvoice
+    val paymentLinkInternalPaid = paymentLinkPresentation.completedInternalDocument
     val showPaymentLinkCard = isPaymentLink &&
         !paymentMethodChangeOpen &&
         !showReleasedPaymentLinkManualPanel &&
@@ -298,7 +302,8 @@ private fun FriendlySuccessScreen(
         uiState.pdfDocument.isNotBlank() &&
         (isNonFiscalOrder || invoiceWarningState.invoiceActionsEnabled)
     val paymentLinkInvoiceActionsEnabled = paymentLinkInvoiceIssued && uiState.pdfDocument.isNotBlank()
-    val canShareFinalInvoice = canOpenInvoiceActions || paymentLinkInvoiceActionsEnabled
+    val paymentLinkInternalPdfReady = paymentLinkInternalPaid && uiState.pdfDocument.isNotBlank()
+    val canShareFinalInvoice = canOpenInvoiceActions || paymentLinkInvoiceActionsEnabled || paymentLinkInternalPdfReady
     val successGreen = Color(0xFF087A16)
     val paidGreen = Color(0xFF0A8F22)
     val warningColor = MaterialTheme.colorScheme.error
@@ -388,6 +393,7 @@ private fun FriendlySuccessScreen(
                 title = when {
                     isDraftOrder -> "Orden guardada en borrador"
                     showReleasedPaymentLinkManualPanel -> "Registra el pago"
+                    paymentLinkInternalPaid -> "¡Documento no fiscal generado!"
                     paymentLinkInvoiceIssued -> completedDocumentTitle
                     paymentLinkAwaitingInvoice -> "¡Pago recibido!"
                     paymentLinkInvoiceFailed -> "Factura requiere atención"
@@ -397,7 +403,7 @@ private fun FriendlySuccessScreen(
                 },
                 subtitle = when {
                     isDraftOrder -> "Puedes completar la factura y el cobro más tarde."
-                    isNonFiscalOrder -> "No es factura electrónica ni comprobante fiscal ante DGI."
+                    paymentLinkInternalPaid || isNonFiscalOrder -> "No es factura electrónica ni comprobante fiscal ante DGI."
                     showReleasedPaymentLinkManualPanel -> "El link fue cancelado. Completa el cobro manual."
                     paymentLinkInvoiceIssued -> "Tu pago fue procesado correctamente."
                     paymentLinkManualInvoiceRequired -> "La factura debe realizarse manualmente."
@@ -492,11 +498,11 @@ private fun FriendlySuccessScreen(
                     onOtherDescription = viewModel::setOtherDescription,
                     onConfirm = viewModel::submitPaymentLinkManualPayments,
                 )
-            } else if (paymentLinkInvoiceIssued || canOpenInvoiceActions) {
+            } else if (paymentLinkInvoiceIssued || canOpenInvoiceActions || paymentLinkInternalPdfReady) {
                 InvoiceDownloadCard(
-                    enabled = if (isPaymentLink) paymentLinkInvoiceActionsEnabled else true,
-                    title = if (isNonFiscalOrder) "Descargar documento" else "Descargar factura",
-                    subtitle = if (isNonFiscalOrder) "Guarda el documento no fiscal en PDF" else "Guarda tu factura en PDF",
+                    enabled = if (isPaymentLink && !paymentLinkInternalPaid) paymentLinkInvoiceActionsEnabled else true,
+                    title = if (isNonFiscalOrder || paymentLinkInternalPaid) "Descargar documento" else "Descargar factura",
+                    subtitle = if (isNonFiscalOrder || paymentLinkInternalPaid) "Guarda el documento no fiscal en PDF" else "Guarda tu factura en PDF",
                     onClick = { viewModel.openPdfDocument() }
                 )
             }
@@ -546,7 +552,7 @@ private fun FriendlySuccessScreen(
                 Spacer(modifier = Modifier.height(12.dp))
             }
 
-            if ((isDraftOrder || isNonFiscalOrder) && uiState.orderNumber.isNotBlank()) {
+            if ((isDraftOrder || isNonFiscalOrder || paymentLinkInternalPaid) && uiState.orderNumber.isNotBlank()) {
                 OutlinedButtonM(
                     onClick = {
                         navController.navigate(OrdersScreenRoute(orderNumber = uiState.orderNumber))
