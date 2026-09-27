@@ -116,6 +116,15 @@ class VersionGateEvaluatorTest {
     }
 
     @Test
+    fun storedPolicyIgnoresMissingAndLegacyBuildNumbers() {
+        assertNull(readStoredVersionPolicy(null, null))
+        assertNull(readStoredVersionPolicy("53", "54"))
+        val policy = readStoredVersionPolicy("1.6.7", "1.6.8")
+        assertEquals(v("1.6.7"), policy?.minUsableVersion)
+        assertEquals(v("1.6.8"), policy?.minRecommendedVersion)
+    }
+
+    @Test
     fun channelsKeepIndependentKeys() {
         assertFalse(AppChannel.ANDROID_PUBLIC.minUsableKey == AppChannel.ANDROID_POS.minUsableKey)
         assertFalse(AppChannel.ANDROID_PUBLIC.minRecommendedKey == AppChannel.IOS_PUBLIC.minRecommendedKey)

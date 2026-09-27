@@ -12,6 +12,15 @@ fun normalizeVersionPolicy(
     )
 }
 
+fun readStoredVersionPolicy(
+    usableRaw: String?,
+    recommendedRaw: String?,
+): VersionPolicy? {
+    val usable = parseMarketingVersion(usableRaw) ?: return null
+    val recommended = parseMarketingVersion(recommendedRaw) ?: return null
+    return normalizeVersionPolicy(usable, recommended)
+}
+
 fun evaluateVersionGate(
     connected: Boolean,
     installedVersion: AppVersion?,

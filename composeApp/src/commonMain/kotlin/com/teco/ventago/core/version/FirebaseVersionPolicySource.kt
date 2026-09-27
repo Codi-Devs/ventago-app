@@ -15,7 +15,7 @@ class FirebaseVersionPolicySource(
     private val storage: LocalStorage,
     private val logger: ILoggerService,
 ) : IVersionPolicySource {
-    private var cached = readPersisted() ?: VersionPolicy.DISABLED
+    private var cached = runCatching { readPersisted() }.getOrNull() ?: VersionPolicy.DISABLED
 
     override fun current(): VersionPolicy = cached
 
@@ -78,20 +78,33 @@ class FirebaseVersionPolicySource(
     }
 
     private fun persist(policy: VersionPolicy) {
+        clearLegacyNumericKeys()
         storage.set(usableStorageKey(), policy.minUsableVersion.toString())
         storage.set(recommendedStorageKey(), policy.minRecommendedVersion.toString())
     }
 
     private fun readPersisted(): VersionPolicy? {
-        val usable = parseMarketingVersion(storage.string(usableStorageKey())) ?: return null
-        val recommended = parseMarketingVersion(storage.string(recommendedStorageKey())) ?: return null
-        return normalizeVersionPolicy(usable, recommended)
+        clearLegacyNumericKeys()
+        val usableRaw = runCatching { storage.string(usableStorageKey()) }.getOrNull()
+        val recommendedRaw = runCatching { storage.string(recommendedStorageKey()) }.getOrNull()
+        return readStoredVersionPolicy(usableRaw, recommendedRaw)
+    }
+
+    private fun clearLegacyNumericKeys() {
+        runCatching { storage.deleteObject(legacyUsableStorageKey()) }
+        runCatching { storage.deleteObject(legacyRecommendedStorageKey()) }
     }
 
     private fun usableStorageKey(): String =
-        "$STORAGE_PREFIX.${buildInfo.channel.name.lowercase()}.usable"
+        "$STORAGE_PREFIX.${buildInfo.channel.name.lowercase()}.usable_version"
 
     private fun recommendedStorageKey(): String =
+        "$STORAGE_PREFIX.${buildInfo.channel.name.lowercase()}.recommended_version"
+
+    private fun legacyUsableStorageKey(): String =
+        "$STORAGE_PREFIX.${buildInfo.channel.name.lowercase()}.usable"
+
+    private fun legacyRecommendedStorageKey(): String =
         "$STORAGE_PREFIX.${buildInfo.channel.name.lowercase()}.recommended"
 
     private fun logConfig(message: String) {

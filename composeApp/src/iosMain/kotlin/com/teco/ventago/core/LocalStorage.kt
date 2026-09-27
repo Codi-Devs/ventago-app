@@ -82,7 +82,7 @@ actual open class LocalStorage() {
      * @return The stored string value
      */
     actual fun string(forKey: String): String? {
-        return NSUserDefaults.standardUserDefaults.valueForKey(forKey) as String?
+        return NSUserDefaults.standardUserDefaults.stringForKey(forKey)
     }
 
     /**
