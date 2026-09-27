@@ -22,13 +22,33 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.ExperimentalMaterialApi
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Add
+import androidx.compose.material.icons.rounded.AccountBalance
+import androidx.compose.material.icons.rounded.Apartment
+import androidx.compose.material.icons.rounded.Bolt
+import androidx.compose.material.icons.rounded.Build
+import androidx.compose.material.icons.rounded.Campaign
+import androidx.compose.material.icons.rounded.Category
+import androidx.compose.material.icons.rounded.Cloud
+import androidx.compose.material.icons.rounded.Flight
+import androidx.compose.material.icons.rounded.Gavel
 import androidx.compose.material.icons.rounded.Edit
+import androidx.compose.material.icons.rounded.Inventory2
+import androidx.compose.material.icons.rounded.LocalGasStation
+import androidx.compose.material.icons.rounded.LocalParking
+import androidx.compose.material.icons.rounded.LocalShipping
 import androidx.compose.material.icons.rounded.PhotoCamera
+import androidx.compose.material.icons.rounded.People
 import androidx.compose.material.icons.rounded.QrCodeScanner
 import androidx.compose.material.icons.rounded.Receipt
-import androidx.compose.material.icons.rounded.Search
+import androidx.compose.material.icons.rounded.Restaurant
+import androidx.compose.material.icons.rounded.School
+import androidx.compose.material.icons.rounded.Security
+import androidx.compose.material.icons.rounded.Shield
 import androidx.compose.material.icons.rounded.Store
 import androidx.compose.material.icons.rounded.Tune
+import androidx.compose.material.icons.rounded.WaterDrop
+import androidx.compose.material.icons.rounded.Wifi
+import androidx.compose.material.icons.rounded.Work
 import androidx.compose.material.pullrefresh.PullRefreshIndicator
 import androidx.compose.material.pullrefresh.pullRefresh
 import androidx.compose.material.pullrefresh.rememberPullRefreshState
@@ -42,6 +62,8 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Surface
+import androidx.compose.material3.SuggestionChip
+import androidx.compose.material3.SuggestionChipDefaults
 import androidx.compose.material3.Text
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
@@ -54,6 +76,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -61,7 +84,6 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.material3.FloatingActionButton
-import androidx.compose.material3.Icon
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.text.AnnotatedString
@@ -71,11 +93,16 @@ import com.teco.ventago.design_system.buttons.OutlinedButtonM
 import com.teco.ventago.design_system.buttons.TextButtonS
 import com.teco.ventago.design_system.loaders.shimmerBrush
 import com.teco.ventago.design_system.molecules.InstallmentDueDateFieldKmp
+import com.teco.ventago.design_system.molecules.list.ListAutocompleteSearchField
+import com.teco.ventago.design_system.molecules.list.TransactionListCard
+import com.teco.ventago.design_system.theme.labelSmall
 import com.teco.ventago.design_system.textfields.DMOutlinedTextField
 import com.teco.ventago.features.expenses.ui.components.ExpenseSheetOption
 import com.teco.ventago.features.expenses.ui.upload.InvoiceUploadCapture
 import com.teco.ventago.features.expenses.domain.CrawlErrorCopy
 import com.teco.ventago.features.expenses.domain.CufeParser
+import com.teco.ventago.features.expenses.domain.ExpenseConceptVisualCategory
+import com.teco.ventago.features.expenses.domain.resolveExpenseConceptVisualCategory
 import com.teco.ventago.features.expenses.domain.models.CrawlJob
 import com.teco.ventago.features.expenses.domain.models.Expense
 import com.teco.ventago.features.expenses.domain.models.ExpenseMerchant
@@ -83,7 +110,8 @@ import com.teco.ventago.features.expenses.domain.models.PaymentMethod
 import kotlinx.coroutines.launch
 import org.koin.compose.koinInject
 import com.teco.ventago.navigation.PosScreens
-import com.teco.ventago.utils.DateFormat.getFormattedDate
+import com.teco.ventago.navigation.LocalNavController
+import com.teco.ventago.utils.formatTransactionListDate
 import com.teco.ventago.utils.formatNumberToMoney
 import kotlinx.datetime.Clock
 import kotlinx.datetime.LocalDate
@@ -91,6 +119,8 @@ import kotlinx.datetime.TimeZone
 import kotlinx.datetime.daysUntil
 import kotlinx.datetime.toLocalDateTime
 import org.jetbrains.compose.resources.stringResource
+import androidx.navigation.NavBackStackEntry
+import org.koin.compose.viewmodel.koinViewModel
 import ventago.composeapp.generated.resources.Res
 import ventago.composeapp.generated.resources.apply_filters
 import ventago.composeapp.generated.resources.clear_filters
@@ -108,6 +138,41 @@ import ventago.composeapp.generated.resources.expenses_end_date
 import ventago.composeapp.generated.resources.filter_all
 import ventago.composeapp.generated.resources.see_more
 
+@Composable
+fun ExpensesListScreenActions(backStackEntry: NavBackStackEntry?) {
+    val navController = LocalNavController.current
+    val expensesOwner = remember(navController) {
+        navController.getBackStackEntry(PosScreens.Expenses.name)
+    }
+    val viewModel: ExpensesListViewModel = koinViewModel(viewModelStoreOwner = expensesOwner)
+    Box {
+        IconButton(onClick = { viewModel.showFiltersSheet(true) }) {
+            Icon(
+                imageVector = Icons.Rounded.Tune,
+                contentDescription = "Filtros",
+                tint = MaterialTheme.colorScheme.primary,
+            )
+        }
+        val activeFilterCount = viewModel.activeFilterCount()
+        if (activeFilterCount > 0) {
+            Surface(
+                modifier = Modifier.align(Alignment.TopEnd).size(18.dp),
+                shape = androidx.compose.foundation.shape.CircleShape,
+                color = MaterialTheme.colorScheme.secondary,
+                contentColor = MaterialTheme.colorScheme.onSecondary,
+            ) {
+                Box(contentAlignment = Alignment.Center) {
+                    Text(
+                        text = activeFilterCount.toString(),
+                        style = MaterialTheme.typography.labelSmall,
+                        textAlign = TextAlign.Center,
+                    )
+                }
+            }
+        }
+    }
+}
+
 @OptIn(ExperimentalMaterialApi::class, ExperimentalMaterial3Api::class)
 @Composable
 fun ExpensesListScreen(
@@ -118,7 +183,6 @@ fun ExpensesListScreen(
     onBack: () -> Unit
 ) {
     val uiState by viewModel.uiState.collectAsState()
-    var showFilters by remember { mutableStateOf(false) }
     var showRegisterSheet by remember { mutableStateOf(false) }
     var showInvoiceSourceSheet by remember { mutableStateOf(false) }
     val filterSheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
@@ -134,12 +198,6 @@ fun ExpensesListScreen(
 
     Box(modifier = Modifier.fillMaxSize()) {
 
-    val sourceOptions = listOf(
-        null to stringResource(Res.string.expenses_source_all),
-        "manual" to stringResource(Res.string.expenses_source_manual),
-        "crawled" to stringResource(Res.string.expenses_source_crawled)
-    )
-
     val paymentStatusOptions = listOf(
         "not_paid" to "No pagado",
         "partial" to "Parcial",
@@ -152,31 +210,25 @@ fun ExpensesListScreen(
     }
 
     Column(modifier = Modifier.fillMaxSize()) {
-        // Search bar
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 16.dp, vertical = 8.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            DMOutlinedTextField(
-                text = uiState.searchQuery,
-                label = stringResource(Res.string.expenses_search_placeholder),
-                modifier = Modifier.weight(1f),
-                onChange = { viewModel.setSearchQuery(it) },
-                leadingIcon = Icons.Rounded.Search,
-                trailingIcon = Icons.Rounded.Tune,
-                trailingIconClick = { showFilters = true }
-            )
-            Spacer(modifier = Modifier.width(8.dp))
-            IconButton(onClick = { viewModel.search() }) {
-                Icon(
-                    imageVector = Icons.Rounded.Search,
-                    contentDescription = "Search",
-                    tint = MaterialTheme.colorScheme.primary
-                )
-            }
-        }
+        ListAutocompleteSearchField(
+            query = uiState.issuerName,
+            hasSelection = uiState.merchantId != null,
+            isSearching = uiState.isMerchantSearching,
+            items = uiState.merchantSuggestions.take(4),
+            label = "Buscar por emisor",
+            searchContentDescription = "Buscar por emisor",
+            clearContentDescription = "Quitar emisor",
+            onQueryChanged = viewModel::setIssuerName,
+            onItemSelected = viewModel::selectMerchantSearch,
+            onClear = viewModel::clearMerchantSearch,
+            itemTitle = { it.name },
+            itemSubtitle = { merchant ->
+                merchant.ruc?.takeIf { it.isNotBlank() }?.let { ruc ->
+                    "RUC: $ruc${merchant.dv?.takeIf { it.isNotBlank() }?.let { "-$it" }.orEmpty()}"
+                }.orEmpty()
+            },
+            itemIcon = Icons.Rounded.Store,
+        )
 
         // Source filter chips Not showing by now
 //        Row(
@@ -291,7 +343,7 @@ fun ExpensesListScreen(
             } else {
                 LazyColumn(
                     contentPadding = PaddingValues(vertical = 12.dp),
-                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                    verticalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
                     items(uiState.expenses, key = { it.id ?: it.hashCode() }) { expense ->
                         ExpenseListItem(expense, viewModel.expenseConceptLabel(expense)) {
@@ -346,9 +398,9 @@ fun ExpensesListScreen(
     }
 
     // Filters bottom sheet
-    if (showFilters) {
+    if (uiState.showFiltersSheet) {
         ModalBottomSheet(
-            onDismissRequest = { showFilters = false },
+            onDismissRequest = { viewModel.showFiltersSheet(false) },
             sheetState = filterSheetState
         ) {
             ExpensesFilterSheet(
@@ -356,21 +408,15 @@ fun ExpensesListScreen(
                 onStartDateChange = { viewModel.setStartDate(it.ifBlank { null }) },
                 endDate = uiState.endDate ?: "",
                 onEndDateChange = { viewModel.setEndDate(it.ifBlank { null }) },
-                issuerName = uiState.issuerName,
-                onIssuerNameChange = { viewModel.setIssuerName(it) },
-                merchantSuggestions = uiState.merchantSuggestions,
-                onMerchantSelected = { viewModel.selectFilterMerchant(it) },
-                onDismissMerchantSuggestions = { viewModel.dismissFilterMerchantSuggestions() },
                 issuerRuc = uiState.issuerRuc,
                 onIssuerRucChange = { viewModel.setIssuerRuc(it) },
                 invoiceNumber = uiState.invoiceNumber,
                 onInvoiceNumberChange = { viewModel.setInvoiceNumber(it) },
                 onApply = {
-                    showFilters = false
+                    viewModel.showFiltersSheet(false)
                     viewModel.applyFilters()
                 },
                 onClear = {
-                    showFilters = false
                     viewModel.clearFilters()
                 }
             )
@@ -448,11 +494,6 @@ private fun ExpensesFilterSheet(
     onStartDateChange: (String) -> Unit,
     endDate: String,
     onEndDateChange: (String) -> Unit,
-    issuerName: String,
-    onIssuerNameChange: (String) -> Unit,
-    merchantSuggestions: List<ExpenseMerchant>,
-    onMerchantSelected: (ExpenseMerchant) -> Unit,
-    onDismissMerchantSuggestions: () -> Unit,
     issuerRuc: String,
     onIssuerRucChange: (String) -> Unit,
     invoiceNumber: String,
@@ -503,64 +544,12 @@ private fun ExpensesFilterSheet(
             color = MaterialTheme.colorScheme.onSurfaceVariant
         )
 
-        Column {
-            DMOutlinedTextField(
-                text = issuerName,
-                label = stringResource(Res.string.expenses_issuer_name),
-                modifier = Modifier,
-                onChange = onIssuerNameChange
-            )
-            if (merchantSuggestions.isNotEmpty()) {
-                Surface(
-                    modifier = Modifier.fillMaxWidth().padding(top = 2.dp),
-                    shape = RoundedCornerShape(12.dp),
-                    shadowElevation = 8.dp,
-                    color = MaterialTheme.colorScheme.background
-                ) {
-                    Column(modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp)) {
-                        merchantSuggestions.forEachIndexed { index, merchant ->
-                            Row(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .clickable { onMerchantSelected(merchant) }
-                                    .padding(horizontal = 16.dp, vertical = 10.dp),
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Rounded.Store,
-                                    contentDescription = null,
-                                    modifier = Modifier.size(20.dp),
-                                    tint = MaterialTheme.colorScheme.primary.copy(alpha = 0.7f)
-                                )
-                                Spacer(modifier = Modifier.width(12.dp))
-                                Column(modifier = Modifier.weight(1f)) {
-                                    Text(
-                                        text = merchant.name,
-                                        style = MaterialTheme.typography.bodyMedium,
-                                        maxLines = 1,
-                                        overflow = TextOverflow.Ellipsis
-                                    )
-                                    if (!merchant.ruc.isNullOrBlank()) {
-                                        Text(
-                                            text = "RUC: ${merchant.ruc}${if (!merchant.dv.isNullOrBlank()) "-${merchant.dv}" else ""}",
-                                            style = MaterialTheme.typography.bodySmall,
-                                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                            maxLines = 1
-                                        )
-                                    }
-                                }
-                            }
-                            if (index < merchantSuggestions.lastIndex) {
-                                Divider(
-                                    modifier = Modifier.padding(horizontal = 16.dp),
-                                    color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
-                                )
-                            }
-                        }
-                    }
-                }
-            }
-        }
+        DMOutlinedTextField(
+            text = invoiceNumber,
+            label = "Número de factura",
+            modifier = Modifier,
+            onChange = onInvoiceNumberChange,
+        )
 
         DMOutlinedTextField(
             text = issuerRuc,
@@ -593,17 +582,13 @@ private fun ExpenseListItem(
     conceptLabel: String,
     onClick: () -> Unit
 ) {
-    val emissionDate = expense.emissionDate?.let {
-        runCatching {
-            getFormattedDate(it, "yyyy-MM-dd'T'HH:mm:ss", "dd/MM/yyyy")
-        }.getOrDefault(it.take(10))
-    } ?: ""
+    val emissionDate = formatTransactionListDate(expense.emissionDate)
 
     val totalFormatted = formatNumberToMoney("${expense.totalAmount ?: 0.0}")
-    val statusColor = when (expense.paymentStatus) {
-        "paid" -> Color(0xFF4CAF50)
-        "partial" -> Color(0xFFFF9800)
-        else -> Color(0xFFF44336)
+    val (statusTextColor, statusContainerColor) = when (expense.paymentStatus) {
+        "paid" -> Color(0xFF2E7D32) to Color(0xFFE8F5E9)
+        "partial" -> Color(0xFFFF8F00) to Color(0xFFFFF8E1)
+        else -> Color(0xFFD32F2F) to Color(0xFFFFEBEE)
     }
     val statusLabel = when (expense.paymentStatus) {
         "paid" -> "Pagado"
@@ -613,94 +598,84 @@ private fun ExpenseListItem(
     }
     val creditDueBadge = remember(expense) { buildCreditDueBadge(expense) }
 
-    Surface(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = 16.dp)
-            .clip(RoundedCornerShape(12.dp))
-            .clickable { onClick() },
-        tonalElevation = 1.dp,
-        shape = RoundedCornerShape(12.dp)
+    TransactionListCard(
+        icon = expenseConceptIcon(expense),
+        iconContentDescription = "Concepto de gasto",
+        iconTint = MaterialTheme.colorScheme.primary,
+        headline = expense.issuer?.name ?: "Sin emisor",
+        supportingLines = listOf(
+            expense.invoiceNumber ?: "Sin factura",
+            emissionDate,
+            "Concepto: $conceptLabel",
+        ),
+        trailingPrimary = totalFormatted,
+        onClick = onClick,
     ) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(16.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Icon(
-                imageVector = Icons.Rounded.Receipt,
-                contentDescription = null,
-                tint = MaterialTheme.colorScheme.primary,
-                modifier = Modifier.size(32.dp)
-            )
-
-            Spacer(modifier = Modifier.width(12.dp))
-
-            Column(modifier = Modifier.weight(1f)) {
-                Text(
-                    text = expense.issuer?.name ?: "Sin emisor",
-                    style = MaterialTheme.typography.bodyMedium,
-                    fontWeight = FontWeight.SemiBold,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
-                )
-                Text(
-                    text = expense.invoiceNumber ?: "Sin factura",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    maxLines = 1
-                )
-                Text(
-                    text = emissionDate,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-                Text(
-                    text = "Concepto: $conceptLabel",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
-                )
-            }
-
-            Column(horizontalAlignment = Alignment.End) {
-                Text(
-                    text = totalFormatted,
-                    style = MaterialTheme.typography.bodyMedium,
-                    fontWeight = FontWeight.Bold
-                )
-                Spacer(modifier = Modifier.height(4.dp))
+        SuggestionChip(
+            modifier = Modifier.height(20.dp),
+            onClick = {},
+            colors = SuggestionChipDefaults.suggestionChipColors(
+                containerColor = statusContainerColor,
+                labelColor = statusTextColor,
+            ),
+            border = SuggestionChipDefaults.suggestionChipBorder(
+                enabled = true,
+                borderColor = statusContainerColor,
+                disabledBorderColor = statusContainerColor,
+                borderWidth = 1.dp,
+            ),
+            label = {
                 Text(
                     text = statusLabel,
-                    style = TextStyle(
-                        fontSize = 11.sp,
-                        fontWeight = FontWeight.Medium,
-                        color = Color.White
-                    ),
-                    modifier = Modifier
-                        .background(statusColor, RoundedCornerShape(4.dp))
-                        .padding(horizontal = 6.dp, vertical = 2.dp)
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    style = labelSmall(statusTextColor).copy(fontWeight = FontWeight.Bold),
                 )
-                creditDueBadge?.let { badge ->
-                    Spacer(modifier = Modifier.height(4.dp))
-                    Text(
-                        text = badge.text,
-                        style = TextStyle(
-                            fontSize = 10.sp,
-                            fontWeight = FontWeight.Medium,
-                            color = badge.textColor
-                        ),
-                        modifier = Modifier
-                            .background(badge.containerColor, RoundedCornerShape(4.dp))
-                            .padding(horizontal = 6.dp, vertical = 2.dp)
-                    )
-                }
-            }
+            },
+        )
+        creditDueBadge?.let { badge ->
+            Text(
+                text = badge.text,
+                style = TextStyle(
+                    fontSize = 10.sp,
+                    fontWeight = FontWeight.Medium,
+                    color = badge.textColor,
+                ),
+                modifier = Modifier
+                    .background(badge.containerColor, RoundedCornerShape(4.dp))
+                    .padding(horizontal = 6.dp, vertical = 2.dp),
+            )
         }
     }
 }
+
+private fun expenseConceptIcon(expense: Expense): ImageVector =
+    when (resolveExpenseConceptVisualCategory(expense)) {
+        ExpenseConceptVisualCategory.INVENTORY -> Icons.Rounded.Inventory2
+        ExpenseConceptVisualCategory.PEOPLE -> Icons.Rounded.People
+        ExpenseConceptVisualCategory.PROFESSIONAL -> Icons.Rounded.Work
+        ExpenseConceptVisualCategory.RENT -> Icons.Rounded.Apartment
+        ExpenseConceptVisualCategory.WATER -> Icons.Rounded.WaterDrop
+        ExpenseConceptVisualCategory.ENERGY -> Icons.Rounded.Bolt
+        ExpenseConceptVisualCategory.CONNECTIVITY -> Icons.Rounded.Wifi
+        ExpenseConceptVisualCategory.SECURITY -> Icons.Rounded.Security
+        ExpenseConceptVisualCategory.FOOD -> Icons.Rounded.Restaurant
+        ExpenseConceptVisualCategory.TRAVEL -> Icons.Rounded.Flight
+        ExpenseConceptVisualCategory.OFFICE -> Icons.Rounded.Work
+        ExpenseConceptVisualCategory.FUEL -> Icons.Rounded.LocalGasStation
+        ExpenseConceptVisualCategory.SHIPPING -> Icons.Rounded.LocalShipping
+        ExpenseConceptVisualCategory.PARKING -> Icons.Rounded.LocalParking
+        ExpenseConceptVisualCategory.MARKETING -> Icons.Rounded.Campaign
+        ExpenseConceptVisualCategory.TRAINING -> Icons.Rounded.School
+        ExpenseConceptVisualCategory.INSURANCE -> Icons.Rounded.Shield
+        ExpenseConceptVisualCategory.TECHNOLOGY -> Icons.Rounded.Cloud
+        ExpenseConceptVisualCategory.LEGAL -> Icons.Rounded.Gavel
+        ExpenseConceptVisualCategory.MAINTENANCE -> Icons.Rounded.Build
+        ExpenseConceptVisualCategory.FINANCE -> Icons.Rounded.AccountBalance
+        ExpenseConceptVisualCategory.TAX -> Icons.Rounded.Receipt
+        ExpenseConceptVisualCategory.GENERAL -> Icons.Rounded.Category
+        ExpenseConceptVisualCategory.FALLBACK -> Icons.Rounded.Receipt
+    }
 
 private data class CreditDueBadge(
     val text: String,
@@ -773,10 +748,10 @@ private fun LoadingExpensesView() {
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(80.dp)
-                    .clip(RoundedCornerShape(12.dp))
+                    .clip(RoundedCornerShape(16.dp))
                     .background(shimmerBrush()),
-                shape = RoundedCornerShape(12.dp),
-                tonalElevation = 1.dp
+                shape = RoundedCornerShape(16.dp),
+                tonalElevation = 2.dp
             ) {
                 Box(
                     modifier = Modifier

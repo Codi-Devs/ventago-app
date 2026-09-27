@@ -67,3 +67,30 @@ expect object DateFormat {
     fun getFormattedDate(date: String, inputFormat: String, outputFormat: String): String
 }
 
+fun formatTransactionListDate(date: String?): String {
+    if (date.isNullOrBlank()) return ""
+    val normalized = date.trim().removeSuffix("Z").substringBefore(".")
+    if ('T' !in normalized && normalized.length >= 10) {
+        val parts = normalized.take(10).split("-")
+        val month = parts.getOrNull(1)?.toIntOrNull()
+        val day = parts.getOrNull(2)?.toIntOrNull()
+        val monthLabel = listOf(
+            "ene", "feb", "mar", "abr", "may", "jun",
+            "jul", "ago", "sep", "oct", "nov", "dic",
+        ).getOrNull((month ?: 0) - 1)
+        if (parts.size == 3 && day != null && monthLabel != null) {
+            return "$day $monthLabel ${parts[0]}"
+        }
+    }
+
+    val formatted = DateFormat.getFormattedDate(
+        normalized.take(19),
+        "yyyy-MM-dd'T'HH:mm:ss",
+        "d MMM yyyy",
+    )
+    return formatted
+        .takeUnless { it.startsWith("00-00-0000") }
+        ?.replace(".", "")
+        ?.lowercase()
+        ?: normalized.take(10)
+}

@@ -29,6 +29,7 @@ import androidx.compose.material.icons.automirrored.rounded.ReceiptLong
 import androidx.compose.material.icons.rounded.Redeem
 import androidx.compose.material.icons.rounded.Search
 import androidx.compose.material.icons.rounded.Tune
+import androidx.compose.material.icons.rounded.Person
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
@@ -69,6 +70,8 @@ import com.teco.ventago.design_system.buttons.ButtonM
 import com.teco.ventago.design_system.buttons.OutlinedButtonM
 import com.teco.ventago.design_system.buttons.TextButtonS
 import com.teco.ventago.design_system.loaders.shimmerBrush
+import com.teco.ventago.design_system.molecules.list.ListAutocompleteSearchField
+import com.teco.ventago.design_system.molecules.list.TransactionListCard
 import com.teco.ventago.design_system.textfields.DMOutlinedTextField
 import com.teco.ventago.design_system.textfields.helpers.DMDropDownField
 import com.teco.ventago.design_system.theme.bodyMedium
@@ -82,7 +85,7 @@ import com.teco.ventago.features.quotes.domain.QuoteSelectionStore
 import com.teco.ventago.features.quotes.domain.models.compactDisplayNumber
 import com.teco.ventago.navigation.PosScreens
 import com.teco.ventago.navigation.LocalNavController
-import com.teco.ventago.utils.DateFormat.getFormattedDate
+import com.teco.ventago.utils.formatTransactionListDate
 import com.teco.ventago.utils.formatNumberToMoney
 import androidx.navigation.NavBackStackEntry
 import org.jetbrains.compose.resources.stringResource
@@ -190,9 +193,25 @@ fun QuotesListScreen(
     Column(
         modifier = Modifier.fillMaxSize()
     ) {
+        ListAutocompleteSearchField(
+            query = uiState.customerName,
+            hasSelection = uiState.selectedCustomerId != null,
+            isSearching = uiState.isSearchingCustomers,
+            items = uiState.customerSearchResults.take(4),
+            label = "Buscar por cliente",
+            searchContentDescription = "Buscar por cliente",
+            clearContentDescription = "Quitar cliente",
+            onQueryChanged = viewModel::setCustomerName,
+            onItemSelected = viewModel::selectCustomer,
+            onClear = viewModel::clearCustomerSearch,
+            itemTitle = { it.name },
+            itemSubtitle = { it.ruc?.ifBlank { null } ?: "Sin RUC" },
+            itemIcon = Icons.Rounded.Person,
+        )
         Box(
             modifier = Modifier
-                .fillMaxSize()
+                .weight(1f)
+                .fillMaxWidth()
                 .pullRefresh(pullRefreshState)
         ) {
             if (uiState.isLoading && uiState.quotes.isEmpty()) {
@@ -202,39 +221,13 @@ fun QuotesListScreen(
                     contentPadding = PaddingValues(vertical = 12.dp),
                     verticalArrangement = Arrangement.spacedBy(12.dp),
                 ) {
-                    val dataGroup = uiState.quotes.groupBy { formatQuoteDate(it.createdAt) }
-                    dataGroup.forEach { (date, quotes) ->
-                        if (date.isNotBlank()) {
-                            item {
-                                Row(
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .padding(bottom = 4.dp, top = 8.dp),
-                                    horizontalArrangement = Arrangement.Center,
-                                ) {
-                                    Text(
-                                        text = date,
-                                        style = TextStyle(
-                                            fontSize = 12.sp,
-                                            lineHeight = 20.sp,
-                                            fontWeight = FontWeight(400),
-                                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                            textAlign = TextAlign.Center,
-                                            letterSpacing = 0.08.sp,
-                                        )
-                                    )
-                                }
-                            }
-                        }
-
-                        itemsIndexed(
-                            items = quotes,
-                            key = { index, quote -> quoteLazyKey(quote, index) }
-                        ) { _, quote ->
-                            QuoteListItem(quote) {
-                                QuoteSelectionStore.selected = quote
-                                navigate(PosScreens.QuoteDetailsScreen)
-                            }
+                    itemsIndexed(
+                        items = uiState.quotes,
+                        key = { index, quote -> quoteLazyKey(quote, index) }
+                    ) { _, quote ->
+                        QuoteListItem(quote) {
+                            QuoteSelectionStore.selected = quote
+                            navigate(PosScreens.QuoteDetailsScreen)
                         }
                     }
                     item {
@@ -369,18 +362,6 @@ private fun QuotesFilterSheet(
                 onStatusSelected = viewModel::setStatus
             )
 
-            DMOutlinedTextField(
-                label = stringResource(Res.string.customer_name_label),
-                modifier = Modifier.fillMaxWidth(),
-                text = uiState.customerName,
-                onChange = { viewModel.setCustomerName(it) }
-            )
-            DMOutlinedTextField(
-                label = stringResource(Res.string.customer_ruc),
-                modifier = Modifier.fillMaxWidth(),
-                text = uiState.customerRuc,
-                onChange = { viewModel.setCustomerRuc(it) }
-            )
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(12.dp)
@@ -586,94 +567,42 @@ private fun QuoteListItem(quote: Quote, onClick: () -> Unit) {
     val (statusText, statusBg) = quoteStatusColors(quote.status)
     val totalAmount = formatNumberToMoney((quote.totals?.total ?: 0.0).toString())
     val businessName = quoteBusinessDisplayName(quote)
+    val quoteDate = formatTransactionListDate(quote.createdAt)
 
-    Row(
-        modifier = Modifier
-            .height(IntrinsicSize.Max)
-            .padding(horizontal = 16.dp, vertical = 6.dp)
-            .clickable { onClick() },
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.SpaceBetween
+    TransactionListCard(
+        icon = Icons.AutoMirrored.Rounded.ReceiptLong,
+        iconContentDescription = "Cotización",
+        iconTint = MaterialTheme.colorScheme.primary,
+        headline = quote.compactDisplayNumber(),
+        supportingLines = listOf(
+            businessName.ifBlank { "${totalItems.toInt()} ${stringResource(Res.string.items)}" },
+            quoteDate,
+        ),
+        trailingPrimary = totalAmount,
+        onClick = onClick,
     ) {
-        Surface(
-            modifier = Modifier.size(50.dp),
-            shape = RoundedCornerShape(10),
-            color = MaterialTheme.colorScheme.surfaceVariant
-        ) {
-            Icon(
-                imageVector = Icons.AutoMirrored.Rounded.ReceiptLong,
-                contentDescription = "Quote",
-                tint = MaterialTheme.colorScheme.primary,
-                modifier = Modifier
-                    .padding(10.dp)
-                    .size(30.dp)
-            )
-        }
-
-        Column(
-            modifier = Modifier
-                .padding(horizontal = 8.dp)
-                .weight(1f, fill = true)
-                .fillMaxHeight()
-                .fillMaxWidth(),
-            verticalArrangement = Arrangement.Top
-        ) {
-            Text(
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-                text = quote.compactDisplayNumber(),
-                style = MaterialTheme.typography.bodyMedium.copy(
-                    color = MaterialTheme.colorScheme.primary,
-                    fontWeight = FontWeight.SemiBold
-                ),
-            )
-            Text(
-                modifier = Modifier.padding(top = 8.dp),
-                text = businessName.ifBlank { "${totalItems.toInt()} ${stringResource(Res.string.items)}" },
-                textAlign = TextAlign.Center,
-                style = MaterialTheme.typography.bodySmall.copy(
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                ),
-            )
-        }
-
-        Column(
-            modifier = Modifier
-                .width(IntrinsicSize.Min)
-                .fillMaxHeight(),
-            horizontalAlignment = Alignment.End,
-            verticalArrangement = Arrangement.SpaceBetween
-        ) {
-            SuggestionChip(
-                modifier = Modifier.height(23.dp),
-                onClick = {},
-                colors = SuggestionChipDefaults.suggestionChipColors(
-                    containerColor = statusBg,
-                    labelColor = statusText,
-                ),
-                border = SuggestionChipDefaults.suggestionChipBorder(
-                    enabled = true,
-                    borderColor = statusBg,
-                    disabledBorderColor = statusBg,
-                    borderWidth = 1.dp
-                ),
-                label = {
-                    Text(
-                        text = statusLabel,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
-                    )
-                },
-            )
-            Text(
-                modifier = Modifier.padding(top = 8.dp),
-                text = totalAmount,
-                style = MaterialTheme.typography.bodyMedium.copy(
-                    color = MaterialTheme.colorScheme.primary,
-                    fontWeight = FontWeight.SemiBold
+        SuggestionChip(
+            modifier = Modifier.height(20.dp),
+            onClick = {},
+            colors = SuggestionChipDefaults.suggestionChipColors(
+                containerColor = statusBg,
+                labelColor = statusText,
+            ),
+            border = SuggestionChipDefaults.suggestionChipBorder(
+                enabled = true,
+                borderColor = statusBg,
+                disabledBorderColor = statusBg,
+                borderWidth = 1.dp
+            ),
+            label = {
+                Text(
+                    text = statusLabel,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    style = labelSmall(statusText).copy(fontWeight = FontWeight.Bold),
                 )
-            )
-        }
+            },
+        )
     }
 }
 
@@ -714,20 +643,10 @@ private fun LoadingQuotesView() {
                         .fillMaxWidth()
                         .height(80.dp)
                         .padding(top = 8.dp)
-                        .clip(shape = RoundedCornerShape(6.dp))
+                        .clip(shape = RoundedCornerShape(16.dp))
                         .background(brush = brush)
                 )
             }
         }
     }
-}
-
-private fun formatQuoteDate(date: String?): String {
-    if (date.isNullOrBlank()) return ""
-    val sanitized = date.trim()
-        .removeSuffix("Z")
-        .split(".")
-        .firstOrNull()
-        ?: date
-    return getFormattedDate(sanitized, "yyyy-MM-dd'T'HH:mm:ss", "dd MMMM yyyy")
 }
