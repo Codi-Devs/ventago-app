@@ -64,6 +64,8 @@ import androidx.compose.ui.unit.dp
 import com.teco.ventago.core.SnackbarService
 import com.teco.ventago.AppDistribution
 import com.teco.ventago.core.camera.PermissionCallback
+import com.teco.ventago.core.version.IAppUpdateLauncher
+import com.teco.ventago.core.version.VersionGateService
 import com.teco.ventago.core.camera.PermissionStatus
 import com.teco.ventago.core.camera.PermissionType
 import com.teco.ventago.core.camera.createPermissionsManager
@@ -129,6 +131,7 @@ import ventago.composeapp.generated.resources.select_photo_from_camera
 import ventago.composeapp.generated.resources.select_photo_from_gallery
 import ventago.composeapp.generated.resources.sign_out
 import ventago.composeapp.generated.resources.terms_and_conditions
+import ventago.composeapp.generated.resources.update_app
 import kotlin.compareTo
 import kotlin.text.get
 
@@ -142,11 +145,14 @@ fun SettingsScreen(
     val snackbarService: SnackbarService = koinInject()
     val printerService: PrinterService = koinInject()
     val appDistribution: AppDistribution = koinInject()
+    val versionGateService: VersionGateService = koinInject()
+    val appUpdateLauncher: IAppUpdateLauncher = koinInject()
     val uriHandler = LocalUriHandler.current
     val scope = rememberCoroutineScope()
 
     val uiState by viewModel.uiState.collectAsState()
     val printers by printerService.observe().collectAsState()
+    val versionSnapshot by versionGateService.snapshot.collectAsState()
     val loadingSheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     val noAddressSelectedString = stringResource(Res.string.no_address_selected)
     val deleteAccountFailedString = stringResource(Res.string.delete_account_failed)
@@ -493,6 +499,13 @@ fun SettingsScreen(
                         onClick = {
                             navigate(PosScreens.ExpenseAccountsSettingsScreen)
                         }
+                    )
+                }
+
+                if (versionSnapshot.showSettingsUpdate) {
+                    SettingsTextButton(
+                        label = stringResource(Res.string.update_app),
+                        onClick = { appUpdateLauncher.openStoreListing() }
                     )
                 }
 

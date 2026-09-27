@@ -174,6 +174,7 @@ dependencies {
     implementation(libs.android.firebase.analytics)
     implementation(libs.android.firebase.crashlytics)
     implementation(libs.android.firebase.messaging)
+    implementation(libs.play.app.update)
     implementation(project.dependencies.platform(libs.koin.bom))
     implementation(libs.koin.android)
     add("posImplementation", project(":printer-h10p"))

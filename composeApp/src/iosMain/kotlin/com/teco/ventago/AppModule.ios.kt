@@ -8,6 +8,10 @@ import com.teco.ventago.core.SecureStorage
 import com.teco.ventago.core.cache.getDatabaseBuilder
 import com.teco.ventago.core.cache.room.CacheDatabase
 import com.teco.ventago.core.cache.room.getCacheDatabase
+import com.teco.ventago.core.version.AppBuildInfo
+import com.teco.ventago.core.version.IAppUpdateLauncher
+import com.teco.ventago.core.version.IosAppUpdateLauncher
+import com.teco.ventago.core.version.iosAppBuildInfo
 import com.teco.ventago.features.printers.domain.IosEpsonPrinterDiscoveryEngine
 import com.teco.ventago.features.printers.domain.IosEpsonPrinterEngine
 import com.teco.ventago.features.printers.domain.PrinterDiscoveryEngine
@@ -47,6 +51,8 @@ actual val platformModule: Module = module {
     }
     single<PdfSharer> { IosPdfSharer() }
     single { AppDistribution(isPosBuild = false) }
+    single<AppBuildInfo> { iosAppBuildInfo() }
+    single<IAppUpdateLauncher> { IosAppUpdateLauncher() }
     single<IPosAgentConfigReader> { NoopPosAgentConfigReader() }
     single<PrinterEngine> { IosEpsonPrinterEngine(get()) }
     single<PrinterDiscoveryEngine> { IosEpsonPrinterDiscoveryEngine() }

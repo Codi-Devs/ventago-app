@@ -19,6 +19,7 @@ import androidx.core.content.ContextCompat
 import androidx.core.view.WindowInsetsControllerCompat
 import com.google.android.libraries.places.widget.Autocomplete
 import com.teco.ventago.core.deeplink.ExternalUriHandler
+import com.teco.ventago.features.appentry.AppEntry
 import com.teco.ventago.features.business.domain.model.BusinessAddress
 import com.teco.ventago.utils.AutocompleteLauncher
 import org.koin.mp.KoinPlatform.getKoin
@@ -70,7 +71,7 @@ class MainActivity : ComponentActivity(), NotificationPermissionRequester {
                 controller.isAppearanceLightStatusBars = !darkTheme
             }
 
-            App()
+            AppEntry()
         }
     }
 
@@ -111,5 +112,5 @@ class MainActivity : ComponentActivity(), NotificationPermissionRequester {
 
 @Composable
 fun AndroidApp() {
-    App()
+    AppEntry()
 }

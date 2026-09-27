@@ -78,6 +78,7 @@ import com.teco.ventago.features.pos.domain.models.Discount
 import com.teco.ventago.features.pos.domain.models.Money
 import com.teco.ventago.features.pos.domain.models.Tax
 import com.teco.ventago.features.pos.provisioning.domain.PosDeviceProvisioningService
+import com.teco.ventago.core.version.VersionGateHold
 import com.teco.ventago.features.product.domain.ProductService
 import com.teco.ventago.features.inventory.domain.InventoryAvailabilityStore
 import com.teco.ventago.features.inventory.domain.InventoryKardexSupport
@@ -166,6 +167,7 @@ class PosViewModel(
     private val appScope: CoroutineScope,
     private val posProvisioningService: PosDeviceProvisioningService,
     private val inventoryAvailabilityStore: InventoryAvailabilityStore,
+    private val versionGateHold: VersionGateHold = VersionGateHold(),
 ) : BaseViewModel<PosState, PosStateUiEvent>(PosState()) {
     private companion object {
         const val DEFAULT_QUOTE_BRANCH_CODE = "0000"
@@ -199,6 +201,8 @@ class PosViewModel(
         val branchCode: String,
         val billingPoint: String
     )
+
+    private val releaseVersionGateHold = versionGateHold.acquire()
 
     private data class PosAuthzState(
         val canCreateInvoice: Boolean,
@@ -5630,9 +5634,14 @@ class PosViewModel(
                     quotesService.updateQuoteSettings(payload)
                 }
             } finally {
-                hideLoading()
-            }
-        }
+                 hideLoading()
+             }
+         }
+     }
+
+    override fun onCleared() {
+        releaseVersionGateHold()
+        super.onCleared()
     }
 }
 

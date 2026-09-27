@@ -3,6 +3,7 @@ import Firebase
 import FirebaseAuth
 import FirebaseFirestore
 import FirebaseMessaging
+import FirebaseRemoteConfig
 import UIKit
 import UserNotifications
 import ComposeApp

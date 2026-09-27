@@ -24,6 +24,7 @@ cameraCamera2 = "1.6.1"
 coilCompose = "3.4.0"
 google-play-services = "4.4.4"
 firebase-crashlytics-plugin = "3.0.7"
+play-app-update = "2.1.0"
 playServicesMlkitBarcodeScanning = "18.3.1"
 richeditorCompose = "1.0.0-rc13"
 sqlite = "2.6.2"
@@ -56,10 +57,13 @@ android-firebase-bom = { module = "com.google.firebase:firebase-bom", version.re
 android-firebase-messaging = { module = "com.google.firebase:firebase-messaging" }
 android-firebase-crashlytics = { module = "com.google.firebase:firebase-crashlytics-ndk" }
 android-firebase-analytics = { module = "com.google.firebase:firebase-analytics" }
+android-firebase-config = { module = "com.google.firebase:firebase-config" }
 firebase-auth = { module = "dev.gitlive:firebase-auth", version.ref = "firebase" }
 firebase-analytics = { module = "dev.gitlive:firebase-analytics", version.ref = "firebase" }
 firebase-firestore = { module = "dev.gitlive:firebase-firestore", version.ref = "firebase" }
 firebase-database = { module = "dev.gitlive:firebase-database", version.ref = "firebase" }
+firebase-config = { module = "dev.gitlive:firebase-config", version.ref = "firebase" }
+play-app-update = { module = "com.google.android.play:app-update-ktx", version.ref = "play-app-update" }
 backhandler-compose = { module = "org.jetbrains.compose.ui:ui-backhandler", version.ref = "backhandlerCompose" }
 navigation-compose = { module = "org.jetbrains.androidx.navigation:navigation-compose", version.ref = "navigationCompose" }
 koin-android = { module = "io.insert-koin:koin-android" }

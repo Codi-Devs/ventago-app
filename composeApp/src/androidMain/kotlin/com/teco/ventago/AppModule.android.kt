@@ -8,6 +8,10 @@ import com.teco.ventago.core.SecureStorage
 import com.teco.ventago.core.cache.getDatabaseBuilder
 import com.teco.ventago.core.cache.room.CacheDatabase
 import com.teco.ventago.core.cache.room.getCacheDatabase
+import com.teco.ventago.core.version.AndroidAppUpdateLauncher
+import com.teco.ventago.core.version.AppBuildInfo
+import com.teco.ventago.core.version.IAppUpdateLauncher
+import com.teco.ventago.core.version.androidAppBuildInfo
 import com.teco.ventago.features.pos.provisioning.domain.AndroidPosAgentConfigReader
 import com.teco.ventago.features.pos.provisioning.domain.IPosAgentConfigReader
 import io.ktor.client.HttpClient
@@ -51,4 +55,6 @@ actual val platformModule: Module = module {
     }
     single<PdfSharer> { AndroidPdfSharer(androidContext()) }
     single<IPosAgentConfigReader> { AndroidPosAgentConfigReader(androidContext()) }
+    single<AppBuildInfo> { androidAppBuildInfo(androidContext(), get()) }
+    single<IAppUpdateLauncher> { AndroidAppUpdateLauncher(androidContext(), get(), get()) }
 }
