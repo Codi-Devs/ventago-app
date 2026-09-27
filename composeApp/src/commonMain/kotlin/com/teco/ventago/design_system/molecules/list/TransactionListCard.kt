@@ -30,6 +30,7 @@ fun TransactionListCard(
     icon: ImageVector,
     iconContentDescription: String?,
     iconTint: Color,
+    iconContainerColor: Color = Gray80,
     headline: String,
     supportingLines: List<String>,
     trailingPrimary: String,
@@ -52,7 +53,7 @@ fun TransactionListCard(
             Surface(
                 modifier = Modifier.size(44.dp),
                 shape = RoundedCornerShape(12.dp),
-                color = Gray80,
+                color = iconContainerColor,
             ) {
                 Icon(
                     imageVector = icon,

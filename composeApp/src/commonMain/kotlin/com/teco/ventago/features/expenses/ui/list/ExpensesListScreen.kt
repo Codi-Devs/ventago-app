@@ -96,6 +96,7 @@ import com.teco.ventago.design_system.molecules.InstallmentDueDateFieldKmp
 import com.teco.ventago.design_system.molecules.list.ListAutocompleteSearchField
 import com.teco.ventago.design_system.molecules.list.TransactionListCard
 import com.teco.ventago.design_system.theme.labelSmall
+import com.teco.ventago.design_system.theme.vanishedBackgroundColor
 import com.teco.ventago.design_system.textfields.DMOutlinedTextField
 import com.teco.ventago.features.expenses.ui.components.ExpenseSheetOption
 import com.teco.ventago.features.expenses.ui.upload.InvoiceUploadCapture
@@ -252,6 +253,10 @@ fun ExpensesListScreen(
 //        }
 
         // Payment status filter chips
+        val paymentStatusFilterColors = FilterChipDefaults.filterChipColors(
+            selectedContainerColor = MaterialTheme.colorScheme.primary,
+            selectedLabelColor = MaterialTheme.colorScheme.onPrimary,
+        )
         Row(
             modifier = Modifier
                 .fillMaxWidth()
@@ -267,7 +272,7 @@ fun ExpensesListScreen(
                     viewModel.applyFilters()
                 },
                 label = { Text(stringResource(Res.string.filter_all)) },
-                colors = FilterChipDefaults.filterChipColors()
+                colors = paymentStatusFilterColors
             )
             paymentStatusOptions.forEach { (value, label) ->
                 FilterChip(
@@ -278,7 +283,7 @@ fun ExpensesListScreen(
                         viewModel.applyFilters()
                     },
                     label = { Text(label) },
-                    colors = FilterChipDefaults.filterChipColors()
+                    colors = paymentStatusFilterColors
                 )
             }
         }
@@ -384,12 +389,12 @@ fun ExpensesListScreen(
                 if (uiState.canCreateExpense) {
                     FloatingActionButton(
                         onClick = { showRegisterSheet = true },
-                        containerColor = MaterialTheme.colorScheme.primary
+                        containerColor = MaterialTheme.colorScheme.secondary
                     ) {
                         Icon(
                             imageVector = Icons.Rounded.Add,
                             contentDescription = "Registrar gasto",
-                            tint = MaterialTheme.colorScheme.onPrimary
+                            tint = MaterialTheme.colorScheme.onSecondary
                         )
                     }
                 }
@@ -601,7 +606,8 @@ private fun ExpenseListItem(
     TransactionListCard(
         icon = expenseConceptIcon(expense),
         iconContentDescription = "Concepto de gasto",
-        iconTint = MaterialTheme.colorScheme.primary,
+        iconTint = MaterialTheme.colorScheme.secondary,
+        iconContainerColor = vanishedBackgroundColor(),
         headline = expense.issuer?.name ?: "Sin emisor",
         supportingLines = listOf(
             expense.invoiceNumber ?: "Sin factura",
