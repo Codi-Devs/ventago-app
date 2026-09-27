@@ -13,6 +13,136 @@ enum class ExpenseConceptMode {
     PER_ITEM
 }
 
+enum class ExpenseConceptVisualCategory {
+    INVENTORY,
+    PEOPLE,
+    PROFESSIONAL,
+    RENT,
+    WATER,
+    ENERGY,
+    CONNECTIVITY,
+    SECURITY,
+    FOOD,
+    TRAVEL,
+    OFFICE,
+    FUEL,
+    SHIPPING,
+    PARKING,
+    MARKETING,
+    TRAINING,
+    INSURANCE,
+    TECHNOLOGY,
+    LEGAL,
+    MAINTENANCE,
+    FINANCE,
+    TAX,
+    GENERAL,
+    FALLBACK,
+}
+
+private val systemExpenseAccountCodes = setOf(
+    "COSTOS", "GASTOS", "COSTOS_VENTAS_OPERACION", "COSTO_MERCANCIA_VENDIDA",
+    "COSTO_INVENTARIO", "AJUSTES_INVENTARIO", "DESCUENTOS_FINANCIEROS_COSTO",
+    "DEVOLUCIONES_COMPRA_INVENTARIO", "COSTO_SERVICIOS_VENDIDOS", "COBRANZAS_COSTO",
+    "COMISION_SERVICIOS_DESCUENTO", "COSTO_MANEJO", "COMISION_TARJETA_CREDITO_CLAVE",
+    "COSTO_MERCANCIA_DANADA_DETERIORADA", "INTERESES_PAGADOS_COSTO", "MERMA_INVENTARIO",
+    "MUESTRAS_COSTO", "PRIMA_PRODUCCION", "REASEGUROS_COSTO", "RESCATES_DIVIDENDOS",
+    "SERVICIOS_OCASIONALES_COSTO", "SUBCONTRATISTAS", "OTROS_COSTOS", "GASTOS_VENTA",
+    "GASTOS_PERSONAL_VENTAS", "SUELDOS_PERSONAL_VENTAS", "HORAS_EXTRAS_PERSONAL_VENTAS",
+    "COMISIONES_PERSONAL_VENTAS", "PRIMA_ANTIGUEDAD_PERSONAL_VENTAS",
+    "INDEMNIZACION_PERSONAL_VENTAS", "SEGURO_SOCIAL_VENTAS", "SEGURO_EDUCATIVO_VENTAS",
+    "PREAVISO_VENTAS", "VACACIONES_VENTAS", "DOTACION_VENTAS", "GASTOS_ADMINISTRACION",
+    "GASTOS_PERSONAL", "SUELDOS_SALARIOS", "HORAS_EXTRAS", "COMISIONES",
+    "PRIMA_ANTIGUEDAD", "INDEMNIZACION_RECARGO", "SEGURO_EDUCATIVO", "PREAVISO",
+    "VACACIONES", "DOTACION_TRABAJADORES", "GASTOS_GENERALES", "SERVICIOS_PROFESIONALES",
+    "ASESORIA_JURIDICA", "ASESORIA_CONTABLE", "ARRENDAMIENTOS", "ARRENDAMIENTO_EQUIPOS",
+    "ARRENDAMIENTO_OFICINAS", "SERVICIOS_PUBLICOS", "SERVICIO_GAS", "SERVICIO_ASEO",
+    "SERVICIO_AGUA", "SERVICIO_ENERGIA", "SERVICIO_TELEFONO_INTERNET", "ASISTENCIA_TECNICA",
+    "OTROS_SERVICIOS", "VIGILANCIA_SEGURIDAD", "GASTOS_REPRESENTACION",
+    "COMIDAS_ENTRETENIMIENTO", "VIATICOS_VIAJES", "ARTICULOS_OFICINA", "PAPELERIA",
+    "COMBUSTIBLES_LUBRICANTES", "FLETES_ENVIOS", "ENVIOS_MENSAJERIA", "ESTACIONAMIENTO",
+    "PROPAGANDA_PUBLICIDAD", "CAPACITACION_PERSONAL", "SEGUROS", "SEGURO_ACCIDENTES",
+    "SEGURO_VEHICULOS", "SEGURO_INCENDIOS", "PATENTES_MARCAS", "SERVICIOS_ONLINE",
+    "SOFTWARE_CONTABLE", "CUOTAS_SUSCRIPCIONES", "OTROS_GASTOS_GENERALES",
+    "GASTOS_CONSTITUCION", "GASTOS_LEGALES", "NOTARIALES", "REGISTROS_MERCANTILES",
+    "TRAMITES_LEGALES", "MANTENIMIENTO_CONSERVACION", "CONSTRUCCION_EDIFICACION",
+    "EQUIPO_OFICINA", "EQUIPO_COMPUTACION", "ADECUACIONES_INSTALACIONES",
+    "DEPRECIACIONES_AMORTIZACIONES", "DETERIORO_CXC", "DEPR_PROPIEDAD_PLANTA_EQUIPO",
+    "DEPR_CONSTRUCCIONES", "DEPR_MOBILIARIO_OFICINA", "DEPR_EQUIPO_COMPUTACION",
+    "DEPR_VEHICULOS", "GASTOS_FINANCIEROS", "INTERESES_FINANCIEROS", "INTERESES_MORA",
+    "COMISIONES_BANCARIAS", "PERDIDA_DIFERENCIA_CAMBIO", "AJUSTES_APROX_CALCULOS",
+    "PERDIDA_DISPOSICION_ACTIVOS", "GASTOS_IMPUESTOS", "IMPUESTOS_VARIOS", "IMPUESTO_PLACA",
+    "IMPUESTO_TIMBRES", "IMPUESTO_MUNICIPAL", "IMPUESTO_AVISO_OPERACION",
+    "IMPUESTO_TASA_UNICA", "IMPUESTO_RENTA", "IMPUESTOS_NO_ACREDITABLES",
+    "GASTOS_NO_DEDUCIBLES", "MULTAS_RECARGOS", "OTROS_GASTOS",
+)
+
+fun isKnownSystemExpenseAccountCode(code: String): Boolean =
+    code.trim().uppercase() in systemExpenseAccountCodes
+
+fun resolveExpenseConceptVisualCategory(expense: Expense): ExpenseConceptVisualCategory {
+    if (expense.categorizationStatus == "partial") return ExpenseConceptVisualCategory.FALLBACK
+
+    val itemAccountIds = expense.items.orEmpty().mapNotNull { it.expenseAccountId }.distinct()
+    if (itemAccountIds.size > 1) return ExpenseConceptVisualCategory.FALLBACK
+
+    val account = when {
+        itemAccountIds.size == 1 -> {
+            expense.items.orEmpty()
+                .mapNotNull { it.expenseAccount }
+                .firstOrNull { it.id == itemAccountIds.single() }
+        }
+        expense.defaultAccountId != null -> expense.defaultAccount
+        else -> null
+    } ?: return ExpenseConceptVisualCategory.FALLBACK
+
+    if (!account.isSystem) return ExpenseConceptVisualCategory.FALLBACK
+    val code = account.code.uppercase()
+
+    return when {
+        code == "COMBUSTIBLES_LUBRICANTES" -> ExpenseConceptVisualCategory.FUEL
+        code == "COMIDAS_ENTRETENIMIENTO" -> ExpenseConceptVisualCategory.FOOD
+        code == "VIATICOS_VIAJES" -> ExpenseConceptVisualCategory.TRAVEL
+        code in setOf("ARTICULOS_OFICINA", "PAPELERIA", "EQUIPO_OFICINA") ->
+            ExpenseConceptVisualCategory.OFFICE
+        code.startsWith("FLETES_") || code.startsWith("ENVIOS_") ->
+            ExpenseConceptVisualCategory.SHIPPING
+        code == "ESTACIONAMIENTO" -> ExpenseConceptVisualCategory.PARKING
+        code == "PROPAGANDA_PUBLICIDAD" -> ExpenseConceptVisualCategory.MARKETING
+        code == "CAPACITACION_PERSONAL" -> ExpenseConceptVisualCategory.TRAINING
+        code == "SERVICIO_AGUA" -> ExpenseConceptVisualCategory.WATER
+        code == "SERVICIO_ENERGIA" -> ExpenseConceptVisualCategory.ENERGY
+        code == "SERVICIO_TELEFONO_INTERNET" -> ExpenseConceptVisualCategory.CONNECTIVITY
+        code == "VIGILANCIA_SEGURIDAD" -> ExpenseConceptVisualCategory.SECURITY
+        code.startsWith("SEGURO") || code == "SEGUROS" || code == "REASEGUROS_COSTO" ->
+            ExpenseConceptVisualCategory.INSURANCE
+        code in setOf("SERVICIOS_ONLINE", "SOFTWARE_CONTABLE", "CUOTAS_SUSCRIPCIONES", "EQUIPO_COMPUTACION") ->
+            ExpenseConceptVisualCategory.TECHNOLOGY
+        code.startsWith("ARRENDAMIENTO") || code == "ARRENDAMIENTOS" ->
+            ExpenseConceptVisualCategory.RENT
+        code.contains("JURIDICA") || code.contains("LEGAL") || code == "NOTARIALES" ||
+            code == "REGISTROS_MERCANTILES" || code == "TRAMITES_LEGALES" ->
+            ExpenseConceptVisualCategory.LEGAL
+        code == "SERVICIOS_PROFESIONALES" || code == "ASESORIA_CONTABLE" || code == "SUBCONTRATISTAS" ->
+            ExpenseConceptVisualCategory.PROFESSIONAL
+        code.startsWith("MANTENIMIENTO_") || code.startsWith("CONSTRUCCION_") ||
+            code.startsWith("ADECUACIONES_") -> ExpenseConceptVisualCategory.MAINTENANCE
+        code.startsWith("GASTOS_FINANCIEROS") || code.startsWith("INTERESES_") ||
+            code.startsWith("COMISIONES_BANCARIAS") || code.startsWith("PERDIDA_") ->
+            ExpenseConceptVisualCategory.FINANCE
+        code.startsWith("GASTOS_IMPUESTOS") || code.startsWith("IMPUESTO") ->
+            ExpenseConceptVisualCategory.TAX
+        code.startsWith("COSTO") || code.startsWith("COSTOS") || code.contains("INVENTARIO") ||
+            code.startsWith("MERCANCIA") || code.startsWith("MERMA_") ->
+            ExpenseConceptVisualCategory.INVENTORY
+        code.contains("PERSONAL") || code.startsWith("SUELDOS_") || code.startsWith("HORAS_EXTRAS") ||
+            code.startsWith("PRIMA_ANTIGUEDAD") || code.startsWith("INDEMNIZACION") ||
+            code.startsWith("VACACIONES") || code.startsWith("DOTACION_") || code.startsWith("PREAVISO") ->
+            ExpenseConceptVisualCategory.PEOPLE
+        else -> ExpenseConceptVisualCategory.GENERAL
+    }
+}
+
 data class ExpenseAccountTreeNode(
     val account: ExpenseAccount,
     val depth: Int,

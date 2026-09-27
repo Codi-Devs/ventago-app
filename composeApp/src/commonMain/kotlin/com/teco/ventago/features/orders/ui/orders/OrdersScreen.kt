@@ -90,6 +90,7 @@ import com.teco.ventago.design_system.buttons.TextButtonS
 import com.teco.ventago.design_system.loaders.shimmerBrush
 import com.teco.ventago.design_system.molecules.DMAlertDialog
 import com.teco.ventago.design_system.molecules.InstallmentDueDateFieldKmp
+import com.teco.ventago.design_system.molecules.list.ListAutocompleteSearchField
 import com.teco.ventago.design_system.molecules.orders.OrderListItem
 import com.teco.ventago.design_system.organism.LoadingSheet
 import com.teco.ventago.design_system.textfields.DMOutlinedTextField
@@ -789,125 +790,20 @@ private fun OrdersCustomerSearchField(
     onCustomerSelected: (CustomerListItem) -> Unit,
     onClearCustomer: () -> Unit,
 ) {
-    val query = customerName.trim()
-    val showSuggestions = selectedCustomerId == null && (isSearchingCustomers || customers.isNotEmpty() || query.length == 1)
-
-    Column(
-        modifier = Modifier
-            .fillMaxWidth()
-            .zIndex(2f)
-            .background(MaterialTheme.colorScheme.background)
-            .padding(horizontal = 16.dp, vertical = 8.dp),
-    ) {
-        OutlinedTextField(
-            value = customerName,
-            onValueChange = onQueryChanged,
-            modifier = Modifier.fillMaxWidth(),
-            singleLine = true,
-            textStyle = MaterialTheme.typography.bodyMedium,
-            label = {
-                Text(
-                    text = "Buscar por cliente",
-                    style = MaterialTheme.typography.bodyMedium,
-                )
-            },
-            trailingIcon = {
-                val hasValue = customerName.isNotBlank()
-                AnimatedContent(
-                    targetState = hasValue,
-                    transitionSpec = {
-                        (fadeIn(tween(160)) + scaleIn(initialScale = 0.82f, animationSpec = tween(160)))
-                            .togetherWith(fadeOut(tween(120)) + scaleOut(targetScale = 0.82f, animationSpec = tween(120)))
-                    },
-                    label = "customer-search-icon",
-                ) { filled ->
-                    if (filled) {
-                        IconButton(onClick = onClearCustomer) {
-                            Icon(
-                                imageVector = Icons.Rounded.Close,
-                                contentDescription = "Quitar cliente",
-                                tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                            )
-                        }
-                    } else {
-                        Icon(
-                            imageVector = Icons.Rounded.Search,
-                            contentDescription = "Buscar por cliente",
-                            tint = MaterialTheme.colorScheme.primary,
-                            modifier = Modifier.padding(12.dp),
-                        )
-                    }
-                }
-            },
-            colors = OutlinedTextFieldDefaults.colors(
-                focusedBorderColor = MaterialTheme.colorScheme.primary,
-                focusedLabelColor = MaterialTheme.colorScheme.primary,
-                cursorColor = MaterialTheme.colorScheme.primary,
-            ),
-            shape = RoundedCornerShape(12.dp),
-        )
-
-        if (showSuggestions) {
-            Card(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(top = 4.dp),
-                elevation = CardDefaults.cardElevation(defaultElevation = 6.dp),
-                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-                shape = RoundedCornerShape(12.dp),
-            ) {
-                Column(modifier = Modifier.padding(vertical = 4.dp)) {
-                    if (isSearchingCustomers) {
-                        Row(
-                            modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(8.dp),
-                        ) {
-                            CircularProgressIndicator(modifier = Modifier.size(16.dp), strokeWidth = 2.dp)
-                            Text(
-                                text = "Buscando clientes...",
-                                style = labelSmall(color = MaterialTheme.colorScheme.onSurfaceVariant),
-                            )
-                        }
-                    } else if (query.length == 1) {
-                        Text(
-                            modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
-                            text = "Escribe al menos 2 caracteres",
-                            style = labelSmall(color = MaterialTheme.colorScheme.onSurfaceVariant),
-                        )
-                    }
-                    customers.forEachIndexed { index, customer ->
-                        Surface(
-                            onClick = { onCustomerSelected(customer) },
-                            color = Color.Transparent,
-                            modifier = Modifier.fillMaxWidth(),
-                        ) {
-                            Column(
-                                modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
-                                verticalArrangement = Arrangement.spacedBy(2.dp),
-                            ) {
-                                Text(
-                                    text = customer.name,
-                                    style = bodyMediumBold(color = MaterialTheme.colorScheme.onSurface),
-                                    maxLines = 1,
-                                    overflow = TextOverflow.Ellipsis,
-                                )
-                                Text(
-                                    text = customer.ruc?.ifBlank { null } ?: "Sin RUC",
-                                    style = labelSmall(color = MaterialTheme.colorScheme.onSurfaceVariant),
-                                    maxLines = 1,
-                                    overflow = TextOverflow.Ellipsis,
-                                )
-                            }
-                        }
-                        if (index < customers.lastIndex) {
-                            HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
-                        }
-                    }
-                }
-            }
-        }
-    }
+    ListAutocompleteSearchField(
+        query = customerName,
+        hasSelection = selectedCustomerId != null,
+        isSearching = isSearchingCustomers,
+        items = customers,
+        label = "Buscar por cliente",
+        searchContentDescription = "Buscar por cliente",
+        clearContentDescription = "Quitar cliente",
+        onQueryChanged = onQueryChanged,
+        onItemSelected = onCustomerSelected,
+        onClear = onClearCustomer,
+        itemTitle = { it.name },
+        itemSubtitle = { it.ruc?.ifBlank { null } ?: "Sin RUC" },
+    )
 }
 
 @Composable

@@ -29,6 +29,25 @@ iOS number/decimal pads have no dismiss key. Tapping outside an input must close
 
 ---
 
+# UI Style Guide for Transaction List Screens
+
+Orders define the visual and interaction baseline for transactional lists such as quotes and expenses.
+
+- Render every row with `TransactionListCard`: 16 dp horizontal margin, 16 dp corner radius, 2 dp elevation, 44 dp semantic-icon tile, primary identifier/content on the left, amount and compact status on the right.
+- Use `ListAutocompleteSearchField` for the main entity search (customer, issuer, etc.). The user selects an autocomplete result before the list is filtered.
+- Put the filter action in the top app bar and show the active-filter count. Secondary identifiers such as invoice or document numbers belong in the filter/search sheet, not in the primary entity search.
+- Render the record date inside the card with `formatTransactionListDate`, whose display contract is `d MMM yyyy` in lowercase Spanish (for example, `7 sep 2026`). Do not group transactional lists by date unless the product requirement explicitly calls for grouping.
+- Use a semantic icon when the domain has a known system category. Custom, mixed, missing, or unresolved categories must use the feature's neutral fallback icon.
+- Preserve the primary search when the user clears the secondary filters.
+
+**Reference files:**
+- `design_system/molecules/list/TransactionListCard.kt`
+- `design_system/molecules/list/ListAutocompleteSearchField.kt`
+- `design_system/molecules/orders/OrderListItem.kt`
+- `utils/DateUtils.kt`
+
+---
+
 # UI Style Guide for Invoice / Quote / Transaction Detail Screens
 
 This document describes the standard UI patterns used to present invoices, quotes, and transaction details in the VentaGo KMP app.

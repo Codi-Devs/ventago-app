@@ -11,6 +11,8 @@ import com.teco.ventago.features.quotes.domain.models.requests.GetQuoteRequest
 import com.teco.ventago.features.quotes.domain.models.requests.ListQuotesRequest
 import com.teco.ventago.features.quotes.domain.models.requests.SendQuoteEmailRequest
 import com.teco.ventago.features.quotes.domain.models.requests.UpdateQuoteRequest
+import com.teco.ventago.features.quotes.ui.list.QuotesListState
+import com.teco.ventago.features.quotes.ui.list.toListQuotesRequest
 import com.teco.ventago.utils.ApiError
 import com.teco.ventago.utils.ApiResponse
 import kotlinx.coroutines.test.runTest
@@ -20,6 +22,20 @@ import kotlin.test.Test
 import kotlin.test.assertEquals
 
 class QuotesRepositoryTest {
+
+    @Test
+    fun `quote list request uses the selected customer as primary search`() {
+        val request = QuotesListState(
+            customerName = "Empresa de prueba",
+            customerRuc = "155-123-456",
+            selectedCustomerId = 42,
+            quoteNumber = "",
+        ).toListQuotesRequest(page = 1, pageSize = 10)
+
+        assertEquals("Empresa de prueba", request.customerName)
+        assertEquals("155-123-456", request.customerRuc)
+        assertEquals(null, request.quoteNumber)
+    }
 
     @Test
     fun `listQuotes maps nested customer name from backend response`() = runTest {

@@ -288,9 +288,7 @@ class ExpensesListViewModel(
             paymentStatus = state.paymentStatuses.firstOrNull(),
             issuerName = state.issuerName.ifBlank { null },
             issuerRuc = state.issuerRuc.ifBlank { null },
-            invoiceNumber = state.searchQuery.ifBlank {
-                state.invoiceNumber.ifBlank { null }
-            },
+            invoiceNumber = state.invoiceNumber.ifBlank { null },
             categorizationStatus = state.categorizationStatus,
             merchantId = state.merchantId
         )
@@ -321,10 +319,9 @@ class ExpensesListViewModel(
             filtered = filtered.filter { it.categorizationStatus == state.categorizationStatus }
         }
 
-        val search = state.searchQuery.ifBlank { state.invoiceNumber }
-        if (search.isNotBlank()) {
+        if (state.invoiceNumber.isNotBlank()) {
             filtered = filtered.filter {
-                it.invoiceNumber?.contains(search, ignoreCase = true) == true
+                it.invoiceNumber?.contains(state.invoiceNumber, ignoreCase = true) == true
             }
         }
 
@@ -345,15 +342,6 @@ class ExpensesListViewModel(
         }
 
         return filtered
-    }
-
-    fun setSearchQuery(value: String) {
-        _uiState.value = _uiState.value.copy(searchQuery = value)
-    }
-
-    fun search() {
-        _uiState.value = _uiState.value.copy(page = 1, expenses = emptyList(), noMore = false)
-        loadExpenses(refresh = true)
     }
 
     fun setStartDate(value: String?) {
@@ -385,6 +373,26 @@ class ExpensesListViewModel(
             merchantName = merchant.name,
             merchantSuggestions = emptyList()
         )
+    }
+
+    fun selectMerchantSearch(merchant: ExpenseMerchant) {
+        selectFilterMerchant(merchant)
+        applyFilters()
+    }
+
+    fun clearMerchantSearch() {
+        merchantSearchJob?.cancel()
+        _uiState.value = _uiState.value.copy(
+            issuerName = "",
+            merchantId = null,
+            merchantName = null,
+            merchantSuggestions = emptyList(),
+            isMerchantSearching = false,
+            page = 1,
+            expenses = emptyList(),
+            noMore = false,
+        )
+        loadExpenses(refresh = true)
     }
 
     fun dismissFilterMerchantSuggestions() {
@@ -446,6 +454,22 @@ class ExpensesListViewModel(
         loadExpenses(refresh = true)
     }
 
+    fun showFiltersSheet(show: Boolean) {
+        _uiState.value = _uiState.value.copy(showFiltersSheet = show)
+    }
+
+    fun activeFilterCount(): Int {
+        val state = _uiState.value
+        return listOf(
+            state.startDate != null || state.endDate != null,
+            state.invoiceNumber.isNotBlank(),
+            state.issuerRuc.isNotBlank(),
+            state.source != null,
+            state.paymentStatuses.isNotEmpty(),
+            state.categorizationStatus != null,
+        ).count { it }
+    }
+
     private fun validateDateRange(startDate: String?, endDate: String?): String? {
         if (startDate == null && endDate == null) return null
         try {
@@ -469,15 +493,11 @@ class ExpensesListViewModel(
             startDate = null,
             endDate = null,
             invoiceNumber = "",
-            issuerName = "",
             issuerRuc = "",
-            merchantId = null,
-            merchantName = null,
-            merchantSuggestions = emptyList(),
             source = null,
             paymentStatuses = emptyList(),
             categorizationStatus = null,
-            searchQuery = "",
+            showFiltersSheet = false,
             page = 1,
             expenses = emptyList(),
             noMore = false

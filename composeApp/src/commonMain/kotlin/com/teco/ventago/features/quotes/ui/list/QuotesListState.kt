@@ -2,6 +2,7 @@ package com.teco.ventago.features.quotes.ui.list
 
 import com.teco.ventago.design_system.organism.LoadingBottomSheetState
 import com.teco.ventago.features.branches.domain.model.Branch
+import com.teco.ventago.features.customers.domain.models.CustomerListItem
 import com.teco.ventago.features.quotes.domain.models.PagedQuotes
 import com.teco.ventago.features.quotes.domain.models.Quote
 
@@ -15,6 +16,9 @@ data class QuotesListState(
     val loadingBottomSheet: LoadingBottomSheetState = LoadingBottomSheetState(),
     val customerName: String = "",
     val customerRuc: String = "",
+    val selectedCustomerId: Long? = null,
+    val customerSearchResults: List<CustomerListItem> = emptyList(),
+    val isSearchingCustomers: Boolean = false,
     val quoteNumber: String = "",
     val status: Int? = null,
     val branches: List<Branch> = emptyList(),

@@ -45,6 +45,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.teco.ventago.features.orders.domain.models.Order
+import com.teco.ventago.design_system.molecules.list.TransactionListCard
 import com.teco.ventago.design_system.theme.AcceptedContainer
 import com.teco.ventago.design_system.theme.AcceptedLabel
 import com.teco.ventago.design_system.theme.CancelledContainer
@@ -73,7 +74,7 @@ import com.teco.ventago.features.invoicing.domain.models.FEDocumentType
 import com.teco.ventago.features.invoicing.domain.models.InvoiceStatus
 import com.teco.ventago.features.orders.domain.models.OrderStatus
 import com.teco.ventago.features.orders.domain.models.PaymentStatus
-import com.teco.ventago.utils.DateFormat.getFormattedDate
+import com.teco.ventago.utils.formatTransactionListDate
 import com.teco.ventago.utils.formatNumberToMoney
 import org.jetbrains.compose.resources.DrawableResource
 import org.jetbrains.compose.resources.StringResource
@@ -98,11 +99,7 @@ import ventago.composeapp.generated.resources.rejected
 @Composable
 fun OrderListItem(order: Order, onClick: () -> Unit, statusOnClick: () -> Unit) {
     val customerName = order.displayCustomerName()?.takeIf { it.isNotBlank() } ?: "Consumidor final"
-    val invoiceDate = getFormattedDate(
-        order.listEmissionDateValue().take(19),
-        "yyyy-MM-dd'T'HH:mm:ss",
-        "d MMM yyyy",
-    ).replace(".", "").lowercase()
+    val invoiceDate = formatTransactionListDate(order.listEmissionDateValue())
     val (icon, tint) = getOrderStatusIcon(
         order.status,
         order.paymentStatus,
@@ -110,71 +107,16 @@ fun OrderListItem(order: Order, onClick: () -> Unit, statusOnClick: () -> Unit) 
         order.orderType
     )
 
-    Card(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = 16.dp),
-        shape = RoundedCornerShape(16.dp),
-        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+    TransactionListCard(
+        icon = icon,
+        iconContentDescription = "Order state icon",
+        iconTint = tint,
+        headline = order.formattedInternalNumber(),
+        supportingLines = listOf(customerName, invoiceDate),
+        trailingPrimary = formatNumberToMoney(order.totalAmount),
         onClick = onClick,
     ) {
-        Row(
-            modifier = Modifier.padding(horizontal = 12.dp, vertical = 12.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Surface(
-                modifier = Modifier.size(44.dp),
-                shape = RoundedCornerShape(12.dp),
-                color = Gray80,
-            ) {
-                Icon(
-                    imageVector = icon,
-                    contentDescription = "Order state icon",
-                    tint = tint,
-                    modifier = Modifier.padding(10.dp),
-                )
-            }
-
-            Column(
-                modifier = Modifier
-                    .padding(start = 12.dp)
-                    .weight(1f),
-            ) {
-                Text(
-                    text = order.formattedInternalNumber(),
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                    style = bodyMediumBold(color = MaterialTheme.colorScheme.onSurface),
-                )
-                Text(
-                    modifier = Modifier.padding(top = 2.dp),
-                    text = customerName,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                    style = labelMedium(color = MaterialTheme.colorScheme.onSurfaceVariant),
-                )
-                Text(
-                    modifier = Modifier.padding(top = 2.dp),
-                    text = invoiceDate,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                    style = labelMedium(color = MaterialTheme.colorScheme.onSurfaceVariant),
-                )
-            }
-
-            Column(
-                horizontalAlignment = Alignment.End,
-                verticalArrangement = Arrangement.spacedBy(6.dp),
-            ) {
-                Text(
-                    text = formatNumberToMoney(order.totalAmount),
-                    maxLines = 1,
-                    style = bodyMediumBold(color = MaterialTheme.colorScheme.onSurface),
-                )
-                DocumentStatusChip(order.listDocumentStatusLabel(), onClick = statusOnClick)
-            }
-        }
+        DocumentStatusChip(order.listDocumentStatusLabel(), onClick = statusOnClick)
     }
 }
 

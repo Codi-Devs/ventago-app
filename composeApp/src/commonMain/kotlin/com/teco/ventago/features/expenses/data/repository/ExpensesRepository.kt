@@ -27,6 +27,7 @@ import com.teco.ventago.features.expenses.domain.models.requests.ListExpensesReq
 import com.teco.ventago.features.expenses.domain.models.requests.UpdateExpenseAccountRequest
 import com.teco.ventago.features.expenses.domain.models.requests.UpsertExpensePaymentRequest
 import com.teco.ventago.features.expenses.domain.models.requests.UpsertExpenseRequest
+import com.teco.ventago.features.expenses.domain.isKnownSystemExpenseAccountCode
 import com.teco.ventago.features.expenses.domain.models.requests.ListMerchantsRequest
 import com.teco.ventago.features.expenses.domain.models.requests.CreateMerchantRequest
 import com.teco.ventago.features.expenses.domain.models.requests.UpdateMerchantRequest
@@ -613,14 +614,16 @@ class ExpensesRepository(
     }
 
     private fun mapExpenseAccount(dataObj: JsonObject): ExpenseAccount {
+        val code = dataObj.stringValue("code").orEmpty()
         return ExpenseAccount(
             id = dataObj.longValue("id") ?: 0L,
             businessId = dataObj.longValue("business_id"),
             parentId = dataObj.longValue("parent_id"),
-            code = dataObj.stringValue("code").orEmpty(),
+            code = code,
             name = dataObj.stringValue("name").orEmpty(),
             kind = dataObj.stringValue("kind") ?: "expense",
-            isSystem = dataObj.booleanValue("is_system") ?: false,
+            isSystem = dataObj.booleanValue("is_system")
+                ?: isKnownSystemExpenseAccountCode(code),
             isActive = dataObj.booleanValue("is_active") ?: true,
             createdAt = dataObj.stringValue("created_at"),
             updatedAt = dataObj.stringValue("updated_at")

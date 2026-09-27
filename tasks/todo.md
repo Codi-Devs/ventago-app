@@ -7007,3 +7007,35 @@ PR knowledge: https://github.com/Codi-Devs/ventago-ai-knowledge-public/pull/59
 Ambos adjuntos en Trello. El plugin finalizó R8 con uploadCrashlyticsMappingFilePublicRelease;
 se subió mapping automáticamente, sin distribuir una nueva versión de la app.
 Para futuras validaciones locales de R8, excluir explícitamente esa tarea de upload.
+
+# Task 380 — Homogeneizar listados TODO
+
+Trello: https://trello.com/c/FIWZxRNq
+
+## Plan
+
+- [x] Capturar línea base de compilación y pruebas focales.
+- [x] Compartir el card elevado, el autocompletado y la fecha corta de Órdenes.
+- [x] Buscar Gastos por emisor, llevar filtros al app bar y dejar factura en filtros.
+- [x] Asignar iconos solo a conceptos de sistema uniformes; conservar fallback en mixtos/personalizados/sin concepto.
+- [x] Buscar Cotizaciones por cliente, quitar grupos de fecha y mostrar fecha dentro del card.
+- [x] Agregar pruebas de regresión y ejecutar gates posteriores.
+- [x] Registrar resultados y actualizar knowledge/rules.
+
+## Verification Gates
+
+- [x] `./gradlew --no-build-cache --no-configuration-cache :composeApp:compileCommonMainKotlinMetadata`
+- [x] `:composeApp:testAndroidHostTest --tests ExpenseConceptsTest --tests QuotesRepositoryTest`
+- [x] `git diff --check`
+
+## Review Notes
+
+- Órdenes, Gastos y Cotizaciones comparten `TransactionListCard`,
+  `ListAutocompleteSearchField` y `formatTransactionListDate`.
+- Gastos busca por emisor seleccionado, conserva la factura en filtros y usa
+  iconos semánticos solo para el catálogo exacto del sistema; mixtos,
+  personalizados o ausentes conservan el recibo.
+- Cotizaciones busca por cliente, muestra una lista plana y coloca la fecha
+  homogénea dentro del card.
+- Compilación común y pruebas focales Android aprobadas. Persisten únicamente
+  warnings ya presentes del proyecto; no se ejecutó validación visual en dispositivo.

@@ -3,6 +3,7 @@ package com.teco.ventago.features.expenses
 import com.teco.ventago.features.expenses.data.provider.normalizeExpensesApiResponse
 import com.teco.ventago.features.expenses.data.provider.buildCategorizationPayload
 import com.teco.ventago.features.expenses.domain.ExpenseConceptMode
+import com.teco.ventago.features.expenses.domain.ExpenseConceptVisualCategory
 import com.teco.ventago.features.expenses.domain.ExpenseItemConceptSelection
 import com.teco.ventago.features.expenses.domain.ExpensesErrorMapper
 import com.teco.ventago.features.expenses.domain.applyExpenseSummary
@@ -13,6 +14,7 @@ import com.teco.ventago.features.expenses.domain.buildExpenseCategorizationPaylo
 import com.teco.ventago.features.expenses.domain.buildExpenseConceptLabel
 import com.teco.ventago.features.expenses.domain.buildExpenseCreatePayload
 import com.teco.ventago.features.expenses.domain.inferDefaultExpenseAccount
+import com.teco.ventago.features.expenses.domain.isKnownSystemExpenseAccountCode
 import com.teco.ventago.features.expenses.domain.mergeExpenseSnapshots
 import com.teco.ventago.features.expenses.domain.models.Expense
 import com.teco.ventago.features.expenses.domain.models.ExpenseAccount
@@ -29,7 +31,9 @@ import com.teco.ventago.features.expenses.domain.models.requests.ListExpensesReq
 import com.teco.ventago.features.expenses.domain.models.requests.ExpensePartyRequest
 import com.teco.ventago.features.expenses.domain.models.requests.UpsertExpenseRequest
 import com.teco.ventago.features.expenses.domain.resolveExpenseConceptMode
+import com.teco.ventago.features.expenses.domain.resolveExpenseConceptVisualCategory
 import com.teco.ventago.json
+import com.teco.ventago.utils.formatTransactionListDate
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
@@ -489,5 +493,91 @@ class ExpenseConceptsTest {
             )
         )
         assertEquals("Concepto #77", buildExpenseConceptLabel(expense))
+    }
+
+    @Test
+    fun visualCategoryUsesSemanticIconForSystemFuelConcept() {
+        val fuel = ExpenseAccount(
+            id = 10,
+            code = "COMBUSTIBLES_LUBRICANTES",
+            name = "Combustibles y lubricantes",
+            isSystem = true,
+        )
+
+        assertEquals(
+            ExpenseConceptVisualCategory.FUEL,
+            resolveExpenseConceptVisualCategory(
+                Expense(defaultAccountId = fuel.id, defaultAccount = fuel)
+            ),
+        )
+    }
+
+    @Test
+    fun visualCategoryUsesFallbackForCustomConceptEvenWhenCodeMatchesSystemSeed() {
+        val customFuel = ExpenseAccount(
+            id = 11,
+            code = "COMBUSTIBLES_LUBRICANTES",
+            name = "Combustible propio",
+            isSystem = false,
+        )
+
+        assertEquals(
+            ExpenseConceptVisualCategory.FALLBACK,
+            resolveExpenseConceptVisualCategory(
+                Expense(defaultAccountId = customFuel.id, defaultAccount = customFuel)
+            ),
+        )
+    }
+
+    @Test
+    fun embeddedAccountCanRecognizeOnlyExactSystemSeedCodes() {
+        assertTrue(isKnownSystemExpenseAccountCode("COMBUSTIBLES_LUBRICANTES"))
+        assertFalse(isKnownSystemExpenseAccountCode("COMBUSTIBLE_EMPRESA"))
+    }
+
+    @Test
+    fun visualCategoryUsesFallbackForMixedConcepts() {
+        val fuel = ExpenseAccount(
+            id = 12,
+            code = "COMBUSTIBLES_LUBRICANTES",
+            name = "Combustibles",
+            isSystem = true,
+        )
+        val food = ExpenseAccount(
+            id = 13,
+            code = "COMIDAS_ENTRETENIMIENTO",
+            name = "Comidas",
+            isSystem = true,
+        )
+        val expense = Expense(
+            items = listOf(
+                ExpenseItem(id = 1, lineNumber = 1, expenseAccountId = fuel.id, expenseAccount = fuel),
+                ExpenseItem(id = 2, lineNumber = 2, expenseAccountId = food.id, expenseAccount = food),
+            ),
+        )
+
+        assertEquals(
+            ExpenseConceptVisualCategory.FALLBACK,
+            resolveExpenseConceptVisualCategory(expense),
+        )
+    }
+
+    @Test
+    fun visualCategoryUsesFallbackForMissingOrPartialConcept() {
+        assertEquals(
+            ExpenseConceptVisualCategory.FALLBACK,
+            resolveExpenseConceptVisualCategory(Expense()),
+        )
+        assertEquals(
+            ExpenseConceptVisualCategory.FALLBACK,
+            resolveExpenseConceptVisualCategory(
+                Expense(categorizationStatus = "partial")
+            ),
+        )
+    }
+
+    @Test
+    fun transactionListDateUsesTheOrdersFormatForDateOnlyValues() {
+        assertEquals("7 sep 2026", formatTransactionListDate("2026-09-07"))
     }
 }
