@@ -391,7 +391,14 @@ enum class PosScreens(
 
     // Expenses Screens
     Expenses(Res.string.expenses),
-    ExpensesListScreen(Res.string.expenses, true, showBackButton = true),
+    ExpensesListScreen(
+        Res.string.expenses,
+        true,
+        showBackButton = true,
+        actions = { backStackEntry, _, _ ->
+            com.teco.ventago.features.expenses.ui.list.ExpensesListScreenActions(backStackEntry)
+        },
+    ),
     ExpenseDetailsScreen(Res.string.expense_details, true, showBackButton = true),
     NewExpenseScreen(Res.string.new_expense, true, showBackButton = true),
     EditExpenseScreen(Res.string.expense_details, true, showBackButton = true),

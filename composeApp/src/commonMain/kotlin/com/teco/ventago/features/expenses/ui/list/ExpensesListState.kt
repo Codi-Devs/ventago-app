@@ -26,8 +26,7 @@ data class ExpensesListState(
     val source: String? = null,
     val paymentStatuses: List<String> = emptyList(),
     val categorizationStatus: String? = null,
-    // Search
-    val searchQuery: String = "",
+    val showFiltersSheet: Boolean = false,
     // Feature flags
     val hasExpensesQr: Boolean = false,
     val hasExpensesOcr: Boolean = false,
