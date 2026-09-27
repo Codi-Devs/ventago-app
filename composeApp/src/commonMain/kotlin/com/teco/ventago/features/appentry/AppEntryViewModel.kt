@@ -3,11 +3,13 @@ package com.teco.ventago.features.appentry
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.teco.ventago.core.version.AppBuildInfo
+import com.teco.ventago.core.version.AppVersion
 import com.teco.ventago.core.version.IAppUpdateLauncher
 import com.teco.ventago.core.version.VersionGateDecision
 import com.teco.ventago.core.version.VersionGateHold
 import com.teco.ventago.core.version.VersionGateService
 import com.teco.ventago.core.version.VersionPolicy
+import com.teco.ventago.core.version.parseMarketingVersion
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -24,7 +26,7 @@ enum class AppEntryPhase {
 data class AppEntryUiState(
     val phase: AppEntryPhase = AppEntryPhase.Checking,
     val versionName: String = "",
-    val installedBuild: Long = 0L,
+    val installedVersion: AppVersion? = null,
     val policy: VersionPolicy = VersionPolicy.DISABLED,
     val showRecommendedPrompt: Boolean = false,
     val showSettingsUpdate: Boolean = false,
@@ -40,7 +42,7 @@ class AppEntryViewModel(
     private val _uiState = MutableStateFlow(
         AppEntryUiState(
             versionName = buildInfo.versionName,
-            installedBuild = buildInfo.versionCode,
+            installedVersion = parseMarketingVersion(buildInfo.versionName),
         )
     )
     val uiState: StateFlow<AppEntryUiState> = _uiState.asStateFlow()
@@ -112,7 +114,7 @@ class AppEntryViewModel(
             it.copy(
                 phase = nextPhase,
                 versionName = snapshot.versionName,
-                installedBuild = snapshot.installedBuild,
+                installedVersion = snapshot.installedVersion,
                 policy = snapshot.policy,
                 showRecommendedPrompt = nextPhase == AppEntryPhase.Ready &&
                     versionGateService.shouldShowRecommendedPrompt(),

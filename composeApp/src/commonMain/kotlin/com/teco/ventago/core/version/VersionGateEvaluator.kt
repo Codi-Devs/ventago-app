@@ -1,32 +1,29 @@
 package com.teco.ventago.core.version
 
-fun parseBuildThreshold(raw: String?): Long? {
-    val trimmed = raw?.trim().orEmpty()
-    if (trimmed.isEmpty()) return null
-    val parsed = trimmed.toLongOrNull() ?: return null
-    if (parsed < 0L) return null
-    return parsed
-}
-
 fun normalizeVersionPolicy(
-    minUsableBuild: Long,
-    minRecommendedBuild: Long,
+    minUsableVersion: AppVersion,
+    minRecommendedVersion: AppVersion,
 ): VersionPolicy {
-    val clamped = minRecommendedBuild < minUsableBuild
+    val clamped = minRecommendedVersion < minUsableVersion
     return VersionPolicy(
-        minUsableBuild = minUsableBuild,
-        minRecommendedBuild = if (clamped) minUsableBuild else minRecommendedBuild,
+        minUsableVersion = minUsableVersion,
+        minRecommendedVersion = if (clamped) minUsableVersion else minRecommendedVersion,
         recommendedWasClamped = clamped,
     )
 }
 
 fun evaluateVersionGate(
     connected: Boolean,
-    installedBuild: Long,
+    installedVersion: AppVersion?,
     policy: VersionPolicy,
 ): VersionGateDecision {
     if (!connected) return VersionGateDecision.Offline
-    if (installedBuild < policy.minUsableBuild) return VersionGateDecision.Forced
-    if (installedBuild < policy.minRecommendedBuild) return VersionGateDecision.Recommended
+    val installed = installedVersion ?: return VersionGateDecision.Allowed
+    if (policy.minUsableVersion.isEnabled && installed < policy.minUsableVersion) {
+        return VersionGateDecision.Forced
+    }
+    if (policy.minRecommendedVersion.isEnabled && installed < policy.minRecommendedVersion) {
+        return VersionGateDecision.Recommended
+    }
     return VersionGateDecision.Allowed
 }

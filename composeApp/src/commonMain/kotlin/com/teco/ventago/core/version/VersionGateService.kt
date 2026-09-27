@@ -12,9 +12,11 @@ class VersionGateService(
     private val reachabilityProbe: IReachabilityProbe,
     private val dismissalStore: RecommendedDismissalStore,
 ) {
+    private val installedVersion = parseMarketingVersion(buildInfo.versionName)
+
     private val _snapshot = MutableStateFlow(
         VersionGateSnapshot(
-            installedBuild = buildInfo.versionCode,
+            installedVersion = installedVersion,
             versionName = buildInfo.versionName,
         )
     )
@@ -31,16 +33,18 @@ class VersionGateService(
         }
         val decision = evaluateVersionGate(
             connected = connected,
-            installedBuild = buildInfo.versionCode,
+            installedVersion = installedVersion,
             policy = policy,
         )
         _snapshot.update {
             VersionGateSnapshot(
                 decision = decision,
                 policy = policy,
-                installedBuild = buildInfo.versionCode,
+                installedVersion = installedVersion,
                 versionName = buildInfo.versionName,
-                showSettingsUpdate = buildInfo.versionCode < policy.minRecommendedBuild,
+                showSettingsUpdate = installedVersion != null &&
+                    policy.minRecommendedVersion.isEnabled &&
+                    installedVersion < policy.minRecommendedVersion,
                 configError = if (policy.recommendedWasClamped) "recommended_below_usable" else null,
             )
         }
@@ -50,17 +54,19 @@ class VersionGateService(
     fun shouldShowRecommendedPrompt(): Boolean {
         val current = _snapshot.value
         if (current.decision != VersionGateDecision.Recommended) return false
+        val installed = current.installedVersion ?: return false
         return !dismissalStore.isDismissed(
-            recommendedBuild = current.policy.minRecommendedBuild,
-            installedBuild = current.installedBuild,
+            recommendedVersion = current.policy.minRecommendedVersion.toString(),
+            installedVersion = installed.toString(),
         )
     }
 
     fun dismissRecommendedPrompt() {
         val current = _snapshot.value
+        val installed = current.installedVersion ?: return
         dismissalStore.dismiss(
-            recommendedBuild = current.policy.minRecommendedBuild,
-            installedBuild = current.installedBuild,
+            recommendedVersion = current.policy.minRecommendedVersion.toString(),
+            installedVersion = installed.toString(),
         )
     }
 

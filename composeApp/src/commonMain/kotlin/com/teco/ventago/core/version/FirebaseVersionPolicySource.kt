@@ -31,12 +31,12 @@ class FirebaseVersionPolicySource(
         }
         runCatching {
             remoteConfig.setDefaults(
-                AppChannel.ANDROID_PUBLIC.minUsableKey to 0L,
-                AppChannel.ANDROID_PUBLIC.minRecommendedKey to 0L,
-                AppChannel.ANDROID_POS.minUsableKey to 0L,
-                AppChannel.ANDROID_POS.minRecommendedKey to 0L,
-                AppChannel.IOS_PUBLIC.minUsableKey to 0L,
-                AppChannel.IOS_PUBLIC.minRecommendedKey to 0L,
+                AppChannel.ANDROID_PUBLIC.minUsableKey to DEFAULT_THRESHOLD,
+                AppChannel.ANDROID_PUBLIC.minRecommendedKey to DEFAULT_THRESHOLD,
+                AppChannel.ANDROID_POS.minUsableKey to DEFAULT_THRESHOLD,
+                AppChannel.ANDROID_POS.minRecommendedKey to DEFAULT_THRESHOLD,
+                AppChannel.IOS_PUBLIC.minUsableKey to DEFAULT_THRESHOLD,
+                AppChannel.IOS_PUBLIC.minRecommendedKey to DEFAULT_THRESHOLD,
             )
         }.onFailure { error ->
             logConfig("remote_config_defaults_failed ${error::class.simpleName}")
@@ -56,8 +56,8 @@ class FirebaseVersionPolicySource(
             remoteConfig.getValue(buildInfo.channel.minRecommendedKey).asString()
         }.getOrNull()
 
-        val usable = parseBuildThreshold(usableRaw)
-        val recommended = parseBuildThreshold(recommendedRaw)
+        val usable = parseMarketingVersion(usableRaw)
+        val recommended = parseMarketingVersion(recommendedRaw)
         if (usable == null && !usableRaw.isNullOrBlank()) {
             logConfig("invalid_usable_threshold")
         }
@@ -66,8 +66,8 @@ class FirebaseVersionPolicySource(
         }
 
         val policy = normalizeVersionPolicy(
-            minUsableBuild = usable ?: cached.minUsableBuild,
-            minRecommendedBuild = recommended ?: cached.minRecommendedBuild,
+            minUsableVersion = usable ?: cached.minUsableVersion,
+            minRecommendedVersion = recommended ?: cached.minRecommendedVersion,
         )
         if (policy.recommendedWasClamped) {
             logConfig("recommended_below_usable_clamped")
@@ -78,13 +78,13 @@ class FirebaseVersionPolicySource(
     }
 
     private fun persist(policy: VersionPolicy) {
-        storage.set(usableStorageKey(), policy.minUsableBuild)
-        storage.set(recommendedStorageKey(), policy.minRecommendedBuild)
+        storage.set(usableStorageKey(), policy.minUsableVersion.toString())
+        storage.set(recommendedStorageKey(), policy.minRecommendedVersion.toString())
     }
 
     private fun readPersisted(): VersionPolicy? {
-        val usable = storage.long(usableStorageKey()) ?: return null
-        val recommended = storage.long(recommendedStorageKey()) ?: return null
+        val usable = parseMarketingVersion(storage.string(usableStorageKey())) ?: return null
+        val recommended = parseMarketingVersion(storage.string(recommendedStorageKey())) ?: return null
         return normalizeVersionPolicy(usable, recommended)
     }
 
@@ -107,6 +107,7 @@ class FirebaseVersionPolicySource(
     companion object {
         private const val STORAGE_PREFIX = "version_gate.policy"
         private const val LOG_FLOW = "version_gate"
+        private const val DEFAULT_THRESHOLD = "0.0.0"
         private val FETCH_TIMEOUT = 8.seconds
         private val MIN_FETCH_INTERVAL = 15.minutes
     }

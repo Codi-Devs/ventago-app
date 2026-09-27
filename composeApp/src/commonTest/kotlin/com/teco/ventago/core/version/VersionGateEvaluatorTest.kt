@@ -12,8 +12,8 @@ class VersionGateEvaluatorTest {
     fun offlineWinsEvenWithCachedForcedPolicy() {
         val decision = evaluateVersionGate(
             connected = false,
-            installedBuild = 10L,
-            policy = VersionPolicy(minUsableBuild = 50L, minRecommendedBuild = 60L),
+            installedVersion = v("1.0.0"),
+            policy = policy("1.6.0", "1.6.7"),
         )
         assertEquals(VersionGateDecision.Offline, decision)
     }
@@ -22,8 +22,8 @@ class VersionGateEvaluatorTest {
     fun forcedWhenBelowUsable() {
         val decision = evaluateVersionGate(
             connected = true,
-            installedBuild = 49L,
-            policy = VersionPolicy(minUsableBuild = 50L, minRecommendedBuild = 60L),
+            installedVersion = v("1.6.6"),
+            policy = policy("1.6.7", "1.6.8"),
         )
         assertEquals(VersionGateDecision.Forced, decision)
     }
@@ -32,8 +32,8 @@ class VersionGateEvaluatorTest {
     fun recommendedWhenBetweenThresholds() {
         val decision = evaluateVersionGate(
             connected = true,
-            installedBuild = 50L,
-            policy = VersionPolicy(minUsableBuild = 50L, minRecommendedBuild = 60L),
+            installedVersion = v("1.6.7"),
+            policy = policy("1.6.7", "1.6.8"),
         )
         assertEquals(VersionGateDecision.Recommended, decision)
     }
@@ -42,8 +42,8 @@ class VersionGateEvaluatorTest {
     fun allowedWhenAtRecommended() {
         val decision = evaluateVersionGate(
             connected = true,
-            installedBuild = 60L,
-            policy = VersionPolicy(minUsableBuild = 50L, minRecommendedBuild = 60L),
+            installedVersion = v("1.6.8"),
+            policy = policy("1.6.7", "1.6.8"),
         )
         assertEquals(VersionGateDecision.Allowed, decision)
     }
@@ -52,37 +52,66 @@ class VersionGateEvaluatorTest {
     fun defaultsZeroNeverForceOrRecommend() {
         val decision = evaluateVersionGate(
             connected = true,
-            installedBuild = 1L,
+            installedVersion = v("1.0.0"),
             policy = VersionPolicy.DISABLED,
         )
         assertEquals(VersionGateDecision.Allowed, decision)
     }
 
     @Test
-    fun parseRejectsBlankNegativeAndNonInteger() {
-        assertNull(parseBuildThreshold(null))
-        assertNull(parseBuildThreshold(""))
-        assertNull(parseBuildThreshold("  "))
-        assertNull(parseBuildThreshold("-1"))
-        assertNull(parseBuildThreshold("1.6.7"))
-        assertNull(parseBuildThreshold("abc"))
-        assertEquals(0L, parseBuildThreshold("0"))
-        assertEquals(53L, parseBuildThreshold("53"))
+    fun unparseableInstalledVersionFailsOpenWhenOnline() {
+        val decision = evaluateVersionGate(
+            connected = true,
+            installedVersion = null,
+            policy = policy("1.6.7", "1.6.8"),
+        )
+        assertEquals(VersionGateDecision.Allowed, decision)
+    }
+
+    @Test
+    fun posSuffixComparesAsMarketingVersion() {
+        assertEquals(v("1.6.7"), parseMarketingVersion("1.6.7-pos"))
+        assertEquals(
+            VersionGateDecision.Allowed,
+            evaluateVersionGate(
+                connected = true,
+                installedVersion = parseMarketingVersion("1.6.7-pos"),
+                policy = policy("1.6.7", "1.6.7"),
+            ),
+        )
+    }
+
+    @Test
+    fun parseRejectsBlankBuildNumbersAndGarbage() {
+        assertNull(parseMarketingVersion(null))
+        assertNull(parseMarketingVersion(""))
+        assertNull(parseMarketingVersion("  "))
+        assertNull(parseMarketingVersion("-1"))
+        assertNull(parseMarketingVersion("53"))
+        assertNull(parseMarketingVersion("abc"))
+        assertNull(parseMarketingVersion("1.6.7.1"))
+        assertEquals(AppVersion.ZERO, parseMarketingVersion("0"))
+        assertEquals(AppVersion.ZERO, parseMarketingVersion("0.0.0"))
+        assertEquals(v("1.6.0"), parseMarketingVersion("1.6"))
+        assertEquals(v("1.6.7"), parseMarketingVersion("1.6.7"))
     }
 
     @Test
     fun recommendedBelowUsableIsClamped() {
-        val policy = normalizeVersionPolicy(minUsableBuild = 80L, minRecommendedBuild = 50L)
+        val policy = normalizeVersionPolicy(
+            minUsableVersion = v("1.6.8")!!,
+            minRecommendedVersion = v("1.6.5")!!,
+        )
         assertTrue(policy.recommendedWasClamped)
-        assertEquals(80L, policy.minUsableBuild)
-        assertEquals(80L, policy.minRecommendedBuild)
+        assertEquals(v("1.6.8"), policy.minUsableVersion)
+        assertEquals(v("1.6.8"), policy.minRecommendedVersion)
         assertEquals(
             VersionGateDecision.Allowed,
-            evaluateVersionGate(connected = true, installedBuild = 80L, policy = policy),
+            evaluateVersionGate(connected = true, installedVersion = v("1.6.8"), policy = policy),
         )
         assertEquals(
             VersionGateDecision.Forced,
-            evaluateVersionGate(connected = true, installedBuild = 79L, policy = policy),
+            evaluateVersionGate(connected = true, installedVersion = v("1.6.7"), policy = policy),
         )
     }
 
@@ -90,6 +119,8 @@ class VersionGateEvaluatorTest {
     fun channelsKeepIndependentKeys() {
         assertFalse(AppChannel.ANDROID_PUBLIC.minUsableKey == AppChannel.ANDROID_POS.minUsableKey)
         assertFalse(AppChannel.ANDROID_PUBLIC.minRecommendedKey == AppChannel.IOS_PUBLIC.minRecommendedKey)
+        assertTrue(AppChannel.ANDROID_PUBLIC.minUsableKey.contains("version"))
+        assertFalse(AppChannel.ANDROID_PUBLIC.minUsableKey.contains("build"))
         assertEquals(
             AppChannel.ANDROID_POS,
             AppChannel.resolve(
@@ -113,6 +144,15 @@ class VersionGateEvaluatorTest {
                 isPosBuild = false,
                 isIos = true,
             ),
+        )
+    }
+
+    private fun v(raw: String): AppVersion? = parseMarketingVersion(raw)
+
+    private fun policy(usable: String, recommended: String): VersionPolicy {
+        return normalizeVersionPolicy(
+            minUsableVersion = v(usable)!!,
+            minRecommendedVersion = v(recommended)!!,
         )
     }
 }

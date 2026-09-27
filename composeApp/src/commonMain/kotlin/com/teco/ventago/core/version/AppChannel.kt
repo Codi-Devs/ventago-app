@@ -8,16 +8,16 @@ enum class AppChannel {
 
     val minUsableKey: String
         get() = when (this) {
-            ANDROID_PUBLIC -> "app_min_usable_build_android_public"
-            ANDROID_POS -> "app_min_usable_build_android_pos"
-            IOS_PUBLIC -> "app_min_usable_build_ios_public"
+            ANDROID_PUBLIC -> "app_min_usable_version_android_public"
+            ANDROID_POS -> "app_min_usable_version_android_pos"
+            IOS_PUBLIC -> "app_min_usable_version_ios_public"
         }
 
     val minRecommendedKey: String
         get() = when (this) {
-            ANDROID_PUBLIC -> "app_min_recommended_build_android_public"
-            ANDROID_POS -> "app_min_recommended_build_android_pos"
-            IOS_PUBLIC -> "app_min_recommended_build_ios_public"
+            ANDROID_PUBLIC -> "app_min_recommended_version_android_public"
+            ANDROID_POS -> "app_min_recommended_version_android_pos"
+            IOS_PUBLIC -> "app_min_recommended_version_ios_public"
         }
 
     companion object {
