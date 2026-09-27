@@ -488,6 +488,7 @@ data class PosState(
     val createdOrderId: Int? = null,
     val paymentLinkPolling: Boolean = false,
     val paymentLinkPaymentDetected: Boolean = false,
+    val paymentLinkInternalReadyOrderId: Int? = null,
     val paymentLinkInvoicePrintAttemptedOrderId: Int? = null,
     val paymentLinkManualPanelVisible: Boolean = false,
     val paymentLinkManualErrorMessage: String? = null,
