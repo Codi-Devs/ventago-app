@@ -284,6 +284,8 @@ private fun FriendlySuccessScreen(
         invoiceStatus = uiState.invoiceStatus,
         autoInvoiceOnPaymentSuccess = uiState.autoInvoiceOnPaymentSuccess,
         internalDocument = uiState.internalDocument,
+        internalDocumentReady = uiState.paymentLinkInternalReadyOrderId == uiState.createdOrderId &&
+            uiState.createdOrderId != null,
     )
     val paymentLinkAwaitingInvoice = paymentLinkPresentation.awaitingElectronicInvoice
     val paymentLinkManualInvoiceRequired = paymentLinkPresentation.showManualInvoiceRequired

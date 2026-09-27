@@ -19,10 +19,11 @@ internal fun paymentLinkSuccessPresentation(
     invoiceStatus: InvoiceStatus,
     autoInvoiceOnPaymentSuccess: Boolean,
     internalDocument: Boolean,
+    internalDocumentReady: Boolean = false,
 ): PaymentLinkSuccessPresentation {
     val invoiceSettled = invoiceStatus == InvoiceStatus.ISSUED || invoiceStatus == InvoiceStatus.FAILED
     val completedInternalDocument = isPaymentLink &&
-        internalDocument &&
+        (internalDocument || internalDocumentReady) &&
         paymentDetected &&
         !invoiceSettled
     val awaitingElectronicInvoice = isPaymentLink &&

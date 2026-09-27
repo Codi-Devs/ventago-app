@@ -62,6 +62,21 @@ class PaymentLinkSuccessPresentationTest {
     }
 
     @Test
+    fun readyInternalDocumentDoesNotWaitEvenIfTheLocalFlagWasCleared() {
+        val presentation = paymentLinkSuccessPresentation(
+            isPaymentLink = true,
+            paymentDetected = true,
+            invoiceStatus = InvoiceStatus.NONE,
+            autoInvoiceOnPaymentSuccess = true,
+            internalDocument = false,
+            internalDocumentReady = true,
+        )
+
+        assertTrue(presentation.completedInternalDocument)
+        assertFalse(presentation.showGeneratingInvoice)
+    }
+
+    @Test
     fun electronicPaymentLinkWithoutAutoInvoiceAsksForManualInvoice() {
         val presentation = paymentLinkSuccessPresentation(
             isPaymentLink = true,
