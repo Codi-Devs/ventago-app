@@ -1733,6 +1733,7 @@ class PosViewModel(
                           createdOrderId = response.id,
                           paymentLinkPolling = false,
                           paymentLinkPaymentDetected = false,
+                          paymentLinkInternalReadyOrderId = null,
                           paymentLinkInvoicePrintAttemptedOrderId = null,
                           paymentLinkManualPanelVisible = false,
                           paymentLinkManualErrorMessage = null,
@@ -1802,6 +1803,19 @@ class PosViewModel(
                       }
                   }
 
+                  if (hasValidOrderNumber && saveAsNonFiscal && effectiveCreatePaymentLink) {
+                      runCatching {
+                          orderService.confirmNonFiscal(
+                              businessId = business!!.businessId,
+                              orderId = response.id,
+                          )
+                      }.onFailure { error ->
+                          if (error is CancellationException) return@onFailure
+                          withContext(Dispatchers.Main) {
+                              snackbarService.show("El enlace se creó, pero el documento interno no quedó generado.")
+                          }
+                      }
+                  }
                   withContext(Dispatchers.Main) {
                       if (!hasValidOrderNumber) {
                           showError()
@@ -2527,16 +2541,39 @@ class PosViewModel(
                         freshOrder.paymentStatus == PaymentStatus.PAID.id ||
                         invoiceStatus == InvoiceStatus.ISSUED
 
+                    val internalPayment = paymentDetected && (
+                        uiState.value.internalDocument ||
+                            freshOrder.isExplicitInternal() ||
+                            freshOrder.hasCurrentNonFiscalDocument()
+                        )
+                    val settledOrder = if (internalPayment && !freshOrder.hasCurrentNonFiscalDocument()) {
+                        runCatching {
+                            orderService.confirmNonFiscal(businessId = businessId, orderId = orderId)
+                        }.getOrElse { error ->
+                            if (error is CancellationException) throw error
+                            freshOrder
+                        }
+                    } else {
+                        freshOrder
+                    }
+                    val internalDocumentReady = internalPayment && settledOrder.hasCurrentNonFiscalDocument()
+
                     updateState {
                         copy(
                             paymentLinkPaymentDetected = paymentDetected,
-                            invoiceStatus = invoiceStatus,
-                            orderNumber = freshOrder.internalNumber.ifBlank { orderNumber },
+                            paymentLinkInternalReadyOrderId = if (internalDocumentReady) orderId else paymentLinkInternalReadyOrderId,
+                            invoiceStatus = InvoiceStatus.fromId(settledOrder.invoiceStatus ?: invoiceStatus.id),
+                            orderNumber = settledOrder.internalNumber.ifBlank { orderNumber },
                         )
                     }
 
-                    if (paymentDetected && uiState.value.internalDocument) {
-                        printInternalDocumentTicket(orderId)
+                    if (internalPayment) {
+                        if (internalDocumentReady) {
+                            prefetchNonFiscalPdf(businessId = businessId, orderId = orderId.toLong())
+                            printInternalDocumentTicket(orderId)
+                        } else {
+                            snackbarService.show("El pago se registró, pero no se pudo generar el documento interno.")
+                        }
                         return@launch
                     }
 
@@ -3812,7 +3849,17 @@ class PosViewModel(
             !state.orderCreationFailed &&
             (
                 state.invoiceStatus == InvoiceStatus.ISSUED ||
-                    state.paymentFlowMode == PaymentFlowMode.NON_FISCAL
+                    state.paymentFlowMode == PaymentFlowMode.NON_FISCAL ||
+                    paymentLinkSuccessPresentation(
+                        isPaymentLink = state.paymentLink.isNotBlank() ||
+                            state.paymentFlowMode == PaymentFlowMode.PAYMENT_LINK,
+                        paymentDetected = state.paymentLinkPaymentDetected,
+                        invoiceStatus = state.invoiceStatus,
+                        autoInvoiceOnPaymentSuccess = state.autoInvoiceOnPaymentSuccess,
+                        internalDocument = state.internalDocument,
+                        internalDocumentReady = state.paymentLinkInternalReadyOrderId == state.createdOrderId &&
+                            state.createdOrderId != null,
+                    ).completedInternalDocument
                 )
     }
 
