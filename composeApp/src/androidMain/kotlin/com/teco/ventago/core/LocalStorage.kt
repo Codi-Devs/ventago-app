@@ -105,7 +105,11 @@ actual open class LocalStorage(
      * @return The stored string value, or null if it is missing
      */
     actual fun string(forKey: String): String? {
-        return sp.getString(forKey, null)
+        return try {
+            sp.getString(forKey, null)
+        } catch (_: ClassCastException) {
+            null
+        }
     }
 
     /**

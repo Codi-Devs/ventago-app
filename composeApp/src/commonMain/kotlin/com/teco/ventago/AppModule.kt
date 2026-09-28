@@ -14,6 +14,14 @@ import com.teco.ventago.core.firebase.AnalyticsService
 import com.teco.ventago.core.logger.ILoggerService
 import com.teco.ventago.core.logger.LoggerService
 import com.teco.ventago.core.logger.printLog
+import com.teco.ventago.core.version.FirebaseVersionPolicySource
+import com.teco.ventago.core.version.HttpReachabilityProbe
+import com.teco.ventago.core.version.IReachabilityProbe
+import com.teco.ventago.core.version.IVersionPolicySource
+import com.teco.ventago.core.version.RecommendedDismissalStore
+import com.teco.ventago.core.version.VersionGateHold
+import com.teco.ventago.core.version.VersionGateService
+import com.teco.ventago.features.appentry.AppEntryViewModel
 import com.teco.ventago.core.FingerPrintService
 import com.teco.ventago.core.network.FINGERPRINT_HEADER_NAME
 import com.teco.ventago.core.session.ISessionIdService
@@ -258,6 +266,7 @@ internal val viewModels = module {
     viewModelOf(::RegisterViewModel)
     viewModelOf(::BusinessRegisterViewModel)
     viewModelOf(::AppViewModel)
+    viewModelOf(::AppEntryViewModel)
     viewModel {
         HomeViewModel(
             authService = get(),
@@ -300,6 +309,7 @@ internal val viewModels = module {
             appScope = get(named("AppScope")),
             posProvisioningService = get(),
             inventoryAvailabilityStore = get(),
+            versionGateHold = get(),
         )
     }
     viewModelOf(::QuotesListViewModel)
@@ -449,6 +459,25 @@ internal fun appModule() = module {
         LoggerService(
             client = get(),
             secure = get()
+        )
+    }
+
+    single { VersionGateHold() }
+    single { RecommendedDismissalStore(get()) }
+    single<IReachabilityProbe> { HttpReachabilityProbe() }
+    single<IVersionPolicySource> {
+        FirebaseVersionPolicySource(
+            buildInfo = get(),
+            storage = get(),
+            logger = get(),
+        )
+    }
+    single {
+        VersionGateService(
+            buildInfo = get(),
+            policySource = get(),
+            reachabilityProbe = get(),
+            dismissalStore = get(),
         )
     }
 

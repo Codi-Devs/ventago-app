@@ -679,6 +679,17 @@
     <string name="pos_devices">Dispositivos POS</string>
     <string name="pos_device_details">Detalle de dispositivo POS</string>
     <string name="app_logo_content_description">Logo de VentaGO</string>
+    <string name="update_offline_title">Sin conexión</string>
+    <string name="update_offline_body">VentaGO necesita internet para continuar. Revisa tu conexión e inténtalo de nuevo.</string>
+    <string name="update_forced_title">Actualización obligatoria</string>
+    <string name="update_forced_body">Esta versión ya no se puede usar. Actualiza la app para continuar.</string>
+    <string name="update_recommended_title">Actualización recomendada</string>
+    <string name="update_recommended_body">Hay una versión más reciente de VentaGO. Puedes actualizar ahora o seguir usando esta versión.</string>
+    <string name="update_now">Actualizar ahora</string>
+    <string name="update_later">Más tarde</string>
+    <string name="update_retry">Reintentar</string>
+    <string name="update_app">Actualizar app</string>
+    <string name="update_app_installed_version">Versión instalada: %1$s</string>
 
     <string name="get_started">Empezar</string>
     <string name="quote_updated">Cotización actualizada</string>

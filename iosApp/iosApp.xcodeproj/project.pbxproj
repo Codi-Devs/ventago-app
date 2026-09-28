@@ -13,6 +13,7 @@
 		55E359322EA9640100F60E7C /* FirebaseDatabase in Frameworks */ = {isa = PBXBuildFile; productRef = 55E359312EA9640100F60E7C /* FirebaseDatabase */; };
 		55E359342EA9640100F60E7C /* FirebaseFirestore in Frameworks */ = {isa = PBXBuildFile; productRef = 55E359332EA9640100F60E7C /* FirebaseFirestore */; };
 		55E359362EA9640100F60E7C /* FirebaseMessaging in Frameworks */ = {isa = PBXBuildFile; productRef = 55E359352EA9640100F60E7C /* FirebaseMessaging */; };
+		55E359382EA9640100F60E7C /* FirebaseRemoteConfig in Frameworks */ = {isa = PBXBuildFile; productRef = 55E359372EA9640100F60E7C /* FirebaseRemoteConfig */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -58,6 +59,7 @@
 				55E359322EA9640100F60E7C /* FirebaseDatabase in Frameworks */,
 				55E359342EA9640100F60E7C /* FirebaseFirestore in Frameworks */,
 				55E3592E2EA9640100F60E7C /* FirebaseAuth in Frameworks */,
+				55E359382EA9640100F60E7C /* FirebaseRemoteConfig in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -109,6 +111,7 @@
 				55E359312EA9640100F60E7C /* FirebaseDatabase */,
 				55E359332EA9640100F60E7C /* FirebaseFirestore */,
 				55E359352EA9640100F60E7C /* FirebaseMessaging */,
+				55E359372EA9640100F60E7C /* FirebaseRemoteConfig */,
 			);
 			productName = iosApp;
 			productReference = CAE77F623088645D3F2F092F /* VentaGo.app */;
@@ -484,6 +487,11 @@
 			isa = XCSwiftPackageProductDependency;
 			package = 55E3592A2EA9640100F60E7C /* XCRemoteSwiftPackageReference "firebase-ios-sdk" */;
 			productName = FirebaseMessaging;
+		};
+		55E359372EA9640100F60E7C /* FirebaseRemoteConfig */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 55E3592A2EA9640100F60E7C /* XCRemoteSwiftPackageReference "firebase-ios-sdk" */;
+			productName = FirebaseRemoteConfig;
 		};
 /* End XCSwiftPackageProductDependency section */
 	};
