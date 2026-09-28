@@ -293,8 +293,10 @@ class ProductService(
     }
 
     private fun saveCache() {
+        val snapshot = state.value ?: return
         CoroutineScope(Dispatchers.IO).launch {
-            cache.saveCache(state.value)
+            cache.saveCache(snapshot)
+            changesManager.productsChanged()
         }
     }
 
