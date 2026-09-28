@@ -12,6 +12,14 @@ fun normalizeVersionPolicy(
     )
 }
 
+fun pickRemoteThreshold(primaryRaw: String?, fallbackRaw: String?): AppVersion? {
+    val primary = parseMarketingVersion(primaryRaw)
+    val fallback = parseMarketingVersion(fallbackRaw)
+    if (primary?.isEnabled == true) return primary
+    if (fallback?.isEnabled == true) return fallback
+    return primary ?: fallback
+}
+
 fun readStoredVersionPolicy(
     usableRaw: String?,
     recommendedRaw: String?,

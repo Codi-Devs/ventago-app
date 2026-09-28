@@ -20,6 +20,20 @@ enum class AppChannel {
             IOS_PUBLIC -> "app_min_recommended_version_ios_public"
         }
 
+    val minUsableLegacyKey: String
+        get() = when (this) {
+            ANDROID_PUBLIC -> "app_min_usable_build_android_public"
+            ANDROID_POS -> "app_min_usable_build_android_pos"
+            IOS_PUBLIC -> "app_min_usable_build_ios_public"
+        }
+
+    val minRecommendedLegacyKey: String
+        get() = when (this) {
+            ANDROID_PUBLIC -> "app_min_recommended_build_android_public"
+            ANDROID_POS -> "app_min_recommended_build_android_pos"
+            IOS_PUBLIC -> "app_min_recommended_build_ios_public"
+        }
+
     companion object {
         const val ANDROID_PUBLIC_PACKAGE = "com.teco.ventago"
         const val ANDROID_POS_PACKAGE = "com.teco.ventago.pos"

@@ -6,7 +6,6 @@ import com.teco.ventago.core.logger.Log
 import com.teco.ventago.core.logger.LogLevel
 import dev.gitlive.firebase.Firebase
 import dev.gitlive.firebase.remoteconfig.remoteConfig
-import kotlin.time.Duration.Companion.minutes
 import kotlin.time.Duration.Companion.seconds
 import kotlinx.coroutines.withTimeout
 
@@ -33,10 +32,16 @@ class FirebaseVersionPolicySource(
             remoteConfig.setDefaults(
                 AppChannel.ANDROID_PUBLIC.minUsableKey to DEFAULT_THRESHOLD,
                 AppChannel.ANDROID_PUBLIC.minRecommendedKey to DEFAULT_THRESHOLD,
+                AppChannel.ANDROID_PUBLIC.minUsableLegacyKey to DEFAULT_THRESHOLD,
+                AppChannel.ANDROID_PUBLIC.minRecommendedLegacyKey to DEFAULT_THRESHOLD,
                 AppChannel.ANDROID_POS.minUsableKey to DEFAULT_THRESHOLD,
                 AppChannel.ANDROID_POS.minRecommendedKey to DEFAULT_THRESHOLD,
+                AppChannel.ANDROID_POS.minUsableLegacyKey to DEFAULT_THRESHOLD,
+                AppChannel.ANDROID_POS.minRecommendedLegacyKey to DEFAULT_THRESHOLD,
                 AppChannel.IOS_PUBLIC.minUsableKey to DEFAULT_THRESHOLD,
                 AppChannel.IOS_PUBLIC.minRecommendedKey to DEFAULT_THRESHOLD,
+                AppChannel.IOS_PUBLIC.minUsableLegacyKey to DEFAULT_THRESHOLD,
+                AppChannel.IOS_PUBLIC.minRecommendedLegacyKey to DEFAULT_THRESHOLD,
             )
         }.onFailure { error ->
             logConfig("remote_config_defaults_failed ${error::class.simpleName}")
@@ -52,16 +57,22 @@ class FirebaseVersionPolicySource(
         val usableRaw = runCatching {
             remoteConfig.getValue(buildInfo.channel.minUsableKey).asString()
         }.getOrNull()
+        val usableLegacyRaw = runCatching {
+            remoteConfig.getValue(buildInfo.channel.minUsableLegacyKey).asString()
+        }.getOrNull()
         val recommendedRaw = runCatching {
             remoteConfig.getValue(buildInfo.channel.minRecommendedKey).asString()
         }.getOrNull()
+        val recommendedLegacyRaw = runCatching {
+            remoteConfig.getValue(buildInfo.channel.minRecommendedLegacyKey).asString()
+        }.getOrNull()
 
-        val usable = parseMarketingVersion(usableRaw)
-        val recommended = parseMarketingVersion(recommendedRaw)
-        if (usable == null && !usableRaw.isNullOrBlank()) {
+        val usable = pickRemoteThreshold(usableRaw, usableLegacyRaw)
+        val recommended = pickRemoteThreshold(recommendedRaw, recommendedLegacyRaw)
+        if (usable == null && !(usableRaw.isNullOrBlank() && usableLegacyRaw.isNullOrBlank())) {
             logConfig("invalid_usable_threshold")
         }
-        if (recommended == null && !recommendedRaw.isNullOrBlank()) {
+        if (recommended == null && !(recommendedRaw.isNullOrBlank() && recommendedLegacyRaw.isNullOrBlank())) {
             logConfig("invalid_recommended_threshold")
         }
 
@@ -122,6 +133,6 @@ class FirebaseVersionPolicySource(
         private const val LOG_FLOW = "version_gate"
         private const val DEFAULT_THRESHOLD = "0.0.0"
         private val FETCH_TIMEOUT = 8.seconds
-        private val MIN_FETCH_INTERVAL = 15.minutes
+        private val MIN_FETCH_INTERVAL = 0.seconds
     }
 }

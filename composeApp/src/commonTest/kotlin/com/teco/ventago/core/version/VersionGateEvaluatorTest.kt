@@ -116,6 +116,13 @@ class VersionGateEvaluatorTest {
     }
 
     @Test
+    fun pickRemoteThresholdPrefersLegacyBuildKeyWhenVersionKeyIsDefault() {
+        assertEquals(v("1.6.6"), pickRemoteThreshold("0.0.0", "1.6.6"))
+        assertEquals(v("1.6.8"), pickRemoteThreshold("1.6.8", "1.6.6"))
+        assertNull(pickRemoteThreshold(null, null))
+    }
+
+    @Test
     fun storedPolicyIgnoresMissingAndLegacyBuildNumbers() {
         assertNull(readStoredVersionPolicy(null, null))
         assertNull(readStoredVersionPolicy("53", "54"))
@@ -129,7 +136,10 @@ class VersionGateEvaluatorTest {
         assertFalse(AppChannel.ANDROID_PUBLIC.minUsableKey == AppChannel.ANDROID_POS.minUsableKey)
         assertFalse(AppChannel.ANDROID_PUBLIC.minRecommendedKey == AppChannel.IOS_PUBLIC.minRecommendedKey)
         assertTrue(AppChannel.ANDROID_PUBLIC.minUsableKey.contains("version"))
-        assertFalse(AppChannel.ANDROID_PUBLIC.minUsableKey.contains("build"))
+        assertEquals(
+            "app_min_recommended_build_android_public",
+            AppChannel.ANDROID_PUBLIC.minRecommendedLegacyKey,
+        )
         assertEquals(
             AppChannel.ANDROID_POS,
             AppChannel.resolve(
