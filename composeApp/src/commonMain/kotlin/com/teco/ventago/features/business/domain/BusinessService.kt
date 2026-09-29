@@ -29,6 +29,7 @@ class BusinessService(
     private val changesManager: IChangesManager,
     private val authService: IAuthService,
     private val productService: ProductService,
+    private val appScope: CoroutineScope = CoroutineScope(Dispatchers.IO),
 ) {
 
     val business = MutableStateFlow<Business?>(null)
@@ -146,7 +147,7 @@ class BusinessService(
 
 
     private fun saveCache(ignoreChange: Boolean = false) {
-        CoroutineScope(Dispatchers.IO).launch {
+        appScope.launch {
             cache.saveCache(business.value)
             if (!ignoreChange) {
                 changesManager.businessChanged()
@@ -154,10 +155,10 @@ class BusinessService(
         }
     }
 
-    fun saveBusiness(newBusiness: Business) {
+    fun saveBusiness(newBusiness: Business, publishChange: Boolean = true) {
         business.update {
             newBusiness
         }
-        saveCache()
+        saveCache(ignoreChange = !publishChange)
     }
 }

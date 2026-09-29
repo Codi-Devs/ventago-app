@@ -412,7 +412,7 @@ internal fun appModule() = module {
     }
 
     single<ICacheService> {
-        RoomCache(get(), get())
+        RoomCache(get())
     }
 
     single<AnalyticsService> {

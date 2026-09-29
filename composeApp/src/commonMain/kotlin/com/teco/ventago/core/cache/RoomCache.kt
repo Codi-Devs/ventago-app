@@ -6,7 +6,6 @@ import com.teco.ventago.core.cache.room.models.UserCache
 import com.teco.ventago.core.cache.room.models.toBusinessIdsList
 import com.teco.ventago.core.cache.room.models.toCache
 import com.teco.ventago.core.cache.room.models.toObject
-import com.teco.ventago.core.changes.IChangesManager
 import com.teco.ventago.features.auth.domain.model.User
 import com.teco.ventago.features.auth.domain.model.response.BusinessIds
 import com.teco.ventago.features.branches.domain.model.Branch
@@ -16,7 +15,7 @@ import com.teco.ventago.features.financialProfile.domain.model.BusinessFinancial
 import com.teco.ventago.features.product.domain.model.Products
 import kotlin.reflect.KClass
 
-class RoomCache (private val cacheDatabase: CacheDatabase,  private val changesManager: IChangesManager): ICacheService {
+class RoomCache (private val cacheDatabase: CacheDatabase): ICacheService {
     override suspend fun <T : Any> getCache(klass: KClass<T>): T? {
         return when (klass) {
             User::class -> {
@@ -74,7 +73,6 @@ class RoomCache (private val cacheDatabase: CacheDatabase,  private val changesM
             is Business -> {
                 cacheDatabase.getBusinessCacheDao().deleteBusiness()
                 data.toCache()?.let { cacheDatabase.getBusinessCacheDao().insert(it) }
-                changesManager.businessChanged()
             }
             is BusinessFinancialProfile -> {
                 cacheDatabase.getFinancialProfileCacheDao().deleteProfile()
@@ -83,7 +81,6 @@ class RoomCache (private val cacheDatabase: CacheDatabase,  private val changesM
             is Products -> {
                 cacheDatabase.getProductsCacheDao().deleteProducts()
                 data.toCache()?.let { cacheDatabase.getProductsCacheDao().insert(it) }
-                changesManager.productsChanged()
             }
         }
     }

@@ -72,7 +72,7 @@ class SettingsService(val repository: ISettingsRepository, private val businessS
         val res = repository.updateBusinessLogo(logo, businessId)
         if (res) {
             businessService.business.value?.let {
-                businessService.saveBusiness(it.copy(logo = logo))
+                businessService.saveBusiness(it.copy(logo = logo), publishChange = false)
             }
         }
         return res
