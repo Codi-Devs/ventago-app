@@ -1,3 +1,17 @@
+# Ticket JSON sin impresora (Trello #386) TODO
+
+## Plan
+
+- [x] Separar la generación de documentos de la disponibilidad de impresora.
+- [x] Solicitar `TICKET` para toda orden confirmada, fiscal o interna.
+- [x] Conservar borradores con `PDF` y `XML` únicamente.
+- [x] Ejecutar prueba focal y verificación de diff.
+
+## Review Notes
+
+- La política de formatos vive en dominio y no consulta impresoras.
+- La impresión local continúa usando `PrinterService`; sólo cambió el documento solicitado al backend.
+
 # Cold start session splash TODO
 
 ## Plan

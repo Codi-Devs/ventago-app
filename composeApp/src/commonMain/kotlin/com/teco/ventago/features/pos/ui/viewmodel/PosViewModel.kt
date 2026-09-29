@@ -30,6 +30,7 @@ import com.teco.ventago.features.invoicing.domain.resolvePostCreateInvoiceWarnin
 import com.teco.ventago.features.invoicing.domain.models.InvoiceStatus
 import com.teco.ventago.features.orders.domain.OrderService
 import com.teco.ventago.features.orders.domain.OrderPaymentSubmission
+import com.teco.ventago.features.orders.domain.buildOrderDocumentFormats
 import com.teco.ventago.features.orders.domain.models.CustomerSnapshot
 import com.teco.ventago.features.orders.domain.models.Order
 import com.teco.ventago.features.orders.domain.models.PaymentStatus
@@ -2470,13 +2471,7 @@ class PosViewModel(
 
         val commercialAddenda: CommercialAddenda? = null // TODO add commercial addenda if needed
 
-        val formats = buildList {
-            add("PDF")
-            add("XML")
-            if (printerService.shouldRequestTicket(branch.code, branch.billingPoint)) {
-                add("TICKET")
-            }
-        }
+        val formats = buildOrderDocumentFormats(saveAsDraft = saveAsDraft)
 
         return CreateOrderRequest(
             invoice = invoice,
