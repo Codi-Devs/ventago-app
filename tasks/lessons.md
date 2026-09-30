@@ -255,3 +255,5 @@
 - En Kotlin/Native `iosMain`, `UIView.endEditing` del UIKit commonizado es una extensión: hay que `import platform.UIKit.endEditing`. `VNImageRequestHandler` usa el parámetro `cGImage`, no `cgImage`; APIs CInterop del archivo necesitan `@file:OptIn(ExperimentalForeignApi::class)`.
 - En iOS, no uses Skia `Image.makeFromEncoded(...).peekPixels()` para validar fotos de factura: el JPEG encoded no trae pixmap y el gate local responde `UNREADABLE`. Decodifica con `UIImage`/`CGImage` y un bitmap context.
 - En KPI operativos de home, mantener el card enfocado en el total; trasladar el desglose fiscal/interno a un diálogo accesible desde toda la tarjeta y aplicar el mismo contrato en web y app.
+
+- Al endurecer logout, aislar cada operación local además de las remotas; publicar usuario null antes de efectos fallibles y probar errores de almacenamiento y del ID de sesión en AuthService.

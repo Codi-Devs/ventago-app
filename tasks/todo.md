@@ -1,3 +1,12 @@
+# PR #16 — correcciones de review
+
+- [x] Proteger limpieza local y emitir usuario null antes de operaciones que pueden fallar.
+- [x] Probar AuthService: limpieza, arranque y listener auto-cancelado.
+- [x] Documentar cancelación y corregir relaciones/rangos del manifest.
+- [x] Actualizar app, knowledge y responder comentarios.
+
+Verificación: 18 tests aprobados (3 AuthService, 6 refresh, 9 navegación); diff-check aprobado. Limpieza individual y simultánea, arranque y listener sin errores fatales.
+
 # Sesión expirada sin crash — Trello #388
 
 - [x] Confirmar tarjeta, reglas y causa desde origin/main en worktree.

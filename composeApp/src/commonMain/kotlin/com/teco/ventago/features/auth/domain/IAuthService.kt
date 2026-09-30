@@ -10,6 +10,14 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flowOf
 
 interface IAuthService {
+    /**
+     * Renews tokens, or signs out and throws [SessionExpiredException] on refresh failure.
+     * This domain cancellation stops authenticated work without a fatal root-launch error.
+     * Catch it before CancellationException if handling it explicitly; normal cancellation
+     * must still be rethrown. Clear caller loading state in finally. runCatching and
+     * catch(Exception) also capture it. Navigation observes the cleared user independently.
+     * Current policy also signs out on transport/server/response failures during refresh.
+     */
     suspend fun refreshToken(client: HttpClient, failedAccessToken: String? = null)
     suspend fun googleLogin(googleToken: String): AuthResponse
     suspend fun emailLogin(request: EmailLoginRequest): AuthResponse

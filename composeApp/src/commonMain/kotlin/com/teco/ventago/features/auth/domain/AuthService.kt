@@ -1,7 +1,6 @@
 package com.teco.ventago.features.auth.domain
 
 import com.teco.ventago.Configs
-import com.teco.ventago.core.SecureStorage
 import com.teco.ventago.core.authz.AuthzJwtDecoder
 import com.teco.ventago.core.cache.ICacheService
 import com.teco.ventago.core.changes.IChangesManager
@@ -57,7 +56,7 @@ import kotlinx.serialization.json.longOrNull
 import kotlinx.datetime.Clock
 
 class AuthService(
-    private val store: SecureStorage,
+    private val store: AuthTokenStore,
     private val firebase: IFirebaseService,
     private val repository: IAuthRepository,
     private val userRepository: IUserRepository,
@@ -65,7 +64,8 @@ class AuthService(
     private val changesManager: IChangesManager,
     private val client: HttpClient,
     private val sessionIdService: ISessionIdService,
-    private val posProvisioningService: PosDeviceProvisioningService
+    private val posProvisioningService: PosDeviceProvisioningService,
+    private val scope: CoroutineScope = CoroutineScope(Dispatchers.IO + SupervisorJob()),
 ) : IAuthService {
     val user = MutableStateFlow<User?>(null)
     private var userChangesJob: Job? = null
@@ -73,7 +73,7 @@ class AuthService(
     private val _sessionResolved = MutableStateFlow(false)
 
     init {
-        CoroutineScope(Dispatchers.IO+ SupervisorJob()).launch {
+        scope.launch {
             try {
                 cache.getCache(User::class)?.let {
                     val cachedUser = enrichUserWithCurrentToken(it)
@@ -130,7 +130,6 @@ class AuthService(
 
     private suspend fun listenUserChanges() {
         userChangesJob?.cancel()
-        val scope = CoroutineScope(Dispatchers.IO + SupervisorJob())
         userChangesJob = scope.launch {
             changesManager.userListener().onEach {
                 if (it != 1) {
@@ -331,7 +330,8 @@ class AuthService(
 
     override fun getUserSync(): User? = user.value
 
-    override suspend fun signOut() = withContext(NonCancellable) {
+    override suspend fun signOut(): Unit = withContext(NonCancellable) {
+        user.value = null
         // The listener can sign itself out. Finish cleanup even after cancelling its job,
         // and don't let a remote Firebase failure prevent local session removal.
         userChangesJob?.cancel()
@@ -340,10 +340,9 @@ class AuthService(
         runCatching { posProvisioningService.clear() }
         runCatching { cache.clearAllCache() }
         runCatching { firebase.signOut() }
-        store.deleteObject(SecureConstants.JWT_TOKEN)
-        store.deleteObject(SecureConstants.REFRESH_JWT_TOKEN)
-        sessionIdService.clearSession()
-        user.value = null
+        runCatching { store.deleteObject(SecureConstants.JWT_TOKEN) }
+        runCatching { store.deleteObject(SecureConstants.REFRESH_JWT_TOKEN) }
+        runCatching { sessionIdService.clearSession() }
         // Failure deduplication is reset only when a new refresh token is saved.
     }
 
