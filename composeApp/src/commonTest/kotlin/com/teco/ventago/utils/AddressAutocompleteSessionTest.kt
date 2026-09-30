@@ -89,7 +89,40 @@ class AddressAutocompleteSessionTest {
     }
 
     @Test
-    fun processRestoredWithoutCallbackIgnoresResultAndCanStartFresh() {
+    fun configurationRecreationRetainsPendingSelectionForReplacement() {
+        val session = AddressAutocompleteSession()
+        val oldOwner = Any()
+        val newOwner = Any()
+        val address = BusinessAddress("id", "address", 1.0, 2.0)
+        var calls = 0
+        session.attach(oldOwner) {}
+        session.launch { assertSame(address, it); calls++ }
+        session.detach(oldOwner, keepPendingResult = true)
+        session.attach(newOwner) {}
+        session.complete(address)
+        session.complete(null)
+        assertEquals(1, calls)
+    }
+
+    @Test
+    fun pendingConfigurationResultSurvivesLaunchAttemptBeforeReattachment() {
+        val session = AddressAutocompleteSession()
+        val owner = Any()
+        val address = BusinessAddress("id", "address", 1.0, 2.0)
+        var selections = 0
+        var rejectedRequests = 0
+        session.attach(owner) {}
+        session.launch { assertSame(address, it); selections++ }
+        session.detach(owner, keepPendingResult = true)
+        session.launch { assertNull(it); rejectedRequests++ }
+        session.attach(Any()) {}
+        session.complete(address)
+        assertEquals(1, selections)
+        assertEquals(1, rejectedRequests)
+    }
+
+    @Test
+    fun resultWithoutPendingCallbackIsIgnoredAndAllowsFreshRequest() {
         val restored = AddressAutocompleteSession()
         val address = BusinessAddress("id", "address", 1.0, 2.0)
         restored.complete(address)

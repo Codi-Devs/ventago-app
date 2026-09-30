@@ -6,15 +6,15 @@ import android.content.Intent
 import android.net.Uri
 import android.util.Log
 import androidx.activity.ComponentActivity
-import androidx.lifecycle.Lifecycle
 import androidx.activity.result.ActivityResultLauncher
+import androidx.core.net.toUri
+import androidx.lifecycle.Lifecycle
 import com.google.android.libraries.places.api.Places
 import com.google.android.libraries.places.api.model.Place
 import com.google.android.libraries.places.widget.Autocomplete
 import com.google.android.libraries.places.widget.model.AutocompleteActivityMode
 import com.teco.ventago.features.business.domain.model.BusinessAddress
 import org.koin.java.KoinJavaComponent
-import androidx.core.net.toUri
 
 object AutocompleteLauncher {
     private val session = AddressAutocompleteSession { error ->
@@ -35,7 +35,8 @@ object AutocompleteLauncher {
         }
     }
 
-    fun detach(activity: ComponentActivity) = session.detach(activity)
+    fun detach(activity: ComponentActivity) =
+        session.detach(activity, keepPendingResult = activity.isChangingConfigurations)
 
     fun complete(address: BusinessAddress?) = session.complete(address)
 

@@ -7,7 +7,14 @@
 - [x] Preparar app y knowledge para publicación conjunta; enlaces y cierre en ledger de la tarea.
 
 ## Resultados
-Compilación Kotlin public/pos y manifests aprobados; 7 pruebas de sesión + 2 de formatos: 0 fallos. noHistory confirmado en ambos manifests. La base ya usaba Application y StartActivityForResult. Background cancela la búsqueda. Sin dispositivo conectado: QA Android 11/14 (Pixel 8 Pro), publicación y Crashlytics pendientes. Revisión focal sin defectos nuevos; protección de restauración es mitigación, no prueba de todos los casos de firmware.
+Compilación Kotlin public/pos y manifests aprobados; 9 pruebas de sesión + 2 de formatos: 0 fallos. noHistory confirmado en ambos manifests. La base ya usaba Application y StartActivityForResult. Background cancela la búsqueda. Sin dispositivo conectado: QA Android 11/14 (Pixel 8 Pro), publicación y Crashlytics pendientes. Revisión focal sin defectos nuevos; protección de restauración es mitigación, no prueba de todos los casos de firmware.
+
+## Comentarios PR #15
+
+- [x] Conservar callback en recreación por configuración; soltar launcher de la instancia anterior.
+- [x] Añadir dos regresiones y renombrar test de resultado sin callback.
+- [x] Ordenar imports; actualizar manifiesto/knowledge y respuesta al review.
+- [ ] Aceptación de producto para noHistory y QA Android 11/14 antes del release.
 
 ---
 

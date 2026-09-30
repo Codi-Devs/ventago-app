@@ -11,17 +11,18 @@ internal class AddressAutocompleteSession(
     private var onResult: ((BusinessAddress?) -> Unit)? = null
 
     fun attach(owner: Any, launchAction: () -> Unit) {
-        if (this.owner !== owner) complete(null)
+        if (this.owner != null && this.owner !== owner) complete(null)
         this.owner = owner
         this.launchAction = launchAction
     }
 
-    fun detach(owner: Any) {
+    fun detach(owner: Any, keepPendingResult: Boolean = false) {
         // An old activity can be destroyed after its replacement has attached.
         if (this.owner !== owner) return
         this.owner = null
         launchAction = null
-        complete(null)
+        // A configuration recreation retains the requesting ViewModel/callback.
+        if (!keepPendingResult) complete(null)
     }
 
     fun launch(onResult: (BusinessAddress?) -> Unit) {
