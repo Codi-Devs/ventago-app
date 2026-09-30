@@ -27,6 +27,14 @@
         android:hardwareAccelerated="true"
         android:theme="@android:style/Theme.Material.Light.NoActionBar"
         android:localeConfig="@xml/locales_config">
+        <!-- An unfinished search is cancelled when hidden. Do not restore a
+             Places SDK activity whose calling activity may no longer exist. -->
+        <activity
+            android:name="com.google.android.libraries.places.widget.AutocompleteActivity"
+            android:noHistory="true" />
+        <activity
+            android:name="com.google.android.libraries.places.widget.BasicPlaceAutocompleteActivity"
+            android:noHistory="true" />
         <activity
             android:exported="true"
             android:configChanges="orientation|screenSize|screenLayout|keyboardHidden|mnc|colorMode|density|fontScale|fontWeightAdjustment|keyboard|layoutDirection|locale|mcc|navigation|smallestScreenSize|touchscreen|uiMode"
