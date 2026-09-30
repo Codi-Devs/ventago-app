@@ -34,6 +34,8 @@ import io.ktor.http.contentType
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.IO
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.Flow
@@ -106,6 +108,8 @@ class AuthService(
                     user.tryEmit(null)
                     signOut()
                 }
+            } catch (_: SessionExpiredException) {
+                // Refresh already cleared the session; resolve startup as a guest.
             } finally {
                 _sessionResolved.value = true
             }
@@ -137,16 +141,22 @@ class AuthService(
                         user.update {
                             userData
                         }
+                    } catch (e: CancellationException) {
+                        throw e
                     } catch (e: Exception) {
                         if (e.message?.contains("AUTH_001") == true) {
-                            refreshToken(client)
                             try {
+                                refreshToken(client)
                                 val res = userRepository.getUserData(getJwtToken() ?: "")
                                 val userData = enrichUserWithCurrentToken(User.fromAuthResponse(res))
                                 cache.saveCache(userData)
                                 user.update {
                                     userData
                                 }
+                            } catch (_: SessionExpiredException) {
+                                return@onEach
+                            } catch (ex: CancellationException) {
+                                throw ex
                             } catch (ex: Exception) {
                                 println(e)
                             }
@@ -321,27 +331,20 @@ class AuthService(
 
     override fun getUserSync(): User? = user.value
 
-    override suspend fun signOut() {
-        try {
-            // Cancel user changes listener job
-            userChangesJob?.cancel()
-            userChangesJob = null
-            // Remove Firebase Realtime Database listeners
-            changesManager.removeListeners()
-            posProvisioningService.clear()
-            // Clear cache
-            cache.clearAllCache()
-            // Sign out from Firebase
-            firebase.signOut()
-            user.value = null
-            refreshSingleFlight.resetFailureState()
-            // Delete JWT tokens
-            store.deleteObject(SecureConstants.JWT_TOKEN)
-            store.deleteObject(SecureConstants.REFRESH_JWT_TOKEN)
-        } catch (_: Exception) {
-        } finally {
-            sessionIdService.clearSession()
-        }
+    override suspend fun signOut() = withContext(NonCancellable) {
+        // The listener can sign itself out. Finish cleanup even after cancelling its job,
+        // and don't let a remote Firebase failure prevent local session removal.
+        userChangesJob?.cancel()
+        userChangesJob = null
+        runCatching { changesManager.removeListeners() }
+        runCatching { posProvisioningService.clear() }
+        runCatching { cache.clearAllCache() }
+        runCatching { firebase.signOut() }
+        store.deleteObject(SecureConstants.JWT_TOKEN)
+        store.deleteObject(SecureConstants.REFRESH_JWT_TOKEN)
+        sessionIdService.clearSession()
+        user.value = null
+        // Failure deduplication is reset only when a new refresh token is saved.
     }
 
     override suspend fun businessRegistered() {

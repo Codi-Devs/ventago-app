@@ -1,3 +1,16 @@
+# Sesión expirada sin crash — Trello #388
+
+- [x] Confirmar tarjeta, reglas y causa desde origin/main en worktree.
+- [x] Normalizar refresh fallido y manejar arranque/listener sin excepción fatal.
+- [x] Garantizar limpieza aun si falla Firebase o se cancela el listener.
+- [x] Probar ausencia/rechazo, concurrencia, cancelación y navegación.
+- [x] Publicar PR app y knowledge, adjuntar a Trello; release/Crashlytics pendientes.
+
+Rama: `fix/app-session-expired`. Tarjeta: https://trello.com/c/AwAuG2mn
+
+## Review
+Línea base: 11 tests aprobados. Fix: 15 tests aprobados (6 refresh + 9 navegación), cero errores. `git diff --check` aprobado. Sin pruebas en dispositivo/iOS ni release. Sin modificaciones al checkout principal.
+
 # Ticket JSON sin impresora (Trello #386) TODO
 
 ## Plan
