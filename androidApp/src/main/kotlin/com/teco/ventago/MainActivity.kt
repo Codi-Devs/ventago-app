@@ -37,6 +37,28 @@ class MainActivity : ComponentActivity(), NotificationPermissionRequester {
         }
     }
 
+    // Register in a stable order on every recreation, before the activity starts.
+    private val autocompleteLauncher = registerForActivityResult(
+        ActivityResultContracts.StartActivityForResult()
+    ) { result ->
+        val address = try {
+            val data = result.data
+            if (result.resultCode == RESULT_OK && data != null) {
+                val place = Autocomplete.getPlaceFromIntent(data)
+                BusinessAddress(
+                    place.id ?: "",
+                    place.formattedAddress ?: "",
+                    place.location?.latitude ?: -1.0,
+                    place.location?.longitude ?: -1.0
+                )
+            } else null
+        } catch (error: RuntimeException) {
+            android.util.Log.w("PlacesAutocomplete", "Invalid result (${error.javaClass.simpleName})")
+            null
+        }
+        AutocompleteLauncher.complete(address)
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         getKoin().get<MainActivityHolder>().activity = this
         super.onCreate(savedInstanceState)
@@ -45,22 +67,7 @@ class MainActivity : ComponentActivity(), NotificationPermissionRequester {
             ExternalUriHandler.onNewUri(uri.toString())
         }
 
-        AutocompleteLauncher.launcher = registerForActivityResult(
-            ActivityResultContracts.StartActivityForResult()
-        ) { result ->
-            val intent = result.data
-            if (result.resultCode == RESULT_OK && intent != null) {
-                val place = Autocomplete.getPlaceFromIntent(intent)
-                AutocompleteLauncher.onResult?.invoke(BusinessAddress(
-                    place.id ?: "",
-                    place.formattedAddress ?: "",
-                    place.location?.latitude ?: -1.0,
-                    place.location?.longitude ?: -1.0
-                ))
-            } else {
-                AutocompleteLauncher.onResult?.invoke(null)
-            }
-        }
+        AutocompleteLauncher.attach(this, autocompleteLauncher)
 
         setContent {
             val darkTheme = isSystemInDarkTheme()
@@ -73,6 +80,11 @@ class MainActivity : ComponentActivity(), NotificationPermissionRequester {
 
             AppEntry()
         }
+    }
+
+    override fun onDestroy() {
+        AutocompleteLauncher.detach(this)
+        super.onDestroy()
     }
 
     override fun onNewIntent(intent: Intent) {

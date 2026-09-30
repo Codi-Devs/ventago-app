@@ -4,8 +4,10 @@ import android.content.ActivityNotFoundException
 import android.content.Context
 import android.content.Intent
 import android.net.Uri
+import android.util.Log
+import androidx.activity.ComponentActivity
+import androidx.lifecycle.Lifecycle
 import androidx.activity.result.ActivityResultLauncher
-import com.google.android.gms.common.util.CollectionUtils.listOf
 import com.google.android.libraries.places.api.Places
 import com.google.android.libraries.places.api.model.Place
 import com.google.android.libraries.places.widget.Autocomplete
@@ -15,15 +17,43 @@ import org.koin.java.KoinJavaComponent
 import androidx.core.net.toUri
 
 object AutocompleteLauncher {
-    lateinit var launcher: ActivityResultLauncher<Intent>
-    var onResult: ((BusinessAddress?) -> Unit)? = null
+    private val session = AddressAutocompleteSession { error ->
+        Log.w("PlacesAutocomplete", "Autocomplete failed (${error.javaClass.simpleName})")
+    }
+
+    fun attach(activity: ComponentActivity, launcher: ActivityResultLauncher<Intent>) {
+        session.attach(activity) {
+            check(!activity.isFinishing && !activity.isDestroyed &&
+                activity.lifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED)) {
+                "Autocomplete requires a resumed activity"
+            }
+            check(ensurePlacesInitialized(activity)) { "Places is unavailable" }
+            val fields = listOf(Place.Field.ID, Place.Field.FORMATTED_ADDRESS, Place.Field.LOCATION)
+            val intent = Autocomplete.IntentBuilder(AutocompleteActivityMode.FULLSCREEN, fields)
+                .build(activity)
+            launcher.launch(intent)
+        }
+    }
+
+    fun detach(activity: ComponentActivity) = session.detach(activity)
+
+    fun complete(address: BusinessAddress?) = session.complete(address)
+
+    fun launch(onResult: (BusinessAddress?) -> Unit) = session.launch(onResult)
 }
 
 private const val PLACES_API_KEY = "AIzaSyArIiQadvA4yny2iITHvIVPHSzbaQY_Kz0"
 
-fun ensurePlacesInitialized(context: Context) {
-    if (!Places.isInitialized()) {
-        Places.initialize(context.applicationContext, PLACES_API_KEY)
+@Synchronized
+fun ensurePlacesInitialized(context: Context): Boolean {
+    return try {
+        if (!Places.isInitialized()) {
+            Places.initialize(context.applicationContext, PLACES_API_KEY)
+        }
+        Places.isInitialized()
+    } catch (error: RuntimeException) {
+        Log.w("PlacesAutocomplete", "Places initialization failed (${error.javaClass.simpleName})")
+        false
     }
 }
 
@@ -31,19 +61,9 @@ actual fun launchAutocompleteWidget(
     onAddressSelected: (formattedAddress: BusinessAddress) -> Unit,
     onCancelled: () -> Unit
 ) {
-    val context: Context = KoinJavaComponent.getKoin().get()
-    ensurePlacesInitialized(context)
-
-    val fields: List<Place.Field> =
-        listOf(Place.Field.ID, Place.Field.FORMATTED_ADDRESS, Place.Field.LOCATION)
-    val intent = Autocomplete.IntentBuilder(AutocompleteActivityMode.FULLSCREEN, fields)
-        .build(context)
-
-    AutocompleteLauncher.onResult = { result ->
+    AutocompleteLauncher.launch { result ->
         if (result != null) onAddressSelected(result) else onCancelled()
     }
-
-    AutocompleteLauncher.launcher.launch(intent)
 }
 
 actual fun openMapUrl(placeId: String?) {
