@@ -27,7 +27,7 @@ internal class RefreshTokenSingleFlight {
 
             if (!refreshTokenAvailable()) {
                 handleRefreshFailure(onRefreshFailure)
-                throw IllegalStateException("Refresh token is not available")
+                throw SessionExpiredException()
             }
 
             try {
@@ -37,7 +37,7 @@ internal class RefreshTokenSingleFlight {
                 throw e
             } catch (e: Exception) {
                 handleRefreshFailure(onRefreshFailure)
-                throw e
+                throw SessionExpiredException()
             }
         }
     }

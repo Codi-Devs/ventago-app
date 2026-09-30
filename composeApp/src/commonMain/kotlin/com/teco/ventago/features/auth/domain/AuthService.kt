@@ -1,7 +1,6 @@
 package com.teco.ventago.features.auth.domain
 
 import com.teco.ventago.Configs
-import com.teco.ventago.core.SecureStorage
 import com.teco.ventago.core.authz.AuthzJwtDecoder
 import com.teco.ventago.core.cache.ICacheService
 import com.teco.ventago.core.changes.IChangesManager
@@ -34,6 +33,8 @@ import io.ktor.http.contentType
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.IO
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.Flow
@@ -55,7 +56,7 @@ import kotlinx.serialization.json.longOrNull
 import kotlinx.datetime.Clock
 
 class AuthService(
-    private val store: SecureStorage,
+    private val store: AuthTokenStore,
     private val firebase: IFirebaseService,
     private val repository: IAuthRepository,
     private val userRepository: IUserRepository,
@@ -63,7 +64,8 @@ class AuthService(
     private val changesManager: IChangesManager,
     private val client: HttpClient,
     private val sessionIdService: ISessionIdService,
-    private val posProvisioningService: PosDeviceProvisioningService
+    private val posProvisioningService: PosDeviceProvisioningService,
+    private val scope: CoroutineScope = CoroutineScope(Dispatchers.IO + SupervisorJob()),
 ) : IAuthService {
     val user = MutableStateFlow<User?>(null)
     private var userChangesJob: Job? = null
@@ -71,7 +73,7 @@ class AuthService(
     private val _sessionResolved = MutableStateFlow(false)
 
     init {
-        CoroutineScope(Dispatchers.IO+ SupervisorJob()).launch {
+        scope.launch {
             try {
                 cache.getCache(User::class)?.let {
                     val cachedUser = enrichUserWithCurrentToken(it)
@@ -106,6 +108,8 @@ class AuthService(
                     user.tryEmit(null)
                     signOut()
                 }
+            } catch (_: SessionExpiredException) {
+                // Refresh already cleared the session; resolve startup as a guest.
             } finally {
                 _sessionResolved.value = true
             }
@@ -126,7 +130,6 @@ class AuthService(
 
     private suspend fun listenUserChanges() {
         userChangesJob?.cancel()
-        val scope = CoroutineScope(Dispatchers.IO + SupervisorJob())
         userChangesJob = scope.launch {
             changesManager.userListener().onEach {
                 if (it != 1) {
@@ -137,16 +140,22 @@ class AuthService(
                         user.update {
                             userData
                         }
+                    } catch (e: CancellationException) {
+                        throw e
                     } catch (e: Exception) {
                         if (e.message?.contains("AUTH_001") == true) {
-                            refreshToken(client)
                             try {
+                                refreshToken(client)
                                 val res = userRepository.getUserData(getJwtToken() ?: "")
                                 val userData = enrichUserWithCurrentToken(User.fromAuthResponse(res))
                                 cache.saveCache(userData)
                                 user.update {
                                     userData
                                 }
+                            } catch (_: SessionExpiredException) {
+                                return@onEach
+                            } catch (ex: CancellationException) {
+                                throw ex
                             } catch (ex: Exception) {
                                 println(e)
                             }
@@ -321,27 +330,20 @@ class AuthService(
 
     override fun getUserSync(): User? = user.value
 
-    override suspend fun signOut() {
-        try {
-            // Cancel user changes listener job
-            userChangesJob?.cancel()
-            userChangesJob = null
-            // Remove Firebase Realtime Database listeners
-            changesManager.removeListeners()
-            posProvisioningService.clear()
-            // Clear cache
-            cache.clearAllCache()
-            // Sign out from Firebase
-            firebase.signOut()
-            user.value = null
-            refreshSingleFlight.resetFailureState()
-            // Delete JWT tokens
-            store.deleteObject(SecureConstants.JWT_TOKEN)
-            store.deleteObject(SecureConstants.REFRESH_JWT_TOKEN)
-        } catch (_: Exception) {
-        } finally {
-            sessionIdService.clearSession()
-        }
+    override suspend fun signOut(): Unit = withContext(NonCancellable) {
+        user.value = null
+        // The listener can sign itself out. Finish cleanup even after cancelling its job,
+        // and don't let a remote Firebase failure prevent local session removal.
+        userChangesJob?.cancel()
+        userChangesJob = null
+        runCatching { changesManager.removeListeners() }
+        runCatching { posProvisioningService.clear() }
+        runCatching { cache.clearAllCache() }
+        runCatching { firebase.signOut() }
+        runCatching { store.deleteObject(SecureConstants.JWT_TOKEN) }
+        runCatching { store.deleteObject(SecureConstants.REFRESH_JWT_TOKEN) }
+        runCatching { sessionIdService.clearSession() }
+        // Failure deduplication is reset only when a new refresh token is saved.
     }
 
     override suspend fun businessRegistered() {

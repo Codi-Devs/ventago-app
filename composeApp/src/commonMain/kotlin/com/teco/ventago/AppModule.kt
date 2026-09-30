@@ -34,6 +34,7 @@ import com.teco.ventago.features.auth.data.provider.AuthProvider
 import com.teco.ventago.features.auth.data.provider.IAuthProvider
 import com.teco.ventago.features.auth.data.repository.AuthRepository
 import com.teco.ventago.features.auth.data.repository.IAuthRepository
+import com.teco.ventago.features.auth.domain.SecureStorageAuthTokenStore
 import com.teco.ventago.features.auth.domain.AuthService
 import com.teco.ventago.features.auth.domain.FirebaseService
 import com.teco.ventago.features.auth.domain.IAuthService
@@ -546,7 +547,7 @@ internal fun appModule() = module {
 
     single<IAuthService> {
         AuthService(
-            store = get(),
+            store = SecureStorageAuthTokenStore(get()),
             firebase = get(),
             repository = get(),
             userRepository = UserRepository(
