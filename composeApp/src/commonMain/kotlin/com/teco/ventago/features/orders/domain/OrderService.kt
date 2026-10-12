@@ -450,9 +450,10 @@ class OrderService(
 
     suspend fun retryElectronicInvoice(
         businessId: Int,
-        orderId: Int
+        orderId: Int,
+        finalCustomerCountryCode: String? = null
     ): RetryInvoiceResponse {
-        return repository.retryElectronicInvoice(businessId = businessId, orderId = orderId)
+        return repository.retryElectronicInvoice(businessId = businessId, orderId = orderId, finalCustomerCountryCode = finalCustomerCountryCode)
     }
 
     suspend fun refreshOrder(businessId: Int, orderId: Int): Order {

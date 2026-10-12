@@ -1,5 +1,6 @@
 package com.teco.ventago.features.pos.ui.viewmodel
 
+import com.teco.ventago.features.customers.domain.models.FiscalCountryValidation
 import androidx.lifecycle.viewModelScope
 import com.teco.ventago.core.BaseViewModel
 import com.teco.ventago.core.LocalStorage
@@ -486,6 +487,8 @@ class PosViewModel(
                 copy(
                     finalCustomer = true,
                     selectedCustomerFeCustomerType = null,
+                    selectedCustomerFiscalCountry = null,
+                    selectedCustomerFiscalCountryLoaded = false,
                     customerAddresses = emptyList(),
                     selectedCustomerAddressId = null,
                     customerAddressesLoading = false
@@ -505,6 +508,8 @@ class PosViewModel(
                         updatedAt = now().epochSeconds,
                     ),
                     selectedCustomerFeCustomerType = null,
+                    selectedCustomerFiscalCountry = null,
+                    selectedCustomerFiscalCountryLoaded = false,
                 )
             }
             hydrateSelectedCustomerTaxSettings(
@@ -785,6 +790,8 @@ class PosViewModel(
             copy(
                 customer = customer,
                 selectedCustomerFeCustomerType = null,
+                selectedCustomerFiscalCountry = null,
+                selectedCustomerFiscalCountryLoaded = false,
                 customerAddresses = emptyList(),
                 selectedCustomerAddressId = null,
                 customerAddressesLoading = false
@@ -1188,6 +1195,8 @@ class PosViewModel(
                 freeTrialAvailable = false,
                 customer = null,
                 selectedCustomerFeCustomerType = null,
+                selectedCustomerFiscalCountry = null,
+                selectedCustomerFiscalCountryLoaded = false,
                 customerQuery = "",
                 selectedBranchIndex = nextBranchIndex,
                 billingPoints = nextBillingPoints,
@@ -1389,6 +1398,8 @@ class PosViewModel(
                 invoiceIssueDateIso = data.invoiceIssueDateIso,
                 customer = data.customer,
                 selectedCustomerFeCustomerType = null,
+                selectedCustomerFiscalCountry = null,
+                selectedCustomerFiscalCountryLoaded = false,
                 finalCustomer = data.finalCustomer,
                 finalName = data.finalName,
                 finalEmail = data.finalEmail?.trim()?.takeIf { it.isNotEmpty() },
@@ -1985,6 +1996,7 @@ class PosViewModel(
         createYappyOnsite: Boolean = false,
     ): CreateOrderRequest {
         val state = uiState.value
+        require(posFiscalCountryError(state) == null) { posFiscalCountryError(state).orEmpty() }
         val isFinalCustomer = requireNotNull(state.finalCustomer) { "Customer type not selected" }
 
         val operationDestination = if (state.selectedDocType == "03" || state.selectedDocType == "10") "2" else "1"
@@ -2013,9 +2025,7 @@ class PosViewModel(
 
         var finalCustomerInfo: FinalCustomerInfo? = null
         val finalCustomerCountryCode = if (finalIdTypeRequiresCountry(state.finalIdType)) {
-            state.finalCustomerCountryCode
-                ?.takeIf { code -> state.finalCustomerCountryOptions.any { it.code == code } }
-                ?: "CO"
+            FiscalCountryValidation.normalize(state.finalCustomerCountryCode).takeIf { it.isNotEmpty() }
         } else {
             null
         }
@@ -4313,6 +4323,8 @@ class PosViewModel(
                     )
                 },
                 selectedCustomerFeCustomerType = null,
+                selectedCustomerFiscalCountry = null,
+                selectedCustomerFiscalCountryLoaded = false,
                 finalName = if (isFinalCustomer) finalName else null,
                 finalEmail = if (isFinalCustomer) finalEmail else null,
                 finalPhone = if (isFinalCustomer) finalPhone else null,
@@ -4409,6 +4421,8 @@ class PosViewModel(
                     )
                 },
                 selectedCustomerFeCustomerType = null,
+                selectedCustomerFiscalCountry = null,
+                selectedCustomerFiscalCountryLoaded = false,
                 finalName = if (isFinalCustomer) finalName else null,
                 finalEmail = if (isFinalCustomer) finalEmail else null,
                 finalPhone = if (isFinalCustomer) finalPhone else null,
@@ -4659,7 +4673,7 @@ class PosViewModel(
     private fun finalIdTypeKeys(): List<String> = listOf("cedula", "passport", "foreing_taxid")
 
     private fun finalIdTypeRequiresCountry(type: String): Boolean {
-        return type == "passport" || type == "foreing_taxid"
+        return type == "passport" || type == "foreing_taxid" || type == "foreign_taxid"
     }
     
     fun onFinalIdTypeSelected(idx: Int) {
@@ -4674,7 +4688,7 @@ class PosViewModel(
                     finalIdNumber = normalizedIdNumber,
                     finalIdNumberError = validateFinalCustomerIdentification(selectedType, normalizedIdNumber),
                     finalCustomerCountryCode = if (finalIdTypeRequiresCountry(selectedType)) {
-                        finalCustomerCountryCode ?: "CO"
+                        finalCustomerCountryCode
                     } else {
                         null
                     }
@@ -4695,12 +4709,15 @@ class PosViewModel(
         saveOrderCreationCheckpoint(OrderCreationStep.CUSTOMER)
     }
     fun onFinalCustomerCountrySelected(code: String) {
-        updateState { copy(finalCustomerCountryCode = code) }
+        updateState { copy(finalCustomerCountryCode = FiscalCountryValidation.normalize(code), finalCustomerCountryError = null) }
         saveOrderCreationCheckpoint(OrderCreationStep.CUSTOMER)
     }
 
     fun validateFinalCustomerSelection(showFeedback: Boolean = true): Boolean {
         val state = uiState.value
+        val countryError = posFiscalCountryError(state)
+        updateState { copy(finalCustomerCountryError = countryError) }
+        if (countryError != null && showFeedback) viewModelScope.launch { snackbarService.show(countryError) }
         val normalizedEmail = state.finalEmail?.trim()?.takeIf { it.isNotEmpty() }
         val emailError = validateFinalCustomerEmail(normalizedEmail)
         val normalizedIdNumber = normalizeFinalCustomerIdentificationNumber(state.finalIdType, state.finalIdNumber)
@@ -4734,7 +4751,7 @@ class PosViewModel(
             }
         }
 
-        return emailError == null && error == null
+        return countryError == null && emailError == null && error == null
     }
 
 
@@ -5046,6 +5063,8 @@ class PosViewModel(
             copy(
                 customer = hydratedCustomer,
                 selectedCustomerFeCustomerType = details.feCustomerType,
+                selectedCustomerFiscalCountry = FiscalCountryValidation.normalize(details.countryCode),
+                selectedCustomerFiscalCountryLoaded = true,
             )
         }
         if (shouldApplyDefaults) {
@@ -5664,4 +5683,24 @@ internal fun validateFinalCustomerIdentification(finalIdType: String, finalIdNum
 internal fun validateFinalCustomerEmail(finalEmail: String?): String? {
     val normalizedEmail = finalEmail?.trim()?.takeIf { it.isNotEmpty() } ?: return null
     return if (emailRegex.matches(normalizedEmail)) null else INVALID_FINAL_CUSTOMER_EMAIL_MESSAGE
+}
+
+internal fun posFiscalCountryError(state: PosState): String? {
+    val foreignDestination = state.selectedDocType == "03" || state.selectedDocType == "10"
+    if (state.finalCustomer == false) {
+        if (state.customer != null && !state.selectedCustomerFiscalCountryLoaded) {
+            return "Espera a validar los datos fiscales del cliente antes de emitir"
+        }
+        return FiscalCountryValidation.error(
+            if (state.selectedCustomerFeCustomerType == "04") state.selectedCustomerFiscalCountry else "PA",
+            foreignReceiver = state.selectedCustomerFeCustomerType == "04",
+            foreignDestination = foreignDestination,
+        )
+    }
+    val foreignReceiver = state.finalIdType == "passport" || state.finalIdType == "foreing_taxid" || state.finalIdType == "foreign_taxid"
+    return FiscalCountryValidation.error(
+        if (foreignReceiver) state.finalCustomerCountryCode else "PA",
+        foreignReceiver = foreignReceiver,
+        foreignDestination = foreignDestination,
+    )
 }

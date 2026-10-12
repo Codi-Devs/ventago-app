@@ -76,6 +76,7 @@ interface IOrdersRepository {
     suspend fun retryElectronicInvoice(
         businessId: Int,
         orderId: Int,
+        finalCustomerCountryCode: String? = null,
     ): RetryInvoiceResponse
 
     suspend fun getInvoiceDocsRaw(businessId: Int, cufe: String, orderId: Long? = null): InvoiceDocsDto

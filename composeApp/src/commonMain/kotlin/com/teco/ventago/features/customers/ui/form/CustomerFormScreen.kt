@@ -236,9 +236,10 @@ fun CustomerFormScreen(
                 onItemSelected = { index, _ ->
                     viewModel.onCountryCodeChange(uiState.countryOptions[index].code)
                 },
-                isError = false,
+                isError = uiState.countryError != null,
                 modifier = Modifier.fillMaxWidth(),
             )
+            uiState.countryError?.let { Text(it, color = MaterialTheme.colorScheme.error) }
         }
 
         DMOutlinedTextField(
@@ -651,9 +652,10 @@ private fun CustomerFormForeignMainInfo(viewModel: CustomerFormViewModel) {
         onItemSelected = { index, _ ->
             viewModel.onCountryCodeChange(uiState.countryOptions[index].code)
         },
-        isError = false,
+        isError = uiState.countryError != null,
         modifier = Modifier.fillMaxWidth(),
     )
+    uiState.countryError?.let { Text(it, color = MaterialTheme.colorScheme.error) }
 }
 
 @Composable

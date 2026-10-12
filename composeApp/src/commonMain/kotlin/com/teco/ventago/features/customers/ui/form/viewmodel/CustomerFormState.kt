@@ -15,7 +15,7 @@ internal const val DEFAULT_CUSTOMER_FORM_PROVINCE = "PANAMA"
 internal const val DEFAULT_CUSTOMER_FORM_DISTRICT = "PANAMA"
 internal const val DEFAULT_CUSTOMER_FORM_CORREGIMIENTO = "BELLA VISTA"
 internal const val DEFAULT_CUSTOMER_FORM_ADDRESS_LINE = "Panama"
-internal const val DEFAULT_FOREIGN_CUSTOMER_COUNTRY = "CO"
+internal const val DEFAULT_FOREIGN_CUSTOMER_COUNTRY = ""
 
 enum class CustomerFormStep {
     TYPE,
@@ -305,6 +305,7 @@ data class CustomerFormState(
     val selectedProvince: String? = null,
     val selectedDistrict: String? = null,
     val selectedCorregimiento: String? = null,
+    val countryError: String? = null,
     val selectedCountryCode: String = DEFAULT_FOREIGN_CUSTOMER_COUNTRY,
 
     val provinceOptions: List<String> = PanamaLocations.provinces,

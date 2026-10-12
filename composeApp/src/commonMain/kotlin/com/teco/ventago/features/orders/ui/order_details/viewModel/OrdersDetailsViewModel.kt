@@ -1,5 +1,6 @@
 package com.teco.ventago.features.orders.ui.order_details.viewModel
 
+import com.teco.ventago.features.customers.domain.models.FiscalCountryValidation
 import androidx.compose.runtime.Composable
 import androidx.lifecycle.viewModelScope
 import com.teco.ventago.core.BaseViewModel
@@ -183,6 +184,7 @@ class OrdersDetailsViewModel(
                 updateState {
                     copy(
                         order = order,
+                        invoiceRetryState = if (this.order?.id != order?.id) InvoiceRetryState() else invoiceRetryState,
                     )
                 }
             }.launchIn(this)
@@ -884,14 +886,25 @@ class OrdersDetailsViewModel(
         }
     }
 
+    fun onRetryCountrySelected(code: String) {
+        updateState { copy(invoiceRetryState = invoiceRetryState.copy(countryCode = FiscalCountryValidation.normalize(code), countryError = null)) }
+    }
+
     fun retryElectronicInvoice() {
         val order = uiState.value.order ?: return
         val businessId = business?.businessId ?: return
+        val country = if (order.invoiceRetry?.countryCorrectionRequired == true && order.invoiceRetry.finalCustomerForeign) {
+            val selected = uiState.value.invoiceRetryState.countryCode ?: order.invoiceRetry.finalCustomerCountryCode
+            val error = FiscalCountryValidation.error(selected, foreignReceiver = true)
+            updateState { copy(invoiceRetryState = invoiceRetryState.copy(countryError = error)) }
+            if (error != null) return
+            FiscalCountryValidation.normalize(selected)
+        } else null
         showLoading()
         viewModelScope.launch {
             runCatching {
                 withContext(Dispatchers.IO) {
-                    val response = orderService.retryElectronicInvoice(businessId, order.id)
+                    val response = orderService.retryElectronicInvoice(businessId, order.id, country)
                     val freshOrder = runCatching {
                         orderService.refreshOrder(businessId = businessId, orderId = order.id)
                     }.getOrNull()

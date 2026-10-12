@@ -1,5 +1,6 @@
 package com.teco.ventago.features.orders.ui.order_details
 
+import com.teco.ventago.features.customers.ui.form.viewmodel.CustomerCountries
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.expandVertically
@@ -560,6 +561,18 @@ fun OrderDetailsScreen(
             }
 
             if (viewModel.canShowRetryInvoiceButton(order) && !viewModel.canFacturarInternal(order)) {
+                if (order.invoiceRetry?.countryCorrectionRequired == true && order.invoiceRetry.finalCustomerForeign) {
+                    val countries = CustomerCountries.options.filterNot { it.code == "PA" }
+                    val selected = uiState.invoiceRetryState.countryCode ?: order.invoiceRetry.finalCustomerCountryCode
+                    com.teco.ventago.design_system.textfields.helpers.DMDropDownField(
+                        label = "País fiscal del receptor",
+                        items = countries.map { "${it.name} (${it.code})" },
+                        selectedIndex = countries.indexOfFirst { it.code == selected },
+                        onItemSelected = { index, _ -> viewModel.onRetryCountrySelected(countries[index].code) },
+                        isError = uiState.invoiceRetryState.countryError != null,
+                    )
+                    uiState.invoiceRetryState.countryError?.let { Text(it, color = MaterialTheme.colorScheme.error) }
+                }
                 ButtonM(onClick = { viewModel.retryElectronicInvoice() }) {
                     OrderActionButtonContent(
                         icon = Icons.Rounded.Receipt,

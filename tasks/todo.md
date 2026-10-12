@@ -7097,3 +7097,11 @@ Trello: https://trello.com/c/FIWZxRNq
   homogénea dentro del card.
 - Compilación común y pruebas focales Android aprobadas. Persisten únicamente
   warnings ya presentes del proyecto; no se ejecutó validación visual en dispositivo.
+
+# País fiscal extranjero — Trello PV32N5Qv
+
+- [x] Compartir validación catálogo/país fiscal/destino; eliminar defaults silenciosos.
+- [x] Revalidar cliente y datos restaurados antes de emitir; mostrar error de campo.
+- [x] Probar reglas y compilar Android; documentar límite del contrato de retry.
+
+Verificación: 29 pruebas Android host aprobadas (16 clientes, 5 POS, 4 país fiscal/DTO, 4 OrderService); compilación AndroidMain y diff-check aprobados. Retry usa metadata `invoice_retry` y request tipado con sólo país; no expone `creation_request`. Sin dispositivo/iOS ni release. Clientes existentes inválidos quedan bloqueados al emitir; edición de su país requiere contrato de actualización fiscal, no disponible en el endpoint actual de contacto/dirección.
