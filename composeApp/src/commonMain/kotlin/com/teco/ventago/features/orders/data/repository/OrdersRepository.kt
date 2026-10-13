@@ -382,9 +382,10 @@ class OrdersRepository(private val provider: IOrdersProvider, private val logger
     override suspend fun retryElectronicInvoice(
         businessId: Int,
         orderId: Int,
+        finalCustomerCountryCode: String?,
     ): RetryInvoiceResponse {
         try {
-            val response = provider.retryElectronicInvoice(businessId, orderId)
+            val response = provider.retryElectronicInvoice(businessId, orderId, finalCustomerCountryCode)
 
             if (response.error.isError()) {
                 throw BadRequestException(response.toJson())

@@ -32,6 +32,7 @@ data class Order(
     @SerialName("internal_number") val internalNumber: String,
     @SerialName("external_invoice_number") val externalInvoiceNumber: String? = null,
     @SerialName("external_invoice_id") val externalInvoiceId: String? = null,
+    @SerialName("invoice_retry") val invoiceRetry: InvoiceRetryMetadata? = null,
     @SerialName("invoice_status") val invoiceStatus: Int? = InvoiceStatus.NONE.id,
     @SerialName("currency_code") val currencyCode: String,
 
@@ -378,3 +379,10 @@ object FlexibleDoubleSerializer : KSerializer<Double> {
             ?: 0.0
     }
 }
+
+@Serializable
+data class InvoiceRetryMetadata(
+    @SerialName("country_correction_required") val countryCorrectionRequired: Boolean = false,
+    @SerialName("final_customer_country_code") val finalCustomerCountryCode: String? = null,
+    @SerialName("final_customer_foreign") val finalCustomerForeign: Boolean = false,
+)

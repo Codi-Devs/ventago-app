@@ -264,6 +264,8 @@ data class GeneratePaymentLinkState(
 )
 
 data class InvoiceRetryState(
+    val countryCode: String? = null,
+    val countryError: String? = null,
     val showSuccessDialog: Boolean = false,
     val showWarningDialog: Boolean = false,
     val warningMessage: String? = null

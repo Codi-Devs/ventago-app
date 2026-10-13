@@ -1,5 +1,6 @@
 package com.teco.ventago.features.pos.ui.customer.add.viewmodel
 
+import com.teco.ventago.features.customers.domain.models.FiscalCountryValidation
 import androidx.lifecycle.viewModelScope
 import com.teco.ventago.core.BaseViewModel
 import com.teco.ventago.core.location.PanamaLocations
@@ -63,7 +64,8 @@ class AddCustomerViewModel(
     fun onCountrySelected(code: String) {
         updateState {
             copy(
-                selectedCountryCode = code,
+                selectedCountryCode = FiscalCountryValidation.normalize(code),
+                countryError = null,
                 validationMessage = null,
             )
         }
@@ -114,9 +116,11 @@ class AddCustomerViewModel(
             cedula = normalizedCedula
         )
 
-        if (listOf(nameError, rucError, foreignIdNumberError, cedulaError).any { it != null }) {
+        val countryError = FiscalCountryValidation.error(state.selectedCountryCode, foreignReceiver = state.customerType == FeCustomerType.FOREIGNER)
+        if (listOf(countryError, nameError, rucError, foreignIdNumberError, cedulaError).any { it != null }) {
             updateState {
                 copy(
+                    countryError = countryError,
                     nameError = nameError,
                     rucError = rucError,
                     foreignIdNumberError = foreignIdNumberError,
@@ -241,7 +245,8 @@ class AddCustomerViewModel(
                 foreignIdNumber = "",
                 foreignIdNumberError = null,
                 selectedForeignIdType = ForeignIdType.PASSPORT,
-                selectedCountryCode = DEFAULT_FOREIGN_CUSTOMER_COUNTRY,
+                selectedCountryCode = selectedCountryCode,
+                countryError = null,
                 validationMessage = null,
             )
         }
@@ -543,7 +548,7 @@ class AddCustomerViewModel(
                 corregimiento = if (isForeign) null else state.selectedCorreg,
                 foreignIdType = foreignIdType,
                 foreignIdNumber = if (isForeign) state.foreignIdNumber?.ifBlank { null } else null,
-                countryCode = state.selectedCountryCode,
+                countryCode = FiscalCountryValidation.normalize(state.selectedCountryCode),
                 cedulaCF = if (state.customerType == FeCustomerType.FINAL_CONSUMER) {
                     normalizedCedula.ifBlank { null }
                 } else {
@@ -647,6 +652,7 @@ class AddCustomerViewModel(
     }
 
     private fun applyCreateFieldErrors(state: AddCustomerState): Boolean {
+        val countryError = FiscalCountryValidation.error(state.selectedCountryCode, foreignReceiver = state.customerType == FeCustomerType.FOREIGNER)
         val nameError = if (state.name.isBlank()) "El nombre es requerido" else null
         val rucError = if (state.customerType.rucNeeded() && state.ruc.isBlank()) {
             "El RUC es requerido"
@@ -689,6 +695,7 @@ class AddCustomerViewModel(
 
         updateState {
             copy(
+                countryError = countryError,
                 nameError = nameError,
                 rucError = rucError,
                 foreignIdNumberError = foreignIdNumberError,
@@ -699,6 +706,7 @@ class AddCustomerViewModel(
                 addressLineError = addressLineError,
                 validationMessage = if (
                     listOf(
+                        countryError,
                         nameError,
                         rucError,
                         foreignIdNumberError,
@@ -717,6 +725,7 @@ class AddCustomerViewModel(
         }
 
         return listOf(
+            countryError,
             nameError,
             rucError,
             foreignIdNumberError,

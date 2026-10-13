@@ -1,5 +1,6 @@
 package com.teco.ventago.features.customers.ui.form.viewmodel
 
+import com.teco.ventago.features.customers.domain.models.FiscalCountryValidation
 import androidx.lifecycle.viewModelScope
 import com.teco.ventago.core.BaseViewModel
 import com.teco.ventago.core.location.PanamaLocations
@@ -109,7 +110,7 @@ class CustomerFormViewModel(
                         selectedProvince = details.province,
                         selectedDistrict = details.district,
                         selectedCorregimiento = details.corregimiento,
-                        selectedCountryCode = details.countryCode ?: "PA",
+                        selectedCountryCode = FiscalCountryValidation.normalize(details.countryCode),
                         districtOptions = districtOptions,
                         corregimientoOptions = corregimientoOptions,
                         isFetching = false,
@@ -143,7 +144,8 @@ class CustomerFormViewModel(
                 foreignIdNumber = if (value == FeCustomerType.FOREIGNER) foreignIdNumber else "",
                 foreignIdNumberError = null,
                 foreignIdType = CustomerForeignIdType.PASSPORT,
-                selectedCountryCode = DEFAULT_FOREIGN_CUSTOMER_COUNTRY,
+                selectedCountryCode = selectedCountryCode,
+                countryError = null,
                 addressLine = if (value == FeCustomerType.FOREIGNER) "" else DEFAULT_CUSTOMER_FORM_ADDRESS_LINE,
                 selectedProvince = if (value == FeCustomerType.FOREIGNER) null else DEFAULT_CUSTOMER_FORM_PROVINCE,
                 selectedDistrict = if (value == FeCustomerType.FOREIGNER) null else DEFAULT_CUSTOMER_FORM_DISTRICT,
@@ -216,9 +218,11 @@ class CustomerFormViewModel(
             cedula = normalizedCedula
         )
 
-        if (listOf(nameError, rucError, foreignIdNumberError, cedulaError).any { it != null }) {
+        val countryError = FiscalCountryValidation.error(current.selectedCountryCode, foreignReceiver = current.customerType == FeCustomerType.FOREIGNER)
+        if (listOf(countryError, nameError, rucError, foreignIdNumberError, cedulaError).any { it != null }) {
             updateState {
                 copy(
+                    countryError = countryError,
                     nameError = nameError,
                     rucError = rucError,
                     foreignIdNumberError = foreignIdNumberError,
@@ -326,7 +330,7 @@ class CustomerFormViewModel(
     }
 
     fun onCountryCodeChange(value: String) {
-        updateState { copy(selectedCountryCode = value, validationMessage = null) }
+        updateState { copy(selectedCountryCode = FiscalCountryValidation.normalize(value), countryError = null, validationMessage = null) }
     }
 
     fun onProvinceChange(province: String) {
@@ -560,7 +564,7 @@ class CustomerFormViewModel(
                             } else {
                                 null
                             },
-                            countryCode = current.selectedCountryCode,
+                            countryCode = FiscalCountryValidation.normalize(current.selectedCountryCode),
                             taxExempt = current.taxExempt,
                             taxRetentionCode = retentionCode,
                             taxRetentionPercent = retentionPercent,
@@ -624,6 +628,7 @@ class CustomerFormViewModel(
     }
 
     private fun applyCreateFieldErrors(state: CustomerFormState): Boolean {
+        val countryError = FiscalCountryValidation.error(state.selectedCountryCode, foreignReceiver = state.customerType == FeCustomerType.FOREIGNER)
         val nameError = if (state.name.isBlank()) "El nombre es requerido" else null
         val rucError = if (state.customerType.rucNeeded() && state.ruc.isBlank()) {
             "El RUC es requerido"
@@ -666,6 +671,7 @@ class CustomerFormViewModel(
 
         updateState {
             copy(
+                countryError = countryError,
                 nameError = nameError,
                 rucError = rucError,
                 foreignIdNumberError = foreignIdNumberError,
@@ -676,6 +682,7 @@ class CustomerFormViewModel(
                 addressLineError = addressLineError,
                 validationMessage = if (
                     listOf(
+                        countryError,
                         nameError,
                         rucError,
                         foreignIdNumberError,
@@ -694,6 +701,7 @@ class CustomerFormViewModel(
         }
 
         return listOf(
+            countryError,
             nameError,
             rucError,
             foreignIdNumberError,

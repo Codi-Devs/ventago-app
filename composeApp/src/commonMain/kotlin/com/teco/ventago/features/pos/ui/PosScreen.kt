@@ -259,7 +259,7 @@ fun PosScreen(
 
         ButtonM(
             onClick = {
-                if (viewModel.validateFinalCustomerSelection()) {
+                if (viewModel.validateFinalCustomerSelection(validateFiscalCountry = false)) {
                     viewModel.saveOrderCreationCheckpoint(OrderCreationStep.PRODUCTS)
                     navigate(PosScreens.POSProductScreen)
                 }
@@ -503,6 +503,18 @@ private fun CustomerSelectorCard(
 
     Column(Modifier.padding(16.dp)) {
         Text(stringResource(Res.string.pos_customer_type_question), style = MaterialTheme.typography.titleMedium)
+        if (uiState.finalCustomer == false) {
+            val fiscalError = uiState.selectedCustomerFiscalCountryError ?: uiState.finalCustomerCountryError
+            fiscalError?.let { Text(it, color = MaterialTheme.colorScheme.error) }
+            if (uiState.selectedCustomerFiscalCountryError != null) {
+                androidx.compose.material3.TextButton(onClick = viewModel::retrySelectedCustomerFiscalValidation) {
+                    Text("Reintentar validación fiscal")
+                }
+            }
+            if (uiState.selectedCustomerFiscalCountryLoading) {
+                Text("Validando datos fiscales del cliente…", color = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
+        }
 
         Spacer(Modifier.height(8.dp))
 
@@ -586,7 +598,7 @@ private fun CustomerSelectorCard(
                 Spacer(Modifier.height(8.dp))
 
                 AdditionalInfoCollapsibleCard(
-                    expanded = extraOpen,
+                    expanded = extraOpen || uiState.finalCustomerCountryError != null,
                     onToggle = { extraOpen = !extraOpen },
                     finalName = uiState.finalName,
                     finalEmail = uiState.finalEmail,
@@ -597,6 +609,7 @@ private fun CustomerSelectorCard(
                     finalIdNumber = uiState.finalIdNumber,
                     finalIdNumberError = uiState.finalIdNumberError,
                     finalCustomerCountryCode = uiState.finalCustomerCountryCode,
+                    finalCustomerCountryError = uiState.finalCustomerCountryError,
                     finalCustomerCountryOptions = uiState.finalCustomerCountryOptions,
                     idTypeDisplayNames = viewModel.finalIdTypeDisplayNames(),
                     onFinalName = onFinalName,
@@ -751,6 +764,7 @@ private fun AdditionalInfoCollapsibleCard(
     finalIdNumber: String?,
     finalIdNumberError: String?,
     finalCustomerCountryCode: String?,
+    finalCustomerCountryError: String?,
     finalCustomerCountryOptions: List<CustomerCountryOption>,
     idTypeDisplayNames: List<String>,
     onFinalName: (String) -> Unit,
@@ -851,8 +865,6 @@ private fun AdditionalInfoCollapsibleCard(
 
                 if (shouldShowCountrySelector) {
                     val selectedCountryCode = finalCustomerCountryCode
-                        ?.takeIf { code -> finalCustomerCountryOptions.any { it.code == code } }
-                        ?: "CO"
                     DMDropDownField(
                         label = "País del cliente",
                         items = finalCustomerCountryOptions.map { "${it.name} (${it.code})" },
@@ -861,8 +873,11 @@ private fun AdditionalInfoCollapsibleCard(
                         onItemSelected = { index, _ ->
                             onCountrySelected(finalCustomerCountryOptions[index].code)
                         },
-                        isError = false
+                        isError = finalCustomerCountryError != null
                     )
+                    finalCustomerCountryError?.let { Text(it, color = MaterialTheme.colorScheme.error) }
+                } else {
+                    finalCustomerCountryError?.let { Text(it, color = MaterialTheme.colorScheme.error) }
                 }
             }
         }

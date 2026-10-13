@@ -257,3 +257,8 @@
 - En KPI operativos de home, mantener el card enfocado en el total; trasladar el desglose fiscal/interno a un diálogo accesible desde toda la tarjeta y aplicar el mismo contrato en web y app.
 
 - Al endurecer logout, aislar cada operación local además de las remotas; publicar usuario null antes de efectos fallibles y probar errores de almacenamiento y del ID de sesión en AuthService.
+
+## Validación fiscal e hidratación del cliente (PR #17, 2026-10-13)
+
+- Una dependencia fiscal que bloquea emisión necesita estados de carga, fallo accionable y reintento; ignorar fallos deja al usuario esperando indefinidamente. No aplicar respuestas a otra selección.
+- Vincular la validación fiscal al modo real de envío tanto en ViewModel como en el builder. La navegación, los borradores y los documentos internos deben seguir disponibles mientras se corrigen datos fiscales.

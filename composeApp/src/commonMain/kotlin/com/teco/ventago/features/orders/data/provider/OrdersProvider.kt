@@ -1,5 +1,6 @@
 package com.teco.ventago.features.orders.data.provider
 
+import com.teco.ventago.features.orders.domain.models.requests.RetryInvoiceRequest
 import com.teco.ventago.Configs
 import com.teco.ventago.features.auth.domain.IAuthService
 import com.teco.ventago.features.orders.domain.models.Order
@@ -207,6 +208,7 @@ class OrdersProvider(private val client: HttpClient, private val authService: IA
     override suspend fun retryElectronicInvoice(
         businessId: Int,
         orderId: Int,
+        finalCustomerCountryCode: String?,
     ): ApiResponse {
         val res = client.post(Configs.ordersBasePath + "/api/v1/orders/$orderId/retry-invoice") {
             headers {
@@ -216,6 +218,7 @@ class OrdersProvider(private val client: HttpClient, private val authService: IA
                 append("X-Business-ID", "$businessId")
             }
             contentType(ContentType.Application.Json)
+            setBody(RetryInvoiceRequest(finalCustomerCountryCode))
         }
 
         val body = res.body<JsonObject>()
@@ -223,7 +226,7 @@ class OrdersProvider(private val client: HttpClient, private val authService: IA
         if (response.error == ApiError.AUTH_001) {
             return try {
                 authService.refreshToken(client)
-                retryElectronicInvoice(businessId, orderId)
+                retryElectronicInvoice(businessId, orderId, finalCustomerCountryCode)
             } catch (e: Exception) {
                 response
             }

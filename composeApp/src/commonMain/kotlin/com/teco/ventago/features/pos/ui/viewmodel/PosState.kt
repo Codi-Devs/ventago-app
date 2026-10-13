@@ -339,6 +339,10 @@ data class PosState(
     val creatingOrderState: ViewState = ViewState(),
     val customer: CustomerListItem? = null,
     val selectedCustomerFeCustomerType: String? = null,
+    val selectedCustomerFiscalCountry: String? = null,
+    val selectedCustomerFiscalCountryLoaded: Boolean = false,
+    val selectedCustomerFiscalCountryLoading: Boolean = false,
+    val selectedCustomerFiscalCountryError: String? = null,
     val customerQuery: String = "",
     val paymentsConfigured: Boolean = false,
     val paymentsOnboardingCompleted: Boolean = false,
@@ -398,6 +402,7 @@ data class PosState(
     val finalIdType: String = "cedula",
     val finalIdNumber: String? = null,
     val finalIdNumberError: String? = null,
+    val finalCustomerCountryError: String? = null,
     val finalCustomerCountryCode: String? = null,
     val finalCustomerCountryOptions: List<CustomerCountryOption> = CustomerCountries.options.filterNot { it.code == "PA" },
 

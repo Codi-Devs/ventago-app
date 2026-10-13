@@ -34,6 +34,7 @@ interface IOrdersProvider {
     suspend fun retryElectronicInvoice(
         businessId: Int,
         orderId: Int,
+        finalCustomerCountryCode: String? = null,
     ): ApiResponse
     suspend fun confirmNonFiscal(businessId: Int, orderId: Int): ApiResponse
     suspend fun getInvoiceDocsRaw(businessId: Int, cufe: String, orderId: Long? = null): ApiResponse

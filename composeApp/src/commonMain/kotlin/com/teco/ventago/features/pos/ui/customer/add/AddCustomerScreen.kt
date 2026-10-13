@@ -619,8 +619,9 @@ private fun ForeignMainInfo(viewModel: AddCustomerViewModel) {
         onItemSelected = { index, _ ->
             viewModel.onCountrySelected(uiState.countryOptions[index].code)
         },
-        isError = false,
+        isError = uiState.countryError != null,
     )
+    uiState.countryError?.let { Text(it, color = MaterialTheme.colorScheme.error) }
 }
 
 @Composable

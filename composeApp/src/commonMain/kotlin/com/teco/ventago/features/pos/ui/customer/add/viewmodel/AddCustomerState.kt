@@ -11,7 +11,7 @@ internal const val DEFAULT_CUSTOMER_PROVINCE = "PANAMA"
 internal const val DEFAULT_CUSTOMER_DISTRICT = "PANAMA"
 internal const val DEFAULT_CUSTOMER_CORREGIMIENTO = "BELLA VISTA"
 internal const val DEFAULT_CUSTOMER_ADDRESS_LINE = "Panama"
-internal const val DEFAULT_FOREIGN_CUSTOMER_COUNTRY = "CO"
+internal const val DEFAULT_FOREIGN_CUSTOMER_COUNTRY = ""
 
 data class CountryOption(
     val code: String, // e.g. "PA"
@@ -90,6 +90,7 @@ data class AddCustomerState(
     val cfCedulaError: String? = null,
 
     val countryOptions: List<CountryOption> = emptyList(),
+    val countryError: String? = null,
     val selectedCountryCode: String = DEFAULT_FOREIGN_CUSTOMER_COUNTRY,
 
     val invoicingEnabled: Boolean = false,

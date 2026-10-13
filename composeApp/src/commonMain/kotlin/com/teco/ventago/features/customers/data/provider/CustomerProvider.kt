@@ -1,5 +1,6 @@
 package com.teco.ventago.features.customers.data.provider
 
+import com.teco.ventago.features.customers.domain.models.FiscalCountryValidation
 import com.teco.ventago.Configs
 import com.teco.ventago.features.auth.domain.IAuthService
 import com.teco.ventago.features.customers.data.repository.dto.CreateCustomerDto
@@ -409,7 +410,10 @@ internal fun buildCreateCustomerRequestBody(customer: Customer): String {
 
 internal fun buildCreateCustomerDto(customer: Customer): CreateCustomerDto {
     val countryCode = if (customer.customerType == FeCustomerType.FOREIGNER) {
-        customer.countryCode.nullIfBlank() ?: PANAMA_COUNTRY_CODE
+        require(FiscalCountryValidation.error(customer.countryCode, foreignReceiver = true) == null) {
+            FiscalCountryValidation.error(customer.countryCode, foreignReceiver = true).orEmpty()
+        }
+        FiscalCountryValidation.normalize(customer.countryCode)
     } else {
         PANAMA_COUNTRY_CODE
     }
