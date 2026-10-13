@@ -489,6 +489,8 @@ class PosViewModel(
                     selectedCustomerFeCustomerType = null,
                     selectedCustomerFiscalCountry = null,
                     selectedCustomerFiscalCountryLoaded = false,
+                    selectedCustomerFiscalCountryLoading = false,
+                    selectedCustomerFiscalCountryError = null,
                     customerAddresses = emptyList(),
                     selectedCustomerAddressId = null,
                     customerAddressesLoading = false
@@ -510,6 +512,8 @@ class PosViewModel(
                     selectedCustomerFeCustomerType = null,
                     selectedCustomerFiscalCountry = null,
                     selectedCustomerFiscalCountryLoaded = false,
+                    selectedCustomerFiscalCountryLoading = false,
+                    selectedCustomerFiscalCountryError = null,
                 )
             }
             hydrateSelectedCustomerTaxSettings(
@@ -792,6 +796,8 @@ class PosViewModel(
                 selectedCustomerFeCustomerType = null,
                 selectedCustomerFiscalCountry = null,
                 selectedCustomerFiscalCountryLoaded = false,
+                selectedCustomerFiscalCountryLoading = false,
+                selectedCustomerFiscalCountryError = null,
                 customerAddresses = emptyList(),
                 selectedCustomerAddressId = null,
                 customerAddressesLoading = false
@@ -1197,6 +1203,8 @@ class PosViewModel(
                 selectedCustomerFeCustomerType = null,
                 selectedCustomerFiscalCountry = null,
                 selectedCustomerFiscalCountryLoaded = false,
+                selectedCustomerFiscalCountryLoading = false,
+                selectedCustomerFiscalCountryError = null,
                 customerQuery = "",
                 selectedBranchIndex = nextBranchIndex,
                 billingPoints = nextBillingPoints,
@@ -1400,6 +1408,8 @@ class PosViewModel(
                 selectedCustomerFeCustomerType = null,
                 selectedCustomerFiscalCountry = null,
                 selectedCustomerFiscalCountryLoaded = false,
+                selectedCustomerFiscalCountryLoading = false,
+                selectedCustomerFiscalCountryError = null,
                 finalCustomer = data.finalCustomer,
                 finalName = data.finalName,
                 finalEmail = data.finalEmail?.trim()?.takeIf { it.isNotEmpty() },
@@ -1652,7 +1662,7 @@ class PosViewModel(
         createYappyOnsite: Boolean = false,
         saveAsDraft: Boolean
     ) {
-        if (!validateFinalCustomerSelection()) {
+        if (!validateFinalCustomerSelection(saveAsDraft = saveAsDraft)) {
             return
         }
         updateState {
@@ -1996,7 +2006,7 @@ class PosViewModel(
         createYappyOnsite: Boolean = false,
     ): CreateOrderRequest {
         val state = uiState.value
-        require(posFiscalCountryError(state) == null) { posFiscalCountryError(state).orEmpty() }
+        require(posFiscalCountryError(state, saveAsDraft) == null) { posFiscalCountryError(state, saveAsDraft).orEmpty() }
         val isFinalCustomer = requireNotNull(state.finalCustomer) { "Customer type not selected" }
 
         val operationDestination = if (state.selectedDocType == "03" || state.selectedDocType == "10") "2" else "1"
@@ -4325,6 +4335,8 @@ class PosViewModel(
                 selectedCustomerFeCustomerType = null,
                 selectedCustomerFiscalCountry = null,
                 selectedCustomerFiscalCountryLoaded = false,
+                selectedCustomerFiscalCountryLoading = false,
+                selectedCustomerFiscalCountryError = null,
                 finalName = if (isFinalCustomer) finalName else null,
                 finalEmail = if (isFinalCustomer) finalEmail else null,
                 finalPhone = if (isFinalCustomer) finalPhone else null,
@@ -4423,6 +4435,8 @@ class PosViewModel(
                 selectedCustomerFeCustomerType = null,
                 selectedCustomerFiscalCountry = null,
                 selectedCustomerFiscalCountryLoaded = false,
+                selectedCustomerFiscalCountryLoading = false,
+                selectedCustomerFiscalCountryError = null,
                 finalName = if (isFinalCustomer) finalName else null,
                 finalEmail = if (isFinalCustomer) finalEmail else null,
                 finalPhone = if (isFinalCustomer) finalPhone else null,
@@ -4713,9 +4727,13 @@ class PosViewModel(
         saveOrderCreationCheckpoint(OrderCreationStep.CUSTOMER)
     }
 
-    fun validateFinalCustomerSelection(showFeedback: Boolean = true): Boolean {
+    fun validateFinalCustomerSelection(
+        showFeedback: Boolean = true,
+        saveAsDraft: Boolean = false,
+        validateFiscalCountry: Boolean = true,
+    ): Boolean {
         val state = uiState.value
-        val countryError = posFiscalCountryError(state)
+        val countryError = if (validateFiscalCountry) posFiscalCountryError(state, saveAsDraft) else null
         updateState { copy(finalCustomerCountryError = countryError) }
         if (countryError != null && showFeedback) viewModelScope.launch { snackbarService.show(countryError) }
         val normalizedEmail = state.finalEmail?.trim()?.takeIf { it.isNotEmpty() }
@@ -5021,11 +5039,19 @@ class PosViewModel(
         return state.taxExempt || retentionCode.isNotEmpty() || state.retentionAmount.isNotBlank()
     }
 
+    fun retrySelectedCustomerFiscalValidation() {
+        val state = uiState.value
+        val customer = state.customer ?: return
+        if (state.selectedCustomerFiscalCountryLoading) return
+        hydrateSelectedCustomerTaxSettings(customer.id, applyDefaultsOnlyWhenMissing = true)
+    }
+
     private fun hydrateSelectedCustomerTaxSettings(
         customerId: Long,
         applyDefaultsOnlyWhenMissing: Boolean,
     ) {
         val businessId = business?.businessId ?: return
+        updateState { startFiscalCustomerHydration(customerId) }
         viewModelScope.launch {
             runCatching {
                 withContext(Dispatchers.IO) {
@@ -5037,6 +5063,9 @@ class PosViewModel(
                     details = details,
                     applyDefaultsOnlyWhenMissing = applyDefaultsOnlyWhenMissing,
                 )
+            }.onFailure { error ->
+                if (error is CancellationException) throw error
+                updateState { failFiscalCustomerHydration(customerId) }
             }
         }
     }
@@ -5060,11 +5089,8 @@ class PosViewModel(
 
         val shouldApplyDefaults = !applyDefaultsOnlyWhenMissing || !hasConfiguredTaxSettings()
         updateState {
-            copy(
-                customer = hydratedCustomer,
-                selectedCustomerFeCustomerType = details.feCustomerType,
-                selectedCustomerFiscalCountry = FiscalCountryValidation.normalize(details.countryCode),
-                selectedCustomerFiscalCountryLoaded = true,
+            copy(customer = hydratedCustomer).completeFiscalCustomerHydration(
+                customerId, details.feCustomerType, details.countryCode,
             )
         }
         if (shouldApplyDefaults) {
@@ -5685,10 +5711,12 @@ internal fun validateFinalCustomerEmail(finalEmail: String?): String? {
     return if (emailRegex.matches(normalizedEmail)) null else INVALID_FINAL_CUSTOMER_EMAIL_MESSAGE
 }
 
-internal fun posFiscalCountryError(state: PosState): String? {
+internal fun posFiscalCountryError(state: PosState, saveAsDraft: Boolean = false): String? {
+    if (saveAsDraft || state.internalDocument || state.paymentFlowMode == PaymentFlowMode.NON_FISCAL) return null
     val foreignDestination = state.selectedDocType == "03" || state.selectedDocType == "10"
     if (state.finalCustomer == false) {
         if (state.customer != null && !state.selectedCustomerFiscalCountryLoaded) {
+            state.selectedCustomerFiscalCountryError?.let { return it }
             return "Espera a validar los datos fiscales del cliente antes de emitir"
         }
         return FiscalCountryValidation.error(
@@ -5702,5 +5730,36 @@ internal fun posFiscalCountryError(state: PosState): String? {
         if (foreignReceiver) state.finalCustomerCountryCode else "PA",
         foreignReceiver = foreignReceiver,
         foreignDestination = foreignDestination,
+    )
+}
+
+internal fun PosState.startFiscalCustomerHydration(customerId: Long): PosState {
+    if (customer?.id != customerId) return this
+    return copy(
+        selectedCustomerFiscalCountryLoaded = false,
+        selectedCustomerFiscalCountryLoading = true,
+        selectedCustomerFiscalCountryError = null,
+        finalCustomerCountryError = null,
+    )
+}
+
+internal fun PosState.failFiscalCustomerHydration(customerId: Long): PosState {
+    if (customer?.id != customerId) return this
+    return copy(
+        selectedCustomerFiscalCountryLoaded = false,
+        selectedCustomerFiscalCountryLoading = false,
+        selectedCustomerFiscalCountryError = "No se pudieron validar los datos fiscales del cliente. Reintenta la validación.",
+    )
+}
+
+internal fun PosState.completeFiscalCustomerHydration(customerId: Long, fiscalType: String?, country: String?): PosState {
+    if (customer?.id != customerId) return this
+    return copy(
+        selectedCustomerFeCustomerType = fiscalType,
+        selectedCustomerFiscalCountry = FiscalCountryValidation.normalize(country),
+        selectedCustomerFiscalCountryLoaded = true,
+        selectedCustomerFiscalCountryLoading = false,
+        selectedCustomerFiscalCountryError = null,
+        finalCustomerCountryError = null,
     )
 }

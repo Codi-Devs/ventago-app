@@ -259,7 +259,7 @@ fun PosScreen(
 
         ButtonM(
             onClick = {
-                if (viewModel.validateFinalCustomerSelection()) {
+                if (viewModel.validateFinalCustomerSelection(validateFiscalCountry = false)) {
                     viewModel.saveOrderCreationCheckpoint(OrderCreationStep.PRODUCTS)
                     navigate(PosScreens.POSProductScreen)
                 }
@@ -504,7 +504,16 @@ private fun CustomerSelectorCard(
     Column(Modifier.padding(16.dp)) {
         Text(stringResource(Res.string.pos_customer_type_question), style = MaterialTheme.typography.titleMedium)
         if (uiState.finalCustomer == false) {
-            uiState.finalCustomerCountryError?.let { Text(it, color = MaterialTheme.colorScheme.error) }
+            val fiscalError = uiState.selectedCustomerFiscalCountryError ?: uiState.finalCustomerCountryError
+            fiscalError?.let { Text(it, color = MaterialTheme.colorScheme.error) }
+            if (uiState.selectedCustomerFiscalCountryError != null) {
+                androidx.compose.material3.TextButton(onClick = viewModel::retrySelectedCustomerFiscalValidation) {
+                    Text("Reintentar validación fiscal")
+                }
+            }
+            if (uiState.selectedCustomerFiscalCountryLoading) {
+                Text("Validando datos fiscales del cliente…", color = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
         }
 
         Spacer(Modifier.height(8.dp))

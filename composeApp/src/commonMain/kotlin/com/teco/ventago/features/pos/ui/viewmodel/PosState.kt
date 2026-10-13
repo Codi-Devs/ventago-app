@@ -341,6 +341,8 @@ data class PosState(
     val selectedCustomerFeCustomerType: String? = null,
     val selectedCustomerFiscalCountry: String? = null,
     val selectedCustomerFiscalCountryLoaded: Boolean = false,
+    val selectedCustomerFiscalCountryLoading: Boolean = false,
+    val selectedCustomerFiscalCountryError: String? = null,
     val customerQuery: String = "",
     val paymentsConfigured: Boolean = false,
     val paymentsOnboardingCompleted: Boolean = false,
