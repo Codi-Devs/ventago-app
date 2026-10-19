@@ -11,6 +11,8 @@ import com.teco.ventago.features.pos.ui.viewmodel.startFiscalCustomerHydration
 import com.teco.ventago.features.pos.ui.viewmodel.failFiscalCustomerHydration
 import com.teco.ventago.features.pos.ui.viewmodel.completeFiscalCustomerHydration
 import com.teco.ventago.features.pos.ui.viewmodel.PosState
+import com.teco.ventago.features.pos.ui.viewmodel.fiscalHydrationNeedsKickoff
+import com.teco.ventago.features.pos.ui.viewmodel.fiscalIssueWaitingOnHydration
 import com.teco.ventago.features.pos.ui.viewmodel.posFiscalCountryError
 import kotlinx.serialization.json.Json
 import kotlin.test.Test
@@ -81,6 +83,25 @@ class FiscalCountryValidationTest {
         val selected = registeredState()
         assertEquals(selected, selected.failFiscalCustomerHydration(14))
         assertEquals(selected, selected.completeFiscalCustomerHydration(14, "04", "PA"))
+    }
+
+    @Test fun waitingForFiscalDataRetriesUntilItStartsOrFails() {
+        val waiting = registeredState()
+        assertEquals(true, fiscalHydrationNeedsKickoff(waiting))
+        assertEquals(true, fiscalIssueWaitingOnHydration(waiting, saveAsDraft = false))
+        assertEquals(false, fiscalIssueWaitingOnHydration(waiting, saveAsDraft = true))
+
+        val loading = waiting.startFiscalCustomerHydration(15)
+        assertEquals(false, fiscalHydrationNeedsKickoff(loading))
+        assertEquals(true, fiscalIssueWaitingOnHydration(loading, saveAsDraft = false))
+
+        val failed = loading.failFiscalCustomerHydration(15)
+        assertEquals(false, fiscalHydrationNeedsKickoff(failed))
+        assertEquals(false, fiscalIssueWaitingOnHydration(failed, saveAsDraft = false))
+
+        val ready = waiting.completeFiscalCustomerHydration(15, "01", "PA")
+        assertEquals(false, fiscalHydrationNeedsKickoff(ready))
+        assertEquals(false, fiscalIssueWaitingOnHydration(ready, saveAsDraft = false))
     }
 
     @Test fun draftsAndInternalDocumentsDoNotRequireFiscalHydration() {

@@ -64,7 +64,7 @@ data class Item (
         cost = response["cost"]?.jsonPrimitive?.double,
         active = (response["active"]?.jsonPrimitive?.int ?: 0) == 1,
         order = response["order"]?.jsonPrimitive?.int ?: 0,
-        taxPercent = response["tax_percent"]?.jsonPrimitive?.int,
+        taxPercent = readItemTaxPercent(response),
         productType = ProductType.fromId(response["product_type"]?.jsonPrimitive?.int ?: 1),
 
         unitMeasureCode = response["unit_measure_code"]?.jsonPrimitive?.content
@@ -103,7 +103,12 @@ data class Item (
                 data["allergens"] = JsonPrimitive("")
                 data["price"] = JsonPrimitive(price)
                 data["cost"] = JsonPrimitive(cost ?: 0.0)
-                data["taxPercent"] = JsonPrimitive(taxPercent ?: 0)
+                // Keep both keys. Installed caches and the API use different names;
+                // a null rate is omitted so an unknown tax is not stored as exempt.
+                taxPercent?.let { percent ->
+                    data["tax_percent"] = JsonPrimitive(percent)
+                    data["taxPercent"] = JsonPrimitive(percent)
+                }
                 data["active"] = JsonPrimitive(if (active) 1 else 0)
                 data["order"] = JsonPrimitive(order)
                 data["product_type"] = JsonPrimitive(productType.typeId)
@@ -156,7 +161,7 @@ data class Item (
                 cost = json["cost"]?.jsonPrimitive?.double,
                 active = (json["active"]?.jsonPrimitive?.int ?: 0) == 1,
                 order = json["order"]?.jsonPrimitive?.int ?: 0,
-                taxPercent = json["tax_percent"]?.jsonPrimitive?.int,
+                taxPercent = readItemTaxPercent(json),
                 productType = ProductType.fromId(json["product_type"]?.jsonPrimitive?.int ?: 1),
                 unitMeasureCode = json["unit_measure_code"]?.jsonPrimitive?.content ?: "und",
                 iscRate = json["isc_rate"]?.jsonPrimitive?.doubleOrNull,
@@ -184,7 +189,7 @@ data class Item (
                 cost = map["cost"]?.jsonPrimitive?.doubleOrNull ?: 0.0,
                 active = (map["active"]?.jsonPrimitive?.intOrNull ?: 0) == 1,
                 order = map["order"]?.jsonPrimitive?.intOrNull ?: 0,
-                taxPercent = map["tax_percent"]?.jsonPrimitive?.int,
+                taxPercent = readItemTaxPercent(map),
                 productType = ProductType.fromId(map["product_type"]?.jsonPrimitive?.int ?: 1),
                 unitMeasureCode = map["unit_measure_code"]?.jsonPrimitive?.content
                     ?: map["unitMeasureCode"]?.jsonPrimitive?.content ?: "und",
@@ -211,6 +216,19 @@ data class Item (
     }
 }
 
+internal fun readItemTaxPercent(source: Map<String, JsonElement>): Int? {
+    return readTaxPercentValue(source["tax_percent"]) ?: readTaxPercentValue(source["taxPercent"])
+}
+
+internal fun readTaxPercentValue(element: JsonElement?): Int? {
+    val primitive = element as? JsonPrimitive ?: return null
+    primitive.intOrNull?.let { return it }
+    val text = primitive.content.trim()
+    text.toIntOrNull()?.let { return it }
+    val decimal = text.toDoubleOrNull() ?: return null
+    if (!decimal.isFinite()) return null
+    return decimal.toInt()
+}
 
 @Serializable
 enum class AdditionalValueType { STRING, NUMBER, DATE }

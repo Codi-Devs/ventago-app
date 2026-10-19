@@ -198,7 +198,15 @@ class PosViewModel(
     private var paymentLinkPollingJob: Job? = null
     private var yappyOnsitePollingJob: Job? = null
     private var inventoryRefreshJob: Job? = null
+    private var fiscalHydrationJob: Job? = null
+    private var pendingFiscalHydration: FiscalHydrationRequest? = null
+    private var orderCreationWaitingOnFiscal = false
     private var lastPaymentConfigRefreshAtEpochSeconds: Long = 0L
+
+    private data class FiscalHydrationRequest(
+        val customerId: Long,
+        val applyDefaultsOnlyWhenMissing: Boolean,
+    )
     private data class PersistedBranchBillingPoint(
         val branchCode: String,
         val billingPoint: String
@@ -390,6 +398,7 @@ class PosViewModel(
                     applyPersistedBranchBillingPointSelectionIfPossible()
                     fetchCustomerAddresses()
                     warmYappyOnsiteAvailabilityForNewOrder()
+                    resumePendingFiscalHydration()
                 }
             }.launchIn(this)
 
@@ -790,6 +799,7 @@ class PosViewModel(
     }
 
     fun selectCustomer(customer: CustomerListItem?) {
+        if (customer == null) cancelFiscalHydration()
         updateState {
             copy(
                 customer = customer,
@@ -1173,6 +1183,7 @@ class PosViewModel(
 
 
     fun resetForNewSale() {
+        cancelFiscalHydration()
         val currentState = uiState.value
         val (nextBranchIndex, nextBillingPointIndex) = resolveSelectionForNewSaleReset(currentState)
         val nextBillingPoints = currentState.branches
@@ -1662,6 +1673,9 @@ class PosViewModel(
         createYappyOnsite: Boolean = false,
         saveAsDraft: Boolean
     ) {
+        if (deferOrderUntilFiscalHydration(createPaymentLink, createYappyOnsite, saveAsDraft)) {
+            return
+        }
         if (!validateFinalCustomerSelection(saveAsDraft = saveAsDraft)) {
             return
         }
@@ -4614,6 +4628,7 @@ class PosViewModel(
     }
 
     fun onFinalCustomerToggle(isFinal: Boolean) {
+        if (isFinal) cancelFiscalHydration()
         updateState {
             copy(
                 finalCustomer = isFinal,
@@ -5046,13 +5061,78 @@ class PosViewModel(
         hydrateSelectedCustomerTaxSettings(customer.id, applyDefaultsOnlyWhenMissing = true)
     }
 
+    private fun cancelFiscalHydration() {
+        pendingFiscalHydration = null
+        fiscalHydrationJob?.cancel()
+        fiscalHydrationJob = null
+    }
+
+    private fun resumePendingFiscalHydration() {
+        val state = uiState.value
+        val pending = pendingFiscalHydration
+        if (pending != null && state.customer?.id != pending.customerId) {
+            pendingFiscalHydration = null
+        }
+        val request = pendingFiscalHydration
+        if (request != null && fiscalHydrationNeedsKickoff(state)) {
+            hydrateSelectedCustomerTaxSettings(request.customerId, request.applyDefaultsOnlyWhenMissing)
+            return
+        }
+        if (fiscalHydrationNeedsKickoff(state)) {
+            val customerId = state.customer?.id ?: return
+            hydrateSelectedCustomerTaxSettings(customerId, applyDefaultsOnlyWhenMissing = true)
+        }
+    }
+
+    private fun deferOrderUntilFiscalHydration(
+        createPaymentLink: Boolean,
+        createYappyOnsite: Boolean,
+        saveAsDraft: Boolean,
+    ): Boolean {
+        val state = uiState.value
+        if (!fiscalIssueWaitingOnHydration(state, saveAsDraft)) return false
+        if (orderCreationWaitingOnFiscal) return true
+        if (fiscalHydrationNeedsKickoff(state)) {
+            val customerId = state.customer?.id ?: return false
+            val applyDefaultsOnlyWhenMissing = pendingFiscalHydration
+                ?.takeIf { it.customerId == customerId }
+                ?.applyDefaultsOnlyWhenMissing
+                ?: true
+            hydrateSelectedCustomerTaxSettings(customerId, applyDefaultsOnlyWhenMissing)
+        }
+        val job = fiscalHydrationJob?.takeIf { it.isActive } ?: return false
+        orderCreationWaitingOnFiscal = true
+        showLoading()
+        viewModelScope.launch {
+            try {
+                job.join()
+            } finally {
+                orderCreationWaitingOnFiscal = false
+            }
+            if (!validateFinalCustomerSelection(saveAsDraft = saveAsDraft)) {
+                hideLoading()
+                return@launch
+            }
+            hideLoading()
+            createOrder(createPaymentLink, createYappyOnsite, saveAsDraft)
+        }
+        return true
+    }
+
     private fun hydrateSelectedCustomerTaxSettings(
         customerId: Long,
         applyDefaultsOnlyWhenMissing: Boolean,
     ) {
-        val businessId = business?.businessId ?: return
+        if (uiState.value.customer?.id != customerId) return
+        val businessId = business?.businessId
+        if (businessId == null) {
+            pendingFiscalHydration = FiscalHydrationRequest(customerId, applyDefaultsOnlyWhenMissing)
+            return
+        }
+        pendingFiscalHydration = null
         updateState { startFiscalCustomerHydration(customerId) }
-        viewModelScope.launch {
+        fiscalHydrationJob?.cancel()
+        fiscalHydrationJob = viewModelScope.launch {
             runCatching {
                 withContext(Dispatchers.IO) {
                     customerService.getCustomerById(businessId = businessId, customerId = customerId)
@@ -5709,6 +5789,24 @@ internal fun validateFinalCustomerIdentification(finalIdType: String, finalIdNum
 internal fun validateFinalCustomerEmail(finalEmail: String?): String? {
     val normalizedEmail = finalEmail?.trim()?.takeIf { it.isNotEmpty() } ?: return null
     return if (emailRegex.matches(normalizedEmail)) null else INVALID_FINAL_CUSTOMER_EMAIL_MESSAGE
+}
+
+internal fun fiscalHydrationNeedsKickoff(state: PosState): Boolean {
+    if (state.finalCustomer != false) return false
+    val customerId = state.customer?.id ?: return false
+    if (customerId <= 0L) return false
+    if (state.selectedCustomerFiscalCountryLoaded) return false
+    if (state.selectedCustomerFiscalCountryLoading) return false
+    if (state.selectedCustomerFiscalCountryError != null) return false
+    return true
+}
+
+internal fun fiscalIssueWaitingOnHydration(state: PosState, saveAsDraft: Boolean): Boolean {
+    if (saveAsDraft || state.internalDocument || state.paymentFlowMode == PaymentFlowMode.NON_FISCAL) return false
+    if (state.finalCustomer != false || state.customer == null) return false
+    if (state.selectedCustomerFiscalCountryLoaded) return false
+    if (state.selectedCustomerFiscalCountryError != null) return false
+    return true
 }
 
 internal fun posFiscalCountryError(state: PosState, saveAsDraft: Boolean = false): String? {
