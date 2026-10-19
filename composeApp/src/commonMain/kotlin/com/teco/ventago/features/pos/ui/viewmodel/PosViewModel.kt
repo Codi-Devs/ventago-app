@@ -199,6 +199,7 @@ class PosViewModel(
     private var yappyOnsitePollingJob: Job? = null
     private var inventoryRefreshJob: Job? = null
     private var fiscalHydrationJob: Job? = null
+    private var fiscalOrderWaitJob: Job? = null
     private var pendingFiscalHydration: FiscalHydrationRequest? = null
     private var orderCreationWaitingOnFiscal = false
     private var lastPaymentConfigRefreshAtEpochSeconds: Long = 0L
@@ -5065,23 +5066,24 @@ class PosViewModel(
         pendingFiscalHydration = null
         fiscalHydrationJob?.cancel()
         fiscalHydrationJob = null
+        fiscalOrderWaitJob?.cancel()
+        fiscalOrderWaitJob = null
+        orderCreationWaitingOnFiscal = false
     }
 
     private fun resumePendingFiscalHydration() {
         val state = uiState.value
-        val pending = pendingFiscalHydration
-        if (pending != null && state.customer?.id != pending.customerId) {
+        val pending = pendingFiscalHydration?.takeIf { state.customer?.id == it.customerId }
+        if (pendingFiscalHydration != null && pending == null) {
             pendingFiscalHydration = null
         }
-        val request = pendingFiscalHydration
-        if (request != null && fiscalHydrationNeedsKickoff(state)) {
-            hydrateSelectedCustomerTaxSettings(request.customerId, request.applyDefaultsOnlyWhenMissing)
-            return
-        }
-        if (fiscalHydrationNeedsKickoff(state)) {
-            val customerId = state.customer?.id ?: return
-            hydrateSelectedCustomerTaxSettings(customerId, applyDefaultsOnlyWhenMissing = true)
-        }
+        val next = fiscalHydrationToStart(
+            businessReady = business != null,
+            state = state,
+            pendingCustomerId = pending?.customerId,
+            pendingApplyDefaultsOnlyWhenMissing = pending?.applyDefaultsOnlyWhenMissing ?: true,
+        ) ?: return
+        hydrateSelectedCustomerTaxSettings(next.first, next.second)
     }
 
     private fun deferOrderUntilFiscalHydration(
@@ -5090,10 +5092,15 @@ class PosViewModel(
         saveAsDraft: Boolean,
     ): Boolean {
         val state = uiState.value
-        if (!fiscalIssueWaitingOnHydration(state, saveAsDraft)) return false
-        if (orderCreationWaitingOnFiscal) return true
+        val start = fiscalOrderWaitStart(
+            alreadyWaiting = orderCreationWaitingOnFiscal,
+            issueWaiting = fiscalIssueWaitingOnHydration(state, saveAsDraft),
+        )
+        if (start != FiscalOrderWaitStart.BEGIN_WAIT) {
+            return start == FiscalOrderWaitStart.HOLD_DUPLICATE
+        }
+        val customerId = state.customer?.id ?: return false
         if (fiscalHydrationNeedsKickoff(state)) {
-            val customerId = state.customer?.id ?: return false
             val applyDefaultsOnlyWhenMissing = pendingFiscalHydration
                 ?.takeIf { it.customerId == customerId }
                 ?.applyDefaultsOnlyWhenMissing
@@ -5103,18 +5110,26 @@ class PosViewModel(
         val job = fiscalHydrationJob?.takeIf { it.isActive } ?: return false
         orderCreationWaitingOnFiscal = true
         showLoading()
-        viewModelScope.launch {
+        fiscalOrderWaitJob?.cancel()
+        fiscalOrderWaitJob = viewModelScope.launch {
             try {
                 job.join()
+                if (!fiscalOrderWaitMayIssue(job.isCancelled, customerId, uiState.value)) {
+                    hideLoading()
+                    return@launch
+                }
+                if (!validateFinalCustomerSelection(saveAsDraft = saveAsDraft)) {
+                    hideLoading()
+                    return@launch
+                }
+                hideLoading()
+                createOrder(createPaymentLink, createYappyOnsite, saveAsDraft)
+            } catch (error: CancellationException) {
+                hideLoading()
+                throw error
             } finally {
                 orderCreationWaitingOnFiscal = false
             }
-            if (!validateFinalCustomerSelection(saveAsDraft = saveAsDraft)) {
-                hideLoading()
-                return@launch
-            }
-            hideLoading()
-            createOrder(createPaymentLink, createYappyOnsite, saveAsDraft)
         }
         return true
     }
@@ -5799,6 +5814,38 @@ internal fun fiscalHydrationNeedsKickoff(state: PosState): Boolean {
     if (state.selectedCustomerFiscalCountryLoading) return false
     if (state.selectedCustomerFiscalCountryError != null) return false
     return true
+}
+
+internal enum class FiscalOrderWaitStart { PROCEED, HOLD_DUPLICATE, BEGIN_WAIT }
+
+internal fun fiscalOrderWaitStart(alreadyWaiting: Boolean, issueWaiting: Boolean): FiscalOrderWaitStart {
+    if (!issueWaiting) return FiscalOrderWaitStart.PROCEED
+    if (alreadyWaiting) return FiscalOrderWaitStart.HOLD_DUPLICATE
+    return FiscalOrderWaitStart.BEGIN_WAIT
+}
+
+internal fun fiscalOrderWaitMayIssue(
+    hydrationCancelled: Boolean,
+    customerIdAtStart: Long,
+    state: PosState,
+): Boolean {
+    if (hydrationCancelled) return false
+    if (state.finalCustomer != false) return false
+    return state.customer?.id == customerIdAtStart
+}
+
+internal fun fiscalHydrationToStart(
+    businessReady: Boolean,
+    state: PosState,
+    pendingCustomerId: Long?,
+    pendingApplyDefaultsOnlyWhenMissing: Boolean,
+): Pair<Long, Boolean>? {
+    if (!businessReady || !fiscalHydrationNeedsKickoff(state)) return null
+    if (pendingCustomerId != null && state.customer?.id == pendingCustomerId) {
+        return pendingCustomerId to pendingApplyDefaultsOnlyWhenMissing
+    }
+    val customerId = state.customer?.id ?: return null
+    return customerId to true
 }
 
 internal fun fiscalIssueWaitingOnHydration(state: PosState, saveAsDraft: Boolean): Boolean {
