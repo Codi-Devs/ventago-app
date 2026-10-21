@@ -28,7 +28,6 @@ import androidx.compose.material.icons.rounded.TrendingUp
 import androidx.compose.material.icons.rounded.Undo
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
-import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.SuggestionChip
 import androidx.compose.material3.SuggestionChipDefaults
@@ -97,7 +96,11 @@ import ventago.composeapp.generated.resources.ready_pickup
 import ventago.composeapp.generated.resources.rejected
 
 @Composable
-fun OrderListItem(order: Order, onClick: () -> Unit, statusOnClick: () -> Unit) {
+fun OrderListItem(
+    order: Order,
+    onClick: () -> Unit,
+    statusOnClick: () -> Unit,
+) {
     val customerName = order.displayCustomerName()?.takeIf { it.isNotBlank() } ?: "Consumidor final"
     val invoiceDate = formatTransactionListDate(order.listEmissionDateValue())
     val (icon, tint) = getOrderStatusIcon(

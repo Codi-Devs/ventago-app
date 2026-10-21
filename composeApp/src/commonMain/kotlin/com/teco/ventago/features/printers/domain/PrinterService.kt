@@ -8,10 +8,13 @@ import com.teco.ventago.core.logger.LogLevel
 import com.teco.ventago.features.business.domain.BusinessService
 import com.teco.ventago.features.printers.data.repository.IPrinterRepository
 import com.teco.ventago.features.printers.domain.model.CreatePrinterRequest
+import com.teco.ventago.features.printers.domain.model.DeviceBluetoothPrinter
 import com.teco.ventago.features.printers.domain.model.PrintCommand
 import com.teco.ventago.features.printers.domain.model.PrintContext
 import com.teco.ventago.features.printers.domain.model.PrintResult
 import com.teco.ventago.features.printers.domain.model.PrintResultContext
+import com.teco.ventago.features.printers.domain.model.PrinterSendException
+import com.teco.ventago.features.printers.domain.model.PRINTER_INTEGRATION_BLUETOOTH_ESCPOS
 import com.teco.ventago.features.printers.domain.model.PRINTER_INTEGRATION_H10P_INTERNAL
 import com.teco.ventago.features.printers.domain.model.PrinterConfig
 import com.teco.ventago.features.printers.domain.model.PrinterListFilters
@@ -24,6 +27,7 @@ import com.teco.ventago.features.printers.domain.model.UpdatePrinterRequest
 import com.teco.ventago.features.printers.domain.model.NARROW_PAPER_COLUMNS
 import com.teco.ventago.features.printers.domain.model.isNarrowPaperWidth
 import com.teco.ventago.features.printers.domain.model.toPaperColumns
+import com.teco.ventago.features.printers.domain.model.toTicketPaperProfile
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.IO
@@ -51,6 +55,7 @@ class PrinterService(
     private val appDistribution: AppDistribution,
 ) {
     private val state = MutableStateFlow<List<PrinterConfig>>(emptyList())
+    private val deviceBluetooth = MutableStateFlow(readDeviceBluetoothPrinter())
     private val refreshMutex = Mutex()
     private var currentBusinessId: Int? = null
     private val parser = TicketLayoutParser()
@@ -67,6 +72,60 @@ class PrinterService(
     }
 
     fun observe(): StateFlow<List<PrinterConfig>> = state.asStateFlow()
+
+    fun observeDeviceBluetooth(): StateFlow<DeviceBluetoothPrinter?> = deviceBluetooth.asStateFlow()
+
+    fun linkedBluetoothPrinter(): DeviceBluetoothPrinter? = deviceBluetooth.value
+
+    fun saveDeviceBluetoothPrinter(id: String, name: String, paperWidthMm: Int = 58) {
+        val printer = DeviceBluetoothPrinter(
+            id = id,
+            name = name,
+            paperWidthMm = paperWidthMm,
+            isActive = true,
+        )
+        storage.set(BLUETOOTH_PRINTER_KEY, json.encodeToString(printer))
+        deviceBluetooth.value = printer
+    }
+
+    fun clearDeviceBluetoothPrinter() {
+        storage.set(BLUETOOTH_PRINTER_KEY, "")
+        deviceBluetooth.value = null
+    }
+
+    fun canPrintTicket(branchCode: String?, billingPointCode: String?): Boolean {
+        if (linkedBluetoothPrinter()?.isActive == true) return true
+        if (branchCode.isNullOrBlank() || billingPointCode.isNullOrBlank()) return false
+        return resolveActivePrinter(branchCode, billingPointCode) != null
+    }
+
+    suspend fun printTicketForThisDevice(
+        branchCode: String?,
+        billingPointCode: String?,
+        ticketPayload: TicketDocumentPayload,
+        context: PrintContext,
+    ): PrintResult {
+        val bluetooth = linkedBluetoothPrinter()?.takeIf { it.isActive }
+        if (bluetooth != null) {
+            return printTicketOnBluetooth(
+                ticketPayload = ticketPayload,
+                paperWidthMm = bluetooth.paperWidthMm,
+                context = context,
+                deviceId = bluetooth.id,
+            )
+        }
+        val printer = if (!branchCode.isNullOrBlank() && !billingPointCode.isNullOrBlank()) {
+            resolveActivePrinter(branchCode, billingPointCode)
+        } else {
+            null
+        } ?: throw PrinterSendException("No hay impresora activa")
+        return printTicketPayload(printer, ticketPayload, context)
+    }
+
+    private fun readDeviceBluetoothPrinter(): DeviceBluetoothPrinter? {
+        val raw = storage.string(BLUETOOTH_PRINTER_KEY)?.takeIf { it.isNotBlank() } ?: return null
+        return runCatching { json.decodeFromString<DeviceBluetoothPrinter>(raw) }.getOrNull()
+    }
 
     fun initialize(businessId: Int) {
         if (currentBusinessId == businessId) return
@@ -295,6 +354,58 @@ class PrinterService(
         )
     }
 
+    suspend fun printTicketOnBluetooth(
+        ticketPayload: TicketDocumentPayload,
+        paperWidthMm: Int = 58,
+        context: PrintContext,
+        deviceId: String,
+    ): PrintResult {
+        return printLayoutOnBluetooth(parser.parse(ticketPayload), paperWidthMm, context, deviceId)
+    }
+
+    suspend fun printLayoutOnBluetooth(
+        layout: TicketLayout,
+        paperWidthMm: Int = 58,
+        context: PrintContext,
+        deviceId: String,
+    ): PrintResult {
+        val commands = parser.toCommands(layout, bluetoothPaperConfig(paperWidthMm))
+        val paperWidthDots = paperWidthMm.toTicketPaperProfile().canvasWidthDots
+        val outcome = printBluetoothTicket(commands, deviceId, paperWidthDots)
+        if (!outcome.success) {
+            throw PrinterSendException(outcome.message)
+        }
+        return PrintResult(
+            success = outcome.success,
+            attempt = 1,
+            attempts = 1,
+            connectPort = 0,
+            deviceId = outcome.printerName ?: "bluetooth",
+            context = PrintResultContext(
+                source = context.source,
+                orderId = context.orderId,
+            ),
+            message = outcome.message,
+        )
+    }
+
+    private fun bluetoothPaperConfig(paperWidthMm: Int): PrinterConfig {
+        return PrinterConfig(
+            branchCode = "bluetooth",
+            billingPointCode = "bluetooth",
+            printerBrand = "escpos",
+            printerModel = "Bluetooth ESC/POS",
+            integrationType = PRINTER_INTEGRATION_BLUETOOTH_ESCPOS,
+            host = "bluetooth",
+            port = 0,
+            deviceId = "bluetooth",
+            paperWidthMm = paperWidthMm,
+            supportsCutter = false,
+            printByDefault = false,
+            isActive = true,
+        )
+    }
+
     fun clear() {
         currentBusinessId = null
         state.value = emptyList()
@@ -352,6 +463,7 @@ class PrinterService(
     companion object {
         private const val CACHE_TTL_MS = 24L * 60L * 60L * 1000L
         private const val NARROW_TEST_PRINT_COLUMNS = 24
+        private const val BLUETOOTH_PRINTER_KEY = "printers.bluetooth.device"
 
         fun cachePayloadKey(businessId: Int): String = "cache:printers:$businessId"
         fun cacheTimestampKey(businessId: Int): String = "cache:printers:$businessId:ts"

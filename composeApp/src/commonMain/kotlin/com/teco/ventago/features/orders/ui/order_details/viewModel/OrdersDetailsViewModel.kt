@@ -97,6 +97,10 @@ class OrdersDetailsViewModel(
 ) : BaseViewModel<OrderDetailsState, OrderDetailsUiEvent>(OrderDetailsState()) {
 
     var business: Business? = null
+    private companion object {
+        val PHYSICAL_RETURN_EXCLUDED_TYPES = setOf("04", "4", "05", "5", "06", "6", "07", "7")
+    }
+
     private val achDetailsInFlight = mutableSetOf<String>()
     private val achProofBinaryCache = mutableMapOf<String, AchProofBinary>()
     private val hydratedOrderDetails = mutableSetOf<Int>()
@@ -184,9 +188,11 @@ class OrdersDetailsViewModel(
                 updateState {
                     copy(
                         order = order,
+                        hasInventoriableLines = false,
                         invoiceRetryState = if (this.order?.id != order?.id) InvoiceRetryState() else invoiceRetryState,
                     )
                 }
+                refreshInventoriableLines(order)
             }.launchIn(this)
         }
     }
@@ -208,10 +214,30 @@ class OrdersDetailsViewModel(
         }
     }
 
+    private fun refreshInventoriableLines(order: Order?) {
+        if (order == null || !inventoryAvailabilityStore.canReceive()) return
+        if (order.orderType in PHYSICAL_RETURN_EXCLUDED_TYPES) return
+        if (order.status == OrderStatus.DRAFT || order.status == OrderStatus.CANCELLED) return
+        val itemIds = order.lines.map { it.itemId }.filter { it > 0 }
+        if (itemIds.isEmpty()) return
+        viewModelScope.launch {
+            val businessId = business?.businessId ?: order.businessId
+            if (!inventoryAvailabilityStore.isModuleEnabled(businessId)) return@launch
+            val (branchCode, billingPoint) = orderScope(order.internalNumber) ?: return@launch
+            inventoryAvailabilityStore.refresh(businessId, branchCode, billingPoint, itemIds)
+            if (uiState.value.order?.id != order.id) return@launch
+            val trackedIds = inventoryAvailabilityStore.snapshot.value.byItemId
+                .filterValues { it.tracked }
+                .keys
+            val hasLines = order.lines.any { it.itemId > 0 && it.itemId in trackedIds }
+            updateState { copy(hasInventoriableLines = hasLines) }
+        }
+    }
+
     fun openPhysicalReturn() {
         val order = uiState.value.order ?: return
         if (!uiState.value.canPhysicalReturn) return
-        val noteTypes = setOf("04", "4", "05", "5", "06", "6", "07", "7")
+        val noteTypes = PHYSICAL_RETURN_EXCLUDED_TYPES
         if (order.orderType in noteTypes) return
         if (order.status == OrderStatus.DRAFT || order.status == OrderStatus.CANCELLED) return
         viewModelScope.launch {
@@ -1656,7 +1682,8 @@ class OrdersDetailsViewModel(
             hideReprintTicketAction = uiState.value.hideReprintTicketAction,
             reprintInFlight = uiState.value.reprintInFlight,
             businessId = businessId,
-            hasLocalPrintCapability = printerService.resolveSelectionOptions().isNotEmpty(),
+            hasLocalPrintCapability = printerService.resolveSelectionOptions().isNotEmpty() ||
+                printerService.linkedBluetoothPrinter()?.isActive == true,
         )
     }
 
@@ -1712,17 +1739,22 @@ class OrdersDetailsViewModel(
 
     private fun autoPrintNonFiscalTicket(order: Order) {
         if (!order.hasCurrentNonFiscalDocument()) return
-        val (branchCode, billingPointCode) = orderScope(order.internalNumber) ?: return
-        if (branchCode.isBlank() || billingPointCode.isBlank()) return
+        val scope = orderScope(order.internalNumber)
+        val bluetoothActive = printerService.linkedBluetoothPrinter()?.isActive == true
+        if (!bluetoothActive && scope == null) return
         viewModelScope.launch {
             runCatching {
-                val printer = printerService.resolveActivePrinter(branchCode, billingPointCode) ?: return@runCatching
-                if (!printer.printByDefault) return@runCatching
+                if (!bluetoothActive) {
+                    val (branchCode, billingPointCode) = scope ?: return@runCatching
+                    val printer = printerService.resolveActivePrinter(branchCode, billingPointCode) ?: return@runCatching
+                    if (!printer.printByDefault) return@runCatching
+                }
                 val payload = withContext(Dispatchers.IO) {
                     printerService.fetchOrderTicketLayout(order.id, order.businessId)
                 }
-                printerService.printTicketPayload(
-                    printerConfig = printer,
+                printerService.printTicketForThisDevice(
+                    branchCode = scope?.first,
+                    billingPointCode = scope?.second,
                     ticketPayload = payload,
                     context = com.teco.ventago.features.printers.domain.model.PrintContext(
                         source = "order_details_non_fiscal",
@@ -1755,6 +1787,18 @@ class OrdersDetailsViewModel(
                     orderId = order.id,
                     businessId = businessId
                 )
+                if (printerService.linkedBluetoothPrinter()?.isActive == true) {
+                    printerService.printTicketForThisDevice(
+                        branchCode = null,
+                        billingPointCode = null,
+                        ticketPayload = payload,
+                        context = com.teco.ventago.features.printers.domain.model.PrintContext(
+                            source = "order_details_reprint",
+                            orderId = order.id
+                        )
+                    )
+                    return@runCatching null
+                }
                 val layout = printerService.parseTicketLayout(payload)
                 val reprintState = com.teco.ventago.features.printers.domain.model.ReprintTicketState(
                     businessId = businessId,
@@ -1770,6 +1814,12 @@ class OrdersDetailsViewModel(
                 }
                 Triple(reprintState, layout, printers)
             }.onSuccess { result ->
+                if (result == null) {
+                    hideLoading()
+                    updateState { copy(reprintInFlight = false) }
+                    snackbarService.show("Ticket reenviado a la impresora correctamente.")
+                    return@onSuccess
+                }
                 val reprintState = result.first
                 val options = result.third
                 when {

@@ -192,6 +192,10 @@ class H10pPrinterEngine(
                     sourceBitmap.recycle()
                 }
             }
+
+            is PrintCommand.Raster -> throw PrinterConnectionException(
+                "El bitmap ESC/POS solo aplica a la impresora Bluetooth"
+            )
         }
     }
 

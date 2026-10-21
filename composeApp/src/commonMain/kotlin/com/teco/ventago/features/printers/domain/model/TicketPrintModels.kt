@@ -192,6 +192,9 @@ sealed class PrintCommand {
     ) : PrintCommand()
 
     data class Cut(val fullCut: Boolean = true) : PrintCommand()
+
+    /** Bitmap ESC/POS ya rasterizado (`GS v 0`). Solo lo consume la termica Bluetooth. */
+    class Raster(val bytes: ByteArray) : PrintCommand()
 }
 
 data class PrintContext(

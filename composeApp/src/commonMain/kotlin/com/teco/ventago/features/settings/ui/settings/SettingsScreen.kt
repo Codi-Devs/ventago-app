@@ -95,8 +95,10 @@ import com.teco.ventago.features.settings.ui.settings.viewmodel.SettingsState
 import com.teco.ventago.features.settings.ui.settings.viewmodel.SettingsStateUiEvent
 import com.teco.ventago.features.settings.ui.settings.viewmodel.SettingsViewModel
 import com.teco.ventago.navigation.PosScreens
+import com.teco.ventago.navigation.BluetoothPrinterOnboardingRoute
 import com.teco.ventago.features.quotes.ui.settings.QuoteSettingsSection
 import com.teco.ventago.features.printers.domain.PrinterService
+import com.teco.ventago.features.printers.domain.listBluetoothPrinters
 import com.teco.ventago.features.printers.ui.viewmodel.PrinterEntryContext
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -152,6 +154,7 @@ fun SettingsScreen(
 
     val uiState by viewModel.uiState.collectAsState()
     val printers by printerService.observe().collectAsState()
+    val deviceBluetooth by printerService.observeDeviceBluetooth().collectAsState()
     val versionSnapshot by versionGateService.snapshot.collectAsState()
     val loadingSheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     val noAddressSelectedString = stringResource(Res.string.no_address_selected)
@@ -480,14 +483,24 @@ fun SettingsScreen(
                     SettingsTextButton(
                         label = "Impresoras térmicas",
                         onClick = {
-                            if (printers.isEmpty()) {
-                                navigate(
-                                    PrinterOnboardingRoute(
-                                        entryContext = PrinterEntryContext.SETTINGS.name
-                                    )
-                                )
-                            } else {
+                            if (printers.isNotEmpty() || deviceBluetooth != null) {
                                 navigate(PosScreens.PrintersScreen)
+                            } else {
+                                scope.launch {
+                                    val connected = runCatching { listBluetoothPrinters() }
+                                        .getOrNull()
+                                        ?.printers
+                                        .orEmpty()
+                                    if (connected.isNotEmpty()) {
+                                        navigate(BluetoothPrinterOnboardingRoute)
+                                    } else {
+                                        navigate(
+                                            PrinterOnboardingRoute(
+                                                entryContext = PrinterEntryContext.SETTINGS.name
+                                            )
+                                        )
+                                    }
+                                }
                             }
                         }
                     )

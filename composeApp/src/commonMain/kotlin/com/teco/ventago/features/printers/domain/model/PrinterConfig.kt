@@ -80,6 +80,7 @@ private const val DEFAULT_PRINTER_PORT = 443
 private const val DEFAULT_RAW_TCP_PORT = 9100
 const val PRINTER_INTEGRATION_EPSON_EPOS = "epson_epos"
 const val PRINTER_INTEGRATION_H10P_INTERNAL = "h10p_internal"
+const val PRINTER_INTEGRATION_BLUETOOTH_ESCPOS = "bluetooth_escpos"
 
 private fun String.normalizePrinterHost(): String {
     if (isBlank()) return ""

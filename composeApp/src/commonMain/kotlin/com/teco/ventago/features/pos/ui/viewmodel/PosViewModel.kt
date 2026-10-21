@@ -1800,11 +1800,9 @@ class PosViewModel(
                   }
 
                   if (hasValidOrderNumber && !effectiveCreatePaymentLink && !effectiveCreateYappyOnsite && !saveAsDraft) {
-                      val printer = printerService.resolveActivePrinter(
-                          branchCode = request.branch.code,
-                          billingPointCode = request.branch.billingPoint
-                      )
-                      if (printer != null) {
+                      val branchCode = request.branch.code
+                      val billingPoint = request.branch.billingPoint
+                      if (printerService.canPrintTicket(branchCode, billingPoint)) {
                           val inlineTicket = response.invoiceFiles?.ticket
                           val ticketPayload = if (saveAsNonFiscal) {
                               if (inlineTicket != null && inlineTicket.hasIssuerPrintData()) {
@@ -1822,8 +1820,9 @@ class PosViewModel(
                           }
                           if (ticketPayload != null) {
                               runCatching {
-                                  printerService.printTicketPayload(
-                                      printerConfig = printer,
+                                  printerService.printTicketForThisDevice(
+                                      branchCode = branchCode,
+                                      billingPointCode = billingPoint,
                                       ticketPayload = ticketPayload,
                                       context = PrintContext(
                                           source = "pos_order_create",
@@ -3466,8 +3465,7 @@ class PosViewModel(
         if (!invoiceIssued) return
         if (providedTicket == null && order.ticketEnabled != true) return
         if (uiState.value.paymentLinkInvoicePrintAttemptedOrderId == order.id) return
-        if (branchCode.isNullOrBlank() || billingPoint.isNullOrBlank()) return
-        if (printerService.resolveActivePrinter(branchCode, billingPoint) == null) return
+        if (!printerService.canPrintTicket(branchCode, billingPoint)) return
 
         updateState { copy(paymentLinkInvoicePrintAttemptedOrderId = order.id) }
         launchProtectedTicketPrint {
@@ -3507,11 +3505,9 @@ class PosViewModel(
         val state = uiState.value
         val resolvedBranchCode = branchCode
             ?: state.branches.getOrNull(state.selectedBranchIndex)?.branchCode
-            ?: return
         val resolvedBillingPoint = billingPoint
             ?: state.billingPoints.getOrNull(state.selectedBillingPointIndex)?.billingPoint
-            ?: return
-        val printer = printerService.resolveActivePrinter(resolvedBranchCode, resolvedBillingPoint) ?: return
+        if (!printerService.canPrintTicket(resolvedBranchCode, resolvedBillingPoint)) return
 
         if (markAttempted) {
             updateState { copy(paymentLinkInvoicePrintAttemptedOrderId = order.id) }
@@ -3521,8 +3517,9 @@ class PosViewModel(
             val ticketPayload = providedTicket
                 ?: fetchOrderTicketPayloadForPrint(order)
             stage = "print_ticket"
-            printerService.printTicketPayload(
-                printerConfig = printer,
+            printerService.printTicketForThisDevice(
+                branchCode = resolvedBranchCode,
+                billingPointCode = resolvedBillingPoint,
                 ticketPayload = ticketPayload,
                 context = PrintContext(
                     source = source,
@@ -3822,15 +3819,16 @@ class PosViewModel(
         if (uiState.value.yappyOnsitePrintAttemptedTransactionId == transactionId) return
 
         val state = uiState.value
-        val branch = state.branches.getOrNull(state.selectedBranchIndex)?.branchCode ?: return
-        val billingPoint = state.billingPoints.getOrNull(state.selectedBillingPointIndex)?.billingPoint ?: return
-        val printer = printerService.resolveActivePrinter(branch, billingPoint) ?: return
+        val branch = state.branches.getOrNull(state.selectedBranchIndex)?.branchCode
+        val billingPoint = state.billingPoints.getOrNull(state.selectedBillingPointIndex)?.billingPoint
+        if (!printerService.canPrintTicket(branch, billingPoint)) return
 
         updateState { copy(yappyOnsitePrintAttemptedTransactionId = transactionId) }
         launchProtectedTicketPrint {
             runCatching {
-                printerService.printTicketPayload(
-                    printerConfig = printer,
+                printerService.printTicketForThisDevice(
+                    branchCode = branch,
+                    billingPointCode = billingPoint,
                     ticketPayload = ticket,
                     context = PrintContext(
                         source = "pos_yappy_onsite",
@@ -3850,16 +3848,17 @@ class PosViewModel(
         if (orderId <= 0) return
         if (uiState.value.yappyOnsitePrintAttemptedTransactionId == "internal-$orderId") return
         val state = uiState.value
-        val branch = state.branches.getOrNull(state.selectedBranchIndex)?.branchCode ?: return
-        val billingPoint = state.billingPoints.getOrNull(state.selectedBillingPointIndex)?.billingPoint ?: return
-        val printer = printerService.resolveActivePrinter(branch, billingPoint) ?: return
+        val branch = state.branches.getOrNull(state.selectedBranchIndex)?.branchCode
+        val billingPoint = state.billingPoints.getOrNull(state.selectedBillingPointIndex)?.billingPoint
+        if (!printerService.canPrintTicket(branch, billingPoint)) return
         val businessId = business?.businessId ?: return
         updateState { copy(yappyOnsitePrintAttemptedTransactionId = "internal-$orderId") }
         launchProtectedTicketPrint {
             runCatching {
                 val ticket = printerService.fetchOrderTicketLayout(orderId = orderId, businessId = businessId)
-                printerService.printTicketPayload(
-                    printerConfig = printer,
+                printerService.printTicketForThisDevice(
+                    branchCode = branch,
+                    billingPointCode = billingPoint,
                     ticketPayload = ticket,
                     context = PrintContext(
                         source = "pos_internal_document_payment",
@@ -3906,10 +3905,7 @@ class PosViewModel(
         val orderNumber = state.orderNumber
         val branchCode = state.branches.getOrNull(state.selectedBranchIndex)?.branchCode
         val billingPoint = state.billingPoints.getOrNull(state.selectedBillingPointIndex)?.billingPoint
-        if (branchCode.isNullOrBlank() || billingPoint.isNullOrBlank()) return
-
-        val printer = printerService.resolveActivePrinter(branchCode, billingPoint)
-        if (printer == null) {
+        if (!printerService.canPrintTicket(branchCode, billingPoint)) {
             viewModelScope.launch {
                 snackbarService.show("No hay impresora activa disponible para reimprimir este ticket.")
             }
@@ -3924,8 +3920,9 @@ class PosViewModel(
                     orderId = orderId,
                     businessId = businessId
                 )
-                printerService.printTicketPayload(
-                    printerConfig = printer,
+                printerService.printTicketForThisDevice(
+                    branchCode = branchCode,
+                    billingPointCode = billingPoint,
                     ticketPayload = ticketPayload,
                     context = PrintContext(
                         source = "pos_success_reprint",

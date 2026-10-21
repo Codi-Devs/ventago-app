@@ -94,9 +94,9 @@ import com.teco.ventago.design_system.theme.titleMediumBold
 import com.teco.ventago.design_system.theme.vanishedBackgroundColor
 import com.teco.ventago.core.flags.IFlagsService
 import com.teco.ventago.features.notifications.domain.formatUnreadBadge
-import com.teco.ventago.features.home.ui.viewmodel.HomeViewModel
 import com.teco.ventago.features.home.domain.model.HomeSalesRange
 import com.teco.ventago.features.home.domain.model.HomeSummary
+import com.teco.ventago.features.home.ui.viewmodel.HomeViewModel
 import com.teco.ventago.core.LocalStorage
 import com.teco.ventago.features.quotes.domain.QuotesOnboarding
 import com.teco.ventago.isIOS
