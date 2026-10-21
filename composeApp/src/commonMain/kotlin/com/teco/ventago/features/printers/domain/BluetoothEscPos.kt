@@ -1,9 +1,7 @@
 package com.teco.ventago.features.printers.domain
 
 import com.teco.ventago.features.printers.domain.model.NARROW_CANVAS_WIDTH_DOTS
-import com.teco.ventago.features.printers.domain.model.PrintAlignment
 import com.teco.ventago.features.printers.domain.model.PrintCommand
-import com.teco.ventago.features.printers.domain.model.TicketBlockStyle
 
 data class BluetoothPrintOutcome(
     val success: Boolean,
@@ -53,29 +51,3 @@ suspend fun printBluetoothTicket(
     }
     return sendBluetoothEscPos(EscPosTicketEncoder.encode(prepared), deviceId)
 }
-
-suspend fun printBluetoothEscPosTest(): String {
-    return printBluetoothTicket(bluetoothTestCommands()).message
-}
-
-internal fun bluetoothTestCommands(): List<PrintCommand> = listOf(
-    PrintCommand.Text(
-        text = "VentaGO",
-        alignment = PrintAlignment.CENTER,
-        style = TicketBlockStyle(bold = true, doubleWidth = true, doubleHeight = true),
-    ),
-    PrintCommand.Text(
-        text = "Prueba Bluetooth",
-        alignment = PrintAlignment.CENTER,
-        style = TicketBlockStyle(bold = true),
-    ),
-    PrintCommand.Text(
-        text = "ESC/POS",
-        alignment = PrintAlignment.CENTER,
-    ),
-    PrintCommand.Text(text = "--------------------------------"),
-    PrintCommand.Text(text = "Si lees esto, imprime bien."),
-    PrintCommand.Text(text = "Impresora termica portatil."),
-    PrintCommand.Text(text = "--------------------------------"),
-    PrintCommand.Feed(4),
-)
