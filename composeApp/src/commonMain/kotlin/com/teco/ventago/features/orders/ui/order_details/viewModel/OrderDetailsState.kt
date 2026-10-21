@@ -58,6 +58,7 @@ data class OrderDetailsState(
     val rescheduleState: RescheduleState = RescheduleState(),
     val voidPaymentState: VoidPaymentState = VoidPaymentState(),
     val canPhysicalReturn: Boolean = false,
+    val hasInventoriableLines: Boolean = false,
     val showPhysicalReturnSheet: Boolean = false,
     val physicalReturnSubmitting: Boolean = false,
     val physicalReturnLines: List<PhysicalReturnLineState> = emptyList(),

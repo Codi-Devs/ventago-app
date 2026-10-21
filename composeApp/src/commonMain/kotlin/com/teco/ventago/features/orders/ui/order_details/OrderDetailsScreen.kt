@@ -62,6 +62,7 @@ import androidx.compose.material.icons.rounded.Add
 import androidx.compose.material.icons.rounded.Remove
 import androidx.compose.material.icons.rounded.OpenInNew
 import androidx.compose.material.icons.rounded.Payment
+import androidx.compose.material.icons.rounded.Print
 import androidx.compose.material.icons.rounded.Person
 import androidx.compose.material.icons.rounded.Receipt
 import androidx.compose.material.icons.rounded.Redeem
@@ -244,7 +245,27 @@ fun OrderDetailsActions(backStackEntry: NavBackStackEntry?,  navigateAny: (Any) 
     val uiState by viewModel.uiState.collectAsState()
     val order = uiState.order
 
-    if (uiState.canPhysicalReturn && order != null && order.orderType !in listOf("04", "4", "05", "5", "06", "6", "07", "7")) {
+    if (viewModel.canShowReprintAction(order) || uiState.reprintInFlight) {
+        IconButton(
+            onClick = { viewModel.reprintTicket() },
+            enabled = !uiState.reprintInFlight,
+        ) {
+            if (uiState.reprintInFlight) {
+                CircularProgressIndicator(
+                    modifier = Modifier.size(18.dp),
+                    strokeWidth = 2.dp,
+                    color = MaterialTheme.colorScheme.secondary,
+                )
+            } else {
+                Icon(
+                    imageVector = Icons.Rounded.Print,
+                    contentDescription = "Imprimir ticket",
+                    tint = MaterialTheme.colorScheme.secondary,
+                )
+            }
+        }
+    }
+    if (uiState.canPhysicalReturn && uiState.hasInventoriableLines && order != null && order.orderType !in listOf("04", "4", "05", "5", "06", "6", "07", "7")) {
         IconButton(onClick = { viewModel.openPhysicalReturn() }) {
             Icon(
                 imageVector = Icons.Rounded.Inventory2,

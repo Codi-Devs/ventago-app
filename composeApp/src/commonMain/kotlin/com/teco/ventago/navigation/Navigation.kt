@@ -79,6 +79,8 @@ import com.teco.ventago.features.orders.ui.order_history.viewModel.OrderHistoryV
 import com.teco.ventago.features.orders.ui.order_invoice.viewModel.OrderInvoiceViewModel
 import com.teco.ventago.features.orders.ui.orders.viewmodel.OrdersViewModel
 import com.teco.ventago.features.printers.domain.PrinterQrEntry
+import com.teco.ventago.features.printers.ui.BluetoothPrinterOnboardingScreen
+import com.teco.ventago.features.printers.ui.viewmodel.PrinterEntryContext
 import com.teco.ventago.features.printers.ui.PrinterConfigScreen as PrinterConfigContent
 import com.teco.ventago.features.printers.ui.PrinterOnboardingScreen as PrinterOnboardingContent
 import com.teco.ventago.features.printers.ui.PrintersScreen as PrintersContent
@@ -364,7 +366,12 @@ enum class PosScreens(
     Settings(Res.string.action_settings), SettingsScreen(Res.string.action_settings), BusinessLogoSettingsScreen(
         Res.string.add_image
     ),
-    PrintersScreen(Res.string.printers),
+    PrintersScreen(
+        Res.string.printers,
+        actions = { _, _, navigateAny ->
+            com.teco.ventago.features.printers.ui.PrintersScreenActions(navigateAny)
+        },
+    ),
     PrinterOnboardingScreen(Res.string.printer_onboarding),
     PrinterConfigScreen(Res.string.printer_config),
 
@@ -1590,13 +1597,40 @@ private fun NavGraphBuilder.addSettingsNavigation(
                 branchCode = args.branchCode,
                 billingPointCode = args.billingPointCode,
                 fromQr = args.fromQr,
+                openNetwork = args.openNetwork,
                 onDismiss = { navController.navigateUp() },
                 onGoToBranches = {
                     navController.navigate(PosScreens.Branches.name) {
                         popUpTo(PosScreens.Settings.name) { inclusive = false }
                         launchSingleTop = true
                     }
-                }
+                },
+                onOpenBluetooth = {
+                    navController.navigate(BluetoothPrinterOnboardingRoute)
+                },
+            )
+        }
+
+        composable<BluetoothPrinterOnboardingRoute> {
+            analyticsService.logScreenView("BluetoothPrinterOnboardingScreen")
+            BluetoothPrinterOnboardingScreen(
+                onLinked = {
+                    val returnedToPrinters = navController.popBackStack(
+                        PosScreens.PrintersScreen.name,
+                        inclusive = false,
+                    )
+                    if (!returnedToPrinters) {
+                        navController.navigate(PosScreens.PrintersScreen.name) {
+                            popUpTo(PosScreens.Settings.name) { inclusive = false }
+                            launchSingleTop = true
+                        }
+                    }
+                },
+                onOpenNetworkOnboarding = {
+                    navController.navigate(
+                        PrinterOnboardingRoute(entryContext = PrinterEntryContext.SETTINGS.name)
+                    )
+                },
             )
         }
 
@@ -1913,6 +1947,7 @@ fun String.toPosScreenOrNull(): PosScreens? {
     if (this.contains("AddBillingPointRoute")) return PosScreens.AddBillingPointScreen
     if (this.contains("EditBillingPointRoute")) return PosScreens.EditBillingPointScreen
     if (this.contains("ReportDefinitionRoute")) return PosScreens.ReportDefinitionScreen
+    if (this.contains("BluetoothPrinterOnboardingRoute")) return PosScreens.PrinterOnboardingScreen
     if (this.contains("PrinterOnboardingRoute")) return PosScreens.PrinterOnboardingScreen
     if (this.contains("PrinterConfigRoute")) return PosScreens.PrinterConfigScreen
     val base = this.substringBefore("?")     // strip query params
@@ -2002,11 +2037,15 @@ data class AddBillingPointRoute(val branchCode: String)
 data class EditBillingPointRoute(val branchCode: String, val billingCode: String)
 
 @Serializable
+object BluetoothPrinterOnboardingRoute
+
+@Serializable
 data class PrinterOnboardingRoute(
     val entryContext: String = "SETTINGS",
     val branchCode: String? = null,
     val billingPointCode: String? = null,
     val fromQr: Boolean = false,
+    val openNetwork: Boolean = false,
 )
 
 @Serializable

@@ -38,9 +38,14 @@ class PrinterOnboardingViewModel(
     private val preselectedBranchCode: String? = null,
     private val preselectedBillingPointCode: String? = null,
     startAtConfig: Boolean = false,
+    startAtSetup: Boolean = false,
 ) : BaseViewModel<PrinterOnboardingState, PrinterOnboardingUiEvent>(
     PrinterOnboardingState(
-        step = if (startAtConfig) PrinterOnboardingStep.CONFIG else PrinterOnboardingStep.LANDING,
+        step = when {
+            startAtConfig -> PrinterOnboardingStep.CONFIG
+            startAtSetup -> PrinterOnboardingStep.SETUP
+            else -> PrinterOnboardingStep.LANDING
+        },
         entryContext = entryContext.toPrinterEntryContextValue(),
         selectionLocked = entryContext.toPrinterEntryContextValue() == PrinterEntryContext.BRANCH,
         showSuccessOnSave = !startAtConfig,

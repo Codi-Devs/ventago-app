@@ -336,7 +336,7 @@ fun OrdersScreen(
                                 navigate(PosScreens.OrderDetailsScreen, null)
                             },
                             statusOnClick = {
-                            }
+                            },
                         )
                     }
 

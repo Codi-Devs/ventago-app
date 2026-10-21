@@ -24,7 +24,9 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.Chat
+import androidx.compose.material.icons.rounded.Bluetooth
 import androidx.compose.material.icons.rounded.ElectricBolt
+import androidx.compose.material.icons.rounded.Wifi
 import androidx.compose.material.icons.rounded.ExpandLess
 import androidx.compose.material.icons.rounded.ExpandMore
 import androidx.compose.material.icons.rounded.QrCodeScanner
@@ -33,9 +35,11 @@ import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Divider
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.RadioButton
 import androidx.compose.material3.RadioButtonDefaults
 import androidx.compose.material3.Switch
@@ -94,10 +98,12 @@ import io.github.alexzhirkevich.compottie.rememberLottieComposition
 import io.github.alexzhirkevich.compottie.rememberLottiePainter
 import kotlinx.coroutines.launch
 import org.jetbrains.compose.resources.ExperimentalResourceApi
+import org.jetbrains.compose.resources.painterResource
 import org.koin.compose.koinInject
 import org.koin.compose.viewmodel.koinViewModel
 import org.koin.core.parameter.parametersOf
 import ventago.composeapp.generated.resources.Res
+import ventago.composeapp.generated.resources.ic_arrow_forward_ios
 
 @Composable
 fun PrinterOnboardingScreen(
@@ -105,10 +111,12 @@ fun PrinterOnboardingScreen(
     branchCode: String? = null,
     billingPointCode: String? = null,
     fromQr: Boolean = false,
+    openNetwork: Boolean = false,
     onDismiss: () -> Unit,
     onGoToBranches: () -> Unit,
+    onOpenBluetooth: () -> Unit = {},
     viewModel: PrinterOnboardingViewModel = koinViewModel(
-        parameters = { parametersOf(entryContext, branchCode, billingPointCode, false) }
+        parameters = { parametersOf(entryContext, branchCode, billingPointCode, false, openNetwork) }
     ),
 ) {
     PrinterFlowContent(
@@ -117,6 +125,8 @@ fun PrinterOnboardingScreen(
         onDismiss = onDismiss,
         onGoToBranches = onGoToBranches,
         onSaveAndClose = onDismiss,
+        onOpenBluetooth = onOpenBluetooth,
+        openNetwork = openNetwork,
     )
 }
 
@@ -128,7 +138,7 @@ fun PrinterConfigScreen(
     onDismiss: () -> Unit,
     onGoToBranches: () -> Unit = onDismiss,
     viewModel: PrinterOnboardingViewModel = koinViewModel(
-        parameters = { parametersOf(entryContext, branchCode, billingPointCode, true) }
+        parameters = { parametersOf(entryContext, branchCode, billingPointCode, true, false) }
     ),
 ) {
     PrinterFlowContent(
@@ -137,6 +147,8 @@ fun PrinterConfigScreen(
         onDismiss = onDismiss,
         onGoToBranches = onGoToBranches,
         onSaveAndClose = onDismiss,
+        onOpenBluetooth = {},
+        openNetwork = false,
     )
 }
 
@@ -147,6 +159,8 @@ private fun PrinterFlowContent(
     onDismiss: () -> Unit,
     onGoToBranches: () -> Unit,
     onSaveAndClose: () -> Unit,
+    onOpenBluetooth: () -> Unit,
+    openNetwork: Boolean,
 ) {
     val snackbarService: SnackbarService = koinInject()
     val analyticsService: AnalyticsService = koinInject()
@@ -197,13 +211,21 @@ private fun PrinterFlowContent(
                     "Hola, quiero adquirir una impresora térmica para usarla con VentaGo."
                 )
             },
-            onHasPrinter = {
+            onNetworkPrinter = {
                 analyticsService.logPrinterOnboardingActionClicked(
                     source = analyticsSource,
                     step = "landing",
-                    actionValue = "configure"
+                    actionValue = "configure_network"
                 )
                 viewModel.startSetupFlow()
+            },
+            onBluetoothPrinter = {
+                analyticsService.logPrinterOnboardingActionClicked(
+                    source = analyticsSource,
+                    step = "landing",
+                    actionValue = "configure_bluetooth"
+                )
+                onOpenBluetooth()
             },
             onDismiss = {
                 analyticsService.logPrinterOnboardingDismissed(
@@ -216,7 +238,10 @@ private fun PrinterFlowContent(
 
         PrinterOnboardingStep.SETUP -> PrinterSetupStep(
             slideIndex = uiState.setupSlideIndex,
-            onBack = viewModel::previousSetupSlide,
+            onBack = {
+                if (openNetwork && uiState.setupSlideIndex == 0) onDismiss()
+                else viewModel.previousSetupSlide()
+            },
             onNext = viewModel::nextSetupSlide,
         )
 
@@ -295,12 +320,13 @@ private fun printerAnalyticsStep(step: PrinterOnboardingStep): String {
     }
 }
 
-@OptIn(ExperimentalResourceApi::class)
+@OptIn(ExperimentalResourceApi::class, ExperimentalMaterial3Api::class)
 @Composable
 private fun PrinterLandingStep(
     fromQr: Boolean,
     onBuyPrinter: () -> Unit,
-    onHasPrinter: () -> Unit,
+    onNetworkPrinter: () -> Unit,
+    onBluetoothPrinter: () -> Unit,
     onDismiss: () -> Unit,
 ) {
     val composition by rememberLottieComposition {
@@ -308,11 +334,12 @@ private fun PrinterLandingStep(
             Res.readBytes("files/print-invoice-an.json").decodeToString()
         )
     }
+    var showKindSheet by remember { mutableStateOf(false) }
+    val kindSheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
 
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .verticalScroll(rememberScrollState())
             .padding(20.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
@@ -323,7 +350,7 @@ private fun PrinterLandingStep(
                 .padding(horizontal = 10.dp, vertical = 4.dp),
             contentAlignment = Alignment.Center
         ) {
-            Row (verticalAlignment = Alignment.CenterVertically) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
                 Icon(
                     imageVector = Icons.Rounded.ElectricBolt,
                     contentDescription = null,
@@ -335,7 +362,6 @@ private fun PrinterLandingStep(
                     style = labelLarge().copy(color = MaterialTheme.colorScheme.onSecondary)
                 )
             }
-
         }
 
         Text(
@@ -344,6 +370,9 @@ private fun PrinterLandingStep(
         )
 
         Card(
+            modifier = Modifier
+                .weight(1f)
+                .fillMaxWidth(),
             colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.secondary)
         ) {
             Image(
@@ -352,47 +381,12 @@ private fun PrinterLandingStep(
                     iterations = Compottie.IterateForever
                 ),
                 contentDescription = "Impresora térmica",
+                contentScale = ContentScale.Fit,
                 modifier = Modifier
-                    .fillMaxWidth()
-                    .height(220.dp)
-                    .padding(top = 16.dp)
-            )
-            Text(
-                text = "Conecta tu impresora y déjanos ayudarte a detectarla automáticamente.",
-                modifier = Modifier.padding(16.dp),
-                style = bodyMediumBold(color = MaterialTheme.colorScheme.onSecondary)
+                    .fillMaxSize()
+                    .padding(16.dp)
             )
         }
-        Text(
-            text = "Convierte cada factura en una experiencia más ágil y profesional para tus clientes. Con una impresora térmica reduces esperas, entregas comprobantes al instante y haces tu operación mucho más fluida.",
-            style = bodyMedium()
-        )
-        Card(
-            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.08f))
-        ) {
-            Text(
-                text = "Empieza a imprimir tus facturas en segundos y da una mejor experiencia a tus clientes.",
-                modifier = Modifier.padding(16.dp),
-                style = bodyMediumBold(color = MaterialTheme.colorScheme.primary)
-            )
-        }
-        BenefitRow(
-            text = "Agiliza el cobro en caja y evita filas innecesarias.",
-            bulletColor = MaterialTheme.colorScheme.secondary
-        )
-        BenefitRow(
-            text = "Entrega tickets claros y profesionales en el momento exacto.",
-            bulletColor = MaterialTheme.colorScheme.secondary
-        )
-        BenefitRow(
-            text = "Recibe acompañamiento de VentaGo para escoger y configurar tu impresora.",
-            bulletColor = MaterialTheme.colorScheme.secondary
-        )
-        Text(
-            text = "Si ya tienes tu impresora, te guiamos paso a paso para dejarla lista. Si todavía no la tienes, te ayudamos a conseguir la ideal para tu negocio.",
-            style = bodyMedium(color = MaterialTheme.colorScheme.onSurfaceVariant)
-        )
-        Spacer(modifier = Modifier.height(8.dp))
         if (!fromQr) {
             ButtonM(
                 onClick = onBuyPrinter,
@@ -411,7 +405,7 @@ private fun PrinterLandingStep(
             }
         }
         OutlinedButtonM(
-            onClick = onHasPrinter,
+            onClick = { showKindSheet = true },
             containerColor = MaterialTheme.colorScheme.secondary.copy(alpha = 0.08f),
             contentColor = MaterialTheme.colorScheme.secondary,
             border = BorderStroke(1.dp, MaterialTheme.colorScheme.secondary)
@@ -420,6 +414,91 @@ private fun PrinterLandingStep(
         }
         Box(modifier = Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
             TextButtonS(label = "Configurar más tarde") { onDismiss() }
+        }
+    }
+
+    if (showKindSheet) {
+        ModalBottomSheet(
+            onDismissRequest = { showKindSheet = false },
+            sheetState = kindSheetState,
+            containerColor = cardContainerColor(),
+        ) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 20.dp)
+                    .padding(bottom = 28.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp),
+            ) {
+                Text("¿Cómo se conecta?", style = titleMedium())
+                PrinterKindCard(
+                    icon = Icons.Rounded.Wifi,
+                    title = "Impresora de red",
+                    subtitle = "La usan varios equipos de la caja",
+                    onClick = {
+                        showKindSheet = false
+                        onNetworkPrinter()
+                    },
+                )
+                PrinterKindCard(
+                    icon = Icons.Rounded.Bluetooth,
+                    title = "Impresora Bluetooth",
+                    subtitle = "Solo este celular",
+                    onClick = {
+                        showKindSheet = false
+                        onBluetoothPrinter()
+                    },
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun PrinterKindCard(
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    title: String,
+    subtitle: String,
+    onClick: () -> Unit,
+) {
+    Card(
+        onClick = onClick,
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(16.dp),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.35f)),
+    ) {
+        Row(
+            modifier = Modifier.padding(16.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
+            Box(
+                modifier = Modifier
+                    .size(44.dp)
+                    .clip(RoundedCornerShape(14.dp))
+                    .background(vanishedBackgroundColor()),
+                contentAlignment = Alignment.Center,
+            ) {
+                Icon(
+                    imageVector = icon,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.secondary,
+                )
+            }
+            Column(modifier = Modifier.weight(1f)) {
+                Text(title, style = bodyMediumBold())
+                Text(
+                    subtitle,
+                    style = bodySmall(color = MaterialTheme.colorScheme.onSurfaceVariant),
+                )
+            }
+            Icon(
+                painter = painterResource(Res.drawable.ic_arrow_forward_ios),
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.size(16.dp),
+            )
         }
     }
 }

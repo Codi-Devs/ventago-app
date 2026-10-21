@@ -97,6 +97,7 @@ import com.teco.ventago.features.printers.domain.PrinterDiscoveryEngine
 import com.teco.ventago.features.printers.domain.PrinterDiscoveryService
 import com.teco.ventago.features.printers.domain.PrinterEngine
 import com.teco.ventago.features.printers.domain.PrinterService
+import com.teco.ventago.features.printers.ui.viewmodel.BluetoothPrinterOnboardingViewModel
 import com.teco.ventago.features.printers.ui.viewmodel.PrinterOnboardingViewModel
 import com.teco.ventago.features.printers.ui.viewmodel.PrintersViewModel
 import com.teco.ventago.features.reports.data.provider.IRealTimeReportsProvider
@@ -335,6 +336,7 @@ internal val viewModels = module {
     viewModelOf(::OrderHistoryViewModel)
     viewModelOf(::BranchesManageViewModel)
     viewModelOf(::PrintersViewModel)
+    viewModelOf(::BluetoothPrinterOnboardingViewModel)
     viewModelOf(::PosDevicesViewModel)
     viewModelOf(::AddCustomerViewModel)
     viewModelOf(::ClientListViewModel)
@@ -381,7 +383,7 @@ internal val viewModels = module {
             billingPoint = billingPoint
         )
     }
-    viewModel { (entryContext: String, branchCode: String?, billingPointCode: String?, startAtConfig: Boolean) ->
+    viewModel { (entryContext: String, branchCode: String?, billingPointCode: String?, startAtConfig: Boolean, startAtSetup: Boolean) ->
         PrinterOnboardingViewModel(
             printerService = get(),
             discoveryService = get(),
@@ -392,7 +394,8 @@ internal val viewModels = module {
             entryContext = entryContext,
             preselectedBranchCode = branchCode,
             preselectedBillingPointCode = billingPointCode,
-            startAtConfig = startAtConfig
+            startAtConfig = startAtConfig,
+            startAtSetup = startAtSetup,
         )
     }
 

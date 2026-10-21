@@ -2,6 +2,7 @@ package com.teco.ventago.features.printers.ui.viewmodel
 
 import com.teco.ventago.core.LoadableState
 import com.teco.ventago.design_system.organism.LoadingBottomSheetState
+import com.teco.ventago.features.printers.domain.model.DeviceBluetoothPrinter
 import com.teco.ventago.features.printers.domain.model.PrinterConfig
 
 data class PrinterListItem(
@@ -12,6 +13,9 @@ data class PrinterListItem(
 
 data class PrintersState(
     val printers: List<PrinterListItem> = emptyList(),
+    val deviceBluetooth: DeviceBluetoothPrinter? = null,
+    val bluetoothReachable: Boolean? = null,
+    val confirmUnlinkBluetooth: Boolean = false,
     val pendingDelete: PrinterConfig? = null,
     override val loadingBottomSheet: LoadingBottomSheetState = LoadingBottomSheetState(),
 ) : LoadableState<PrintersState> {

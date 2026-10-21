@@ -163,6 +163,10 @@ class AndroidEpsonPrinterEngine(
                 }
                 printer.addFeedLine(1)
             }
+
+            is PrintCommand.Raster -> throw PrinterConnectionException(
+                "El bitmap ESC/POS solo aplica a la impresora Bluetooth"
+            )
         }
     }
 

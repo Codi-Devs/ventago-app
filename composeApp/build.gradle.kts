@@ -55,7 +55,8 @@ kotlin {
                 "-framework", "CoreGraphics",
                 "-framework", "CoreImage",
                 "-framework", "Security",
-                "-framework", "SystemConfiguration"
+                "-framework", "SystemConfiguration",
+                "-framework", "CoreBluetooth"
             )
         }
     }

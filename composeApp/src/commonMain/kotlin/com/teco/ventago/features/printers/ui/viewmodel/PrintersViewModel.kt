@@ -9,9 +9,11 @@ import com.teco.ventago.design_system.organism.LoadingBottomSheetState
 import com.teco.ventago.design_system.organism.LoadingState
 import com.teco.ventago.features.branches.domain.BranchService
 import com.teco.ventago.features.printers.domain.PrinterService
+import com.teco.ventago.features.printers.domain.isSavedBluetoothPrinterAvailable
 import com.teco.ventago.features.printers.domain.model.PrinterConfig
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.IO
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.launch
 
@@ -20,6 +22,7 @@ class PrintersViewModel(
     private val branchService: BranchService,
     private val logger: ILoggerService,
 ) : BaseViewModel<PrintersState, PrintersUiEvent>(PrintersState()) {
+    private var reachabilityJob: Job? = null
 
     init {
         viewModelScope.launch {
@@ -43,6 +46,48 @@ class PrintersViewModel(
                     updateState { copy(printers = items) }
                 }
         }
+        viewModelScope.launch {
+            printerService.observeDeviceBluetooth().collect { printer ->
+                updateState { copy(deviceBluetooth = printer, bluetoothReachable = null) }
+                refreshBluetoothReachability()
+            }
+        }
+    }
+
+    fun refreshBluetoothReachability() {
+        val printer = printerService.linkedBluetoothPrinter()
+        if (printer == null || !printer.isActive) {
+            reachabilityJob?.cancel()
+            updateState { copy(bluetoothReachable = null) }
+            return
+        }
+        reachabilityJob?.cancel()
+        reachabilityJob = viewModelScope.launch {
+            val reachable = runCatching { isSavedBluetoothPrinterAvailable(printer.id) }.getOrDefault(false)
+            if (printerService.linkedBluetoothPrinter()?.id == printer.id) {
+                updateState { copy(bluetoothReachable = reachable) }
+            }
+        }
+    }
+
+    fun promptUnlinkBluetooth() {
+        updateState { copy(confirmUnlinkBluetooth = true) }
+    }
+
+    fun dismissUnlinkBluetooth() {
+        updateState { copy(confirmUnlinkBluetooth = false) }
+    }
+
+    fun confirmUnlinkBluetooth() {
+        printerService.clearDeviceBluetoothPrinter()
+        updateState { copy(confirmUnlinkBluetooth = false) }
+    }
+
+    fun setBluetoothPaperWidth(mm: Int) {
+        if (mm != 58 && mm != 80) return
+        val printer = printerService.linkedBluetoothPrinter() ?: return
+        if (printer.paperWidthMm == mm) return
+        printerService.saveDeviceBluetoothPrinter(printer.id, printer.name, mm)
     }
 
     fun promptDelete(printerConfig: PrinterConfig) {
