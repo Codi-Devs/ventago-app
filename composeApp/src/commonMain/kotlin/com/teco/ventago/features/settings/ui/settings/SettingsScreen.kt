@@ -94,8 +94,9 @@ import com.teco.ventago.features.invoicing.ui.settings.BottomNoteSettingsSheet
 import com.teco.ventago.features.settings.ui.settings.viewmodel.SettingsState
 import com.teco.ventago.features.settings.ui.settings.viewmodel.SettingsStateUiEvent
 import com.teco.ventago.features.settings.ui.settings.viewmodel.SettingsViewModel
+import com.teco.ventago.features.printers.ui.viewmodel.PrinterEntryContext
 import com.teco.ventago.navigation.PosScreens
-import com.teco.ventago.navigation.BluetoothPrinterOnboardingRoute
+import com.teco.ventago.navigation.PrinterOnboardingRoute
 import com.teco.ventago.features.quotes.ui.settings.QuoteSettingsSection
 import com.teco.ventago.features.printers.domain.PrinterService
 import kotlinx.coroutines.Dispatchers
@@ -483,7 +484,11 @@ fun SettingsScreen(
                             if (printers.isNotEmpty() || deviceBluetooth != null) {
                                 navigate(PosScreens.PrintersScreen)
                             } else {
-                                navigate(BluetoothPrinterOnboardingRoute)
+                                navigate(
+                                    PrinterOnboardingRoute(
+                                        entryContext = PrinterEntryContext.SETTINGS.name,
+                                    )
+                                )
                             }
                         }
                     )
