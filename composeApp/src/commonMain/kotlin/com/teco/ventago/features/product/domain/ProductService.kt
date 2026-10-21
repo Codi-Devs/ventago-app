@@ -22,6 +22,8 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
+internal fun preferLoadedMenu(current: Products?, cached: Products): Products = current ?: cached
+
 class ProductService(
     private val productsRepository: IProductsRepository,
     private val cache: ICacheService,
@@ -41,9 +43,9 @@ class ProductService(
         serviceScope.launch {
             cache.getCache(Products::class)?.let { productsData ->
                 withContext(Dispatchers.Main) {
-                    state.update {
-                        productsData
-                    }
+                    // A menu already fetched from the network wins. A late Room
+                    // read must not put back a snapshot that dropped ITBMS.
+                    state.update { current -> preferLoadedMenu(current, productsData) }
                 }
             }
 
