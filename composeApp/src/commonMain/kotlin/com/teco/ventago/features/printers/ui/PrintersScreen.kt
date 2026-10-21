@@ -233,8 +233,10 @@ fun PrintersScreen(
                     item(key = "bluetooth-${bluetooth.id}") {
                         DeviceBluetoothCard(
                             name = bluetooth.name,
+                            paperWidthMm = bluetooth.paperWidthMm,
                             reachable = uiState.bluetoothReachable,
-                            onUnlink = viewModel::unlinkBluetooth,
+                            onPaperWidth = viewModel::setBluetoothPaperWidth,
+                            onUnlink = viewModel::promptUnlinkBluetooth,
                         )
                     }
                 }
@@ -259,6 +261,26 @@ fun PrintersScreen(
                 }
             }
         }
+    }
+
+    if (uiState.confirmUnlinkBluetooth) {
+        AlertDialog(
+            onDismissRequest = viewModel::dismissUnlinkBluetooth,
+            confirmButton = {
+                TextButtonS(label = "Quitar") { viewModel.confirmUnlinkBluetooth() }
+            },
+            dismissButton = {
+                TextButtonS(label = "Cancelar") { viewModel.dismissUnlinkBluetooth() }
+            },
+            title = { Text("Quitar impresora") },
+            text = {
+                Text(
+                    "Esta impresora dejará de imprimir los tickets en este equipo.",
+                    style = bodyMedium()
+                )
+            },
+            containerColor = cardContainerColor(),
+        )
     }
 
     uiState.pendingDelete?.let {
@@ -294,7 +316,9 @@ fun PrintersScreen(
 @Composable
 private fun DeviceBluetoothCard(
     name: String,
+    paperWidthMm: Int,
     reachable: Boolean?,
+    onPaperWidth: (Int) -> Unit,
     onUnlink: () -> Unit,
 ) {
     Card(
@@ -326,6 +350,33 @@ private fun DeviceBluetoothCard(
                     "Bluetooth · este equipo",
                     style = bodySmall(color = MaterialTheme.colorScheme.onSurfaceVariant),
                 )
+                Spacer(modifier = Modifier.height(8.dp))
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    listOf(58, 80).forEach { mm ->
+                        val selected = paperWidthMm == mm
+                        Surface(
+                            onClick = { onPaperWidth(mm) },
+                            shape = RoundedCornerShape(50),
+                            color = if (selected) {
+                                MaterialTheme.colorScheme.secondary
+                            } else {
+                                vanishedBackgroundColor()
+                            },
+                        ) {
+                            Text(
+                                text = "$mm mm",
+                                modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp),
+                                style = bodySmall(
+                                    color = if (selected) {
+                                        MaterialTheme.colorScheme.onSecondary
+                                    } else {
+                                        MaterialTheme.colorScheme.secondary
+                                    }
+                                ),
+                            )
+                        }
+                    }
+                }
             }
             if (reachable != null) {
                 Box(

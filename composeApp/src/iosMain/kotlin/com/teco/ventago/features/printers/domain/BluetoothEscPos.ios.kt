@@ -39,7 +39,6 @@ import platform.darwin.dispatch_time
 import kotlin.coroutines.resume
 
 private const val PRINTER_NAME_SCORE = 20
-private const val IMMEDIATE_CONNECT_SCORE = 100
 
 private var activeBleSession: IosBleEscPosSession? = null
 
@@ -49,6 +48,9 @@ actual suspend fun sendBluetoothEscPos(
 ): BluetoothPrintOutcome {
     if (payload.isEmpty()) {
         return BluetoothPrintOutcome(false, "No hay contenido para imprimir.")
+    }
+    if (deviceId.isNullOrBlank()) {
+        return BluetoothPrintOutcome(false, "No hay impresora seleccionada en este equipo.")
     }
     return suspendCancellableCoroutine { continuation ->
         val session = IosBleEscPosSession(payload, deviceId, continuation)
@@ -111,14 +113,10 @@ class IosBleEscPosSession(
         val name = didDiscoverPeripheral.name
             ?: advertisementData[CBAdvertisementDataLocalNameKey] as? String
         val id = didDiscoverPeripheral.identifier.UUIDString
-        if (!deviceId.isNullOrBlank() && id != deviceId) return
+        if (deviceId.isNullOrBlank() || id != deviceId) return
         val score = bluetoothPrinterNameScore(name)
-        if (deviceId.isNullOrBlank() && score <= 0) return
-        val usableScore = if (deviceId.isNullOrBlank()) score else maxOf(score, PRINTER_NAME_SCORE)
-        candidates[id] = Candidate(didDiscoverPeripheral, id, name ?: id, usableScore)
-        if (!deviceId.isNullOrBlank() || usableScore >= IMMEDIATE_CONNECT_SCORE) {
-            connectBest()
-        }
+        candidates[id] = Candidate(didDiscoverPeripheral, id, name ?: id, maxOf(score, PRINTER_NAME_SCORE))
+        connectBest()
     }
 
     override fun centralManager(central: CBCentralManager, didConnectPeripheral: CBPeripheral) {

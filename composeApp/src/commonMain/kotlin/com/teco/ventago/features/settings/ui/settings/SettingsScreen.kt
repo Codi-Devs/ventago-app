@@ -98,8 +98,6 @@ import com.teco.ventago.navigation.PosScreens
 import com.teco.ventago.navigation.BluetoothPrinterOnboardingRoute
 import com.teco.ventago.features.quotes.ui.settings.QuoteSettingsSection
 import com.teco.ventago.features.printers.domain.PrinterService
-import com.teco.ventago.features.printers.domain.listBluetoothPrinters
-import com.teco.ventago.features.printers.ui.viewmodel.PrinterEntryContext
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -107,7 +105,6 @@ import org.jetbrains.compose.resources.painterResource
 import org.jetbrains.compose.resources.stringResource
 import org.koin.compose.koinInject
 import org.koin.compose.viewmodel.koinViewModel
-import com.teco.ventago.navigation.PrinterOnboardingRoute
 import ventago.composeapp.generated.resources.Res
 import ventago.composeapp.generated.resources.action_settings
 import ventago.composeapp.generated.resources.business_address
@@ -486,21 +483,7 @@ fun SettingsScreen(
                             if (printers.isNotEmpty() || deviceBluetooth != null) {
                                 navigate(PosScreens.PrintersScreen)
                             } else {
-                                scope.launch {
-                                    val connected = runCatching { listBluetoothPrinters() }
-                                        .getOrNull()
-                                        ?.printers
-                                        .orEmpty()
-                                    if (connected.isNotEmpty()) {
-                                        navigate(BluetoothPrinterOnboardingRoute)
-                                    } else {
-                                        navigate(
-                                            PrinterOnboardingRoute(
-                                                entryContext = PrinterEntryContext.SETTINGS.name
-                                            )
-                                        )
-                                    }
-                                }
+                                navigate(BluetoothPrinterOnboardingRoute)
                             }
                         }
                     )

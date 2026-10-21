@@ -70,8 +70,24 @@ class PrintersViewModel(
         }
     }
 
-    fun unlinkBluetooth() {
+    fun promptUnlinkBluetooth() {
+        updateState { copy(confirmUnlinkBluetooth = true) }
+    }
+
+    fun dismissUnlinkBluetooth() {
+        updateState { copy(confirmUnlinkBluetooth = false) }
+    }
+
+    fun confirmUnlinkBluetooth() {
         printerService.clearDeviceBluetoothPrinter()
+        updateState { copy(confirmUnlinkBluetooth = false) }
+    }
+
+    fun setBluetoothPaperWidth(mm: Int) {
+        if (mm != 58 && mm != 80) return
+        val printer = printerService.linkedBluetoothPrinter() ?: return
+        if (printer.paperWidthMm == mm) return
+        printerService.saveDeviceBluetoothPrinter(printer.id, printer.name, mm)
     }
 
     fun promptDelete(printerConfig: PrinterConfig) {

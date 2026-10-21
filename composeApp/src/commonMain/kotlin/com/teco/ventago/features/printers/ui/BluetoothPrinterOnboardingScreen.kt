@@ -37,6 +37,7 @@ import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import com.teco.ventago.core.SnackbarService
 import com.teco.ventago.design_system.buttons.ButtonM
+import com.teco.ventago.design_system.buttons.TextButtonS
 import com.teco.ventago.design_system.theme.bodyMedium
 import com.teco.ventago.design_system.theme.bodyMediumBold
 import com.teco.ventago.design_system.theme.bodySmall
@@ -54,6 +55,7 @@ import org.koin.compose.viewmodel.koinViewModel
 @Composable
 fun BluetoothPrinterOnboardingScreen(
     onLinked: () -> Unit,
+    onOpenNetworkOnboarding: () -> Unit = {},
     viewModel: BluetoothPrinterOnboardingViewModel = koinViewModel(),
 ) {
     val snackbarService: SnackbarService = koinInject()
@@ -124,6 +126,8 @@ fun BluetoothPrinterOnboardingScreen(
                 body = "Asegúrate de tener la impresora conectada.",
                 action = "Buscar de nuevo",
                 onAction = viewModel::refresh,
+                secondaryAction = "Configurar impresora de red",
+                onSecondaryAction = onOpenNetworkOnboarding,
             )
         }
 
@@ -164,6 +168,8 @@ private fun BluetoothStatusCard(
     accent: Color = MaterialTheme.colorScheme.primary,
     iconBackground: Color = MaterialTheme.colorScheme.primary.copy(alpha = 0.12f),
     buttonContainer: Color = MaterialTheme.colorScheme.primary,
+    secondaryAction: String? = null,
+    onSecondaryAction: () -> Unit = {},
 ) {
     Column(
         modifier = Modifier
@@ -193,6 +199,9 @@ private fun BluetoothStatusCard(
         )
         ButtonM(onClick = onAction, containerColor = buttonContainer) {
             Text(action)
+        }
+        if (secondaryAction != null) {
+            TextButtonS(label = secondaryAction, color = MaterialTheme.colorScheme.secondary, onClick = onSecondaryAction)
         }
     }
 }

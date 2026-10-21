@@ -27,6 +27,7 @@ import platform.CoreGraphics.CGRectMake
 import platform.CoreGraphics.CGSizeMake
 import platform.CoreGraphics.kCGBitmapByteOrder32Big
 import platform.CoreImage.*
+import platform.Foundation.NSLog
 import platform.Foundation.NSData
 import platform.Foundation.setValue
 import platform.Foundation.NSString
@@ -47,6 +48,10 @@ import platform.UIKit.UIGraphicsGetImageFromCurrentImageContext
 import platform.UIKit.UIImage
 import platform.UIKit.UIRectFill
 import platform.posix.memcpy
+
+internal actual fun reportSkippedTicketImage(reason: String) {
+    NSLog("EscPosRaster: $reason")
+}
 
 internal actual suspend fun renderTicketImageRaster(
     source: String,

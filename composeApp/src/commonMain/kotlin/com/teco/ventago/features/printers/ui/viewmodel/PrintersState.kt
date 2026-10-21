@@ -15,6 +15,7 @@ data class PrintersState(
     val printers: List<PrinterListItem> = emptyList(),
     val deviceBluetooth: DeviceBluetoothPrinter? = null,
     val bluetoothReachable: Boolean? = null,
+    val confirmUnlinkBluetooth: Boolean = false,
     val pendingDelete: PrinterConfig? = null,
     override val loadingBottomSheet: LoadingBottomSheetState = LoadingBottomSheetState(),
 ) : LoadableState<PrintersState> {

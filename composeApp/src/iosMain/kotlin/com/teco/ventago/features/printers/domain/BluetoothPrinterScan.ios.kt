@@ -50,9 +50,7 @@ actual suspend fun isSavedBluetoothPrinterAvailable(deviceId: String): Boolean {
 }
 
 actual fun openBluetoothSettings() {
-    if (!openUrl("App-Prefs:root=Bluetooth")) {
-        openUrl(UIApplicationOpenSettingsURLString)
-    }
+    openUrl(UIApplicationOpenSettingsURLString)
 }
 
 actual fun openAppSettings() {

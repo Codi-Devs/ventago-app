@@ -45,6 +45,9 @@ actual suspend fun sendBluetoothEscPos(
     if (!hasBluetoothConnectPermission()) {
         return@withContext BluetoothPrintOutcome(false, "Falta permiso de Bluetooth para VentaGO.")
     }
+    if (deviceId.isNullOrBlank()) {
+        return@withContext BluetoothPrintOutcome(false, "No hay impresora seleccionada en este equipo.")
+    }
 
     val bonded = try {
         adapter.bondedDevices.orEmpty().toList()
@@ -52,15 +55,10 @@ actual suspend fun sendBluetoothEscPos(
         return@withContext BluetoothPrintOutcome(false, "Falta permiso de Bluetooth para VentaGO.")
     }
     val targets = bonded
-        .filter { deviceId.isNullOrBlank() || it.address.equals(deviceId, ignoreCase = true) }
+        .filter { it.address.equals(deviceId, ignoreCase = true) }
         .sortedByDescending { printerScore(it) }
     if (targets.isEmpty()) {
-        val message = if (deviceId.isNullOrBlank()) {
-            "No hay dispositivos emparejados. Empareja la impresora en Ajustes de Bluetooth."
-        } else {
-            "No encuentro la impresora de este equipo. Vuelve a emparejarla."
-        }
-        return@withContext BluetoothPrintOutcome(false, message)
+        return@withContext BluetoothPrintOutcome(false, "No encuentro la impresora de este equipo. Vuelve a emparejarla.")
     }
 
     val failures = mutableListOf<String>()

@@ -7,6 +7,7 @@ import android.graphics.Color
 import android.graphics.Paint
 import android.graphics.Rect
 import android.graphics.Typeface
+import android.util.Log
 import com.google.zxing.EncodeHintType
 import com.google.zxing.qrcode.decoder.ErrorCorrectionLevel
 import com.google.zxing.qrcode.encoder.Encoder
@@ -14,11 +15,16 @@ import com.teco.ventago.features.printers.domain.model.PrintAlignment
 import com.teco.ventago.features.printers.domain.model.TicketBlockStyle
 import java.net.HttpURLConnection
 import java.net.URL
+import java.util.LinkedHashMap
 import kotlin.io.encoding.Base64
 import kotlin.io.encoding.ExperimentalEncodingApi
 import kotlin.math.roundToInt
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+
+internal actual fun reportSkippedTicketImage(reason: String) {
+    Log.w("EscPosRaster", reason)
+}
 
 internal actual suspend fun renderTicketImageRaster(
     source: String,
@@ -26,20 +32,24 @@ internal actual suspend fun renderTicketImageRaster(
     widthHintPercent: Int?,
     alignment: PrintAlignment,
 ): ByteArray = withContext(Dispatchers.IO) {
+    val cacheKey = LogoRasterKey(source, paperWidthDots, widthHintPercent, alignment)
+    cachedLogoRaster(cacheKey)?.let { return@withContext it }
     val bytes = loadTicketImageBytes(source)
-    val sourceBitmap = BitmapFactory.decodeByteArray(bytes, 0, bytes.size)
+    val sourceBitmap = decodeTicketBitmap(bytes, paperWidthDots)
         ?: rasterFailure("No se pudo decodificar el logo del negocio")
     val scaled = sourceBitmap.scaleToPaper(paperWidthDots, widthHintPercent)
     try {
         val pixels = IntArray(scaled.width * scaled.height)
         scaled.getPixels(pixels, 0, scaled.width, 0, 0, scaled.width, scaled.height)
-        pixelsToEscPosRaster(
+        val raster = pixelsToEscPosRaster(
             width = scaled.width,
             height = scaled.height,
             isBlack = { x, y -> pixels[y * scaled.width + x].isThermalBlack() },
             paperWidthDots = paperWidthDots,
             alignment = alignment,
         )
+        storeLogoRaster(cacheKey, raster)
+        raster
     } finally {
         if (scaled !== sourceBitmap) scaled.recycle()
         sourceBitmap.recycle()
@@ -130,6 +140,50 @@ internal actual fun renderTicketTextRaster(
         alignment = PrintAlignment.LEFT,
         feedLine = false,
     )
+}
+
+private data class LogoRasterKey(
+    val source: String,
+    val paperWidthDots: Int,
+    val widthHintPercent: Int?,
+    val alignment: PrintAlignment,
+)
+
+private val logoRasterCache = object : LinkedHashMap<LogoRasterKey, ByteArray>(4, 0.75f, true) {
+    override fun removeEldestEntry(eldest: MutableMap.MutableEntry<LogoRasterKey, ByteArray>?): Boolean = size > 4
+}
+
+private fun cachedLogoRaster(key: LogoRasterKey): ByteArray? = synchronized(logoRasterCache) {
+    logoRasterCache[key]
+}
+
+private fun storeLogoRaster(key: LogoRasterKey, raster: ByteArray) {
+    synchronized(logoRasterCache) {
+        logoRasterCache[key] = raster
+    }
+}
+
+private fun decodeTicketBitmap(bytes: ByteArray, paperWidthDots: Int): Bitmap? {
+    val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+    BitmapFactory.decodeByteArray(bytes, 0, bytes.size, bounds)
+    val options = BitmapFactory.Options().apply {
+        inSampleSize = logoSampleSize(bounds.outWidth, bounds.outHeight, paperWidthDots)
+    }
+    return BitmapFactory.decodeByteArray(bytes, 0, bytes.size, options)
+}
+
+private fun logoSampleSize(width: Int, height: Int, paperWidthDots: Int): Int {
+    if (width <= 0 || height <= 0) return 1
+    val target = (paperWidthDots * 2).coerceAtLeast(1)
+    var sample = 1
+    var sampledWidth = width
+    var sampledHeight = height
+    while (sampledWidth / 2 >= target && sampledHeight / 2 >= target) {
+        sampledWidth /= 2
+        sampledHeight /= 2
+        sample *= 2
+    }
+    return sample
 }
 
 @OptIn(ExperimentalEncodingApi::class)

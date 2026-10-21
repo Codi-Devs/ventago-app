@@ -80,6 +80,7 @@ import com.teco.ventago.features.orders.ui.order_invoice.viewModel.OrderInvoiceV
 import com.teco.ventago.features.orders.ui.orders.viewmodel.OrdersViewModel
 import com.teco.ventago.features.printers.domain.PrinterQrEntry
 import com.teco.ventago.features.printers.ui.BluetoothPrinterOnboardingScreen
+import com.teco.ventago.features.printers.ui.viewmodel.PrinterEntryContext
 import com.teco.ventago.features.printers.ui.PrinterConfigScreen as PrinterConfigContent
 import com.teco.ventago.features.printers.ui.PrinterOnboardingScreen as PrinterOnboardingContent
 import com.teco.ventago.features.printers.ui.PrintersScreen as PrintersContent
@@ -1624,6 +1625,11 @@ private fun NavGraphBuilder.addSettingsNavigation(
                             launchSingleTop = true
                         }
                     }
+                },
+                onOpenNetworkOnboarding = {
+                    navController.navigate(
+                        PrinterOnboardingRoute(entryContext = PrinterEntryContext.SETTINGS.name)
+                    )
                 },
             )
         }

@@ -32,6 +32,8 @@ internal expect fun renderTicketTextRaster(
     columns: Int,
 ): ByteArray
 
+internal expect fun reportSkippedTicketImage(reason: String)
+
 internal suspend fun commandsForBluetooth(
     commands: List<PrintCommand>,
     paperWidthDots: Int,
@@ -44,14 +46,25 @@ internal suspend fun commandsForBluetooth(
                 if (source.isEmpty()) {
                     null
                 } else {
-                    PrintCommand.Raster(
-                        renderTicketImageRaster(
-                            source = source,
-                            paperWidthDots = dots,
-                            widthHintPercent = command.widthHintPercent,
-                            alignment = command.alignment,
+                    runCatching {
+                        PrintCommand.Raster(
+                            renderTicketImageRaster(
+                                source = source,
+                                paperWidthDots = dots,
+                                widthHintPercent = command.widthHintPercent,
+                                alignment = command.alignment,
+                            )
                         )
-                    )
+                    }.getOrElse { error ->
+                        val detail = error.message?.takeIf { message ->
+                            message.isNotBlank() &&
+                                message.length <= 160 &&
+                                !message.contains("http", ignoreCase = true) &&
+                                !message.contains("://")
+                        } ?: "No se pudo imprimir el logo"
+                        reportSkippedTicketImage(detail)
+                        null
+                    }
                 }
             }
 

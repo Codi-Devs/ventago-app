@@ -14,7 +14,7 @@
     <uses-permission android:name="android.permission.CAMERA" />
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
     <uses-permission android:name="android.permission.INTERNET" />
-    <!-- Prueba temporal de impresora termica ESC/POS. API 30 y anteriores. -->
+    <!-- Impresora termica Bluetooth. BLUETOOTH* cubre API 30 y anteriores; BLUETOOTH_CONNECT cubre API 31+. -->
     <uses-permission
         android:name="android.permission.BLUETOOTH"
         android:maxSdkVersion="30" />

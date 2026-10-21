@@ -94,9 +94,17 @@ class PrinterService(
     }
 
     fun canPrintTicket(branchCode: String?, billingPointCode: String?): Boolean {
-        if (linkedBluetoothPrinter()?.isActive == true) return true
-        if (branchCode.isNullOrBlank() || billingPointCode.isNullOrBlank()) return false
-        return resolveActivePrinter(branchCode, billingPointCode) != null
+        val bluetoothActive = linkedBluetoothPrinter()?.isActive == true
+        val networkAvailable = !bluetoothActive &&
+            !branchCode.isNullOrBlank() &&
+            !billingPointCode.isNullOrBlank() &&
+            resolveActivePrinter(branchCode, billingPointCode) != null
+        return chooseTicketPrinter(
+            bluetoothActive = bluetoothActive,
+            branchCode = branchCode,
+            billingPointCode = billingPointCode,
+            networkPrinterAvailable = networkAvailable,
+        ) != TicketPrinterChoice.None
     }
 
     suspend fun printTicketForThisDevice(
@@ -106,7 +114,14 @@ class PrinterService(
         context: PrintContext,
     ): PrintResult {
         val bluetooth = linkedBluetoothPrinter()?.takeIf { it.isActive }
-        if (bluetooth != null) {
+        if (
+            chooseTicketPrinter(
+                bluetoothActive = bluetooth != null,
+                branchCode = branchCode,
+                billingPointCode = billingPointCode,
+                networkPrinterAvailable = false,
+            ) == TicketPrinterChoice.Bluetooth && bluetooth != null
+        ) {
             return printTicketOnBluetooth(
                 ticketPayload = ticketPayload,
                 paperWidthMm = bluetooth.paperWidthMm,
@@ -118,7 +133,17 @@ class PrinterService(
             resolveActivePrinter(branchCode, billingPointCode)
         } else {
             null
-        } ?: throw PrinterSendException("No hay impresora activa")
+        }
+        if (
+            chooseTicketPrinter(
+                bluetoothActive = false,
+                branchCode = branchCode,
+                billingPointCode = billingPointCode,
+                networkPrinterAvailable = printer != null,
+            ) != TicketPrinterChoice.Network || printer == null
+        ) {
+            throw PrinterSendException("No hay impresora activa")
+        }
         return printTicketPayload(printer, ticketPayload, context)
     }
 
