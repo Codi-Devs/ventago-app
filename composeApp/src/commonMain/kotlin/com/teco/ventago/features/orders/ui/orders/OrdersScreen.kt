@@ -100,6 +100,9 @@ import com.teco.ventago.design_system.theme.labelSmall
 import com.teco.ventago.design_system.theme.latoFontFamily
 import com.teco.ventago.features.branches.domain.model.Branch
 import com.teco.ventago.features.branches.domain.model.FiscalBillingPoint
+import com.teco.ventago.features.orders.domain.OrderScopeFilterOption
+import com.teco.ventago.features.orders.domain.billingPointFilterOptions
+import com.teco.ventago.features.orders.domain.branchFilterOptions
 import com.teco.ventago.features.customers.domain.models.CustomerListItem
 import com.teco.ventago.features.invoicing.domain.models.FEDocumentType
 import com.teco.ventago.features.orders.domain.models.PaymentStatus
@@ -570,6 +573,12 @@ private fun OrdersFilterSheet(
         .takeIf { it >= 0 } ?: 0
     val allInvoiceTypesLabel = stringResource(Res.string.all_invoice_types)
     var selectedTab by remember { mutableIntStateOf(0) }
+    val scopeLocked = viewModel.isOrderScopeLocked()
+    val branchOptions = if (scopeLocked) null else branchFilterOptions(uiState.branches)
+    val billingPointOptions = if (scopeLocked) null else billingPointFilterOptions(
+        uiState.branches,
+        uiState.branchCodeFilter,
+    )
 
     ModalBottomSheet(
         onDismissRequest = onDismiss,
@@ -606,6 +615,28 @@ private fun OrdersFilterSheet(
                 }
             }
             if (selectedTab == 0) {
+            if (branchOptions != null) {
+                item {
+                    OrderScopeDropdown(
+                        label = "Sucursal",
+                        allLabel = "Todas las sucursales",
+                        options = branchOptions,
+                        selectedCode = uiState.branchCodeFilter,
+                        onSelected = viewModel::setBranchCodeFilter,
+                    )
+                }
+            }
+            if (billingPointOptions != null) {
+                item {
+                    OrderScopeDropdown(
+                        label = "Punto de facturación",
+                        allLabel = "Todos los puntos",
+                        options = billingPointOptions,
+                        selectedCode = uiState.billingPointCodeFilter,
+                        onSelected = viewModel::setBillingPointCodeFilter,
+                    )
+                }
+            }
             item {
                 PaymentStatusFilterChips(
                     paymentStatusFilter = uiState.paymentStatusFilter,
@@ -740,6 +771,25 @@ private fun SheetModeTab(
             overflow = TextOverflow.Ellipsis,
         )
     }
+}
+
+@Composable
+private fun OrderScopeDropdown(
+    label: String,
+    allLabel: String,
+    options: List<OrderScopeFilterOption>,
+    selectedCode: String?,
+    onSelected: (String?) -> Unit,
+) {
+    val items = listOf(OrderScopeFilterOption(code = "", label = allLabel)) + options
+    val selectedIndex = items.indexOfFirst { it.code == selectedCode.orEmpty() }.takeIf { it >= 0 } ?: 0
+    DMDropDownField(
+        label = label,
+        items = items,
+        selectedIndex = selectedIndex,
+        onItemSelected = { _, item -> onSelected(item.code.takeIf { it.isNotBlank() }) },
+        selectedItemToString = { it.label },
+    )
 }
 
 @Composable

@@ -14,6 +14,7 @@ import com.teco.ventago.features.business.domain.model.Business
 import com.teco.ventago.features.customers.domain.CustomerService
 import com.teco.ventago.features.customers.domain.models.CustomerListItem
 import com.teco.ventago.features.orders.domain.OrderService
+import com.teco.ventago.features.orders.domain.billingPointFilterOptions
 import com.teco.ventago.features.orders.domain.models.Order
 import com.teco.ventago.features.orders.domain.models.OrderStatus
 import com.teco.ventago.features.orders.domain.models.requests.orderEmissionEndDate
@@ -84,6 +85,8 @@ class OrdersViewModel(
                             emissionStartDate = orderEmissionStartDate(uiState.value.emissionStartDate),
                             emissionEndDate = orderEmissionEndDate(uiState.value.emissionEndDate),
                             orderType = uiState.value.orderTypeFilter,
+                            branchCode = uiState.value.branchCodeFilter,
+                            billingPointCode = uiState.value.billingPointCodeFilter,
                         )
                         withContext(Dispatchers.Main) {
                             updateState { copy(noMoreOrders = refreshed.isEmpty() && orders.isEmpty()) }
@@ -164,6 +167,8 @@ class OrdersViewModel(
                         emissionStartDate = orderEmissionStartDate(uiState.value.emissionStartDate),
                         emissionEndDate = orderEmissionEndDate(uiState.value.emissionEndDate),
                         orderType = uiState.value.orderTypeFilter,
+                        branchCode = uiState.value.branchCodeFilter,
+                        billingPointCode = uiState.value.billingPointCodeFilter,
                     )
                     withContext(Dispatchers.Main) {
                         if (aux.isEmpty()) {
@@ -205,6 +210,8 @@ class OrdersViewModel(
                         emissionStartDate = orderEmissionStartDate(uiState.value.emissionStartDate),
                         emissionEndDate = orderEmissionEndDate(uiState.value.emissionEndDate),
                         orderType = uiState.value.orderTypeFilter,
+                        branchCode = uiState.value.branchCodeFilter,
+                        billingPointCode = uiState.value.billingPointCodeFilter,
                     )
                     withContext(Dispatchers.Main) {
                         filterOrders(uiState.value.filterSelected)
@@ -391,6 +398,27 @@ class OrdersViewModel(
         updateState { copy(orderTypeFilter = orderType) }
     }
 
+    fun isOrderScopeLocked(): Boolean = orderService.isListScopeLocked()
+
+    fun setBranchCodeFilter(branchCode: String?) {
+        val normalized = branchCode?.takeIf { it.isNotBlank() }
+        val pointStillValid = billingPointFilterOptions(uiState.value.branches, normalized)
+            ?.any { it.code == uiState.value.billingPointCodeFilter } == true
+        updateState {
+            copy(
+                branchCodeFilter = normalized,
+                billingPointCodeFilter = if (pointStillValid) billingPointCodeFilter else null,
+            )
+        }
+    }
+
+    fun setBillingPointCodeFilter(billingPointCode: String?) {
+        val normalized = billingPointCode?.takeIf { it.isNotBlank() }
+        val allowed = billingPointFilterOptions(uiState.value.branches, uiState.value.branchCodeFilter)
+        if (normalized != null && allowed?.any { it.code == normalized } != true) return
+        updateState { copy(billingPointCodeFilter = normalized) }
+    }
+
     fun setCustomerNameFilter(customerName: String) {
         customerSearchJob?.cancel()
         val query = customerName.trim()
@@ -496,6 +524,8 @@ class OrdersViewModel(
                 customerSearchResults = emptyList(),
                 isSearchingCustomers = false,
                 orderTypeFilter = null,
+                branchCodeFilter = null,
+                billingPointCodeFilter = null,
                 emissionStartDate = startDate,
                 emissionEndDate = endDate,
                 orders = emptyList(),
@@ -528,6 +558,8 @@ class OrdersViewModel(
                 customerSearchResults = emptyList(),
                 isSearchingCustomers = false,
                 orderTypeFilter = null,
+                branchCodeFilter = null,
+                billingPointCodeFilter = null,
                 emissionStartDate = "",
                 emissionEndDate = "",
                 orders = emptyList(),
@@ -544,6 +576,8 @@ class OrdersViewModel(
         return listOf(
             state.paymentStatusFilter != null,
             state.orderTypeFilter != null,
+            state.branchCodeFilter != null,
+            state.billingPointCodeFilter != null,
             state.emissionStartDate.isNotBlank() || state.emissionEndDate.isNotBlank()
         ).count { it }
     }

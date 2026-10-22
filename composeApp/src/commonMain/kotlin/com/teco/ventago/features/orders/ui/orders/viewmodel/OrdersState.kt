@@ -23,6 +23,8 @@ data class OrdersState(
     val customerSearchResults: List<CustomerListItem> = emptyList(),
     val isSearchingCustomers: Boolean = false,
     val orderTypeFilter: String? = null,
+    val branchCodeFilter: String? = null,
+    val billingPointCodeFilter: String? = null,
     val emissionStartDate: String = "",
     val emissionEndDate: String = "",
     val showFiltersSheet: Boolean = false,
