@@ -97,7 +97,9 @@ data class Order(
 
     fun listDocumentStatusLabel(): String {
         val invoice = invoiceStatus ?: InvoiceStatus.NONE.id
+        if (invoice == InvoiceStatus.CANCELLED.id) return "Anulada"
         if (invoice == InvoiceStatus.ISSUED.id) return "Facturado"
+        if (status == OrderStatus.CANCELLED) return "Cancelado"
         if (invoice == InvoiceStatus.FAILED.id) return "Fallida"
         if (status == OrderStatus.DRAFT) return "Borrador"
         return "Sin Factura"
