@@ -25,7 +25,6 @@ import com.teco.ventago.utils.uploadImageToBunnyCdn
 import com.teco.ventago.utils.formatTwoDecimals
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.IO
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.launchIn
 import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.launch
@@ -236,9 +235,9 @@ class EditItemViewModel (
                             showError()
                             return@launch
                         }
-                        showSuccess()
-                        delay(600)
-                        emitEvent(ItemStateUiEvent.GoBack)
+                        showSuccessThen {
+                            emitEvent(ItemStateUiEvent.GoBack)
+                        }
                     } else {
                         // TODO Add logs
                         showError()

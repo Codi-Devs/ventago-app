@@ -16,6 +16,8 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.MutableState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -27,7 +29,7 @@ import io.github.alexzhirkevich.compottie.LottieCompositionSpec
 import io.github.alexzhirkevich.compottie.animateLottieCompositionAsState
 import io.github.alexzhirkevich.compottie.rememberLottieComposition
 import io.github.alexzhirkevich.compottie.rememberLottiePainter
-
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.launch
 import org.jetbrains.compose.resources.ExperimentalResourceApi
 import ventago.composeapp.generated.resources.Res
@@ -68,12 +70,11 @@ fun LoadingBottomSheet(
 
     val state by loadingState
     val canDismiss = state.state != LoadingState.LOADING
+    val dismissSheet = rememberDismissSheetAfterHide(sheetState, canDismiss, onDismissRequest)
 
     ModalBottomSheet(
         containerColor = cardContainerColor(),
-        onDismissRequest = {
-            if (canDismiss) onDismissRequest()
-        },
+        onDismissRequest = dismissSheet,
         sheetState = sheetState,
         sheetGesturesEnabled = canDismiss,
         properties = loadingSheetProperties(canDismiss),
@@ -86,14 +87,10 @@ fun LoadingBottomSheet(
                 )
             }
             LoadingState.ERROR -> {
-                ActionContent(false, state.title, sheetState) {
-                    onDismissRequest()
-                }
+                ActionContent(false, state.title, dismissSheet)
             }
             LoadingState.SUCCESS -> {
-                ActionContent(true, state.title, sheetState) {
-                    onDismissRequest()
-                }
+                ActionContent(true, state.title, dismissSheet)
             }
             else -> {
                 LoadingContent(state.title)
@@ -111,12 +108,11 @@ fun LoadingSheet(
     onDismissRequest: () -> Unit = {},
 ) {
     val canDismiss = state.state != LoadingState.LOADING
+    val dismissSheet = rememberDismissSheetAfterHide(sheetState, canDismiss, onDismissRequest)
 
     ModalBottomSheet(
         containerColor = cardContainerColor(),
-        onDismissRequest = {
-            if (canDismiss) onDismissRequest()
-        },
+        onDismissRequest = dismissSheet,
         sheetState = sheetState,
         sheetGesturesEnabled = canDismiss,
         properties = loadingSheetProperties(canDismiss),
@@ -129,14 +125,10 @@ fun LoadingSheet(
                 )
             }
             LoadingState.ERROR -> {
-                ActionContent(false, state.title, sheetState) {
-                    onDismissRequest()
-                }
+                ActionContent(false, state.title, dismissSheet)
             }
             LoadingState.SUCCESS -> {
-                ActionContent(true, state.title, sheetState) {
-                    onDismissRequest()
-                }
+                ActionContent(true, state.title, dismissSheet)
             }
             else -> {
                 LoadingContent(state.title)
@@ -152,9 +144,34 @@ private fun loadingSheetProperties(canDismiss: Boolean) = ModalBottomSheetProper
 )
 
 
-@OptIn(ExperimentalMaterial3Api::class, ExperimentalResourceApi::class)
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
-internal fun ActionContent(success: Boolean, title: String, sheetState: SheetState, onCompletion: () -> Unit = {}) {
+private fun rememberDismissSheetAfterHide(
+    sheetState: SheetState,
+    canDismiss: Boolean,
+    onDismissed: () -> Unit,
+): () -> Unit {
+    val scope = rememberCoroutineScope()
+    val started = remember { mutableStateOf(false) }
+    return dismiss@{
+        if (!canDismiss || started.value) return@dismiss
+        started.value = true
+        scope.launch {
+            try {
+                sheetState.hide()
+            } catch (e: CancellationException) {
+                throw e
+            } catch (_: Exception) {
+                // iOS aborts the process if hide() throws out of this coroutine.
+            }
+            onDismissed()
+        }
+    }
+}
+
+@OptIn(ExperimentalResourceApi::class)
+@Composable
+internal fun ActionContent(success: Boolean, title: String, onAnimationFinished: () -> Unit = {}) {
     val composition by rememberLottieComposition {
         if (success) {
             LottieCompositionSpec.JsonString(
@@ -166,8 +183,8 @@ internal fun ActionContent(success: Boolean, title: String, sheetState: SheetSta
             )
         }
     }
-    val scope = rememberCoroutineScope()
     val progress by animateLottieCompositionAsState(composition, iterations = 1,)
+    val finished = remember { mutableStateOf(false) }
     Column (
         modifier = Modifier
             .fillMaxWidth()
@@ -193,18 +210,11 @@ internal fun ActionContent(success: Boolean, title: String, sheetState: SheetSta
 
     }
 
-    LaunchedEffect(progress) {
-        if (progress >= 1f) {
-            scope.launch {
-                sheetState.hide()
-            }.invokeOnCompletion {
-                onCompletion()
-            }
-        }
-
+    LaunchedEffect(progress, composition) {
+        if (finished.value || composition == null || progress < 1f) return@LaunchedEffect
+        finished.value = true
+        onAnimationFinished()
     }
-
-
 }
 
 @OptIn(ExperimentalResourceApi::class)

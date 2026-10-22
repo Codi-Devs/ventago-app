@@ -21,7 +21,6 @@ import com.teco.ventago.utils.randomUUID
 import com.teco.ventago.utils.uploadImageToBunnyCdn
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.IO
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.JsonElement
@@ -186,9 +185,9 @@ class AddItemViewModel(
                     state.additionalInfo.toJsonObject()
                 )
                 
-                showSuccess()
-                delay(600)
-                emitEvent(ItemStateUiEvent.ReturnPersonalizedProduct(personalizedItem))
+                showSuccessThen {
+                    emitEvent(ItemStateUiEvent.ReturnPersonalizedProduct(personalizedItem))
+                }
             }
             return
         }
@@ -249,14 +248,13 @@ class AddItemViewModel(
                             showError()
                             return@launch
                         }
-                        showSuccess()
-                        delay(600)
-                        if (state.isPersonalizedProduct) {
-                            // If it was a personalized product but user chose to save it, go back
-                            emitEvent(ItemStateUiEvent.ReturnPersonalizedProduct(savedItem))
-                        } else {
-                            resetView()
-                            emitEvent(ItemStateUiEvent.GoBack)
+                        showSuccessThen {
+                            if (state.isPersonalizedProduct) {
+                                emitEvent(ItemStateUiEvent.ReturnPersonalizedProduct(savedItem))
+                            } else {
+                                resetView()
+                                emitEvent(ItemStateUiEvent.GoBack)
+                            }
                         }
                     } else {
                         // TODO Add logs

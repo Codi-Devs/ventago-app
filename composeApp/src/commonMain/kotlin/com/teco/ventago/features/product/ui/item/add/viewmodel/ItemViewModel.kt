@@ -21,10 +21,29 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.IO
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.yield
 import ventago.composeapp.generated.resources.Res
 
 abstract class ItemViewModel(private val productService: ProductService) :
     BaseViewModel<ItemState, ItemStateUiEvent>(ItemState()) {
+
+    private val successFollowUp = OneShotFollowUp()
+
+    protected fun showSuccessThen(followUp: suspend () -> Unit) {
+        successFollowUp.arm(followUp)
+        showSuccess()
+    }
+
+    fun onLoadingSheetDismissed() {
+        val followUp = successFollowUp.consume()
+        hideLoading()
+        if (followUp != null) {
+            viewModelScope.launch {
+                yield()
+                followUp()
+            }
+        }
+    }
 
     fun onNameChange(name: String) {
         // Limit to 100 characters
