@@ -41,6 +41,7 @@ import com.teco.ventago.features.pos.provisioning.domain.model.PosDeviceConfig
 import com.teco.ventago.features.pos.provisioning.domain.model.PosDevicePermissions
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
 import kotlinx.coroutines.test.runTest
@@ -116,6 +117,34 @@ class OrderServiceProvisioningTest {
         val request = ordersRepository.requests.single()
         assertEquals("0002", request.branchCode)
         assertEquals("003", request.billingPointCode)
+    }
+
+    @Test
+    fun posWithFixedBranchAndPointLocksTheListScope() = runTest {
+        val provisioning = provisioningService(isPosBuild = true)
+        provisioning.validateLogin(authResponse())
+        val service = OrderService(CapturingOrdersRepository(), provisioning)
+
+        assertTrue(service.isListScopeLocked())
+    }
+
+    @Test
+    fun posWithoutFixedCodesDoesNotLockTheListScope() = runTest {
+        val provisioning = provisioningService(
+            isPosBuild = true,
+            agentConfigReader = FakeAgentReader(result = null),
+        )
+        provisioning.validateLogin(authResponse())
+        val service = OrderService(CapturingOrdersRepository(), provisioning)
+
+        assertFalse(service.isListScopeLocked())
+    }
+
+    @Test
+    fun publicAppDoesNotLockTheListScope() = runTest {
+        val service = OrderService(CapturingOrdersRepository(), provisioningService(isPosBuild = false))
+
+        assertFalse(service.isListScopeLocked())
     }
 
     private fun provisioningService(

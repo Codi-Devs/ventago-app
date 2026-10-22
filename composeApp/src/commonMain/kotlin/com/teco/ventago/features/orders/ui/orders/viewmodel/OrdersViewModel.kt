@@ -14,7 +14,8 @@ import com.teco.ventago.features.business.domain.model.Business
 import com.teco.ventago.features.customers.domain.CustomerService
 import com.teco.ventago.features.customers.domain.models.CustomerListItem
 import com.teco.ventago.features.orders.domain.OrderService
-import com.teco.ventago.features.orders.domain.billingPointFilterOptions
+import com.teco.ventago.features.orders.domain.acceptedBillingPointCode
+import com.teco.ventago.features.orders.domain.billingPointCodeAfterBranchChange
 import com.teco.ventago.features.orders.domain.models.Order
 import com.teco.ventago.features.orders.domain.models.OrderStatus
 import com.teco.ventago.features.orders.domain.models.requests.orderEmissionEndDate
@@ -402,21 +403,26 @@ class OrdersViewModel(
 
     fun setBranchCodeFilter(branchCode: String?) {
         val normalized = branchCode?.takeIf { it.isNotBlank() }
-        val pointStillValid = billingPointFilterOptions(uiState.value.branches, normalized)
-            ?.any { it.code == uiState.value.billingPointCodeFilter } == true
         updateState {
             copy(
                 branchCodeFilter = normalized,
-                billingPointCodeFilter = if (pointStillValid) billingPointCodeFilter else null,
+                billingPointCodeFilter = billingPointCodeAfterBranchChange(
+                    branches,
+                    normalized,
+                    billingPointCodeFilter,
+                ),
             )
         }
     }
 
     fun setBillingPointCodeFilter(billingPointCode: String?) {
-        val normalized = billingPointCode?.takeIf { it.isNotBlank() }
-        val allowed = billingPointFilterOptions(uiState.value.branches, uiState.value.branchCodeFilter)
-        if (normalized != null && allowed?.any { it.code == normalized } != true) return
-        updateState { copy(billingPointCodeFilter = normalized) }
+        if (billingPointCode.isNullOrBlank()) {
+            updateState { copy(billingPointCodeFilter = null) }
+            return
+        }
+        val accepted = acceptedBillingPointCode(uiState.value.branches, uiState.value.branchCodeFilter, billingPointCode)
+            ?: return
+        updateState { copy(billingPointCodeFilter = accepted) }
     }
 
     fun setCustomerNameFilter(customerName: String) {

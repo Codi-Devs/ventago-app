@@ -23,6 +23,27 @@ fun branchFilterOptions(branches: List<Branch>): List<OrderScopeFilterOption>? {
     }
 }
 
+fun billingPointCodeAfterBranchChange(
+    branches: List<Branch>,
+    nextBranchCode: String?,
+    currentBillingPointCode: String?,
+): String? {
+    val branch = nextBranchCode?.takeIf { it.isNotBlank() } ?: return null
+    val point = currentBillingPointCode?.takeIf { it.isNotBlank() } ?: return null
+    val stillThere = billingPointFilterOptions(branches, branch)?.any { it.code == point } == true
+    return if (stillThere) point else null
+}
+
+fun acceptedBillingPointCode(
+    branches: List<Branch>,
+    selectedBranchCode: String?,
+    requestedBillingPointCode: String?,
+): String? {
+    val point = requestedBillingPointCode?.takeIf { it.isNotBlank() } ?: return null
+    val allowed = billingPointFilterOptions(branches, selectedBranchCode) ?: return null
+    return point.takeIf { code -> allowed.any { it.code == code } }
+}
+
 fun billingPointFilterOptions(
     branches: List<Branch>,
     selectedBranchCode: String?,

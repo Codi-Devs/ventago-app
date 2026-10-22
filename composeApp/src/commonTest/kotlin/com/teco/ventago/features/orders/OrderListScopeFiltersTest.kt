@@ -2,6 +2,8 @@ package com.teco.ventago.features.orders
 
 import com.teco.ventago.features.branches.domain.model.Branch
 import com.teco.ventago.features.branches.domain.model.FiscalBillingPoint
+import com.teco.ventago.features.orders.domain.acceptedBillingPointCode
+import com.teco.ventago.features.orders.domain.billingPointCodeAfterBranchChange
 import com.teco.ventago.features.orders.domain.billingPointFilterOptions
 import com.teco.ventago.features.orders.domain.branchFilterOptions
 import kotlin.test.Test
@@ -40,6 +42,32 @@ class OrderListScopeFiltersTest {
         assertEquals(listOf("001", "002"), billingPointFilterOptions(branches, "0000")?.map { it.code })
         assertEquals("002 - Delivery", billingPointFilterOptions(branches, "0000")?.last()?.label)
         assertNull(billingPointFilterOptions(branches, "0001"))
+    }
+
+    @Test
+    fun returningToEveryBranchClearsTheBillingPoint() {
+        val branches = listOf(
+            branch("0000", "Casa matriz", point("001", "Caja"), point("002", "Delivery")),
+            branch("0001", "Costa", point("001", "Mostrador"), point("003", "Kiosco")),
+        )
+
+        assertNull(billingPointCodeAfterBranchChange(branches, null, "001"))
+        assertNull(billingPointCodeAfterBranchChange(branches, "0001", "002"))
+        assertEquals("001", billingPointCodeAfterBranchChange(branches, "0001", "001"))
+    }
+
+    @Test
+    fun billingPointSelectionRejectsAPointOutsideTheBranch() {
+        val branches = listOf(
+            branch("0000", "Casa matriz", point("001", "Caja"), point("002", "Delivery")),
+            branch("0001", "Costa", point("001", "Mostrador")),
+        )
+
+        assertEquals("002", acceptedBillingPointCode(branches, "0000", "002"))
+        assertEquals("001", acceptedBillingPointCode(branches, null, "001"))
+        assertNull(acceptedBillingPointCode(branches, "0001", "002"))
+        assertNull(acceptedBillingPointCode(branches, "0001", null))
+        assertNull(acceptedBillingPointCode(listOf(branch("0000", "Casa matriz", point("001", "Caja"))), "0000", "001"))
     }
 
     @Test
