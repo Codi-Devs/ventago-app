@@ -8,6 +8,7 @@ import com.teco.ventago.features.product.data.repository.IProductsRepository
 import com.teco.ventago.features.product.domain.model.Category
 import com.teco.ventago.features.product.domain.model.Item
 import com.teco.ventago.features.product.domain.model.Products
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.IO
@@ -260,9 +261,7 @@ class ProductService(
         if (listenerJob?.isActive != true) {
             startProductsListener()
         }
-        CoroutineScope(Dispatchers.IO).launch {
-            cache.saveCache(state.value)
-        }
+        persistProducts(state.value, publishChange = false)
         return res
     }
 
@@ -295,10 +294,27 @@ class ProductService(
     }
 
     private fun saveCache() {
-        val snapshot = state.value ?: return
-        CoroutineScope(Dispatchers.IO).launch {
-            cache.saveCache(snapshot)
-            changesManager.productsChanged()
+        persistProducts(state.value, publishChange = true)
+    }
+
+    private fun persistProducts(snapshot: Products?, publishChange: Boolean) {
+        if (snapshot == null) return
+        serviceScope.launch {
+            try {
+                cache.saveCache(snapshot)
+            } catch (error: CancellationException) {
+                throw error
+            } catch (_: Exception) {
+                // The product is already stored on the server. An uncaught
+                // Room error in this coroutine aborts the iOS process.
+            }
+            if (!publishChange) return@launch
+            try {
+                changesManager.productsChanged()
+            } catch (error: CancellationException) {
+                throw error
+            } catch (_: Exception) {
+            }
         }
     }
 

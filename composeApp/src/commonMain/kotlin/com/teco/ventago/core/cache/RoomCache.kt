@@ -14,8 +14,11 @@ import com.teco.ventago.features.customers.domain.models.CustomerListItem
 import com.teco.ventago.features.financialProfile.domain.model.BusinessFinancialProfile
 import com.teco.ventago.features.product.domain.model.Products
 import kotlin.reflect.KClass
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 
 class RoomCache (private val cacheDatabase: CacheDatabase): ICacheService {
+    private val productsWrite = Mutex()
     override suspend fun <T : Any> getCache(klass: KClass<T>): T? {
         return when (klass) {
             User::class -> {
@@ -78,9 +81,14 @@ class RoomCache (private val cacheDatabase: CacheDatabase): ICacheService {
                 cacheDatabase.getFinancialProfileCacheDao().deleteProfile()
                 data.toCache()?.let { cacheDatabase.getFinancialProfileCacheDao().insert(it) }
             }
-            is Products -> {
-                cacheDatabase.getProductsCacheDao().deleteProducts()
-                data.toCache()?.let { cacheDatabase.getProductsCacheDao().insert(it) }
+            is Products -> productsWrite.withLock {
+                // The menu is one row (id = 1). Saving after add and the
+                // realtime refresh both write it. Separate DELETE and INSERT
+                // overlap and the second INSERT hits UNIQUE. iOS then aborts
+                // the process because that coroutine is uncaught.
+                val dao = cacheDatabase.getProductsCacheDao()
+                dao.deleteProducts()
+                data.toCache()?.let { dao.insert(it) }
             }
         }
     }

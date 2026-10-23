@@ -17,8 +17,6 @@ import platform.CoreGraphics.CGColorSpaceCreateDeviceRGB
 import platform.CoreGraphics.CGColorSpaceRelease
 import platform.CoreGraphics.CGContextDrawImage
 import platform.CoreGraphics.CGContextRelease
-import platform.CoreGraphics.CGContextScaleCTM
-import platform.CoreGraphics.CGContextTranslateCTM
 import platform.CoreGraphics.CGImageAlphaInfo
 import platform.CoreGraphics.CGImageGetHeight
 import platform.CoreGraphics.CGImageGetWidth
@@ -247,8 +245,8 @@ private fun UIImage.rgbaPixels(): RgbaPixels? {
                 bitmapInfo = CGImageAlphaInfo.kCGImageAlphaPremultipliedLast.value or kCGBitmapByteOrder32Big,
             ) ?: return@usePinned false
             try {
-                CGContextTranslateCTM(context, 0.0, height.toDouble())
-                CGContextScaleCTM(context, 1.0, -1.0)
+                // Row 0 is the visual top, same as Android Bitmap.getPixels.
+                // A Y-axis CTM flip reverses every text line, logo and QR on paper.
                 CGContextDrawImage(
                     context,
                     CGRectMake(0.0, 0.0, width.toDouble(), height.toDouble()),

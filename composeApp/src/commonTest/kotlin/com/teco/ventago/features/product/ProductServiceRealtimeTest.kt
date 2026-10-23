@@ -12,15 +12,18 @@ import com.teco.ventago.features.product.data.repository.IProductsRepository
 import com.teco.ventago.features.product.domain.ProductService
 import com.teco.ventago.features.product.domain.model.Category
 import com.teco.ventago.features.product.domain.model.Item
+import com.teco.ventago.features.product.domain.model.ProductType
 import com.teco.ventago.features.product.domain.model.Products
 import io.ktor.client.HttpClient
 import kotlin.reflect.KClass
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.emptyFlow
 import kotlinx.coroutines.test.runTest
+import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeout
 
 class ProductServiceRealtimeTest {
@@ -62,6 +65,41 @@ class ProductServiceRealtimeTest {
         assertEquals(1, changes.productsChangedCalls)
     }
 
+    @Test
+    fun cacheFailureStillPublishesMenuToken() = runTest {
+        val changes = FakeChangesManager()
+        val service = ProductService(
+            productsRepository = FakeProductsRepository(menu()),
+            cache = FakeCacheService(failSaves = true),
+            changesManager = changes,
+            authService = FakeAuthService(),
+        )
+        service.getProductsByBusinessId(10)
+
+        val saved = service.addItem(sampleItem(), categoryId = 1)
+        changes.awaitProductsChanged()
+
+        assertEquals(99, saved.itemId)
+        assertEquals(1, changes.productsChangedCalls)
+    }
+
+    private fun sampleItem(): Item {
+        return Item(
+            itemId = 99,
+            barcode = null,
+            sku = null,
+            name = "Prueba",
+            description = "",
+            img = "",
+            price = 1.0,
+            cost = null,
+            active = true,
+            order = 1,
+            taxPercent = 7,
+            productType = ProductType.GOOD,
+        )
+    }
+
     private fun menu(): Products {
         return Products(
             id = 7,
@@ -95,18 +133,23 @@ class ProductServiceRealtimeTest {
         override suspend fun getProductIdByBusinessId(businessId: Int): Int = menu.id
     }
 
-    private class FakeCacheService : ICacheService {
+    private class FakeCacheService(
+        private val failSaves: Boolean = false,
+    ) : ICacheService {
         private val saves = Channel<Unit>(capacity = Channel.UNLIMITED)
 
         suspend fun awaitSave() {
-            withTimeout(2_000) {
-                saves.receive()
+            withContext(Dispatchers.Default.limitedParallelism(1)) {
+                withTimeout(2_000) {
+                    saves.receive()
+                }
             }
         }
 
         override suspend fun <T : Any> getCache(klass: KClass<T>): T? = null
         override suspend fun <T : Any> getCache(key: String): T? = null
         override suspend fun <T> saveCache(data: T) {
+            if (failSaves) error("UNIQUE constraint failed: ProductsCache.id")
             saves.trySend(Unit)
         }
         override suspend fun <T> saveCache(key: String, data: T) = Unit
@@ -119,8 +162,10 @@ class ProductServiceRealtimeTest {
         private val productChanges = Channel<Unit>(capacity = Channel.UNLIMITED)
 
         suspend fun awaitProductsChanged() {
-            withTimeout(2_000) {
-                productChanges.receive()
+            withContext(Dispatchers.Default.limitedParallelism(1)) {
+                withTimeout(2_000) {
+                    productChanges.receive()
+                }
             }
         }
 
