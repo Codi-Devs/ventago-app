@@ -722,7 +722,7 @@ fun AddItemScreen(
             state = uiState.loadingBottomSheet,
             sheetState = loadingSheetState
         ) {
-            viewModel.hideLoading()
+            viewModel.onLoadingSheetDismissed()
         }
     }
 
