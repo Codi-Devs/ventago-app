@@ -35,6 +35,11 @@ class ListDocumentStatusLabelTest {
             order(status = OrderStatus.CANCELLED, invoiceStatus = InvoiceStatus.FAILED.id)
                 .listDocumentStatusLabel(),
         )
+        assertEquals(
+            "Cancelado",
+            order(status = OrderStatus.CANCELLED, invoiceStatus = null)
+                .listDocumentStatusLabel(),
+        )
     }
 
     @Test
@@ -76,7 +81,7 @@ class ListDocumentStatusLabelTest {
         )
     }
 
-    private fun order(status: Int, invoiceStatus: Int): Order {
+    private fun order(status: Int, invoiceStatus: Int?): Order {
         return Order(
             id = 1,
             orderType = "01",
