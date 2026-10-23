@@ -70,7 +70,12 @@ fun LoadingBottomSheet(
 
     val state by loadingState
     val canDismiss = state.state != LoadingState.LOADING
-    val dismissSheet = rememberDismissSheetAfterHide(sheetState, canDismiss, onDismissRequest)
+    val dismissSheet = rememberDismissSheetAfterHide(
+        sheetState,
+        state.state,
+        canDismiss,
+        onDismissRequest,
+    )
 
     ModalBottomSheet(
         containerColor = cardContainerColor(),
@@ -108,7 +113,12 @@ fun LoadingSheet(
     onDismissRequest: () -> Unit = {},
 ) {
     val canDismiss = state.state != LoadingState.LOADING
-    val dismissSheet = rememberDismissSheetAfterHide(sheetState, canDismiss, onDismissRequest)
+    val dismissSheet = rememberDismissSheetAfterHide(
+        sheetState,
+        state.state,
+        canDismiss,
+        onDismissRequest,
+    )
 
     ModalBottomSheet(
         containerColor = cardContainerColor(),
@@ -144,18 +154,37 @@ private fun loadingSheetProperties(canDismiss: Boolean) = ModalBottomSheetProper
 )
 
 
+internal class SheetDismissLock {
+    private var phase: Any? = null
+    private var held = false
+
+    fun sync(phase: Any) {
+        if (this.phase != phase) {
+            this.phase = phase
+            held = false
+        }
+    }
+
+    fun tryAcquire(): Boolean {
+        if (held) return false
+        held = true
+        return true
+    }
+}
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun rememberDismissSheetAfterHide(
     sheetState: SheetState,
+    phase: Any,
     canDismiss: Boolean,
     onDismissed: () -> Unit,
 ): () -> Unit {
     val scope = rememberCoroutineScope()
-    val started = remember { mutableStateOf(false) }
+    val lock = remember { SheetDismissLock() }
+    lock.sync(phase)
     return dismiss@{
-        if (!canDismiss || started.value) return@dismiss
-        started.value = true
+        if (!canDismiss || !lock.tryAcquire()) return@dismiss
         scope.launch {
             try {
                 sheetState.hide()
