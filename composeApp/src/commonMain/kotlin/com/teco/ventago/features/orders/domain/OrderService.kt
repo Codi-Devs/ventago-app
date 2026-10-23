@@ -118,6 +118,8 @@ class OrderService(
         emissionEndDate: String? = null,
         orderType: String? = null,
         customerRuc: String? = null,
+        branchCode: String? = null,
+        billingPointCode: String? = null,
         force: Boolean = false,
     ): List<Order> {
         val request = withPosProvisioningFilters(
@@ -130,7 +132,9 @@ class OrderService(
                 emissionStartDate = emissionStartDate,
                 emissionEndDate = emissionEndDate,
                 orderType = orderType,
-                customerRuc = customerRuc
+                customerRuc = customerRuc,
+                branchCode = branchCode?.takeIf { it.isNotBlank() },
+                billingPointCode = billingPointCode?.takeIf { it.isNotBlank() },
             )
         ) ?: return emptyOrdersForUnprovisionedPos()
         val cacheKey = ordersListCacheKey(request)
@@ -177,6 +181,8 @@ class OrderService(
         emissionEndDate: String? = null,
         orderType: String? = null,
         customerRuc: String? = null,
+        branchCode: String? = null,
+        billingPointCode: String? = null,
     ): List<Order> {
         mutex.withLock {
             page = INITIAL_PAGE
@@ -189,6 +195,8 @@ class OrderService(
             emissionEndDate = emissionEndDate,
             orderType = orderType,
             customerRuc = customerRuc,
+            branchCode = branchCode,
+            billingPointCode = billingPointCode,
             force = false,
         )
     }
@@ -214,6 +222,8 @@ class OrderService(
         emissionEndDate: String? = null,
         orderType: String? = null,
         customerRuc: String? = null,
+        branchCode: String? = null,
+        billingPointCode: String? = null,
     ): List<Order> {
         mutex.withLock {
             page = INITIAL_PAGE
@@ -228,8 +238,17 @@ class OrderService(
             emissionEndDate = emissionEndDate,
             orderType = orderType,
             customerRuc = customerRuc,
+            branchCode = branchCode,
+            billingPointCode = billingPointCode,
             force = true,
         )
+    }
+
+    fun isListScopeLocked(): Boolean {
+        if (!posProvisioningService.isRequired()) return false
+        val state = posProvisioningService.currentState()
+        if (!state.locksBranchPoint) return false
+        return !state.fixedBranchCode.isNullOrBlank() && !state.fixedBillingPointCode.isNullOrBlank()
     }
 
     suspend fun listOrdersForCustomerPaged(

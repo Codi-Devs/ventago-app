@@ -41,6 +41,7 @@ import com.teco.ventago.features.pos.provisioning.domain.model.PosDeviceConfig
 import com.teco.ventago.features.pos.provisioning.domain.model.PosDevicePermissions
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
 import kotlinx.coroutines.test.runTest
@@ -53,7 +54,12 @@ class OrderServiceProvisioningTest {
         provisioningService.validateLogin(authResponse())
         val service = OrderService(ordersRepository, provisioningService)
 
-        service.loadOrders(businessId = 7, paymentStatus = 1)
+        service.loadOrders(
+            businessId = 7,
+            paymentStatus = 1,
+            branchCode = "9999",
+            billingPointCode = "001",
+        )
 
         val request = ordersRepository.requests.single()
         assertEquals("0000", request.branchCode)
@@ -99,6 +105,46 @@ class OrderServiceProvisioningTest {
         val request = ordersRepository.requests.single()
         assertNull(request.branchCode)
         assertNull(request.billingPointCode)
+    }
+
+    @Test
+    fun publicOrderLoadsPassSelectedBranchAndBillingPoint() = runTest {
+        val ordersRepository = CapturingOrdersRepository()
+        val service = OrderService(ordersRepository, provisioningService(isPosBuild = false))
+
+        service.loadOrders(businessId = 7, branchCode = "0002", billingPointCode = "003")
+
+        val request = ordersRepository.requests.single()
+        assertEquals("0002", request.branchCode)
+        assertEquals("003", request.billingPointCode)
+    }
+
+    @Test
+    fun posWithFixedBranchAndPointLocksTheListScope() = runTest {
+        val provisioning = provisioningService(isPosBuild = true)
+        provisioning.validateLogin(authResponse())
+        val service = OrderService(CapturingOrdersRepository(), provisioning)
+
+        assertTrue(service.isListScopeLocked())
+    }
+
+    @Test
+    fun posWithoutFixedCodesDoesNotLockTheListScope() = runTest {
+        val provisioning = provisioningService(
+            isPosBuild = true,
+            agentConfigReader = FakeAgentReader(result = null),
+        )
+        provisioning.validateLogin(authResponse())
+        val service = OrderService(CapturingOrdersRepository(), provisioning)
+
+        assertFalse(service.isListScopeLocked())
+    }
+
+    @Test
+    fun publicAppDoesNotLockTheListScope() = runTest {
+        val service = OrderService(CapturingOrdersRepository(), provisioningService(isPosBuild = false))
+
+        assertFalse(service.isListScopeLocked())
     }
 
     private fun provisioningService(
