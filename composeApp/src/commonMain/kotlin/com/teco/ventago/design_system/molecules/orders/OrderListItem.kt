@@ -127,7 +127,8 @@ fun OrderListItem(
 fun DocumentStatusChip(label: String, onClick: () -> Unit) {
     val (textColor, background) = when (label) {
         "Facturado" -> Color(0xFF2E7D32) to Color(0xFFE8F5E9)
-        "Fallida" -> Color(0xFFD32F2F) to Color(0xFFFFEBEE)
+        "Fallida", "Cancelado" -> Color(0xFFD32F2F) to Color(0xFFFFEBEE)
+        "Anulada" -> Color(0xFF37474F) to Color(0xFFECEFF1)
         else -> Color(0xFF757575) to Color(0xFFF5F5F5)
     }
     SuggestionChip(
