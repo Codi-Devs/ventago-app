@@ -700,7 +700,8 @@ internal fun appModule() = module {
                     client = get()
                 ),
                 categoryProvider = CategoryProvider(
-                    client = get()
+                    client = get(),
+                    authService = get()
                 ),
                 itemProvider = ItemProvider(
                     client = get(),

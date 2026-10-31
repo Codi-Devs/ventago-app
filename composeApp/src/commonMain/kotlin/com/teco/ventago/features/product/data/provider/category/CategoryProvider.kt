@@ -1,6 +1,7 @@
 package com.teco.ventago.features.product.data.provider.category
 
 import com.teco.ventago.Configs
+import com.teco.ventago.features.auth.domain.IAuthService
 import com.teco.ventago.features.product.domain.model.Category
 import com.teco.ventago.utils.ApiError
 import com.teco.ventago.utils.ApiResponse
@@ -18,13 +19,17 @@ import io.ktor.http.isSuccess
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.boolean
+import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.jsonPrimitive
 import kotlin.math.PI
 import kotlin.random.Random
 
-class CategoryProvider(private val client: HttpClient): ICategoryProvider {
+class CategoryProvider(
+    private val client: HttpClient,
+    private val authService: IAuthService,
+) : ICategoryProvider {
     override suspend fun setActive(categoryId: Int, active: Boolean): ApiResponse {
-        val res = client.post(Configs.serverBasePath+"category/set-category-active"){
+        val res = client.post(Configs.serverBasePath + "category/set-category-active") {
             headers {
                 append(HttpHeaders.Accept, "*/*")
                 append(HttpHeaders.ContentType, "application/json; charset=UTF-8")
@@ -45,7 +50,7 @@ class CategoryProvider(private val client: HttpClient): ICategoryProvider {
 
     override suspend fun changeCategoryOrder(categories: List<Category>): ApiResponse {
         val value: Double = Random.nextDouble(until = PI / 6)
-        val res = client.post(Configs.serverBasePath+"category/change-category-order"){
+        val res = client.post(Configs.serverBasePath + "category/change-category-order") {
             headers {
                 append(HttpHeaders.Accept, "*/*")
                 append(HttpHeaders.ContentType, "application/json; charset=UTF-8")
@@ -65,66 +70,64 @@ class CategoryProvider(private val client: HttpClient): ICategoryProvider {
     }
 
     override suspend fun editCategory(category: Category): ApiResponse {
-        val res = client.post(Configs.serverBasePath+"category/edit-category"){
-            headers {
-                append(HttpHeaders.Accept, "*/*")
-                append(HttpHeaders.ContentType, "application/json; charset=UTF-8")
-                append("http-x-api-token", generateHashWithHmac256(category.id.toString()+category.name+category.desc)!!)
-            }
-            contentType(ContentType.Application.Json)
-            setBody(CategoryRequests.editCategory(category))
-        }
-
-        if (!res.status.isSuccess()) {
-            throw BadRequestException("Error editing category ${category.id}")
-        }
-
-        val body = res.body<JsonObject>()
-        val status = body["status"]?.jsonPrimitive?.boolean ?: false
-        return ApiResponse(status, JsonPrimitive(status), ApiError.NO_ERROR)
+        return postWithJwt(
+            path = "category/edit-category",
+            body = CategoryRequests.editCategory(category),
+            failure = "Error editing category ${category.id}",
+        )
     }
 
     override suspend fun addCategory(category: Category, menuId: Int): ApiResponse {
-        val res = client.post(Configs.serverBasePath+"category/add-category"){
-            headers {
-                append(HttpHeaders.Accept, "*/*")
-                append(HttpHeaders.ContentType, "application/json; charset=UTF-8")
-                append("http-x-api-token", generateHashWithHmac256(category.name+category.desc+menuId.toString()+category.order.toString())!!)
-            }
-            contentType(ContentType.Application.Json)
-            setBody(CategoryRequests.addCategory(category, menuId))
-        }
-
-        if (!res.status.isSuccess()) {
-            throw BadRequestException("Error adding category $category")
-        }
-
-        val body = res.body<JsonObject>()
-        val status = body["status"]?.jsonPrimitive?.boolean ?: false
-        return if (status) {
-            ApiResponse(true, body["data"], ApiError.NO_ERROR)
-        } else {
-            ApiResponse(false, null, ApiError.NO_ERROR)
-        }
+        return postWithJwt(
+            path = "category/add-category",
+            body = CategoryRequests.addCategory(category, menuId),
+            failure = "Error adding category $category",
+        )
     }
 
     override suspend fun removeCategory(categoryId: Int): ApiResponse {
-        val res = client.post(Configs.serverBasePath+"category/remove-category"){
+        return postWithJwt(
+            path = "category/remove-category",
+            body = CategoryRequests.removeCategory(categoryId),
+            failure = "Error removing category $categoryId",
+        )
+    }
+
+    private suspend fun postWithJwt(
+        path: String,
+        body: String,
+        failure: String,
+        retried: Boolean = false,
+    ): ApiResponse {
+        val res = client.post(Configs.serverBasePath + path) {
             headers {
                 append(HttpHeaders.Accept, "*/*")
+                append(HttpHeaders.Authorization, "Bearer ${authService.getJwtToken()}")
                 append(HttpHeaders.ContentType, "application/json; charset=UTF-8")
-                append("http-x-api-token", generateHashWithHmac256(categoryId.toString())!!)
             }
             contentType(ContentType.Application.Json)
-            setBody(CategoryRequests.removeCategory(categoryId))
+            setBody(body)
         }
 
         if (!res.status.isSuccess()) {
-            throw BadRequestException("Error removing category $categoryId")
+            throw BadRequestException(failure)
         }
 
-        val body = res.body<JsonObject>()
-        val status = body["status"]?.jsonPrimitive?.boolean ?: false
-        return ApiResponse(status, JsonPrimitive(status), ApiError.NO_ERROR)
+        val json = res.body<JsonObject>()
+        val status = json["status"]?.jsonPrimitive?.boolean ?: false
+        val error = ApiError.fromError(json["error"]?.jsonPrimitive?.contentOrNull)
+        if (error == ApiError.AUTH_001 && !retried) {
+            return try {
+                authService.refreshToken(client)
+                postWithJwt(path, body, failure, retried = true)
+            } catch (e: Exception) {
+                ApiResponse(false, null, error)
+            }
+        }
+        return if (status) {
+            ApiResponse(true, json["data"], ApiError.NO_ERROR)
+        } else {
+            ApiResponse(false, null, error)
+        }
     }
 }
