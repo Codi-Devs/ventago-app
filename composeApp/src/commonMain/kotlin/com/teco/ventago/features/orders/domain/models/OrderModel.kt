@@ -282,6 +282,7 @@ data class OrderLineDto(
 
 @Serializable
 data class OrderHistoryDto(
+    @SerialName("history_type") val historyType: Int = 0,
     @SerialName("status_id") val statusId: Int = 0,
     val note: String = "",
     @SerialName("changed_by") val changedBy: String = "",

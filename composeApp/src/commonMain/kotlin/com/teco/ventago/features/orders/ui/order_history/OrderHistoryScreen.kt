@@ -35,6 +35,7 @@ import com.teco.ventago.design_system.molecules.orders.OrderHistoryList
 import com.teco.ventago.design_system.organism.LoadingSheet
 import com.teco.ventago.design_system.theme.latoFontFamily
 import com.teco.ventago.features.orders.domain.models.OrderStatus
+import com.teco.ventago.features.orders.domain.visibleOrderHistories
 import com.teco.ventago.features.orders.ui.order_details.viewModel.OrdersDetailsViewModel
 import com.teco.ventago.features.orders.ui.order_history.viewModel.OrderHistoryViewModel
 import org.jetbrains.compose.resources.stringResource
@@ -83,7 +84,7 @@ fun OrderHistoryScreen(
                 .padding(horizontal = 16.dp)
                 .verticalScroll(rememberScrollState()),
         ) {
-            OrderHistoryList(order.orderHistories) {
+            OrderHistoryList(visibleOrderHistories(order.orderHistories)) {
                 viewModel.showReasonDialog(true)
             }
         }
