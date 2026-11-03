@@ -140,6 +140,7 @@ data class Item (
             val list = mutableListOf<Item>()
             for (item in arr) {
                 val map = Json.decodeFromJsonElement<Map<String, JsonElement>>(item)
+                if (map.isRemovedFromCatalog()) continue
                 val element = fromMap(map)
                 list.add(element)
             }
