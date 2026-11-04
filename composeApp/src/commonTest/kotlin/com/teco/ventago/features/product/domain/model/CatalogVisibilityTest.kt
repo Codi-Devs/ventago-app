@@ -19,7 +19,10 @@ class CatalogVisibilityTest {
                     "items":[
                       {"idItem":10,"name":"Borrado","descripcion":"","img":"","price":1,"cost":0,"active":0,"order":1,"deleted":1},
                       {"idItem":11,"name":"Inactivo","descripcion":"","img":"","price":1,"cost":0,"active":0,"order":2},
-                      {"idItem":12,"name":"Con fecha","descripcion":"","img":"","price":1,"cost":0,"active":1,"order":3,"deleted_at":"2026-11-03 12:00:00.000000"}
+                      {"idItem":12,"name":"Con fecha","descripcion":"","img":"","price":1,"cost":0,"active":1,"order":3,"deleted_at":"2026-11-03 12:00:00.000000"},
+                      {"idItem":13,"name":"Fecha gana","descripcion":"","img":"","price":1,"cost":0,"active":1,"order":4,"deleted":0,"deleted_at":"2026-11-04 00:00:00"},
+                      {"idItem":14,"name":"Null","descripcion":"","img":"","price":1,"cost":0,"active":1,"order":5,"deleted":null,"deleted_at":"2026-11-04 00:00:00"},
+                      {"idItem":15,"name":"Objeto","descripcion":"","img":"","price":1,"cost":0,"active":1,"order":6,"deleted":{"x":1}}
                     ]
                   }
                 ]
@@ -28,7 +31,9 @@ class CatalogVisibilityTest {
         )
 
         assertEquals(listOf(2), categories.map { it.id })
-        assertEquals(listOf(11), categories.single().items.map { it.itemId })
-        assertEquals(false, categories.single().items.single().active)
+        val items = categories.single().items
+        assertEquals(listOf(11, 15), items.map { it.itemId })
+        assertEquals(false, items.first { it.itemId == 11 }.active)
+        assertEquals(true, items.first { it.itemId == 15 }.active)
     }
 }
