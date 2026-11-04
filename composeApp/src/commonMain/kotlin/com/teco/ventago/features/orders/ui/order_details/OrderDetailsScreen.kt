@@ -153,6 +153,7 @@ import com.teco.ventago.features.branches.domain.model.Branch
 import com.teco.ventago.features.invoicing.domain.models.FEDocumentType
 import com.teco.ventago.features.invoicing.domain.models.InvoiceStatus
 import com.teco.ventago.features.orders.domain.PaymentLinkResolver
+import com.teco.ventago.features.orders.domain.visibleOrderHistories
 import com.teco.ventago.features.orders.domain.models.ManualPaymentMethodOption
 import com.teco.ventago.features.orders.domain.models.Order
 import com.teco.ventago.features.orders.domain.models.OrderHistoryDto
@@ -1708,7 +1709,8 @@ private fun OrderStatusHistoryBottomSheet(
             overflow = TextOverflow.Ellipsis
         )
 
-        if (order.orderHistories.isEmpty()) {
+        val histories = visibleOrderHistories(order.orderHistories)
+        if (histories.isEmpty()) {
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -1731,10 +1733,10 @@ private fun OrderStatusHistoryBottomSheet(
                     .verticalScroll(rememberScrollState()),
                 verticalArrangement = Arrangement.spacedBy(0.dp)
             ) {
-                order.orderHistories.forEachIndexed { index, history ->
+                histories.forEachIndexed { index, history ->
                     OrderStatusHistoryTimelineItem(
                         history = history,
-                        isLast = index == order.orderHistories.lastIndex
+                        isLast = index == histories.lastIndex
                     )
                 }
             }
