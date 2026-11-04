@@ -16,6 +16,8 @@ import io.ktor.http.ContentType
 import io.ktor.http.HttpHeaders
 import io.ktor.http.contentType
 import io.ktor.http.isSuccess
+import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.JsonNull
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.boolean
@@ -115,7 +117,7 @@ class CategoryProvider(
 
         val json = res.body<JsonObject>()
         val status = json["status"]?.jsonPrimitive?.boolean ?: false
-        val error = ApiError.fromError(json["error"]?.jsonPrimitive?.contentOrNull)
+        val error = ApiError.fromError(errorCode(json["error"]))
         if (error == ApiError.AUTH_001 && !retried) {
             return try {
                 authService.refreshToken(client)
@@ -128,6 +130,15 @@ class CategoryProvider(
             ApiResponse(true, json["data"], ApiError.NO_ERROR)
         } else {
             ApiResponse(false, null, error)
+        }
+    }
+
+    private fun errorCode(element: JsonElement?): String? {
+        return when (element) {
+            null, JsonNull -> null
+            is JsonPrimitive -> element.contentOrNull
+            is JsonObject -> element["code"]?.jsonPrimitive?.contentOrNull
+            else -> null
         }
     }
 }
