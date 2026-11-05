@@ -609,7 +609,8 @@ class ExpensesRepository(
             itbmsAmount = dataObj.doubleValue("itbms_amount"),
             total = dataObj.doubleValue("total"),
             expenseAccountId = dataObj.longValue("expense_account_id") ?: expenseAccount?.id,
-            expenseAccount = expenseAccount
+            expenseAccount = expenseAccount,
+            categorizedBy = dataObj.stringValue("categorized_by")
         )
     }
 
