@@ -16,5 +16,6 @@ data class ExpenseItem(
     @SerialName("itbms_amount") val itbmsAmount: Double? = null,
     val total: Double? = null,
     @SerialName("expense_account_id") val expenseAccountId: Long? = null,
-    @SerialName("expense_account") val expenseAccount: ExpenseAccount? = null
+    @SerialName("expense_account") val expenseAccount: ExpenseAccount? = null,
+    @SerialName("categorized_by") val categorizedBy: String? = null
 )

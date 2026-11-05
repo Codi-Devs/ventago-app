@@ -221,6 +221,17 @@ fun buildExpenseCategorizationPayload(
     )
 }
 
+const val EXPENSE_CONCEPT_RULE_ACTOR = "concept_rule"
+const val EXPENSE_CONCEPT_DETECTED_MARK = "Detectado automáticamente"
+
+fun ExpenseItem.assignedByConceptRule(): Boolean =
+    categorizedBy == EXPENSE_CONCEPT_RULE_ACTOR
+
+fun Expense.conceptAssignedByRule(): Boolean {
+    val assigned = items.orEmpty().filter { (it.expenseAccountId ?: 0L) > 0L }
+    return assigned.isNotEmpty() && assigned.all { it.assignedByConceptRule() }
+}
+
 fun buildExpenseConceptLabel(expense: Expense): String {
     val itemConceptNames = expense.items.orEmpty()
         .mapNotNull { it.expenseAccount?.name ?: it.expenseAccountId?.let { id -> "Concepto #$id" } }
