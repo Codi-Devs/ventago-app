@@ -47,6 +47,7 @@ import com.teco.ventago.design_system.theme.bodyMedium
 import com.teco.ventago.design_system.theme.headlineSmall
 import com.teco.ventago.design_system.theme.titleLarge
 import com.teco.ventago.design_system.theme.vanishedBackgroundColor
+import com.teco.ventago.features.product.domain.CatalogDeleteStockCopy
 import com.teco.ventago.features.product.domain.model.Category
 import com.teco.ventago.features.product.ui.category.manage.viewmodel.CategoriesManageViewModel
 import com.teco.ventago.navigation.PosScreens
@@ -88,6 +89,7 @@ fun CategoriesManageScreen(
 ) {
 
     var list by remember { viewModel.state.categories }
+    val positiveStockByItemId by viewModel.state.positiveStockByItemId
 
     val snackbarHostState = remember { SnackbarHostState() }
 
@@ -99,6 +101,7 @@ fun CategoriesManageScreen(
     val scope = rememberCoroutineScope()
 
     var showDeleteDialog by remember { mutableStateOf(false) }
+    var stockHelpMessage by remember { mutableStateOf<String?>(null) }
 
     Column(
         modifier = Modifier
@@ -134,6 +137,23 @@ fun CategoriesManageScreen(
         LoadingBottomSheet(loadingState = viewModel.state.loadingState, sheetState = sheetState) {
             viewModel.loadingDone()
         }
+    }
+
+    stockHelpMessage?.let { message ->
+        AlertDialog(
+            onDismissRequest = { stockHelpMessage = null },
+            confirmButton = {
+                TextButtonS(label = "Entendido") { stockHelpMessage = null }
+            },
+            title = { Text(text = "No se puede eliminar", style = headlineSmall()) },
+            text = {
+                Text(
+                    text = message,
+                    style = bodyMedium(MaterialTheme.colorScheme.onSurfaceVariant).merge(textAlign = TextAlign.Start),
+                )
+            },
+            containerColor = MaterialTheme.colorScheme.background,
+        )
     }
 
     if (showDeleteDialog) {
@@ -228,7 +248,16 @@ fun CategoriesManageScreen(
                             .weight(1f, fill = true)
                             .padding(start = 8.dp),
                         onClick = {
-                            showDeleteDialog = true
+                            val category = selectedCategory
+                            val products = category?.items.orEmpty().mapNotNull { item ->
+                                positiveStockByItemId[item.itemId]?.let { item.name to it }
+                            }
+                            val blocked = category?.let { CatalogDeleteStockCopy.category(it.name, products) }
+                            if (blocked != null) {
+                                stockHelpMessage = blocked
+                            } else {
+                                showDeleteDialog = true
+                            }
                         },
                         containerColor = MaterialTheme.colorScheme.error,
                     ) {

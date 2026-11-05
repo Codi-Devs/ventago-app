@@ -134,6 +134,7 @@ class EditCategoryViewModel(
     fun removeItem(itemId: Int) {
         if (!state.canManageCategories.value) return
         if (itemId <= 0) return
+        if (state.positiveStockByItemId.value.containsKey(itemId)) return
         state.showLoading("Eliminando elemento")
         viewModelScope.launch(Dispatchers.IO) {
             try {
@@ -215,5 +216,8 @@ class EditCategoryViewModel(
         }
         state.inventoryStockByItemId.value = stock
         state.inventoryCostByItemId.value = cost
+        state.positiveStockByItemId.value = items.mapNotNull { item ->
+            snap.positiveAvailableStockLabel(item.itemId)?.let { item.itemId to it }
+        }.toMap()
     }
 }

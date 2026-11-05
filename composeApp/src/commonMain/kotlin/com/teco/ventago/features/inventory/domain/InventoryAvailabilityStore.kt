@@ -61,6 +61,19 @@ data class InventoryAvailabilitySnapshot(
         return "Stock $qty"
     }
 
+    fun hasPositiveAvailableStock(itemId: Int): Boolean {
+        val row = byItemId[itemId] ?: return false
+        if (!row.tracked) return false
+        val qty = row.available?.trim()?.toDoubleOrNull() ?: return false
+        return qty > 0.0
+    }
+
+    fun positiveAvailableStockLabel(itemId: Int): String? {
+        if (!hasPositiveAvailableStock(itemId)) return null
+        val formatted = InventoryKardexSupport.formatInventoryQuantity(byItemId[itemId]?.available)
+        return formatted.ifBlank { null }
+    }
+
     fun shouldBlockUnstocked(
         itemId: Int,
         canView: Boolean,

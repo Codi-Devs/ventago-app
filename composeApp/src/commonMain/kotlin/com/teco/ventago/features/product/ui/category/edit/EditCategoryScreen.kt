@@ -52,6 +52,7 @@ import com.teco.ventago.design_system.theme.bodyMedium
 import com.teco.ventago.design_system.theme.headlineSmall
 import com.teco.ventago.design_system.theme.titleLarge
 import com.teco.ventago.design_system.theme.vanishedBackgroundColor
+import com.teco.ventago.features.product.domain.CatalogDeleteStockCopy
 import com.teco.ventago.features.product.domain.model.Item
 import com.teco.ventago.features.product.ui.category.edit.viewmodel.EditCategoryViewModel
 import com.teco.ventago.navigation.PosScreens
@@ -101,6 +102,7 @@ fun EditCategoryScreen(
     var list by remember { viewModel.state.items }
     val inventoryStockByItemId by viewModel.state.inventoryStockByItemId
     val inventoryCostByItemId by viewModel.state.inventoryCostByItemId
+    val positiveStockByItemId by viewModel.state.positiveStockByItemId
 
     val lazyListState = rememberLazyListState()
     
@@ -111,6 +113,7 @@ fun EditCategoryScreen(
     var selectedItem by remember { mutableStateOf<Item?>(null) }
     val scope = rememberCoroutineScope()
     var showDeleteDialog by remember { mutableStateOf(false) }
+    var stockHelpMessage by remember { mutableStateOf<String?>(null) }
 
     Column(
         modifier = Modifier
@@ -190,6 +193,23 @@ fun EditCategoryScreen(
         ) {
             viewModel.loadingDone()
         }
+    }
+
+    stockHelpMessage?.let { message ->
+        AlertDialog(
+            onDismissRequest = { stockHelpMessage = null },
+            confirmButton = {
+                TextButtonS(label = "Entendido") { stockHelpMessage = null }
+            },
+            title = { Text(text = "No se puede eliminar", style = headlineSmall()) },
+            text = {
+                Text(
+                    text = message,
+                    style = bodyMedium(MaterialTheme.colorScheme.onSurfaceVariant).merge(textAlign = TextAlign.Start),
+                )
+            },
+            containerColor = MaterialTheme.colorScheme.background,
+        )
     }
 
     if (showDeleteDialog) {
@@ -286,7 +306,13 @@ fun EditCategoryScreen(
                             .weight(1f, fill = true)
                             .padding(start = 8.dp),
                         onClick = {
-                            showDeleteDialog = true
+                            val item = selectedItem
+                            val stock = item?.itemId?.let { positiveStockByItemId[it] }
+                            if (item != null && stock != null) {
+                                stockHelpMessage = CatalogDeleteStockCopy.product(item.name, stock)
+                            } else {
+                                showDeleteDialog = true
+                            }
                         },
                         containerColor = MaterialTheme.colorScheme.error,
                     ) {
