@@ -93,10 +93,7 @@ import com.teco.ventago.design_system.theme.cardContainerColor
 import com.teco.ventago.design_system.theme.labelSmall
 import com.teco.ventago.design_system.theme.titleMediumBold
 import com.teco.ventago.features.expenses.domain.ExpensesSelectionStore
-import com.teco.ventago.features.expenses.domain.EXPENSE_CONCEPT_DETECTED_MARK
-import com.teco.ventago.features.expenses.domain.assignedByConceptRule
 import com.teco.ventago.features.expenses.domain.buildExpenseConceptLabel
-import com.teco.ventago.features.expenses.domain.conceptAssignedByRule
 import com.teco.ventago.features.expenses.domain.remainingToRegister
 import com.teco.ventago.features.expenses.domain.models.Expense
 import com.teco.ventago.features.expenses.domain.models.ExpenseItem
@@ -441,12 +438,6 @@ private fun ConceptSummaryCard(
                 maxLines = 3,
                 overflow = TextOverflow.Ellipsis
             )
-            if (expense.conceptAssignedByRule()) {
-                Text(
-                    text = EXPENSE_CONCEPT_DETECTED_MARK,
-                    style = labelSmall(color = MaterialTheme.colorScheme.onSurfaceVariant)
-                )
-            }
             Spacer(modifier = Modifier.height(4.dp))
             Text(
                 text = itemSummary,
@@ -681,12 +672,6 @@ private fun ExpenseItemRow(item: ExpenseItem) {
                 maxLines = 2,
                 overflow = TextOverflow.Ellipsis
             )
-            if (item.assignedByConceptRule()) {
-                Text(
-                    text = EXPENSE_CONCEPT_DETECTED_MARK,
-                    style = labelSmall(color = MaterialTheme.colorScheme.onSurfaceVariant)
-                )
-            }
         }
         Spacer(modifier = Modifier.width(8.dp))
         Text(

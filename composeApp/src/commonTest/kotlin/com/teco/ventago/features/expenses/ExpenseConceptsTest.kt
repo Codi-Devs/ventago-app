@@ -11,9 +11,7 @@ import com.teco.ventago.features.expenses.domain.buildExpenseAccountsTree
 import com.teco.ventago.features.expenses.domain.compactExpenseAccountAncestors
 import com.teco.ventago.features.expenses.domain.selectableExpenseAccounts
 import com.teco.ventago.features.expenses.domain.buildExpenseCategorizationPayload
-import com.teco.ventago.features.expenses.domain.assignedByConceptRule
 import com.teco.ventago.features.expenses.domain.buildExpenseConceptLabel
-import com.teco.ventago.features.expenses.domain.conceptAssignedByRule
 import com.teco.ventago.features.expenses.domain.buildExpenseCreatePayload
 import com.teco.ventago.features.expenses.domain.inferDefaultExpenseAccount
 import com.teco.ventago.features.expenses.domain.isKnownSystemExpenseAccountCode
@@ -576,17 +574,6 @@ class ExpenseConceptsTest {
                 Expense(categorizationStatus = "partial")
             ),
         )
-    }
-
-    @Test
-    fun conceptRuleMarkOnlyWhenEveryAssignedItemCameFromTheEngine() {
-        val detected = ExpenseItem(expenseAccountId = 10, categorizedBy = "concept_rule")
-        val manual = ExpenseItem(expenseAccountId = 11, categorizedBy = "user")
-        assertTrue(detected.assignedByConceptRule())
-        assertFalse(manual.assignedByConceptRule())
-        assertTrue(Expense(items = listOf(detected, detected)).conceptAssignedByRule())
-        assertFalse(Expense(items = listOf(detected, manual)).conceptAssignedByRule())
-        assertFalse(Expense(items = listOf(ExpenseItem(categorizedBy = "concept_rule"))).conceptAssignedByRule())
     }
 
     @Test

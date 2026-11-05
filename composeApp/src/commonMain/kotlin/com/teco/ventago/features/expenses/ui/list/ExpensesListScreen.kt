@@ -102,9 +102,7 @@ import com.teco.ventago.features.expenses.ui.components.ExpenseSheetOption
 import com.teco.ventago.features.expenses.ui.upload.InvoiceUploadCapture
 import com.teco.ventago.features.expenses.domain.CrawlErrorCopy
 import com.teco.ventago.features.expenses.domain.CufeParser
-import com.teco.ventago.features.expenses.domain.EXPENSE_CONCEPT_DETECTED_MARK
 import com.teco.ventago.features.expenses.domain.ExpenseConceptVisualCategory
-import com.teco.ventago.features.expenses.domain.conceptAssignedByRule
 import com.teco.ventago.features.expenses.domain.resolveExpenseConceptVisualCategory
 import com.teco.ventago.features.expenses.domain.models.CrawlJob
 import com.teco.ventago.features.expenses.domain.models.Expense
@@ -615,7 +613,6 @@ private fun ExpenseListItem(
             expense.invoiceNumber ?: "Sin factura",
             emissionDate,
             "Concepto: $conceptLabel",
-            if (expense.conceptAssignedByRule()) EXPENSE_CONCEPT_DETECTED_MARK else "",
         ),
         trailingPrimary = totalFormatted,
         onClick = onClick,
