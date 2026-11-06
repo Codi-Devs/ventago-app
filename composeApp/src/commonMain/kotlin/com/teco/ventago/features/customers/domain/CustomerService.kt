@@ -16,6 +16,7 @@ import com.teco.ventago.features.customers.domain.models.CustomerDetails
 import com.teco.ventago.features.customers.domain.models.CustomerListItem
 import com.teco.ventago.features.customers.domain.models.UpdateBillingAddressRequest
 import com.teco.ventago.features.customers.domain.models.UpdateCustomerDetailsRequest
+import com.teco.ventago.features.customers.domain.models.UpdateDefaultCustomerAddressRequest
 import com.teco.ventago.features.customers.domain.models.ValidateRucResponse
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -183,6 +184,38 @@ class CustomerService(
                         taxRetentionCode = request.taxRetentionCode,
                         taxRetentionPercent = request.taxRetentionPercent,
                     )
+                } else {
+                    item
+                }
+            }
+            val newPaged = customers.copy(items = newItems)
+            state.value = newPaged
+            saveCache(newPaged)
+        }
+        return updated
+    }
+
+    suspend fun updateDefaultCustomerAddress(
+        businessId: Int,
+        customerId: Long,
+        addressLine: String,
+        locationCode: String?,
+        email: String,
+    ): Boolean {
+        val updated = repository.updateDefaultCustomerAddress(
+            businessId = businessId,
+            customerId = customerId,
+            request = UpdateDefaultCustomerAddressRequest(
+                addressLine = addressLine,
+                locationCode = locationCode?.ifBlank { null },
+                email = email,
+            )
+        )
+        if (updated) {
+            val customers = state.value
+            val newItems = customers.items.map { item ->
+                if (item.id == customerId) {
+                    item.copy(email = email.ifBlank { null })
                 } else {
                     item
                 }

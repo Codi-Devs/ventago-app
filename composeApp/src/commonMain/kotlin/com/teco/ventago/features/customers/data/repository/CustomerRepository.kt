@@ -14,6 +14,7 @@ import com.teco.ventago.features.customers.domain.models.CustomerDetails
 import com.teco.ventago.features.customers.domain.models.CustomerListItem
 import com.teco.ventago.features.customers.domain.models.UpdateBillingAddressRequest
 import com.teco.ventago.features.customers.domain.models.UpdateCustomerDetailsRequest
+import com.teco.ventago.features.customers.domain.models.UpdateDefaultCustomerAddressRequest
 import com.teco.ventago.features.customers.domain.models.ValidateRucResponse
 import com.teco.ventago.utils.ApiError
 import com.teco.ventago.utils.BadRequestException
@@ -42,6 +43,12 @@ interface ICustomerRepository {
         businessId: Int,
         customerId: Long,
         request: UpdateCustomerDetailsRequest
+    ): Boolean
+
+    suspend fun updateDefaultCustomerAddress(
+        businessId: Int,
+        customerId: Long,
+        request: UpdateDefaultCustomerAddressRequest
     ): Boolean
 
     suspend fun deleteCustomer(businessId: Int, customerId: Long): Boolean
@@ -228,6 +235,29 @@ class CustomerRepository(
                     LogLevel.ERROR,
                     "CustomerRepository::updateCustomerDetails",
                     "Error updating customer details. businessId: $businessId, customerId: $customerId. Error: ${e.message ?: "UNKNOWN"}"
+                )
+            )
+            throw e
+        }
+    }
+
+    override suspend fun updateDefaultCustomerAddress(
+        businessId: Int,
+        customerId: Long,
+        request: UpdateDefaultCustomerAddressRequest
+    ): Boolean {
+        try {
+            val response = provider.updateDefaultCustomerAddress(businessId, customerId, request)
+            if (response.error.isError()) {
+                throw BadRequestException(response.toJson())
+            }
+            return true
+        } catch (e: Exception) {
+            logger.sendLog(
+                Log(
+                    LogLevel.ERROR,
+                    "CustomerRepository::updateDefaultCustomerAddress",
+                    "Error updating default customer address. businessId: $businessId, customerId: $customerId. Error: ${e.message ?: "UNKNOWN"}"
                 )
             )
             throw e

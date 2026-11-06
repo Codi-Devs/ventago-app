@@ -9,6 +9,8 @@ import com.teco.ventago.features.customers.domain.models.Customer
 import com.teco.ventago.features.customers.domain.models.nullIfBlank
 import com.teco.ventago.features.customers.domain.models.UpdateBillingAddressRequest
 import com.teco.ventago.features.customers.domain.models.UpdateCustomerDetailsRequest
+import com.teco.ventago.features.customers.domain.models.UpdateDefaultCustomerAddressRequest
+import com.teco.ventago.features.customers.domain.models.toDetailsPayload
 import com.teco.ventago.features.customers.domain.models.ValidateRucRequest
 import com.teco.ventago.features.invoicing.domain.models.FeCustomerType
 import com.teco.ventago.utils.ApiError
@@ -46,6 +48,12 @@ interface ICustomerProvider {
         businessId: Int,
         customerId: Long,
         request: UpdateCustomerDetailsRequest
+    ): ApiResponse
+
+    suspend fun updateDefaultCustomerAddress(
+        businessId: Int,
+        customerId: Long,
+        request: UpdateDefaultCustomerAddressRequest
     ): ApiResponse
 
     suspend fun deleteCustomer(businessId: Int, customerId: Long): ApiResponse
@@ -240,6 +248,22 @@ class CustomerProvider(private val client: HttpClient, private val authService: 
         request: UpdateCustomerDetailsRequest
     ): ApiResponse {
         val payload = updateRequestJson.encodeToString(UpdateCustomerDetailsRequest.serializer(), request)
+        return putCustomerDetails(businessId, customerId, payload)
+    }
+
+    override suspend fun updateDefaultCustomerAddress(
+        businessId: Int,
+        customerId: Long,
+        request: UpdateDefaultCustomerAddressRequest
+    ): ApiResponse {
+        return putCustomerDetails(businessId, customerId, request.toDetailsPayload())
+    }
+
+    private suspend fun putCustomerDetails(
+        businessId: Int,
+        customerId: Long,
+        payload: String
+    ): ApiResponse {
         val res = client.put("${Configs.ordersBasePath}/api/v1/customers/$customerId/details") {
             headers {
                 append(HttpHeaders.Accept, "*/*")
@@ -256,7 +280,7 @@ class CustomerProvider(private val client: HttpClient, private val authService: 
         return if (response.error == ApiError.AUTH_001) {
             try {
                 authService.refreshToken(client)
-                updateCustomerDetails(businessId, customerId, request)
+                putCustomerDetails(businessId, customerId, payload)
             } catch (_: Exception) {
                 response
             }
