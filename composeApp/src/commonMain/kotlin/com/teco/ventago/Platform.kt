@@ -20,7 +20,7 @@ expect fun isIOS(): Boolean
 
 object AppInfo {
     const val APP_NAME = "VentaGo"
-    const val VERSION = "1.3.0"
+    const val VERSION = "1.6.14"
 }
 
 
