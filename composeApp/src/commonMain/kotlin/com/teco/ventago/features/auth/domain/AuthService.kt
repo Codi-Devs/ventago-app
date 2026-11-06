@@ -49,6 +49,7 @@ import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.yield
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
@@ -75,6 +76,11 @@ class AuthService(
 ) : IAuthService {
     val user = MutableStateFlow<User?>(null)
     private var stagedBusinessId: Int? = null
+    private val tenantEpoch = MutableStateFlow(0)
+
+    private enum class LoginBusinessSource { Bound, Explicit, Staged, Remembered, None }
+
+    private data class LoginBusinessChoice(val id: Int?, val source: LoginBusinessSource)
     private var userChangesJob: Job? = null
     private val refreshSingleFlight = RefreshTokenSingleFlight()
     private val _sessionResolved = MutableStateFlow(false)
@@ -228,42 +234,26 @@ class AuthService(
         }
     }
 
+    override fun tenantEpoch(): Flow<Int> = tenantEpoch.asStateFlow()
+
     override suspend fun googleLogin(googleToken: String): AuthResponse {
-        try {
-            sessionIdService.startSession(forceNew = true)
-            val res = repository.googleLogin(googleToken, resolveLoginBusinessId(null))
-            if (res.providerToken.isBlank()) {
-                throw AuthException(ApiError.F_AUTH_007)
-            }
-            validateAccessTokenClaimsBeforeLogin(res.accessToken)
-            posProvisioningService.validateLogin(res)
-            val firebaseResponse = firebase.signInWithCustomToken(res.providerToken)
-            if (firebaseResponse.success) {
-                saveJwt(res.accessToken)
-                saveJwt(res.refreshToken, true)
-                rememberBusiness(res)
-                val userData = enrichUserWithCurrentToken(User.fromAuthResponse(res), res.accessToken)
-                cache.saveCache(userData)
-
-                user.update {
-                    userData
+        val choice = resolveLoginBusinessId(null)
+        return try {
+            finishGoogleLogin(googleToken, choice.id)
+        } catch (e: AuthException) {
+            if (shouldRetryWithoutRememberedBusiness(e, choice.source)) {
+                store.deleteObject(LAST_BUSINESS_KEY)
+                try {
+                    finishGoogleLogin(googleToken, null)
+                } catch (retry: Exception) {
+                    failLogin(retry)
                 }
-                listenUserChanges()
             } else {
-                throw AuthException(ApiError.F_AUTH_007)
+                failLogin(e)
             }
-            return res
         } catch (e: Exception) {
-            user.update {
-                null
-            }
-            if (e.shouldAbortPosLogin()) {
-                signOut()
-            }
-            throw mapPosAuthFailure(e)
+            failLogin(e)
         }
-
-
     }
 
     override fun stageBusinessSelection(businessId: Int) {
@@ -271,41 +261,23 @@ class AuthService(
     }
 
     override suspend fun emailLogin(request: EmailLoginRequest): AuthResponse {
-        try {
-            sessionIdService.startSession(forceNew = true)
-            val res = repository.emailLogin(
-                request.copy(businessId = resolveLoginBusinessId(request.businessId))
-            )
-            if (res.providerToken.isBlank()) {
-                throw AuthException(ApiError.F_AUTH_007)
-            }
-            validateAccessTokenClaimsBeforeLogin(res.accessToken)
-            posProvisioningService.validateLogin(res)
-            val firebaseResponse = firebase.signInWithCustomToken(res.providerToken)
-            if (firebaseResponse.success) {
-                saveJwt(res.accessToken)
-                saveJwt(res.refreshToken, true)
-                rememberBusiness(res)
-                val userData = enrichUserWithCurrentToken(User.fromAuthResponse(res), res.accessToken)
-                cache.saveCache(userData)
-                user.update {
-                    userData
+        val choice = resolveLoginBusinessId(request.businessId)
+        return try {
+            finishEmailLogin(request.copy(businessId = choice.id))
+        } catch (e: AuthException) {
+            if (shouldRetryWithoutRememberedBusiness(e, choice.source)) {
+                store.deleteObject(LAST_BUSINESS_KEY)
+                try {
+                    finishEmailLogin(request.copy(businessId = null))
+                } catch (retry: Exception) {
+                    failLogin(retry)
                 }
-                listenUserChanges()
             } else {
-                throw AuthException(ApiError.F_AUTH_007)
+                failLogin(e)
             }
-            return res
         } catch (e: Exception) {
-            user.update {
-                null
-            }
-            if (e.shouldAbortPosLogin()) {
-                signOut()
-            }
-            throw mapPosAuthFailure(e)
+            failLogin(e)
         }
-
     }
 
     override suspend fun switchBusiness(businessId: Int) {
@@ -343,6 +315,7 @@ class AuthService(
             changesManager.removeListeners()
             runCatching { cache.clearAllCache() }
             user.update { null }
+            yield()
             saveJwt(accessToken)
             saveJwt(refreshToken, true)
             val providerToken = map["token"]?.jsonPrimitive?.contentOrNull
@@ -354,6 +327,7 @@ class AuthService(
                 val next = enrichUserWithCurrentToken(current.copy(businessIds = ordered), accessToken)
                 cache.saveCache(next)
                 user.update { next }
+                tenantEpoch.update { it + 1 }
                 listenUserChanges()
             }
         }
@@ -484,17 +458,63 @@ class AuthService(
         return exp <= Clock.System.now().epochSeconds
     }
 
-    private suspend fun resolveLoginBusinessId(explicit: Int?): Int? {
+    private suspend fun finishGoogleLogin(googleToken: String, businessId: Int?): AuthResponse {
+        sessionIdService.startSession(forceNew = true)
+        val res = repository.googleLogin(googleToken, businessId)
+        return storeLogin(res) { posProvisioningService.validateLogin(res) }
+    }
+
+    private suspend fun finishEmailLogin(request: EmailLoginRequest): AuthResponse {
+        sessionIdService.startSession(forceNew = true)
+        val res = repository.emailLogin(request)
+        return storeLogin(res) { posProvisioningService.validateLogin(res) }
+    }
+
+    private suspend fun storeLogin(res: AuthResponse, validate: suspend () -> Unit): AuthResponse {
+        if (res.providerToken.isBlank()) {
+            throw AuthException(ApiError.F_AUTH_007)
+        }
+        validateAccessTokenClaimsBeforeLogin(res.accessToken)
+        validate()
+        val firebaseResponse = firebase.signInWithCustomToken(res.providerToken)
+        if (!firebaseResponse.success) {
+            throw AuthException(ApiError.F_AUTH_007)
+        }
+        saveJwt(res.accessToken)
+        saveJwt(res.refreshToken, true)
+        rememberBusiness(res)
+        val userData = enrichUserWithCurrentToken(User.fromAuthResponse(res), res.accessToken)
+        cache.saveCache(userData)
+        user.update { userData }
+        listenUserChanges()
+        return res
+    }
+
+    private fun shouldRetryWithoutRememberedBusiness(error: AuthException, source: LoginBusinessSource): Boolean {
+        return error.error == ApiError.AUTH_004 && source == LoginBusinessSource.Remembered && !posProvisioningService.isRequired()
+    }
+
+    private suspend fun failLogin(error: Exception): Nothing {
+        user.update { null }
+        if (error.shouldAbortPosLogin()) {
+            signOut()
+        }
+        throw mapPosAuthFailure(error)
+    }
+
+    private suspend fun resolveLoginBusinessId(explicit: Int?): LoginBusinessChoice {
         val bound = posProvisioningService.boundBusinessIdOrNull()
         if (bound != null && bound > 0) {
             stagedBusinessId = null
-            return bound
+            return LoginBusinessChoice(bound, LoginBusinessSource.Bound)
         }
         val staged = stagedBusinessId
         stagedBusinessId = null
-        if (explicit != null && explicit > 0) return explicit
-        if (staged != null && staged > 0) return staged
-        return store.string(LAST_BUSINESS_KEY)?.toIntOrNull()?.takeIf { it > 0 }
+        if (explicit != null && explicit > 0) return LoginBusinessChoice(explicit, LoginBusinessSource.Explicit)
+        if (staged != null && staged > 0) return LoginBusinessChoice(staged, LoginBusinessSource.Staged)
+        val remembered = store.string(LAST_BUSINESS_KEY)?.toIntOrNull()?.takeIf { it > 0 }
+        if (remembered != null) return LoginBusinessChoice(remembered, LoginBusinessSource.Remembered)
+        return LoginBusinessChoice(null, LoginBusinessSource.None)
     }
 
     private fun rememberBusiness(response: AuthResponse) {
