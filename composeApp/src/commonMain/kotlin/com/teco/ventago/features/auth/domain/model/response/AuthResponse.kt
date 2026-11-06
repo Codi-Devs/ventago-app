@@ -22,7 +22,8 @@ data class AuthResponse(
     val refreshToken: String,
     val providerToken: String,
     val message: String,
-    val businesses: List<BusinessIds>
+    val businesses: List<BusinessIds>,
+    val activeBusinessId: Int = -1,
 )  {
     companion object {
         fun fromMap(map: Map<String, JsonElement>): AuthResponse {
@@ -30,6 +31,16 @@ data class AuthResponse(
             if (map["business"] is JsonArray) {
                 businesses = BusinessIds.listFromMap(
                     map["business"]?.jsonArray ?: JsonArray(emptyList()))
+            }
+            val activeBusinessId = map["business_id"]?.jsonPrimitive?.intOrNull ?: -1
+            if (activeBusinessId > 0) {
+                val selected = businesses.filter { it.businessId == activeBusinessId }
+                val rest = businesses.filter { it.businessId != activeBusinessId }
+                businesses = if (selected.isEmpty()) {
+                    listOf(BusinessIds(activeBusinessId, -1)) + rest
+                } else {
+                    selected + rest
+                }
             }
 
             return AuthResponse(
@@ -44,19 +55,21 @@ data class AuthResponse(
                 map["refresh_token"]?.jsonPrimitive?.contentOrNull ?: "",
                 map["token"]?.jsonPrimitive?.contentOrNull ?: "",
                 map["message"]?.jsonPrimitive?.contentOrNull ?: "",
-                businesses
+                businesses,
+                activeBusinessId
             )
         }
     }
 }
 
 
-data class BusinessIds(val businessId: Int, val menuId: Int) {
+data class BusinessIds(val businessId: Int, val menuId: Int, val name: String = "") {
     companion object {
         fun fromMap(map: Map<String, JsonElement>): BusinessIds {
             return BusinessIds(
                 map["id"]?.jsonPrimitive?.intOrNull ?: -1,
-                map["id_menu"]?.jsonPrimitive?.intOrNull ?: -1
+                map["id_menu"]?.jsonPrimitive?.intOrNull ?: -1,
+                map["name"]?.jsonPrimitive?.contentOrNull ?: ""
             )
         }
 

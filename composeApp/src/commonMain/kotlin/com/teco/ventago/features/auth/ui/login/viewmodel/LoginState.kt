@@ -2,6 +2,7 @@ package com.teco.ventago.features.auth.ui.login.viewmodel
 
 import com.teco.ventago.core.LoadableState
 import com.teco.ventago.design_system.organism.LoadingBottomSheetState
+import com.teco.ventago.utils.BusinessChoice
 
 data class LoginState(
     val makingLogin: Boolean = false,
@@ -13,6 +14,8 @@ data class LoginState(
     val mustChangePasswordBlocked: Boolean = false,
     val email: String = "",
     val password: String = "",
+    val businessChoices: List<BusinessChoice> = emptyList(),
+    val pendingGoogleToken: String = "",
     val forgotEmail: String = "",
     val forgotEmailInvalid: Boolean = false,
     override val loadingBottomSheet: LoadingBottomSheetState = LoadingBottomSheetState(),

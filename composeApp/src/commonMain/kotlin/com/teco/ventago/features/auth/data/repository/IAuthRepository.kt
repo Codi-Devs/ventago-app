@@ -6,7 +6,7 @@ import com.teco.ventago.features.auth.domain.model.response.AuthResponse
 
 
 interface IAuthRepository {
-    suspend fun googleLogin(googleToken: String): AuthResponse
+    suspend fun googleLogin(googleToken: String, businessId: Int? = null): AuthResponse
     suspend fun emailLogin(request: EmailLoginRequest): AuthResponse
     suspend fun emailRegister(request: CreateUserRequest): AuthResponse
 }

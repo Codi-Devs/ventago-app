@@ -144,7 +144,7 @@ class AuthServiceTest {
                 override suspend fun sendPasswordResetEmail(email: String) = Unit
             }
             val repository = object : IAuthRepository {
-                override suspend fun googleLogin(googleToken: String): AuthResponse = error("Unused")
+                override suspend fun googleLogin(googleToken: String, businessId: Int?): AuthResponse = error("Unused")
                 override suspend fun emailLogin(request: EmailLoginRequest): AuthResponse = error("Unused")
                 override suspend fun emailRegister(request: CreateUserRequest): AuthResponse = error("Unused")
             }

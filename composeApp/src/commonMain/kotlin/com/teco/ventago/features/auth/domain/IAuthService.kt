@@ -21,6 +21,8 @@ interface IAuthService {
     suspend fun refreshToken(client: HttpClient, failedAccessToken: String? = null)
     suspend fun googleLogin(googleToken: String): AuthResponse
     suspend fun emailLogin(request: EmailLoginRequest): AuthResponse
+    fun stageBusinessSelection(businessId: Int) {}
+    suspend fun switchBusiness(businessId: Int) {}
     suspend fun emailRegister(request: CreateUserRequest): AuthResponse
     suspend fun sendPasswordResetEmail(email: String)
     suspend fun businessRegistered()

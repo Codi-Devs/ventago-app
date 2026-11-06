@@ -40,14 +40,14 @@ class AuthProvider(private val client: HttpClient): IAuthProvider {
         return ApiResponse.fromJson(body)
     }
 
-    override suspend fun googleLogin(googleToken: String): ApiResponse {
+    override suspend fun googleLogin(googleToken: String, businessId: Int?): ApiResponse {
         val res = client.post(Configs.serverBasePath+"auth/google-login") {
             headers {
                 append(HttpHeaders.Accept, "*/*")
                 append(HttpHeaders.ContentType, "application/json")
             }
             contentType(ContentType.Application.Json)
-            setBody(AuthRequests.googleLoginRequest(googleToken))
+            setBody(AuthRequests.googleLoginRequest(googleToken, businessId))
         }
         val body = res.body<JsonObject>()
         return ApiResponse.fromJson(body)

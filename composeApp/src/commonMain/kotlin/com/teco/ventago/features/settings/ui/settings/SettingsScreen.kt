@@ -63,6 +63,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.teco.ventago.core.SnackbarService
 import com.teco.ventago.AppDistribution
+import com.teco.ventago.features.auth.domain.IAuthService
 import com.teco.ventago.core.camera.PermissionCallback
 import com.teco.ventago.core.version.IAppUpdateLauncher
 import com.teco.ventago.core.version.VersionGateService
@@ -142,6 +143,8 @@ fun SettingsScreen(
     navigate: (Any) -> Unit,
     onAccountDeleted: () -> Unit = {},
 ) {
+    val authService: IAuthService = koinInject()
+    val sessionUser by authService.getUser().collectAsState(initial = null)
     val snackbarService: SnackbarService = koinInject()
     val printerService: PrinterService = koinInject()
     val appDistribution: AppDistribution = koinInject()
@@ -434,6 +437,34 @@ fun SettingsScreen(
                             enabled = uiState.canModifySettings && !uiState.includeCustomerAddressSaving,
                             loading = uiState.includeCustomerAddressSaving,
                             onCheckedChange = viewModel::updateIncludeCustomerAddressOnInvoice,
+                        )
+                    }
+                }
+            }
+
+            val businesses = sessionUser?.businessIds.orEmpty()
+            if (!appDistribution.isPosBuild && businesses.size > 1) {
+                Card(modifier = Modifier.fillMaxWidth().padding(all = 16.dp),
+                    elevation = CardDefaults.elevatedCardElevation(4.dp),
+                    colors = CardDefaults.cardColors(
+                        containerColor = cardContainerColor(),
+                    ),
+                    shape = RoundedCornerShape(10.dp),
+                    onClick = {})
+                {
+                    Text(
+                        modifier = Modifier.padding(top = 16.dp, start = 16.dp, end = 16.dp),
+                        text = "Negocio",
+                        style = titleMedium()
+                    )
+                    businesses.forEach { business ->
+                        SettingsTextButton(
+                            label = business.name.ifBlank { "Negocio ${business.businessId}" },
+                            onClick = {
+                                scope.launch {
+                                    authService.switchBusiness(business.businessId)
+                                }
+                            }
                         )
                     }
                 }

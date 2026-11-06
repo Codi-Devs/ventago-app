@@ -205,6 +205,28 @@ fun LoginScreen(navigate: (PosScreens) -> Unit) {
 
                 Spacer(modifier = Modifier.height(16.dp))
 
+                if (uiState.businessChoices.isNotEmpty()) {
+                    Text(
+                        text = "Elige el negocio",
+                        style = TextStyle(
+                            fontSize = 16.sp,
+                            fontFamily = latoFontFamily(),
+                            fontWeight = FontWeight(700),
+                            textAlign = TextAlign.Center,
+                        )
+                    )
+                    Spacer(modifier = Modifier.height(12.dp))
+                    uiState.businessChoices.forEach { business ->
+                        ButtonM(
+                            onClick = { viewModel.selectBusiness(business.id) },
+                            modifier = Modifier.padding(bottom = 8.dp)
+                        ) {
+                            Text(business.name.ifBlank { "Negocio ${business.id}" })
+                        }
+                    }
+                    Spacer(modifier = Modifier.height(16.dp))
+                }
+
                 DMOutlinedTextField(
                     text = uiState.email,
                     label = stringResource(Res.string.email),

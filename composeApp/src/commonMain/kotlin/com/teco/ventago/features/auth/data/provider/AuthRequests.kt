@@ -20,13 +20,16 @@ object AuthRequests {
     /**
      * endpoint: email-login
      */
-    fun emailLoginRequest(request: EmailLoginRequest) : String =
-        """
+    fun emailLoginRequest(request: EmailLoginRequest) : String {
+        val business = request.businessId?.takeIf { it > 0 }?.let { "\"business_id\": $it," } ?: ""
+        return """
             {
+                $business
                 "email": "${request.email}",
                 "password": "${request.password}"
             }
         """.trimIndent()
+    }
 
 
     /**
@@ -45,10 +48,13 @@ object AuthRequests {
     /**
      * endpoint: email-login
      */
-    fun googleLoginRequest(token: String) : String =
-        """
+    fun googleLoginRequest(token: String, businessId: Int? = null) : String {
+        val business = businessId?.takeIf { it > 0 }?.let { "\"business_id\": $it," } ?: ""
+        return """
             {
-                "id_token": "$token"               
+                $business
+                "id_token": "$token"
             }
         """.trimIndent()
+    }
 }
