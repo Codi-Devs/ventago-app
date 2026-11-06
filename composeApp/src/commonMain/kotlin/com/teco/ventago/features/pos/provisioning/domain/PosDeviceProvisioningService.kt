@@ -37,6 +37,11 @@ class PosDeviceProvisioningService(
 
     fun isRequired(): Boolean = appDistribution.isPosBuild
 
+    suspend fun boundBusinessIdOrNull(): Int? {
+        if (!isRequired()) return null
+        return probeAgent()?.businessId ?: bindingStore.load()?.businessId
+    }
+
     suspend fun validateLogin(response: AuthResponse) {
         if (!isRequired()) return
         validateBusinessIds(response.businesses.map { it.businessId }, response.accessToken)

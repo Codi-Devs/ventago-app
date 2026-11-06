@@ -121,6 +121,27 @@ class AppViewModel(
             }.launchIn(this)
         }
         getToken()
+
+        viewModelScope.launch {
+            var seenEpoch = 0
+            authService.tenantEpoch().collect { epoch ->
+                if (epoch == seenEpoch || epoch <= 0) {
+                    seenEpoch = epoch
+                    return@collect
+                }
+                seenEpoch = epoch
+                val current = authService.getUserSync() ?: return@collect
+                _mainState.value = _mainState.value.copy(
+                    isAuthenticated = true,
+                    sessionResolved = true,
+                    sessionEpoch = _mainState.value.sessionEpoch + 1,
+                )
+                if (this@AppViewModel::loadDataJob.isInitialized && loadDataJob.isActive) {
+                    loadDataJob.cancel()
+                }
+                loadBusinessData(current)
+            }
+        }
     }
 
     private fun loadBusinessData(user: User? = null) {

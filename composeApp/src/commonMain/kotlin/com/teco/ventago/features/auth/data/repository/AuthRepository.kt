@@ -11,17 +11,27 @@ import com.teco.ventago.utils.ApiError
 import com.teco.ventago.utils.ApiResponse
 import com.teco.ventago.utils.AuthException
 import com.teco.ventago.utils.BadRequestException
+import com.teco.ventago.utils.BusinessChoice
+import com.teco.ventago.utils.BusinessSelectionRequiredException
 import com.teco.ventago.utils.isError
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.decodeFromJsonElement
+import kotlinx.serialization.json.intOrNull
+import kotlinx.serialization.json.jsonPrimitive
 
 class AuthRepository(private val provider: IAuthProvider, private val logger: ILoggerService):
     IAuthRepository {
-    override suspend fun googleLogin(googleToken: String): AuthResponse {
+    override suspend fun googleLogin(googleToken: String, businessId: Int?): AuthResponse {
         try {
-            val response = provider.googleLogin(googleToken)
+            val response = provider.googleLogin(googleToken, businessId)
+
+            if (response.error == ApiError.AUTH_005) {
+                throw BusinessSelectionRequiredException(parseBusinessChoices(response.data))
+            }
 
             if (response.error.isError()) {
                 getError(response)
@@ -34,6 +44,7 @@ class AuthRepository(private val provider: IAuthProvider, private val logger: IL
                 throw BadRequestException(response.toJson())
             }
         } catch (e: Exception) {
+            if (e is BusinessSelectionRequiredException) throw e
             logger.sendLog(
                 Log(
                     LogLevel.ERROR, "googleLogin",
@@ -49,6 +60,10 @@ class AuthRepository(private val provider: IAuthProvider, private val logger: IL
             val response = provider.emailLogin(request)
             println("ASDASD: ${response.toJson()}")
 
+            if (response.error == ApiError.AUTH_005) {
+                throw BusinessSelectionRequiredException(parseBusinessChoices(response.data))
+            }
+
             if (response.error.isError()) {
                 getError(response)
             }
@@ -60,6 +75,7 @@ class AuthRepository(private val provider: IAuthProvider, private val logger: IL
                 throw BadRequestException(response.toJson())
             }
         } catch (e: Exception) {
+            if (e is BusinessSelectionRequiredException) throw e
             println("ASDASD: ${e.message}")
             logger.sendLog(
                 Log(
@@ -93,6 +109,19 @@ class AuthRepository(private val provider: IAuthProvider, private val logger: IL
                 )
             )
             throw e
+        }
+    }
+
+    private fun parseBusinessChoices(data: JsonElement?): List<BusinessChoice> {
+        val rows = (data as? JsonObject)?.get("businesses") as? JsonArray ?: return emptyList()
+        return rows.mapNotNull { element ->
+            val row = element as? JsonObject ?: return@mapNotNull null
+            val id = row["id"]?.jsonPrimitive?.intOrNull ?: return@mapNotNull null
+            BusinessChoice(
+                id = id,
+                name = row["name"]?.jsonPrimitive?.contentOrNull ?: "Negocio",
+                role = row["role"]?.jsonPrimitive?.contentOrNull ?: ""
+            )
         }
     }
 

@@ -9,6 +9,7 @@ import com.teco.ventago.features.auth.domain.model.requests.EmailLoginRequest
 import com.teco.ventago.features.pos.provisioning.domain.PosProvisioningException
 import com.teco.ventago.utils.ApiError
 import com.teco.ventago.utils.AuthException
+import com.teco.ventago.utils.BusinessSelectionRequiredException
 import com.teco.ventago.utils.MustChangePasswordException
 import com.teco.ventago.utils.emailRegex
 import kotlinx.coroutines.Dispatchers
@@ -83,6 +84,16 @@ class LoginViewModel(
                             )
                         }
                     }
+                } catch (e: BusinessSelectionRequiredException) {
+                    withContext(Dispatchers.Main) {
+                        hideLoading()
+                        updateState {
+                            copy(
+                                businessChoices = e.businesses,
+                                pendingGoogleToken = idToken
+                            )
+                        }
+                    }
                 } catch (e: AuthException) {
                     handleAuthException(e)
                     showError()
@@ -109,6 +120,16 @@ class LoginViewModel(
             } else {
                 emitEvent(LoginUiEvent.CanceledGoogleLogin)
             }
+        }
+    }
+
+    fun selectBusiness(businessId: Int) {
+        service.stageBusinessSelection(businessId)
+        val googleToken = uiState.value.pendingGoogleToken
+        if (googleToken.isNotBlank()) {
+            googleLogin(googleToken)
+        } else {
+            emailLogin()
         }
     }
 
@@ -154,6 +175,11 @@ class LoginViewModel(
                                 invalidPassword = false
                             )
                         }
+                    }
+                } catch (e: BusinessSelectionRequiredException) {
+                    withContext(Dispatchers.Main) {
+                        hideLoading()
+                        updateState { copy(businessChoices = e.businesses, pendingGoogleToken = "") }
                     }
                 } catch (e: AuthException) {
                     handleAuthException(e)
