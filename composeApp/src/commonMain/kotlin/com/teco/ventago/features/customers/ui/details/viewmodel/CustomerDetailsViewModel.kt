@@ -17,6 +17,8 @@ import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
+private const val DEFAULT_CUSTOMER_ADDRESS_ID = 0L
+
 class CustomerDetailsViewModel(
     private val authService: IAuthService,
     private val customerService: CustomerService,
@@ -192,6 +194,10 @@ class CustomerDetailsViewModel(
     }
 
     fun updateAddress(addressId: Long, addressLine: String, locationCode: String?, email: String?) {
+        if (addressId == DEFAULT_CUSTOMER_ADDRESS_ID) {
+            updateDefaultAddress(addressLine, locationCode, email)
+            return
+        }
         if (!uiState.value.canEditCustomerAction) return
         val customerId = uiState.value.customerId ?: return
         if (businessId <= 0) return
@@ -215,6 +221,36 @@ class CustomerDetailsViewModel(
             }.onSuccess {
                 showSuccess()
                 reloadAddresses()
+                emitEvent(CustomerDetailsUiEvent.AddressMutationSuccess)
+            }.onFailure {
+                showError()
+            }
+        }
+    }
+
+    private fun updateDefaultAddress(addressLine: String, locationCode: String?, email: String?) {
+        if (!uiState.value.canEditCustomerAction) return
+        val customerId = uiState.value.customerId ?: return
+        if (businessId <= 0) return
+
+        showLoading()
+        viewModelScope.launch {
+            runCatching {
+                withContext(Dispatchers.Default) {
+                    customerService.updateDefaultCustomerAddress(
+                        businessId = businessId,
+                        customerId = customerId,
+                        addressLine = addressLine.trim(),
+                        locationCode = locationCode?.trim()?.ifBlank { null },
+                        email = email?.trim().orEmpty(),
+                    )
+                    val customer = customerService.getCustomerById(businessId, customerId)
+                    val addresses = customerService.listCustomerAddresses(businessId, customerId.toInt())
+                    customer to addresses
+                }
+            }.onSuccess { (customer, addresses) ->
+                updateState { copy(customer = customer, addresses = addresses) }
+                showSuccess()
                 emitEvent(CustomerDetailsUiEvent.AddressMutationSuccess)
             }.onFailure {
                 showError()

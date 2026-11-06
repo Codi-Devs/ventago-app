@@ -20,6 +20,8 @@ import com.teco.ventago.features.customers.domain.models.CustomerListItem
 import com.teco.ventago.features.customers.domain.models.CustomerTaxRetentionCatalog
 import com.teco.ventago.features.customers.domain.models.UpdateBillingAddressRequest
 import com.teco.ventago.features.customers.domain.models.UpdateCustomerDetailsRequest
+import com.teco.ventago.features.customers.domain.models.UpdateDefaultCustomerAddressRequest
+import com.teco.ventago.features.customers.domain.models.toDetailsPayload
 import com.teco.ventago.features.customers.domain.models.ValidateRucResponse
 import com.teco.ventago.features.customers.ui.form.viewmodel.CustomerFormState
 import com.teco.ventago.features.invoicing.domain.TaxPayerType
@@ -44,6 +46,7 @@ import kotlin.test.assertFailsWith
 import kotlin.test.assertTrue
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonNull
+import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.decodeFromJsonElement
 import kotlinx.serialization.json.encodeToJsonElement
 import kotlinx.serialization.json.jsonArray
@@ -53,6 +56,22 @@ import kotlin.test.assertNull
 class CustomerModelsAndOrdersRequestTest {
 
     private val json = Json { ignoreUnknownKeys = true }
+
+    @Test
+    fun defaultAddressUpdatePayloadOmitsTaxAndNullLocation() {
+        val payload = UpdateDefaultCustomerAddressRequest(
+            addressLine = "Calle 50",
+            email = "",
+        ).toDetailsPayload()
+        val body = json.parseToJsonElement(payload).jsonObject
+
+        assertEquals("Calle 50", body.getValue("address_line").jsonPrimitive.content)
+        assertEquals("", body.getValue("email").jsonPrimitive.content)
+        assertTrue("location_code" !in body)
+        assertTrue("tax_exempt" !in body)
+        assertTrue("tax_retention_code" !in body)
+        assertTrue("phone1" !in body)
+    }
 
     @Test
     fun customerFormStateUsesForeignCountryCatalogWithoutPanama() {
@@ -604,6 +623,12 @@ class CustomerModelsAndOrdersRequestTest {
             request: UpdateCustomerDetailsRequest
         ): ApiResponse = successResponse
 
+        override suspend fun updateDefaultCustomerAddress(
+            businessId: Int,
+            customerId: Long,
+            request: UpdateDefaultCustomerAddressRequest
+        ): ApiResponse = successResponse
+
         override suspend fun deleteCustomer(businessId: Int, customerId: Long): ApiResponse = successResponse
         override suspend fun listCustomerAddresses(businessId: Int, invoiceCustomerId: Int): ApiResponse =
             successResponse
@@ -691,6 +716,12 @@ class CustomerModelsAndOrdersRequestTest {
             businessId: Int,
             customerId: Long,
             request: UpdateCustomerDetailsRequest
+        ): Boolean = true
+
+        override suspend fun updateDefaultCustomerAddress(
+            businessId: Int,
+            customerId: Long,
+            request: UpdateDefaultCustomerAddressRequest
         ): Boolean = true
 
         override suspend fun deleteCustomer(businessId: Int, customerId: Long): Boolean = true

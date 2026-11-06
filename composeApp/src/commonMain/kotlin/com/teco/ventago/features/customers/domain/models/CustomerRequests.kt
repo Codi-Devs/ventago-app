@@ -2,6 +2,8 @@ package com.teco.ventago.features.customers.domain.models
 
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.encodeToString
+import kotlinx.serialization.json.Json
 
 @Serializable
 data class ValidateRucRequest(
@@ -25,6 +27,21 @@ data class CreateBillingAddressRequest(
     @SerialName("location_code") val locationCode: String? = null,
     @SerialName("email") val email: String? = null,
 )
+
+@Serializable
+data class UpdateDefaultCustomerAddressRequest(
+    @SerialName("address_line") val addressLine: String,
+    @SerialName("location_code") val locationCode: String? = null,
+    @SerialName("email") val email: String = "",
+)
+
+private val defaultAddressDetailsJson = Json {
+    encodeDefaults = true
+    explicitNulls = false
+}
+
+fun UpdateDefaultCustomerAddressRequest.toDetailsPayload(): String =
+    defaultAddressDetailsJson.encodeToString(this)
 
 @Serializable
 data class UpdateBillingAddressRequest(
