@@ -21,6 +21,7 @@ import com.teco.ventago.features.user.data.repository.IUserRepository
 import com.teco.ventago.utils.ApiError
 import com.teco.ventago.utils.ApiResponse
 import com.teco.ventago.utils.AuthException
+import com.teco.ventago.utils.BusinessSelectionRequiredException
 import com.teco.ventago.utils.MustChangePasswordException
 import com.teco.ventago.utils.isError
 import com.teco.ventago.utils.base64.base64Decoded
@@ -238,15 +239,19 @@ class AuthService(
 
     override fun tenantEpoch(): Flow<Int> = tenantEpoch.asStateFlow()
 
-    override suspend fun googleLogin(googleToken: String): AuthResponse {
-        val choice = resolveLoginBusinessId(null)
+    override suspend fun googleLogin(googleToken: String, businessId: Int?): AuthResponse {
+        val choice = resolveLoginBusinessId(businessId)
         return try {
             finishGoogleLogin(googleToken, choice.id)
+        } catch (e: BusinessSelectionRequiredException) {
+            throw e
         } catch (e: AuthException) {
             if (shouldRetryWithoutRememberedBusiness(e, choice.source)) {
                 store.deleteObject(LAST_BUSINESS_KEY)
                 try {
                     finishGoogleLogin(googleToken, null)
+                } catch (retry: BusinessSelectionRequiredException) {
+                    throw retry
                 } catch (retry: Exception) {
                     failLogin(retry)
                 }
@@ -266,11 +271,15 @@ class AuthService(
         val choice = resolveLoginBusinessId(request.businessId)
         return try {
             finishEmailLogin(request.copy(businessId = choice.id))
+        } catch (e: BusinessSelectionRequiredException) {
+            throw e
         } catch (e: AuthException) {
             if (shouldRetryWithoutRememberedBusiness(e, choice.source)) {
                 store.deleteObject(LAST_BUSINESS_KEY)
                 try {
                     finishEmailLogin(request.copy(businessId = null))
+                } catch (retry: BusinessSelectionRequiredException) {
+                    throw retry
                 } catch (retry: Exception) {
                     failLogin(retry)
                 }
@@ -487,16 +496,10 @@ class AuthService(
         }
         validateAccessTokenClaimsBeforeLogin(res.accessToken)
         validate()
-        saveJwt(res.accessToken)
-        saveJwt(res.refreshToken, true)
         rememberBusiness(res)
         val userData = enrichUserWithCurrentToken(User.fromAuthResponse(res), res.accessToken)
-        val deferChoice = res.businesses.size > 1 && !res.missingBusiness && !posProvisioningService.isRequired()
-        if (deferChoice) {
-            pendingUser = userData
-            pendingProviderToken = res.providerToken
-            return res
-        }
+        saveJwt(res.accessToken)
+        saveJwt(res.refreshToken, true)
         val firebaseResponse = firebase.signInWithCustomToken(res.providerToken)
         if (!firebaseResponse.success) {
             throw AuthException(ApiError.F_AUTH_007)
@@ -532,11 +535,14 @@ class AuthService(
         throw mapPosAuthFailure(error)
     }
 
-    private suspend fun resolveLoginBusinessId(@Suppress("UNUSED_PARAMETER") explicit: Int?): LoginBusinessChoice {
+    private suspend fun resolveLoginBusinessId(explicit: Int?): LoginBusinessChoice {
         val bound = posProvisioningService.boundBusinessIdOrNull()
         if (bound != null && bound > 0) {
             stagedBusinessId = null
             return LoginBusinessChoice(bound, LoginBusinessSource.Bound)
+        }
+        if (explicit != null && explicit > 0) {
+            return LoginBusinessChoice(explicit, LoginBusinessSource.Explicit)
         }
         stagedBusinessId = null
         return LoginBusinessChoice(null, LoginBusinessSource.None)

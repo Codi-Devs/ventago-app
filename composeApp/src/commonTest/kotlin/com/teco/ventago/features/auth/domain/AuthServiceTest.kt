@@ -132,60 +132,45 @@ class AuthServiceTest {
 
     @Test
     fun multiBusinessLoginWaitsForAChoiceBeforePublishingTheUser() = runTest {
-        val f = Fixture(coroutineContext, emailHandler = { multiBusinessLogin() }, startGuest = true)
+        val f = Fixture(coroutineContext, emailHandler = {
+            throw BusinessSelectionRequiredException(listOf(BusinessChoice(1, "Uno", "owner"), BusinessChoice(4, "Dos", "owner")))
+        }, startGuest = true)
         try {
             runCurrent()
             f.firebaseSigns = 0
-            val response = f.auth.emailLogin(EmailLoginRequest("person@example.invalid", "secret"))
-            runCurrent()
-            assertEquals(2, response.businesses.size)
+            val before = f.tokens[SecureConstants.JWT_TOKEN]
+            assertFailsWith<BusinessSelectionRequiredException> {
+                f.auth.emailLogin(EmailLoginRequest("person@example.invalid", "secret"))
+            }
+            assertEquals(before, f.tokens[SecureConstants.JWT_TOKEN])
+            assertNull(f.tokens[SecureConstants.REFRESH_JWT_TOKEN])
             assertNull(f.auth.getUserSync())
             assertEquals(0, f.firebaseSigns)
         } finally { f.close() }
     }
 
     @Test
-    fun confirmPendingLoginPublishesTheUserAndFailsClosedWhenFirebaseFails() = runTest {
-        val f = Fixture(coroutineContext, emailHandler = { multiBusinessLogin() }, startGuest = true)
+    fun choosingABusinessSendsItsIdAndThenPublishesTheSession() = runTest {
+        val calls = mutableListOf<Int?>()
+        val f = Fixture(coroutineContext, emailHandler = { request ->
+            calls += request.businessId
+            if (request.businessId == null) {
+                throw BusinessSelectionRequiredException(listOf(BusinessChoice(1, "Uno", "owner"), BusinessChoice(4, "Dos", "owner")))
+            }
+            multiBusinessLogin().copy(activeBusinessId = request.businessId ?: 1)
+        }, startGuest = true)
         try {
             runCurrent()
-            f.auth.emailLogin(EmailLoginRequest("person@example.invalid", "secret"))
-            f.firebaseSuccess = false
-            val error = assertFailsWith<AuthException> { f.auth.confirmPendingLogin() }
-            assertEquals(ApiError.F_AUTH_007, error.error)
+            assertFailsWith<BusinessSelectionRequiredException> {
+                f.auth.emailLogin(EmailLoginRequest("person@example.invalid", "secret"))
+            }
             assertNull(f.auth.getUserSync())
-            f.firebaseSuccess = true
-            f.auth.confirmPendingLogin()
+            f.auth.emailLogin(EmailLoginRequest("person@example.invalid", "secret", 4))
             runCurrent()
+            assertEquals(listOf(null, 4), calls)
             assertNotNull(f.auth.getUserSync())
             assertTrue(f.firebaseSigns > 0)
-        } finally { f.close() }
-    }
-
-    @Test
-    fun switchFromPendingOrdersTheChosenBusinessAndKeepsTheChoiceIfFirebaseFails() = runTest {
-        val client = HttpClient(MockEngine {
-            respond(
-                """{"success":true,"data":{"access_token":"header.eyJleHAiOjQxMDI0NDQ4MDB9.signature","refresh_token":"r2","token":"custom-2","business_id":4}}""",
-                HttpStatusCode.OK,
-                headersOf(HttpHeaders.ContentType, ContentType.Application.Json.toString())
-            )
-        }) {
-            install(ContentNegotiation) { json(Json { ignoreUnknownKeys = true }) }
-        }
-        val f = Fixture(coroutineContext, emailHandler = { multiBusinessLogin() }, startGuest = true, httpClient = client)
-        try {
-            runCurrent()
-            f.auth.emailLogin(EmailLoginRequest("person@example.invalid", "secret"))
-            f.firebaseSuccess = false
-            val error = assertFailsWith<AuthException> { f.auth.switchBusiness(4) }
-            assertEquals(ApiError.F_AUTH_007, error.error)
-            assertNull(f.auth.getUserSync())
-            f.firebaseSuccess = true
-            f.auth.switchBusiness(4)
-            runCurrent()
-            assertNotNull(f.auth.getUserSync())
-            assertEquals(4, f.auth.getUserSync()?.businessIds?.firstOrNull()?.businessId)
+            assertNotNull(f.tokens[SecureConstants.JWT_TOKEN])
         } finally { f.close() }
     }
 

@@ -121,6 +121,17 @@ class LoginViewModel(
         showLoading()
         viewModelScope.launch(Dispatchers.IO) {
             try {
+                if (service.getUserSync() == null) {
+                    val googleToken = uiState.value.pendingGoogleToken
+                    val response = if (googleToken.isNotBlank()) {
+                        service.googleLogin(googleToken, businessId)
+                    } else {
+                        service.emailLogin(EmailLoginRequest(uiState.value.email, uiState.value.password, businessId))
+                    }
+                    if (response.uid.isBlank()) throw Exception("Error in Login")
+                    finishAuthenticated(response)
+                    return@launch
+                }
                 if (businessId != uiState.value.sessionBusinessId) {
                     service.switchBusiness(businessId)
                 } else {
