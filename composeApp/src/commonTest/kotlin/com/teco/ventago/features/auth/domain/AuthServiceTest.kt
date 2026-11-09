@@ -150,25 +150,38 @@ class AuthServiceTest {
     }
 
     @Test
-    fun choosingABusinessSendsItsIdAndThenPublishesTheSession() = runTest {
+    fun choosingABusinessUsesTheSelectionTokenAndThenPublishesTheSession() = runTest {
         val calls = mutableListOf<Int?>()
+        var selectionPath = ""
+        val client = HttpClient(MockEngine { request ->
+            selectionPath = request.url.toString()
+            respond(
+                """{"success":true,"data":{"uid":"uid","email":"person@example.invalid","name":"Test","premium":false,"active":true,"missing_business":false,"user_id":3,"access_token":"header.eyJleHAiOjQxMDI0NDQ4MDB9.signature","refresh_token":"r2","token":"custom-2","business_id":4}}""",
+                HttpStatusCode.OK,
+                headersOf(HttpHeaders.ContentType, ContentType.Application.Json.toString())
+            )
+        }) {
+            install(ContentNegotiation) { json(Json { ignoreUnknownKeys = true }) }
+        }
         val f = Fixture(coroutineContext, emailHandler = { request ->
             calls += request.businessId
-            if (request.businessId == null) {
-                throw BusinessSelectionRequiredException(listOf(BusinessChoice(1, "Uno", "owner"), BusinessChoice(4, "Dos", "owner")))
-            }
-            multiBusinessLogin().copy(activeBusinessId = request.businessId ?: 1)
-        }, startGuest = true)
+            throw BusinessSelectionRequiredException(
+                listOf(BusinessChoice(1, "Uno", "owner"), BusinessChoice(4, "Dos", "owner")),
+                "selection-proof"
+            )
+        }, startGuest = true, httpClient = client)
         try {
             runCurrent()
-            assertFailsWith<BusinessSelectionRequiredException> {
+            val required = assertFailsWith<BusinessSelectionRequiredException> {
                 f.auth.emailLogin(EmailLoginRequest("person@example.invalid", "secret"))
             }
             assertNull(f.auth.getUserSync())
-            f.auth.emailLogin(EmailLoginRequest("person@example.invalid", "secret", 4))
+            assertEquals(listOf<Int?>(null), calls)
+            f.auth.completeSelection(required.selectionToken, 4)
             runCurrent()
-            assertEquals(listOf(null, 4), calls)
+            assertTrue(selectionPath.contains("r=auth/select-business"))
             assertNotNull(f.auth.getUserSync())
+            assertEquals(4, f.auth.getUserSync()?.businessIds?.firstOrNull()?.businessId)
             assertTrue(f.firebaseSigns > 0)
             assertNotNull(f.tokens[SecureConstants.JWT_TOKEN])
         } finally { f.close() }

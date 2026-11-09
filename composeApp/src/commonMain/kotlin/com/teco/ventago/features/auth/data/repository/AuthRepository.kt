@@ -30,7 +30,7 @@ class AuthRepository(private val provider: IAuthProvider, private val logger: IL
             val response = provider.googleLogin(googleToken, businessId)
 
             if (response.error == ApiError.AUTH_005) {
-                throw BusinessSelectionRequiredException(parseBusinessChoices(response.data))
+                throw selectionRequired(response.data)
             }
 
             if (response.error.isError()) {
@@ -61,7 +61,7 @@ class AuthRepository(private val provider: IAuthProvider, private val logger: IL
             println("ASDASD: ${response.toJson()}")
 
             if (response.error == ApiError.AUTH_005) {
-                throw BusinessSelectionRequiredException(parseBusinessChoices(response.data))
+                throw selectionRequired(response.data)
             }
 
             if (response.error.isError()) {
@@ -110,6 +110,11 @@ class AuthRepository(private val provider: IAuthProvider, private val logger: IL
             )
             throw e
         }
+    }
+
+    private fun selectionRequired(data: JsonElement?): BusinessSelectionRequiredException {
+        val token = (data as? JsonObject)?.get("selection_token")?.jsonPrimitive?.contentOrNull.orEmpty()
+        return BusinessSelectionRequiredException(parseBusinessChoices(data), token)
     }
 
     private fun parseBusinessChoices(data: JsonElement?): List<BusinessChoice> {

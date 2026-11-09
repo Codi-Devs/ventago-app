@@ -52,6 +52,8 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.yield
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.put
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.contentOrNull
@@ -76,12 +78,9 @@ class AuthService(
     private val scope: CoroutineScope = CoroutineScope(Dispatchers.IO + SupervisorJob()),
 ) : IAuthService {
     val user = MutableStateFlow<User?>(null)
-    private var pendingUser: User? = null
-    private var pendingProviderToken: String = ""
-    private var stagedBusinessId: Int? = null
     private val tenantEpoch = MutableStateFlow(0)
 
-    private enum class LoginBusinessSource { Bound, Explicit, Staged, Remembered, None }
+    private enum class LoginBusinessSource { Bound, Explicit, None }
 
     private data class LoginBusinessChoice(val id: Int?, val source: LoginBusinessSource)
     private var userChangesJob: Job? = null
@@ -245,26 +244,9 @@ class AuthService(
             finishGoogleLogin(googleToken, choice.id)
         } catch (e: BusinessSelectionRequiredException) {
             throw e
-        } catch (e: AuthException) {
-            if (shouldRetryWithoutRememberedBusiness(e, choice.source)) {
-                store.deleteObject(LAST_BUSINESS_KEY)
-                try {
-                    finishGoogleLogin(googleToken, null)
-                } catch (retry: BusinessSelectionRequiredException) {
-                    throw retry
-                } catch (retry: Exception) {
-                    failLogin(retry)
-                }
-            } else {
-                failLogin(e)
-            }
         } catch (e: Exception) {
             failLogin(e)
         }
-    }
-
-    override fun stageBusinessSelection(businessId: Int) {
-        stagedBusinessId = businessId
     }
 
     override suspend fun emailLogin(request: EmailLoginRequest): AuthResponse {
@@ -273,22 +255,27 @@ class AuthService(
             finishEmailLogin(request.copy(businessId = choice.id))
         } catch (e: BusinessSelectionRequiredException) {
             throw e
-        } catch (e: AuthException) {
-            if (shouldRetryWithoutRememberedBusiness(e, choice.source)) {
-                store.deleteObject(LAST_BUSINESS_KEY)
-                try {
-                    finishEmailLogin(request.copy(businessId = null))
-                } catch (retry: BusinessSelectionRequiredException) {
-                    throw retry
-                } catch (retry: Exception) {
-                    failLogin(retry)
-                }
-            } else {
-                failLogin(e)
-            }
         } catch (e: Exception) {
             failLogin(e)
         }
+    }
+
+    override suspend fun completeSelection(selectionToken: String, businessId: Int): AuthResponse {
+        if (selectionToken.isBlank() || businessId <= 0) throw AuthException(ApiError.AUTH_001)
+        val res = client.post(Configs.serverBasePath + "auth/select-business") {
+            headers { append(HttpHeaders.Accept, "*/*") }
+            contentType(ContentType.Application.Json)
+            setBody(buildJsonObject {
+                put("selection_token", selectionToken)
+                put("business_id", businessId)
+            }.toString())
+        }
+        val response = ApiResponse.fromJson(res.body())
+        if (response.error.isError()) throw AuthException(response.error ?: ApiError.AUTH_001)
+        val map = response.data?.let { Json.decodeFromJsonElement<Map<String, JsonElement>>(it) }
+            ?: throw IllegalStateException("No data in business selection response")
+        val auth = AuthResponse.fromMap(map)
+        return storeLogin(auth) { posProvisioningService.validateLogin(auth) }
     }
 
     override suspend fun switchBusiness(businessId: Int) {
@@ -315,7 +302,7 @@ class AuthService(
             if (accessToken.isNullOrBlank() || refreshToken.isNullOrBlank()) {
                 throw IllegalStateException("Business switch response is missing tokens")
             }
-            val current = user.value ?: pendingUser
+            val current = user.value
             val ids = current?.businessIds.orEmpty()
             val selected = ids.filter { it.businessId == businessId }
             val rest = ids.filter { it.businessId != businessId }
@@ -328,8 +315,6 @@ class AuthService(
             if (providerToken.isNullOrBlank()) throw AuthException(ApiError.F_AUTH_007)
             val signedIn = firebase.signInWithCustomToken(providerToken)
             if (!signedIn.success) throw AuthException(ApiError.F_AUTH_007)
-            pendingUser = null
-            pendingProviderToken = ""
             changesManager.removeListeners()
             runCatching { cache.clearAllCache() }
             user.update { null }
@@ -385,8 +370,6 @@ class AuthService(
     override fun getUserSync(): User? = user.value
 
     override suspend fun signOut(): Unit = withContext(NonCancellable) {
-        pendingUser = null
-        pendingProviderToken = ""
         user.value = null
         // The listener can sign itself out. Finish cleanup even after cancelling its job,
         // and don't let a remote Firebase failure prevent local session removal.
@@ -475,16 +458,12 @@ class AuthService(
     }
 
     private suspend fun finishGoogleLogin(googleToken: String, businessId: Int?): AuthResponse {
-        pendingUser = null
-        pendingProviderToken = ""
         sessionIdService.startSession(forceNew = true)
         val res = repository.googleLogin(googleToken, businessId)
         return storeLogin(res) { posProvisioningService.validateLogin(res) }
     }
 
     private suspend fun finishEmailLogin(request: EmailLoginRequest): AuthResponse {
-        pendingUser = null
-        pendingProviderToken = ""
         sessionIdService.startSession(forceNew = true)
         val res = repository.emailLogin(request)
         return storeLogin(res) { posProvisioningService.validateLogin(res) }
@@ -510,23 +489,6 @@ class AuthService(
         return res
     }
 
-    override suspend fun confirmPendingLogin() {
-        val pending = pendingUser ?: return
-        val token = pendingProviderToken
-        if (token.isBlank()) throw AuthException(ApiError.F_AUTH_007)
-        val firebaseResponse = firebase.signInWithCustomToken(token)
-        if (!firebaseResponse.success) throw AuthException(ApiError.F_AUTH_007)
-        pendingUser = null
-        pendingProviderToken = ""
-        cache.saveCache(pending)
-        user.update { pending }
-        listenUserChanges()
-    }
-
-    private fun shouldRetryWithoutRememberedBusiness(error: AuthException, source: LoginBusinessSource): Boolean {
-        return error.error == ApiError.AUTH_004 && source == LoginBusinessSource.Remembered && !posProvisioningService.isRequired()
-    }
-
     private suspend fun failLogin(error: Exception): Nothing {
         user.update { null }
         if (error.shouldAbortPosLogin()) {
@@ -538,13 +500,11 @@ class AuthService(
     private suspend fun resolveLoginBusinessId(explicit: Int?): LoginBusinessChoice {
         val bound = posProvisioningService.boundBusinessIdOrNull()
         if (bound != null && bound > 0) {
-            stagedBusinessId = null
             return LoginBusinessChoice(bound, LoginBusinessSource.Bound)
         }
         if (explicit != null && explicit > 0) {
             return LoginBusinessChoice(explicit, LoginBusinessSource.Explicit)
         }
-        stagedBusinessId = null
         return LoginBusinessChoice(null, LoginBusinessSource.None)
     }
 

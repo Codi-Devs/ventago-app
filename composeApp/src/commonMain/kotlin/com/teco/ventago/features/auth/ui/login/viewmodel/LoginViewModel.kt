@@ -84,7 +84,7 @@ class LoginViewModel(
                         updateState {
                             copy(
                                 businessChoices = e.businesses,
-                                pendingGoogleToken = idToken
+                                selectionToken = e.selectionToken
                             )
                         }
                     }
@@ -122,20 +122,13 @@ class LoginViewModel(
         viewModelScope.launch(Dispatchers.IO) {
             try {
                 if (service.getUserSync() == null) {
-                    val googleToken = uiState.value.pendingGoogleToken
-                    val response = if (googleToken.isNotBlank()) {
-                        service.googleLogin(googleToken, businessId)
-                    } else {
-                        service.emailLogin(EmailLoginRequest(uiState.value.email, uiState.value.password, businessId))
-                    }
+                    val response = service.completeSelection(uiState.value.selectionToken, businessId)
                     if (response.uid.isBlank()) throw Exception("Error in Login")
                     finishAuthenticated(response)
                     return@launch
                 }
                 if (businessId != uiState.value.sessionBusinessId) {
                     service.switchBusiness(businessId)
-                } else {
-                    service.confirmPendingLogin()
                 }
                 if (service.getUserSync() == null) {
                     withContext(Dispatchers.Main) {
@@ -198,7 +191,7 @@ class LoginViewModel(
                 } catch (e: BusinessSelectionRequiredException) {
                     withContext(Dispatchers.Main) {
                         hideLoading()
-                        updateState { copy(businessChoices = e.businesses, pendingGoogleToken = "") }
+                        updateState { copy(businessChoices = e.businesses, selectionToken = e.selectionToken) }
                     }
                 } catch (e: AuthException) {
                     handleAuthException(e)
