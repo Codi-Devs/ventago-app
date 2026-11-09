@@ -126,6 +126,13 @@ class LoginViewModel(
                 } else {
                     service.confirmPendingLogin()
                 }
+                if (service.getUserSync() == null) {
+                    withContext(Dispatchers.Main) {
+                        emitEvent(LoginUiEvent.GenericError)
+                        showError()
+                    }
+                    return@launch
+                }
                 withContext(Dispatchers.Main) {
                     showSuccess()
                     emitEvent(LoginUiEvent.MakingLoginSuccess)

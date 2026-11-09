@@ -283,9 +283,10 @@ class AuthService(
     }
 
     override suspend fun switchBusiness(businessId: Int) {
-        if (businessId <= 0 || posProvisioningService.isRequired()) return
+        if (businessId <= 0) throw AuthException(ApiError.AUTH_001)
+        if (posProvisioningService.isRequired()) throw PosProvisioningException.BusinessMismatch
         withContext(NonCancellable) {
-            val access = getJwtToken() ?: return@withContext
+            val access = getJwtToken() ?: throw AuthException(ApiError.AUTH_001)
             val res = client.post(Configs.serverBasePath + "auth/switch-business") {
                 headers {
                     append(HttpHeaders.Accept, "*/*")
@@ -306,8 +307,6 @@ class AuthService(
                 throw IllegalStateException("Business switch response is missing tokens")
             }
             val current = user.value ?: pendingUser
-            pendingUser = null
-            pendingProviderToken = ""
             val ids = current?.businessIds.orEmpty()
             val selected = ids.filter { it.businessId == businessId }
             val rest = ids.filter { it.businessId != businessId }
@@ -316,16 +315,18 @@ class AuthService(
             } else {
                 selected + rest
             }
+            val providerToken = map["token"]?.jsonPrimitive?.contentOrNull
+            if (providerToken.isNullOrBlank()) throw AuthException(ApiError.F_AUTH_007)
+            val signedIn = firebase.signInWithCustomToken(providerToken)
+            if (!signedIn.success) throw AuthException(ApiError.F_AUTH_007)
+            pendingUser = null
+            pendingProviderToken = ""
             changesManager.removeListeners()
             runCatching { cache.clearAllCache() }
             user.update { null }
             yield()
             saveJwt(accessToken)
             saveJwt(refreshToken, true)
-            val providerToken = map["token"]?.jsonPrimitive?.contentOrNull
-            if (!providerToken.isNullOrBlank()) {
-                firebase.signInWithCustomToken(providerToken)
-            }
             store.set(LAST_BUSINESS_KEY, businessId.toString())
             if (current != null) {
                 val next = enrichUserWithCurrentToken(current.copy(businessIds = ordered), accessToken)
@@ -375,6 +376,8 @@ class AuthService(
     override fun getUserSync(): User? = user.value
 
     override suspend fun signOut(): Unit = withContext(NonCancellable) {
+        pendingUser = null
+        pendingProviderToken = ""
         user.value = null
         // The listener can sign itself out. Finish cleanup even after cancelling its job,
         // and don't let a remote Firebase failure prevent local session removal.
@@ -463,12 +466,16 @@ class AuthService(
     }
 
     private suspend fun finishGoogleLogin(googleToken: String, businessId: Int?): AuthResponse {
+        pendingUser = null
+        pendingProviderToken = ""
         sessionIdService.startSession(forceNew = true)
         val res = repository.googleLogin(googleToken, businessId)
         return storeLogin(res) { posProvisioningService.validateLogin(res) }
     }
 
     private suspend fun finishEmailLogin(request: EmailLoginRequest): AuthResponse {
+        pendingUser = null
+        pendingProviderToken = ""
         sessionIdService.startSession(forceNew = true)
         val res = repository.emailLogin(request)
         return storeLogin(res) { posProvisioningService.validateLogin(res) }
@@ -503,14 +510,11 @@ class AuthService(
     override suspend fun confirmPendingLogin() {
         val pending = pendingUser ?: return
         val token = pendingProviderToken
+        if (token.isBlank()) throw AuthException(ApiError.F_AUTH_007)
+        val firebaseResponse = firebase.signInWithCustomToken(token)
+        if (!firebaseResponse.success) throw AuthException(ApiError.F_AUTH_007)
         pendingUser = null
         pendingProviderToken = ""
-        if (token.isNotBlank()) {
-            val firebaseResponse = firebase.signInWithCustomToken(token)
-            if (!firebaseResponse.success) {
-                throw AuthException(ApiError.F_AUTH_007)
-            }
-        }
         cache.saveCache(pending)
         user.update { pending }
         listenUserChanges()

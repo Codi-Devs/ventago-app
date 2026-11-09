@@ -13,6 +13,7 @@ import com.teco.ventago.features.auth.domain.model.firebase.FirebaseUserDM
 import com.teco.ventago.features.auth.domain.model.requests.CreateUserRequest
 import com.teco.ventago.features.auth.domain.model.requests.EmailLoginRequest
 import com.teco.ventago.features.auth.domain.model.response.AuthResponse
+import com.teco.ventago.features.auth.domain.model.response.BusinessIds
 import com.teco.ventago.features.business.domain.model.Business
 import com.teco.ventago.features.pos.provisioning.data.repository.IPosDeviceProvisioningRepository
 import com.teco.ventago.features.pos.provisioning.domain.*
@@ -130,6 +131,77 @@ class AuthServiceTest {
     }
 
     @Test
+    fun multiBusinessLoginWaitsForAChoiceBeforePublishingTheUser() = runTest {
+        val f = Fixture(coroutineContext, emailHandler = { multiBusinessLogin() }, startGuest = true)
+        try {
+            runCurrent()
+            f.firebaseSigns = 0
+            val response = f.auth.emailLogin(EmailLoginRequest("person@example.invalid", "secret"))
+            runCurrent()
+            assertEquals(2, response.businesses.size)
+            assertNull(f.auth.getUserSync())
+            assertEquals(0, f.firebaseSigns)
+        } finally { f.close() }
+    }
+
+    @Test
+    fun confirmPendingLoginPublishesTheUserAndFailsClosedWhenFirebaseFails() = runTest {
+        val f = Fixture(coroutineContext, emailHandler = { multiBusinessLogin() }, startGuest = true)
+        try {
+            runCurrent()
+            f.auth.emailLogin(EmailLoginRequest("person@example.invalid", "secret"))
+            f.firebaseSuccess = false
+            val error = assertFailsWith<AuthException> { f.auth.confirmPendingLogin() }
+            assertEquals(ApiError.F_AUTH_007, error.error)
+            assertNull(f.auth.getUserSync())
+            f.firebaseSuccess = true
+            f.auth.confirmPendingLogin()
+            runCurrent()
+            assertNotNull(f.auth.getUserSync())
+            assertTrue(f.firebaseSigns > 0)
+        } finally { f.close() }
+    }
+
+    @Test
+    fun switchFromPendingOrdersTheChosenBusinessAndKeepsTheChoiceIfFirebaseFails() = runTest {
+        val client = HttpClient(MockEngine {
+            respond(
+                """{"success":true,"data":{"access_token":"header.eyJleHAiOjQxMDI0NDQ4MDB9.signature","refresh_token":"r2","token":"custom-2","business_id":4}}""",
+                HttpStatusCode.OK,
+                headersOf(HttpHeaders.ContentType, ContentType.Application.Json.toString())
+            )
+        }) {
+            install(ContentNegotiation) { json(Json { ignoreUnknownKeys = true }) }
+        }
+        val f = Fixture(coroutineContext, emailHandler = { multiBusinessLogin() }, startGuest = true, httpClient = client)
+        try {
+            runCurrent()
+            f.auth.emailLogin(EmailLoginRequest("person@example.invalid", "secret"))
+            f.firebaseSuccess = false
+            val error = assertFailsWith<AuthException> { f.auth.switchBusiness(4) }
+            assertEquals(ApiError.F_AUTH_007, error.error)
+            assertNull(f.auth.getUserSync())
+            f.firebaseSuccess = true
+            f.auth.switchBusiness(4)
+            runCurrent()
+            assertNotNull(f.auth.getUserSync())
+            assertEquals(4, f.auth.getUserSync()?.businessIds?.firstOrNull()?.businessId)
+        } finally { f.close() }
+    }
+
+    @Test
+    fun switchWithoutASessionDoesNotPublishAUser() = runTest {
+        val f = Fixture(coroutineContext, startGuest = true)
+        try {
+            runCurrent()
+            f.tokens.remove(SecureConstants.JWT_TOKEN)
+            val error = assertFailsWith<AuthException> { f.auth.switchBusiness(4) }
+            assertEquals(ApiError.AUTH_001, error.error)
+            assertNull(f.auth.getUserSync())
+        } finally { f.close() }
+    }
+
+    @Test
     fun posBoundBusinessIgnoresRememberedIdAndMapsAuth004ToMismatch() = runTest {
         val calls = mutableListOf<Int?>()
         val f = Fixture(
@@ -179,12 +251,33 @@ class AuthServiceTest {
         } finally { f.close() }
     }
 
+    private fun multiBusinessLogin(): AuthResponse {
+        return AuthResponse(
+            uid = "uid",
+            email = "person@example.invalid",
+            name = "Person",
+            premium = false,
+            active = true,
+            missingBusiness = false,
+            userId = 3,
+            accessToken = "header.eyJleHAiOjQxMDI0NDQ4MDB9.signature",
+            refreshToken = "refresh-1",
+            providerToken = "custom-1",
+            message = "",
+            businesses = listOf(BusinessIds(1, 1, "Uno"), BusinessIds(4, 2, "Dos")),
+            activeBusinessId = 1,
+        )
+    }
+
     private class Fixture(context: CoroutineContext, expiredAccess: Boolean = false,
         private val failures: Set<String> = emptySet(),
         private val emailHandler: suspend (EmailLoginRequest) -> AuthResponse = { error("Unused") },
         posBuild: Boolean = false,
         boundBusinessId: Int? = null,
+        startGuest: Boolean = false,
         httpClient: HttpClient = HttpClient()) {
+        var firebaseSigns = 0
+        var firebaseSuccess = true
         val cleanupCalls = mutableListOf<String>()
         val guestDuringCleanup = mutableListOf<Boolean>()
         val uncaught = mutableListOf<Throwable>()
@@ -195,7 +288,7 @@ class AuthServiceTest {
         var userReads = 0
         private val scope = CoroutineScope(context + SupervisorJob() +
             CoroutineExceptionHandler { _, error -> uncaught.add(error) })
-        private val cachedUser = User("uid", "test@example.invalid", "Test", false, true,
+        private val cachedUser = if (startGuest) null else User("uid", "test@example.invalid", "Test", false, true,
             false, 1, emptyList())
         lateinit var auth: AuthService
             private set
@@ -240,7 +333,10 @@ class AuthServiceTest {
                 override fun initialize(businessId: Int, menuId: Int, userId: Int) = Unit
             }
             val firebase = object : IFirebaseService {
-                override suspend fun signInWithCustomToken(token: String) = CustomTokenResult(true, "uid")
+                override suspend fun signInWithCustomToken(token: String): CustomTokenResult {
+                    firebaseSigns += 1
+                    return CustomTokenResult(firebaseSuccess, "uid")
+                }
                 override fun getUser(): Flow<FirebaseUserDM?> = flowOf(null)
                 override suspend fun signOut() { yield(); cleanup("firebase") }
                 override suspend fun sendPasswordResetEmail(email: String) = Unit
