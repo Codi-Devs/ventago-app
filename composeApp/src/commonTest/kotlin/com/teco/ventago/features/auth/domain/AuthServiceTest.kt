@@ -112,11 +112,10 @@ class AuthServiceTest {
     }
 
     @Test
-    fun staleRememberedBusinessRetriesWithoutBusinessId() = runTest {
+    fun loginDoesNotSendRememberedBusinessId() = runTest {
         val calls = mutableListOf<Int?>()
         val f = Fixture(coroutineContext, emailHandler = { request ->
             calls += request.businessId
-            if (request.businessId == 99) throw AuthException(ApiError.AUTH_004)
             throw BusinessSelectionRequiredException(listOf(BusinessChoice(4, "Sur", "staff")))
         })
         try {
@@ -125,8 +124,8 @@ class AuthServiceTest {
             assertFailsWith<BusinessSelectionRequiredException> {
                 f.auth.emailLogin(EmailLoginRequest("person@example.invalid", "secret"))
             }
-            assertEquals(listOf(99, null), calls)
-            assertNull(f.tokens["ventago.lastBusinessId"])
+            assertEquals(listOf<Int?>(null), calls)
+            assertEquals("99", f.tokens["ventago.lastBusinessId"])
         } finally { f.close() }
     }
 

@@ -75,6 +75,8 @@ class AuthService(
     private val scope: CoroutineScope = CoroutineScope(Dispatchers.IO + SupervisorJob()),
 ) : IAuthService {
     val user = MutableStateFlow<User?>(null)
+    private var pendingUser: User? = null
+    private var pendingProviderToken: String = ""
     private var stagedBusinessId: Int? = null
     private val tenantEpoch = MutableStateFlow(0)
 
@@ -283,11 +285,11 @@ class AuthService(
     override suspend fun switchBusiness(businessId: Int) {
         if (businessId <= 0 || posProvisioningService.isRequired()) return
         withContext(NonCancellable) {
-            val refresh = getJwtToken(true) ?: return@withContext
-            val res = client.post(Configs.serverBasePath + "site/refresh-token") {
+            val access = getJwtToken() ?: return@withContext
+            val res = client.post(Configs.serverBasePath + "auth/switch-business") {
                 headers {
                     append(HttpHeaders.Accept, "*/*")
-                    append(HttpHeaders.Authorization, "Bearer $refresh")
+                    append(HttpHeaders.Authorization, "Bearer $access")
                 }
                 contentType(ContentType.Application.Json)
                 setBody("""{"business_id":$businessId}""")
@@ -303,7 +305,9 @@ class AuthService(
             if (accessToken.isNullOrBlank() || refreshToken.isNullOrBlank()) {
                 throw IllegalStateException("Business switch response is missing tokens")
             }
-            val current = user.value
+            val current = user.value ?: pendingUser
+            pendingUser = null
+            pendingProviderToken = ""
             val ids = current?.businessIds.orEmpty()
             val selected = ids.filter { it.businessId == businessId }
             val rest = ids.filter { it.businessId != businessId }
@@ -476,18 +480,40 @@ class AuthService(
         }
         validateAccessTokenClaimsBeforeLogin(res.accessToken)
         validate()
-        val firebaseResponse = firebase.signInWithCustomToken(res.providerToken)
-        if (!firebaseResponse.success) {
-            throw AuthException(ApiError.F_AUTH_007)
-        }
         saveJwt(res.accessToken)
         saveJwt(res.refreshToken, true)
         rememberBusiness(res)
         val userData = enrichUserWithCurrentToken(User.fromAuthResponse(res), res.accessToken)
+        val deferChoice = res.businesses.size > 1 && !res.missingBusiness && !posProvisioningService.isRequired()
+        if (deferChoice) {
+            pendingUser = userData
+            pendingProviderToken = res.providerToken
+            return res
+        }
+        val firebaseResponse = firebase.signInWithCustomToken(res.providerToken)
+        if (!firebaseResponse.success) {
+            throw AuthException(ApiError.F_AUTH_007)
+        }
         cache.saveCache(userData)
         user.update { userData }
         listenUserChanges()
         return res
+    }
+
+    override suspend fun confirmPendingLogin() {
+        val pending = pendingUser ?: return
+        val token = pendingProviderToken
+        pendingUser = null
+        pendingProviderToken = ""
+        if (token.isNotBlank()) {
+            val firebaseResponse = firebase.signInWithCustomToken(token)
+            if (!firebaseResponse.success) {
+                throw AuthException(ApiError.F_AUTH_007)
+            }
+        }
+        cache.saveCache(pending)
+        user.update { pending }
+        listenUserChanges()
     }
 
     private fun shouldRetryWithoutRememberedBusiness(error: AuthException, source: LoginBusinessSource): Boolean {
@@ -502,18 +528,13 @@ class AuthService(
         throw mapPosAuthFailure(error)
     }
 
-    private suspend fun resolveLoginBusinessId(explicit: Int?): LoginBusinessChoice {
+    private suspend fun resolveLoginBusinessId(@Suppress("UNUSED_PARAMETER") explicit: Int?): LoginBusinessChoice {
         val bound = posProvisioningService.boundBusinessIdOrNull()
         if (bound != null && bound > 0) {
             stagedBusinessId = null
             return LoginBusinessChoice(bound, LoginBusinessSource.Bound)
         }
-        val staged = stagedBusinessId
         stagedBusinessId = null
-        if (explicit != null && explicit > 0) return LoginBusinessChoice(explicit, LoginBusinessSource.Explicit)
-        if (staged != null && staged > 0) return LoginBusinessChoice(staged, LoginBusinessSource.Staged)
-        val remembered = store.string(LAST_BUSINESS_KEY)?.toIntOrNull()?.takeIf { it > 0 }
-        if (remembered != null) return LoginBusinessChoice(remembered, LoginBusinessSource.Remembered)
         return LoginBusinessChoice(null, LoginBusinessSource.None)
     }
 

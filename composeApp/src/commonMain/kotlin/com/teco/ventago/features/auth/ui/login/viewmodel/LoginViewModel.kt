@@ -6,6 +6,8 @@ import com.teco.ventago.core.firebase.AnalyticsService
 import com.teco.ventago.features.auth.data.provider.getGoogleAuthProvider
 import com.teco.ventago.features.auth.domain.IAuthService
 import com.teco.ventago.features.auth.domain.model.requests.EmailLoginRequest
+import com.teco.ventago.features.auth.domain.model.response.AuthResponse
+import com.teco.ventago.utils.BusinessChoice
 import com.teco.ventago.features.pos.provisioning.domain.PosProvisioningException
 import com.teco.ventago.utils.ApiError
 import com.teco.ventago.utils.AuthException
@@ -61,18 +63,10 @@ class LoginViewModel(
                         throw Exception("Error in Login")
                     }
 
-                    withContext(Dispatchers.Main) {
-                        showSuccess()
-//                        CrashlyticsService.sendLog(CrashlyticsLog.GOOGLE_SIGN_IN)
-                        analytics.setUserId(response.userId)
-                        analytics.setDefaultEventParameters(analytics.defaultBundle(response))
-                        analytics.logEvent("user_login", analytics.authBundle(response, true))
-                        if (response.missingBusiness) {
-                            emitEvent(LoginUiEvent.MissingBusiness)
-                        } else {
-                            emitEvent(LoginUiEvent.MakingLoginSuccess)
-                        }
-                    }
+                    analytics.setUserId(response.userId)
+                    analytics.setDefaultEventParameters(analytics.defaultBundle(response))
+                    analytics.logEvent("user_login", analytics.authBundle(response, true))
+                    finishAuthenticated(response)
                 } catch (_: MustChangePasswordException) {
                     withContext(Dispatchers.Main) {
                         hideLoading()
@@ -124,12 +118,27 @@ class LoginViewModel(
     }
 
     fun selectBusiness(businessId: Int) {
-        service.stageBusinessSelection(businessId)
-        val googleToken = uiState.value.pendingGoogleToken
-        if (googleToken.isNotBlank()) {
-            googleLogin(googleToken)
-        } else {
-            emailLogin()
+        showLoading()
+        viewModelScope.launch(Dispatchers.IO) {
+            try {
+                if (businessId != uiState.value.sessionBusinessId) {
+                    service.switchBusiness(businessId)
+                } else {
+                    service.confirmPendingLogin()
+                }
+                withContext(Dispatchers.Main) {
+                    showSuccess()
+                    emitEvent(LoginUiEvent.MakingLoginSuccess)
+                }
+            } catch (e: AuthException) {
+                handleAuthException(e)
+                showError()
+            } catch (_: Throwable) {
+                withContext(Dispatchers.Main) {
+                    emitEvent(LoginUiEvent.GenericError)
+                    showError()
+                }
+            }
         }
     }
 
@@ -153,18 +162,10 @@ class LoginViewModel(
                     if (response.uid.isBlank()) {
                         throw Exception("Error in Login")
                     }
-                    withContext(Dispatchers.Main) {
-                        showSuccess()
-                        if (response.missingBusiness) {
-                            emitEvent(LoginUiEvent.MissingBusiness)
-                        } else {
-                            emitEvent(LoginUiEvent.MakingLoginSuccess)
-                        }
-//                        CrashlyticsService.sendLog(CrashlyticsLog.SIGN_IN)
-                        analytics.setUserId(response.userId)
-                        analytics.setDefaultEventParameters(analytics.defaultBundle(response))
-                        analytics.logEvent("user_login", analytics.authBundle(response, false))
-                    }
+                    analytics.setUserId(response.userId)
+                    analytics.setDefaultEventParameters(analytics.defaultBundle(response))
+                    analytics.logEvent("user_login", analytics.authBundle(response, false))
+                    finishAuthenticated(response)
                 } catch (_: MustChangePasswordException) {
                     withContext(Dispatchers.Main) {
                         hideLoading()
@@ -233,6 +234,34 @@ class LoginViewModel(
     /*
      * Private Methods
      */
+    private suspend fun finishAuthenticated(response: AuthResponse) {
+        if (service.getUserSync() == null && response.businesses.size > 1 && !response.missingBusiness) {
+            withContext(Dispatchers.Main) {
+                hideLoading()
+                updateState {
+                    copy(
+                        businessChoices = response.businesses.map { business ->
+                            BusinessChoice(
+                                business.businessId,
+                                business.name.ifBlank { "Negocio" }
+                            )
+                        },
+                        sessionBusinessId = response.activeBusinessId
+                    )
+                }
+            }
+            return
+        }
+        withContext(Dispatchers.Main) {
+            showSuccess()
+            if (response.missingBusiness) {
+                emitEvent(LoginUiEvent.MissingBusiness)
+            } else {
+                emitEvent(LoginUiEvent.MakingLoginSuccess)
+            }
+        }
+    }
+
     private fun isValidEmail(forgotEmail: Boolean = false): Boolean {
         return if (forgotEmail) {
             emailRegex.matches(uiState.value.forgotEmail)

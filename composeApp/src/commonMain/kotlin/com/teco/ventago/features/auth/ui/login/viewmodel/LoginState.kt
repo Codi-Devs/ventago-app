@@ -15,6 +15,7 @@ data class LoginState(
     val email: String = "",
     val password: String = "",
     val businessChoices: List<BusinessChoice> = emptyList(),
+    val sessionBusinessId: Int = -1,
     val pendingGoogleToken: String = "",
     val forgotEmail: String = "",
     val forgotEmailInvalid: Boolean = false,
