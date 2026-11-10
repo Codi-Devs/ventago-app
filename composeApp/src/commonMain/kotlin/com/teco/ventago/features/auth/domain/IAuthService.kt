@@ -19,8 +19,14 @@ interface IAuthService {
      * Current policy also signs out on transport/server/response failures during refresh.
      */
     suspend fun refreshToken(client: HttpClient, failedAccessToken: String? = null)
-    suspend fun googleLogin(googleToken: String): AuthResponse
+    suspend fun googleLogin(googleToken: String, businessId: Int? = null): AuthResponse
     suspend fun emailLogin(request: EmailLoginRequest): AuthResponse
+    suspend fun completeSelection(selectionToken: String, businessId: Int): AuthResponse {
+        error("Unused")
+    }
+    suspend fun switchBusiness(businessId: Int) {}
+    suspend fun refreshBusinessProfiles() {}
+    fun tenantEpoch(): Flow<Int> = flowOf(0)
     suspend fun emailRegister(request: CreateUserRequest): AuthResponse
     suspend fun sendPasswordResetEmail(email: String)
     suspend fun businessRegistered()

@@ -29,6 +29,20 @@ iOS number/decimal pads have no dismiss key. Tapping outside an input must close
 
 ---
 
+# UI Style Guide for Selectable Cards
+
+Use this for a short list of choices, such as the business selector. Do not invent a second card style.
+
+- `OutlinedCard`, 12 dp corners, `cardContainerColor()`, elevation 0.
+- Unselected border: `outline` at 35% opacity.
+- Selected: 1 dp border, check icon and a light fill, all in `colorScheme.secondary`.
+- No elevation on these cards. An elevated `Card` plus a border draws a shadow around the whole edge and looks dirty on a bottom sheet.
+- Detail and list cards keep their own elevation. See the sections below. Do not copy that elevation onto a selector card.
+
+Reference: `features/auth/ui/BusinessChoiceCard.kt`.
+
+---
+
 # UI Style Guide for Transaction List Screens
 
 Orders define the visual and interaction baseline for transactional lists such as quotes and expenses.

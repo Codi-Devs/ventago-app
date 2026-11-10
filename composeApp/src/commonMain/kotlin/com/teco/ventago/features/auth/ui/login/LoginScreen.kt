@@ -45,6 +45,7 @@ import com.teco.ventago.design_system.buttons.TextButtonS
 import com.teco.ventago.design_system.organism.LoadingSheet
 import com.teco.ventago.design_system.textfields.DMOutlinedTextField
 import com.teco.ventago.design_system.theme.latoFontFamily
+import com.teco.ventago.features.auth.ui.BusinessChoiceCard
 import com.teco.ventago.features.auth.ui.login.viewmodel.LoginUiEvent
 import com.teco.ventago.features.auth.ui.login.viewmodel.LoginViewModel
 import com.teco.ventago.navigation.PosScreens
@@ -172,6 +173,46 @@ fun LoginScreen(navigate: (PosScreens) -> Unit) {
                     )
                 }
 
+                Spacer(modifier = Modifier.height(32.dp))
+            } else if (uiState.businessChoices.isNotEmpty()) {
+                Spacer(modifier = Modifier.height(32.dp))
+                Text(
+                    text = "Elige el negocio",
+                    style = TextStyle(
+                        fontSize = 22.sp,
+                        lineHeight = 28.sp,
+                        fontFamily = latoFontFamily(),
+                        fontWeight = FontWeight(700),
+                        textAlign = TextAlign.Center,
+                    )
+                )
+                Spacer(modifier = Modifier.height(8.dp))
+                Text(
+                    text = "Selecciona con cuál vas a operar.",
+                    style = TextStyle(
+                        fontSize = 14.sp,
+                        lineHeight = 22.sp,
+                        fontFamily = latoFontFamily(),
+                        fontWeight = FontWeight(400),
+                        textAlign = TextAlign.Center,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                )
+                Spacer(modifier = Modifier.height(28.dp))
+                Column(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalArrangement = Arrangement.spacedBy(12.dp),
+                ) {
+                    uiState.businessChoices.forEach { business ->
+                        BusinessChoiceCard(
+                            name = business.name,
+                            role = business.role,
+                            logoUrl = business.logo,
+                            current = false,
+                            onClick = { viewModel.selectBusiness(business.id) },
+                        )
+                    }
+                }
                 Spacer(modifier = Modifier.height(32.dp))
             } else {
                 Spacer(modifier = Modifier.height(32.dp))

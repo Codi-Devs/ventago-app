@@ -58,6 +58,8 @@ class UserRepository(private val provider: IAuthProvider, private val userProvid
             } else {
                 throw BadRequestException(response.toJson())
             }
+        } catch (e: kotlinx.coroutines.CancellationException) {
+            throw e
         } catch (e: Exception) {
             if (e.message?.contains("AUTH_001") == true) {
                 throw e

@@ -83,6 +83,20 @@ class HomeViewModel(
             }.onEach { newState ->
                 val business = newState.first
                 val products = newState.second
+                if (business == null || products == null) {
+                    summaryBusinessId = null
+                    updateState {
+                        copy(
+                            business = null,
+                            products = null,
+                            isLoadingData = true,
+                            isSummaryLoading = true,
+                            homeSummary = null,
+                            salesChart = emptyList(),
+                        )
+                    }
+                    return@onEach
+                }
                 if (business != null && products != null) {
                     updateState {
                         copy(
@@ -127,7 +141,18 @@ class HomeViewModel(
             }.launchIn(this)
 
             financialProfileService.observe().onEach { profile ->
-                profile?.let {
+                if (profile == null) {
+                    updateState {
+                        copy(
+                            invoicingEnabled = false,
+                            invoicingPlanState = null,
+                            paymentProfileResolved = false,
+                            hasConfiguredPaymentMethods = false,
+                        )
+                    }
+                    return@onEach
+                }
+                profile.let {
                     val invoicingPlanState = it.invoiceSummary?.let { invoiceSummary ->
                         InvoicingPlanState(
                             availableDtes = invoiceSummary.planAvailableDte,

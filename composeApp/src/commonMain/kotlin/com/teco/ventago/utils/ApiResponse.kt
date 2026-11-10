@@ -69,6 +69,7 @@ enum class ApiError(val error: String?){
     AUTH_002("AUTH_002"),
     AUTH_003("AUTH_003"),
     AUTH_004("AUTH_004"),
+    AUTH_005("AUTH_005"),
     BR_001("BR_001"),
     BR_002("BR_002"),
     DB_001("DB_001"),
@@ -104,6 +105,7 @@ enum class ApiError(val error: String?){
                 "AUTH_002" -> AUTH_002
                 "AUTH_003" -> AUTH_003
                 "AUTH_004" -> AUTH_004
+                "AUTH_005" -> AUTH_005
                 "BR_001" -> BR_001
                 "BR_002" -> BR_002
                 "DB_001" -> DB_001

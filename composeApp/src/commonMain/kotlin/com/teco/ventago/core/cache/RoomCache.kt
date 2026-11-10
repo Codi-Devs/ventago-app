@@ -35,7 +35,10 @@ class RoomCache (private val cacheDatabase: CacheDatabase): ICacheService {
                         it.businessIds.businessIds.map { businessIdsCache ->
                             BusinessIds(
                                 businessIdsCache.businessId,
-                                businessIdsCache.menuId
+                                businessIdsCache.menuId,
+                                businessIdsCache.name,
+                                businessIdsCache.role,
+                                businessIdsCache.logo,
                             )
                         }
                     )

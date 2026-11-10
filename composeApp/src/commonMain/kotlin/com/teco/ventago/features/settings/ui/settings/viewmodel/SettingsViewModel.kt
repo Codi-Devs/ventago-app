@@ -172,7 +172,9 @@ class SettingsViewModel(
                                     updateState { copy(isVerified = isVerified) }
                                 }
                             } ?: run {
-                                signOut()
+                                if (user == null) {
+                                    signOut()
+                                }
                             }
                         }
                     }

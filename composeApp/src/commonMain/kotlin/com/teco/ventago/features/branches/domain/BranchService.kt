@@ -7,6 +7,8 @@ import com.teco.ventago.core.file.SharedFile
 import com.teco.ventago.features.branches.data.repository.IBranchRepository
 import com.teco.ventago.features.branches.domain.model.Branch
 import com.teco.ventago.features.branches.domain.model.FiscalBillingPoint
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.IO
@@ -25,13 +27,17 @@ class BranchService(
     private val branchRepository: IBranchRepository,
     private val cache: ICacheService,
     private val changesManager: IChangesManager,
-    private val appScope: CoroutineScope
+    private val appScope: CoroutineScope,
+    private val ioDispatcher: CoroutineDispatcher = Dispatchers.IO,
 ) {
 
     private val state = MutableStateFlow<List<Branch>>(emptyList())
     private val loadMutex = Mutex()
     private var currentBusinessId: Int? = null
     private var changesJob: Job? = null
+    private var loadJob: Job? = null
+    private var generation = 0
+    private var acceptCache = true
 
     var isInitialized = false
 
@@ -39,23 +45,39 @@ class BranchService(
     fun observe(): StateFlow<List<Branch>> = state.asStateFlow()
 
     fun initialize(businessId: Int) {
+        val owned = ++generation
+        val useCache = acceptCache
+        acceptCache = true
         currentBusinessId = businessId
         isInitialized = true
-        appScope.launch(Dispatchers.IO) {
-            // 1) try cache fast-path
-            cacheGet()?.let {
-                state.value = it
-            } ?: run {
-                refresh(businessId)
+        loadJob?.cancel()
+        loadJob = appScope.launch(ioDispatcher) {
+            try {
+                if (useCache) {
+                    cacheGet()?.let { cached ->
+                        if (owned == generation) state.value = cached
+                    } ?: refresh(businessId, owned)
+                } else {
+                    refresh(businessId, owned)
+                }
+                if (owned == generation) startRealtimeSync()
+            } catch (e: CancellationException) {
+                throw e
+            } catch (_: Exception) {
+                // The previous business answered AUTH_001 after the switch.
             }
-            // 3) start RTDB/Listener for invalidations
-            startRealtimeSync()
         }
     }
 
     suspend fun refresh(businessId: Int) {
+        refresh(businessId, generation)
+    }
+
+    private suspend fun refresh(businessId: Int, owned: Int) {
         loadMutex.withLock {
+            if (owned != generation) return@withLock
             val branches = branchRepository.getBranches(businessId)
+            if (owned != generation) return@withLock
             state.value = branches
             saveCache(branches, ignoreChange = true)
         }
@@ -148,7 +170,13 @@ class BranchService(
         changesJob = changesManager.branchesListener()
             .onEach { value ->
                 if (value != 1) {
-                    refresh(currentBusinessId ?: return@onEach)
+                    val businessId = currentBusinessId ?: return@onEach
+                    try {
+                        refresh(businessId)
+                    } catch (e: CancellationException) {
+                        throw e
+                    } catch (_: Exception) {
+                    }
                 }
             }
             .catch { _ ->
@@ -167,10 +195,17 @@ class BranchService(
         runCatching { cache.getCache<List<Branch>>(CacheUtils.BRANCHES) }.getOrNull()
 
     fun clear() {
+        generation += 1
+        acceptCache = false
+        loadJob?.cancel()
+        loadJob = null
         currentBusinessId = null
         isInitialized = false
         changesJob?.cancel()
         changesJob = null
         state.value = emptyList()
+        appScope.launch(ioDispatcher) {
+            runCatching { cache.clearCache(CacheUtils.BRANCHES) }
+        }
     }
 }

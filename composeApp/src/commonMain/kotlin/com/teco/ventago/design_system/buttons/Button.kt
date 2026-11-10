@@ -136,7 +136,7 @@ fun SettingsTextButton(
             Spacer(modifier = Modifier)
             Icon(
                 modifier = Modifier
-                    .size(width = 30.dp, height = 30.dp)
+                    .size(18.dp)
                     .padding(end = 8.dp),
                 painter = painterResource(Res.drawable.ic_arrow_forward_ios),
                 contentDescription = "Action",

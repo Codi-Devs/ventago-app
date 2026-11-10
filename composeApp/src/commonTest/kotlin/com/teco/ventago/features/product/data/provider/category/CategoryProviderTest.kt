@@ -117,7 +117,7 @@ class CategoryProviderTest {
         }
 
         override fun getJwtToken(refresh: Boolean): String = token
-        override suspend fun googleLogin(googleToken: String): AuthResponse = error("unused")
+        override suspend fun googleLogin(googleToken: String, businessId: Int?): AuthResponse = error("unused")
         override suspend fun emailLogin(request: EmailLoginRequest): AuthResponse = error("unused")
         override suspend fun emailRegister(request: CreateUserRequest): AuthResponse = error("unused")
         override suspend fun sendPasswordResetEmail(email: String) = Unit

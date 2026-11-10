@@ -11,6 +11,7 @@ import com.teco.ventago.features.auth.domain.model.firebase.FirebaseUserDM
 import com.teco.ventago.features.auth.domain.model.requests.CreateUserRequest
 import com.teco.ventago.features.auth.domain.model.requests.EmailLoginRequest
 import com.teco.ventago.features.auth.domain.model.response.AuthResponse
+import com.teco.ventago.features.auth.domain.model.response.BusinessIds
 import com.teco.ventago.features.business.domain.model.Business
 import com.teco.ventago.features.pos.provisioning.domain.PosDeviceProvisioningService
 import com.teco.ventago.features.pos.provisioning.domain.PosProvisioningException
@@ -20,13 +21,17 @@ import com.teco.ventago.features.user.data.repository.IUserRepository
 import com.teco.ventago.utils.ApiError
 import com.teco.ventago.utils.ApiResponse
 import com.teco.ventago.utils.AuthException
+import com.teco.ventago.utils.BusinessSelectionRequiredException
 import com.teco.ventago.utils.MustChangePasswordException
+import com.teco.ventago.utils.isError
 import com.teco.ventago.utils.base64.base64Decoded
 import com.teco.ventago.utils.base64.base64UrlDecoded
 import io.ktor.client.HttpClient
 import io.ktor.client.call.body
 import io.ktor.client.request.get
 import io.ktor.client.request.headers
+import io.ktor.client.request.post
+import io.ktor.client.request.setBody
 import io.ktor.http.ContentType
 import io.ktor.http.HttpHeaders
 import io.ktor.http.contentType
@@ -44,8 +49,12 @@ import kotlinx.coroutines.flow.launchIn
 import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.put
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.contentOrNull
@@ -54,6 +63,8 @@ import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.longOrNull
 import kotlinx.datetime.Clock
+
+private const val LAST_BUSINESS_KEY = "ventago.lastBusinessId"
 
 class AuthService(
     private val store: AuthTokenStore,
@@ -68,6 +79,12 @@ class AuthService(
     private val scope: CoroutineScope = CoroutineScope(Dispatchers.IO + SupervisorJob()),
 ) : IAuthService {
     val user = MutableStateFlow<User?>(null)
+    private val tenantEpoch = MutableStateFlow(0)
+    private val businessSwitch = Mutex()
+
+    private enum class LoginBusinessSource { Bound, Explicit, None }
+
+    private data class LoginBusinessChoice(val id: Int?, val source: LoginBusinessSource)
     private var userChangesJob: Job? = null
     private val refreshSingleFlight = RefreshTokenSingleFlight()
     private val _sessionResolved = MutableStateFlow(false)
@@ -95,6 +112,9 @@ class AuthService(
                             }
                         }
                         user.tryEmit(cachedUser)
+                        if (cachedUser.businessIds.any { it.name.isBlank() || it.logo.isBlank() }) {
+                            runCatching { refreshBusinessProfiles() }
+                        }
                         val business = cache.getCache(Business::class)
                         val products = cache.getCache(Products::class)
                         if (business != null && products != null) {
@@ -124,7 +144,7 @@ class AuthService(
         if (!accessToken.isNullOrBlank() && !isTokenExpired(accessToken)) {
             return accessToken
         }
-        refreshToken(client, accessToken)
+        refreshStoredSession(client)
         return getJwtToken()
     }
 
@@ -145,7 +165,7 @@ class AuthService(
                     } catch (e: Exception) {
                         if (e.message?.contains("AUTH_001") == true) {
                             try {
-                                refreshToken(client)
+                                refreshStoredSession(client)
                                 val res = userRepository.getUserData(getJwtToken() ?: "")
                                 val userData = enrichUserWithCurrentToken(User.fromAuthResponse(res))
                                 cache.saveCache(userData)
@@ -181,6 +201,14 @@ class AuthService(
     }
 
     override suspend fun refreshToken(client: HttpClient, failedAccessToken: String?) {
+        val tokenAtFailure = failedAccessToken ?: getJwtToken()
+        if (!tokenAtFailure.isNullOrBlank() && !isTokenExpired(tokenAtFailure)) {
+            throw StaleTenantRequestException()
+        }
+        refreshStoredSession(client, tokenAtFailure)
+    }
+
+    private suspend fun refreshStoredSession(client: HttpClient, failedAccessToken: String? = null) {
         val tokenAtFailure = failedAccessToken ?: getJwtToken()
         refreshSingleFlight.refresh(
             failedAccessToken = tokenAtFailure,
@@ -221,76 +249,108 @@ class AuthService(
         }
     }
 
-    override suspend fun googleLogin(googleToken: String): AuthResponse {
-        try {
-            sessionIdService.startSession(forceNew = true)
-            val res = repository.googleLogin(googleToken)
-            if (res.providerToken.isBlank()) {
-                throw AuthException(ApiError.F_AUTH_007)
-            }
-            validateAccessTokenClaimsBeforeLogin(res.accessToken)
-            posProvisioningService.validateLogin(res)
-            val firebaseResponse = firebase.signInWithCustomToken(res.providerToken)
-            if (firebaseResponse.success) {
-                saveJwt(res.accessToken)
-                saveJwt(res.refreshToken, true)
-                val userData = enrichUserWithCurrentToken(User.fromAuthResponse(res), res.accessToken)
-                cache.saveCache(userData)
+    override fun tenantEpoch(): Flow<Int> = tenantEpoch.asStateFlow()
 
-                user.update {
-                    userData
-                }
-                listenUserChanges()
-            } else {
-                throw AuthException(ApiError.F_AUTH_007)
-            }
-            return res
-        } catch (e: Exception) {
-            user.update {
-                null
-            }
-            if (e.shouldAbortPosLogin()) {
-                signOut()
-            }
+    override suspend fun googleLogin(googleToken: String, businessId: Int?): AuthResponse {
+        val choice = resolveLoginBusinessId(businessId)
+        return try {
+            finishGoogleLogin(googleToken, choice.id)
+        } catch (e: BusinessSelectionRequiredException) {
             throw e
+        } catch (e: Exception) {
+            failLogin(e)
         }
-
-
     }
 
     override suspend fun emailLogin(request: EmailLoginRequest): AuthResponse {
-        try {
-            sessionIdService.startSession(forceNew = true)
-            val res = repository.emailLogin(request)
-            if (res.providerToken.isBlank()) {
-                throw AuthException(ApiError.F_AUTH_007)
-            }
-            validateAccessTokenClaimsBeforeLogin(res.accessToken)
-            posProvisioningService.validateLogin(res)
-            val firebaseResponse = firebase.signInWithCustomToken(res.providerToken)
-            if (firebaseResponse.success) {
-                saveJwt(res.accessToken)
-                saveJwt(res.refreshToken, true)
-                val userData = enrichUserWithCurrentToken(User.fromAuthResponse(res), res.accessToken)
-                cache.saveCache(userData)
-                user.update {
-                    userData
-                }
-                listenUserChanges()
-            } else {
-                throw AuthException(ApiError.F_AUTH_007)
-            }
-            return res
-        } catch (e: Exception) {
-            user.update {
-                null
-            }
-            if (e.shouldAbortPosLogin()) {
-                signOut()
-            }
+        val choice = resolveLoginBusinessId(request.businessId)
+        return try {
+            finishEmailLogin(request.copy(businessId = choice.id))
+        } catch (e: BusinessSelectionRequiredException) {
             throw e
+        } catch (e: Exception) {
+            failLogin(e)
         }
+    }
 
+    override suspend fun completeSelection(selectionToken: String, businessId: Int): AuthResponse {
+        if (selectionToken.isBlank() || businessId <= 0) throw AuthException(ApiError.AUTH_001)
+        val res = client.post(Configs.serverBasePath + "auth/select-business") {
+            headers { append(HttpHeaders.Accept, "*/*") }
+            contentType(ContentType.Application.Json)
+            setBody(buildJsonObject {
+                put("selection_token", selectionToken)
+                put("business_id", businessId)
+            }.toString())
+        }
+        val response = ApiResponse.fromJson(res.body())
+        if (response.error.isError()) throw AuthException(response.error ?: ApiError.AUTH_001)
+        val map = response.data?.let { Json.decodeFromJsonElement<Map<String, JsonElement>>(it) }
+            ?: throw IllegalStateException("No data in business selection response")
+        val auth = AuthResponse.fromMap(map)
+        return storeLogin(auth) { posProvisioningService.validateLogin(auth) }
+    }
+
+    override suspend fun switchBusiness(businessId: Int) {
+        if (businessId <= 0) throw AuthException(ApiError.AUTH_001)
+        if (posProvisioningService.isRequired()) throw PosProvisioningException.BusinessMismatch
+        businessSwitch.withLock { withContext(NonCancellable) {
+            val access = getJwtToken() ?: throw AuthException(ApiError.AUTH_001)
+            val res = client.post(Configs.serverBasePath + "auth/switch-business") {
+                headers {
+                    append(HttpHeaders.Accept, "*/*")
+                    append(HttpHeaders.Authorization, "Bearer $access")
+                }
+                contentType(ContentType.Application.Json)
+                setBody("""{"business_id":$businessId}""")
+            }
+            val response = ApiResponse.fromJson(res.body())
+            if (response.error.isError()) {
+                throw mapPosAuthFailure(AuthException(response.error ?: ApiError.AUTH_001))
+            }
+            val map = response.data?.let { Json.decodeFromJsonElement<Map<String, JsonElement>>(it) }
+                ?: throw IllegalStateException("No data in business switch response")
+            val accessToken = map["access_token"]?.jsonPrimitive?.contentOrNull
+            val refreshToken = map["refresh_token"]?.jsonPrimitive?.contentOrNull
+            if (accessToken.isNullOrBlank() || refreshToken.isNullOrBlank()) {
+                throw IllegalStateException("Business switch response is missing tokens")
+            }
+            val current = user.value
+            val providerToken = map["token"]?.jsonPrimitive?.contentOrNull
+            if (providerToken.isNullOrBlank()) throw AuthException(ApiError.F_AUTH_007)
+            val signedIn = firebase.signInWithCustomToken(providerToken)
+            if (!signedIn.success) throw AuthException(ApiError.F_AUTH_007)
+            changesManager.removeListeners()
+            runCatching { cache.clearAllCache() }
+            saveJwt(accessToken)
+            saveJwt(refreshToken, true)
+            store.set(LAST_BUSINESS_KEY, businessId.toString())
+            if (current != null) {
+                val ordered = mergeBusinessProfiles(
+                    current.businessIds,
+                    AuthResponse.fromMap(map).businesses,
+                    businessId,
+                )
+                val next = enrichUserWithCurrentToken(current.copy(businessIds = ordered), accessToken)
+                cache.saveCache(next)
+                user.update { next }
+                tenantEpoch.update { it + 1 }
+                listenUserChanges()
+            }
+            }
+        }
+    }
+
+    override suspend fun refreshBusinessProfiles() {
+        val current = user.value ?: return
+        val token = getJwtToken() ?: return
+        val response = userRepository.getUserData(token)
+        if (response.businesses.isEmpty()) return
+        val next = current.copy(
+            businessIds = mergeBusinessProfiles(current.businessIds, response.businesses, current.businessIds.firstOrNull()?.businessId ?: -1),
+        )
+        cache.saveCache(next)
+        user.update { next }
     }
 
     override suspend fun emailRegister(request: CreateUserRequest): AuthResponse {
@@ -418,6 +478,71 @@ class AuthService(
         return exp <= Clock.System.now().epochSeconds
     }
 
+    private suspend fun finishGoogleLogin(googleToken: String, businessId: Int?): AuthResponse {
+        sessionIdService.startSession(forceNew = true)
+        val res = repository.googleLogin(googleToken, businessId)
+        return storeLogin(res) { posProvisioningService.validateLogin(res) }
+    }
+
+    private suspend fun finishEmailLogin(request: EmailLoginRequest): AuthResponse {
+        sessionIdService.startSession(forceNew = true)
+        val res = repository.emailLogin(request)
+        return storeLogin(res) { posProvisioningService.validateLogin(res) }
+    }
+
+    private suspend fun storeLogin(res: AuthResponse, validate: suspend () -> Unit): AuthResponse {
+        if (res.providerToken.isBlank()) {
+            throw AuthException(ApiError.F_AUTH_007)
+        }
+        validateAccessTokenClaimsBeforeLogin(res.accessToken)
+        validate()
+        rememberBusiness(res)
+        val userData = enrichUserWithCurrentToken(User.fromAuthResponse(res), res.accessToken)
+        saveJwt(res.accessToken)
+        saveJwt(res.refreshToken, true)
+        val firebaseResponse = firebase.signInWithCustomToken(res.providerToken)
+        if (!firebaseResponse.success) {
+            throw AuthException(ApiError.F_AUTH_007)
+        }
+        cache.saveCache(userData)
+        user.update { userData }
+        listenUserChanges()
+        return res
+    }
+
+    private suspend fun failLogin(error: Exception): Nothing {
+        user.update { null }
+        if (error.shouldAbortPosLogin()) {
+            signOut()
+        }
+        throw mapPosAuthFailure(error)
+    }
+
+    private suspend fun resolveLoginBusinessId(explicit: Int?): LoginBusinessChoice {
+        val bound = posProvisioningService.boundBusinessIdOrNull()
+        if (bound != null && bound > 0) {
+            return LoginBusinessChoice(bound, LoginBusinessSource.Bound)
+        }
+        if (explicit != null && explicit > 0) {
+            return LoginBusinessChoice(explicit, LoginBusinessSource.Explicit)
+        }
+        return LoginBusinessChoice(null, LoginBusinessSource.None)
+    }
+
+    private fun rememberBusiness(response: AuthResponse) {
+        val id = response.activeBusinessId.takeIf { it > 0 }
+            ?: response.businesses.firstOrNull()?.businessId?.takeIf { it > 0 }
+            ?: return
+        store.set(LAST_BUSINESS_KEY, id.toString())
+    }
+
+    private fun mapPosAuthFailure(error: Exception): Exception {
+        if (error is AuthException && error.error == ApiError.AUTH_004 && posProvisioningService.isRequired()) {
+            return PosProvisioningException.BusinessMismatch
+        }
+        return error
+    }
+
     private fun saveJwt(token: String, refresh: Boolean = false) {
         store.deleteObject(if (!refresh) SecureConstants.JWT_TOKEN else SecureConstants.REFRESH_JWT_TOKEN)
         store.set(
@@ -426,6 +551,30 @@ class AuthService(
         )
         if (refresh) {
             refreshSingleFlight.resetFailureState()
+        }
+    }
+
+    private fun mergeBusinessProfiles(
+        current: List<BusinessIds>,
+        incoming: List<BusinessIds>,
+        selectedId: Int,
+    ): List<BusinessIds> {
+        val source = incoming.ifEmpty { current }
+        val merged = source.map { row ->
+            val previous = current.firstOrNull { it.businessId == row.businessId }
+            row.copy(
+                name = row.name.ifBlank { previous?.name.orEmpty() },
+                logo = row.logo.ifBlank { previous?.logo.orEmpty() },
+                role = row.role.ifBlank { previous?.role.orEmpty() },
+                menuId = if (row.menuId > 0) row.menuId else previous?.menuId ?: -1,
+            )
+        }
+        val selected = merged.filter { it.businessId == selectedId }
+        val rest = merged.filter { it.businessId != selectedId }
+        return if (selected.isEmpty() && selectedId > 0) {
+            listOf(BusinessIds(selectedId, -1)) + rest
+        } else {
+            selected + rest
         }
     }
 

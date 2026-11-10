@@ -9,12 +9,19 @@ import com.teco.ventago.features.branches.domain.BranchService
 import com.teco.ventago.features.branches.domain.model.Branch
 import com.teco.ventago.features.branches.domain.model.FiscalBillingPoint
 import kotlin.reflect.KClass
+import com.teco.ventago.utils.BadRequestException
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.emptyFlow
+import kotlinx.coroutines.test.StandardTestDispatcher
+import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runTest
+import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeout
 
 class BranchServiceRefreshTest {
@@ -60,6 +67,64 @@ class BranchServiceRefreshTest {
         changesManager.awaitBranchesChanged()
 
         assertEquals(1, changesManager.branchesChangedCalls)
+    }
+
+    @OptIn(ExperimentalCoroutinesApi::class)
+    @Test
+    fun supersededBranchRequestDoesNotCrashOrOverwrite() = runTest {
+        val firstStarted = CompletableDeferred<Unit>()
+        val releaseFirst = CompletableDeferred<Unit>()
+        val repository = object : IBranchRepository {
+            override suspend fun getBranches(businessId: Int): List<Branch> {
+                if (businessId == 1) {
+                    firstStarted.complete(Unit)
+                    withContext(NonCancellable) { releaseFirst.await() }
+                    throw BadRequestException("""{"error":"AUTH_001"}""")
+                }
+                return listOf(branch().copy(branchCode = "0004"))
+            }
+
+            override suspend fun addBillingPoint(
+                businessId: Int,
+                branchCode: String,
+                name: String,
+                code: String,
+                status: Int,
+            ): FiscalBillingPoint = FiscalBillingPoint(code, name, status)
+
+            override suspend fun updateBillingPoint(
+                businessId: Int,
+                branchCode: String,
+                billingPoint: String,
+                name: String,
+                status: Int,
+            ): Boolean = true
+
+            override suspend fun uploadBranchLogo(
+                businessId: Int,
+                branchCode: String,
+                logo: SharedFile,
+            ): Boolean = true
+
+            override suspend fun deleteBranchLogo(businessId: Int, branchCode: String): Boolean = true
+        }
+        val service = BranchService(
+            branchRepository = repository,
+            cache = FakeCacheService(),
+            changesManager = FakeChangesManager(),
+            appScope = this,
+            ioDispatcher = StandardTestDispatcher(testScheduler),
+        )
+
+        service.initialize(1)
+        advanceUntilIdle()
+        firstStarted.await()
+        service.clear()
+        service.initialize(4)
+        releaseFirst.complete(Unit)
+        advanceUntilIdle()
+
+        assertEquals("0004", service.observe().value.single().branchCode)
     }
 
     private fun branch(): Branch {

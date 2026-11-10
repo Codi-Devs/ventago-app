@@ -6,6 +6,7 @@ import com.teco.ventago.core.firebase.getToken
 import com.teco.ventago.core.logger.ILoggerService
 import com.teco.ventago.core.logger.Log
 import com.teco.ventago.core.logger.LogLevel
+import com.teco.ventago.core.beta.BetaService
 import com.teco.ventago.features.auth.domain.IAuthService
 import com.teco.ventago.features.auth.domain.model.User
 import com.teco.ventago.features.branches.domain.BranchService
@@ -13,7 +14,11 @@ import com.teco.ventago.features.business.domain.BusinessService
 import com.teco.ventago.features.business.domain.model.Business
 import com.teco.ventago.features.customers.domain.CustomerService
 import com.teco.ventago.features.financialProfile.domain.FinancialProfileService
+import com.teco.ventago.features.home.domain.HomeSummaryService
+import com.teco.ventago.features.orders.domain.OrderService
 import com.teco.ventago.features.payments.domain.PaymentService
+import com.teco.ventago.features.pos.devices.domain.PosDevicesService
+import com.teco.ventago.features.printers.domain.PrinterService
 import com.teco.ventago.features.product.domain.ProductService
 import com.teco.ventago.features.product.domain.model.Products
 import com.teco.ventago.navigation.SessionNavigation
@@ -38,6 +43,11 @@ class AppViewModel(
     private val financialProfileService: FinancialProfileService,
     private val customerService: CustomerService,
     private val branchService: BranchService,
+    private val homeSummaryService: HomeSummaryService,
+    private val orderService: OrderService,
+    private val printerService: PrinterService,
+    private val posDevicesService: PosDevicesService,
+    private val betaService: BetaService,
     private val logger: ILoggerService,
 ) : ViewModel() {
     private val _mainState = MutableStateFlow(MainState())
@@ -80,10 +90,6 @@ class AppViewModel(
                                 loadDataJob.cancel()
                             }
                             loadBusinessData(user = user)
-                        } else if (this@AppViewModel::loadDataJob.isInitialized) {
-                            if (loadDataJob.isActive) {
-                                loadDataJob.cancel()
-                            }
                         }
                     } else {
                         _mainState.value = MainState(
@@ -121,6 +127,32 @@ class AppViewModel(
             }.launchIn(this)
         }
         getToken()
+
+        viewModelScope.launch {
+            var seenEpoch = 0
+            authService.tenantEpoch().collect { epoch ->
+                if (epoch == seenEpoch || epoch <= 0) {
+                    seenEpoch = epoch
+                    return@collect
+                }
+                seenEpoch = epoch
+                val current = authService.getUserSync() ?: return@collect
+                if (this@AppViewModel::loadDataJob.isInitialized && loadDataJob.isActive) {
+                    loadDataJob.cancel()
+                }
+                clearTenantState()
+                _mainState.value = _mainState.value.copy(
+                    isAuthenticated = true,
+                    sessionResolved = true,
+                    sessionEpoch = _mainState.value.sessionEpoch + 1,
+                    business = null,
+                    products = null,
+                    paymentsConfigured = true,
+                    invoicingConfigured = true,
+                )
+                loadBusinessData(current)
+            }
+        }
     }
 
     private fun loadBusinessData(user: User? = null) {
@@ -193,6 +225,7 @@ class AppViewModel(
                                     )
                             }
                         }
+                        runCatching { betaService.getFeatures(force = true) }
 
                         customerService.initialize(businessId, loadData = true)
                     }
@@ -217,11 +250,20 @@ class AppViewModel(
     }
 
     private fun clearFeatureStateAfterSignOut() {
+        clearTenantState()
+    }
+
+    private fun clearTenantState() {
         businessService.clear()
         productService.signOut()
         financialProfileService.clear()
         customerService.clear()
         branchService.clear()
+        homeSummaryService.clear()
+        orderService.clear()
+        printerService.clear()
+        posDevicesService.clear()
+        betaService.clear()
     }
 }
 
