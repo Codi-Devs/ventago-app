@@ -25,6 +25,7 @@ interface IAuthService {
         error("Unused")
     }
     suspend fun switchBusiness(businessId: Int) {}
+    suspend fun refreshBusinessProfiles() {}
     fun tenantEpoch(): Flow<Int> = flowOf(0)
     suspend fun emailRegister(request: CreateUserRequest): AuthResponse
     suspend fun sendPasswordResetEmail(email: String)

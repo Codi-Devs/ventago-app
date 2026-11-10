@@ -37,7 +37,6 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
 import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -78,7 +77,10 @@ import com.teco.ventago.design_system.buttons.TextButtonS
 import com.teco.ventago.design_system.loaders.shimmerBrush
 import com.teco.ventago.design_system.molecules.DMAlertDialog
 import com.teco.ventago.design_system.organism.BusinessImage
+import com.teco.ventago.design_system.organism.LoadingBottomSheetState
 import com.teco.ventago.design_system.organism.LoadingSheet
+import com.teco.ventago.design_system.organism.LoadingState
+import com.teco.ventago.features.auth.ui.BusinessChoiceCard
 import com.teco.ventago.design_system.organism.SaveChangesBar
 import com.teco.ventago.design_system.textfields.DMOutlinedTextField
 import com.teco.ventago.design_system.theme.Gray50
@@ -145,6 +147,8 @@ fun SettingsScreen(
 ) {
     val authService: IAuthService = koinInject()
     val sessionUser by authService.getUser().collectAsState(initial = null)
+    val businesses = sessionUser?.businessIds.orEmpty()
+    val currentBusinessId = businesses.firstOrNull()?.businessId ?: -1
     val snackbarService: SnackbarService = koinInject()
     val printerService: PrinterService = koinInject()
     val appDistribution: AppDistribution = koinInject()
@@ -188,6 +192,9 @@ fun SettingsScreen(
 
     var pendingEvent by remember { mutableStateOf<SettingsStateUiEvent?>(null) }
     var showBottomNoteSheet by remember { mutableStateOf(false) }
+    var showBusinessSheet by remember { mutableStateOf(false) }
+    var switchingBusiness by remember { mutableStateOf(LoadingBottomSheetState()) }
+    val businessSheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     LaunchedEffect(Unit) {
         viewModel.events.collect { event ->
             pendingEvent = event
@@ -442,34 +449,6 @@ fun SettingsScreen(
                 }
             }
 
-            val businesses = sessionUser?.businessIds.orEmpty()
-            if (!appDistribution.isPosBuild && businesses.size > 1) {
-                Card(modifier = Modifier.fillMaxWidth().padding(all = 16.dp),
-                    elevation = CardDefaults.elevatedCardElevation(4.dp),
-                    colors = CardDefaults.cardColors(
-                        containerColor = cardContainerColor(),
-                    ),
-                    shape = RoundedCornerShape(10.dp),
-                    onClick = {})
-                {
-                    Text(
-                        modifier = Modifier.padding(top = 16.dp, start = 16.dp, end = 16.dp),
-                        text = "Negocio",
-                        style = titleMedium()
-                    )
-                    businesses.forEach { business ->
-                        SettingsTextButton(
-                            label = business.name.ifBlank { "Negocio ${business.businessId}" },
-                            onClick = {
-                                scope.launch {
-                                    authService.switchBusiness(business.businessId)
-                                }
-                            }
-                        )
-                    }
-                }
-            }
-
             Card(modifier = Modifier.fillMaxWidth().padding(all = 16.dp),
                 elevation = CardDefaults.elevatedCardElevation(4.dp),
                 colors = CardDefaults.cardColors(
@@ -495,6 +474,13 @@ fun SettingsScreen(
                         onClick = {
                             navigate(PosScreens.PosDevicesScreen)
                         }
+                    )
+                }
+
+                if (!appDistribution.isPosBuild && businesses.size > 1) {
+                    SettingsTextButton(
+                        label = "Cambiar negocio",
+                        onClick = { showBusinessSheet = true },
                     )
                 }
 
@@ -596,6 +582,72 @@ fun SettingsScreen(
                 .align(Alignment.BottomCenter)
                 .padding(start = 16.dp, end = 16.dp, bottom = navBarHeightPadding)
         )
+
+        LaunchedEffect(showBusinessSheet) {
+            if (showBusinessSheet) {
+                runCatching { authService.refreshBusinessProfiles() }
+            }
+        }
+
+        if (showBusinessSheet) {
+            ModalBottomSheet(
+                containerColor = cardContainerColor(),
+                sheetState = businessSheetState,
+                onDismissRequest = { showBusinessSheet = false },
+            ) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(start = 16.dp, end = 16.dp, bottom = 24.dp),
+                    verticalArrangement = Arrangement.spacedBy(12.dp),
+                ) {
+                    Text(
+                        text = "Elige el negocio",
+                        style = titleMedium(),
+                        modifier = Modifier.padding(bottom = 4.dp),
+                    )
+                    businesses.forEach { business ->
+                        BusinessChoiceCard(
+                            name = business.name.ifBlank { "Negocio ${business.businessId}" },
+                            role = business.role,
+                            logoUrl = business.logo.ifBlank {
+                                if (business.businessId == currentBusinessId) uiState.imgUrl.orEmpty() else ""
+                            },
+                            current = business.businessId == currentBusinessId,
+                            onClick = {
+                                if (business.businessId == currentBusinessId) {
+                                    showBusinessSheet = false
+                                    return@BusinessChoiceCard
+                                }
+                                showBusinessSheet = false
+                                switchingBusiness = LoadingBottomSheetState(
+                                    state = LoadingState.LOADING,
+                                    title = "Cambiando de negocio",
+                                )
+                                scope.launch {
+                                    try {
+                                        authService.switchBusiness(business.businessId)
+                                    } catch (_: Exception) {
+                                        snackbarService.show("No se pudo cambiar de negocio.")
+                                    } finally {
+                                        switchingBusiness = LoadingBottomSheetState()
+                                    }
+                                }
+                            },
+                        )
+                    }
+                }
+            }
+        }
+
+        if (switchingBusiness.isLoading()) {
+            LoadingSheet(
+                state = switchingBusiness,
+                sheetState = loadingSheetState,
+            ) {
+                switchingBusiness = LoadingBottomSheetState()
+            }
+        }
 
         if (uiState.loadingBottomSheet.isLoading()) {
             LoadingSheet(

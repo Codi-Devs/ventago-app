@@ -44,7 +44,14 @@ class NotificationsService(
         appScope.launch(Dispatchers.IO) {
             businessService.getBusiness().onEach { business ->
                 val businessId = business?.businessId ?: -1
-                if (businessId <= 0 || businessId == currentBusinessId) return@onEach
+                if (businessId <= 0) {
+                    currentBusinessId = -1
+                    hasCompletedInitialRefresh = false
+                    _items.value = emptyList()
+                    _unreadCount.value = 0
+                    return@onEach
+                }
+                if (businessId == currentBusinessId) return@onEach
                 currentBusinessId = businessId
                 hasCompletedInitialRefresh = false
                 restoreCachedPage(businessId)

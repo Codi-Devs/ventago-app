@@ -63,13 +63,21 @@ data class AuthResponse(
 }
 
 
-data class BusinessIds(val businessId: Int, val menuId: Int, val name: String = "") {
+data class BusinessIds(
+    val businessId: Int,
+    val menuId: Int,
+    val name: String = "",
+    val role: String = "",
+    val logo: String = "",
+) {
     companion object {
         fun fromMap(map: Map<String, JsonElement>): BusinessIds {
             return BusinessIds(
                 map["id"]?.jsonPrimitive?.intOrNull ?: -1,
                 map["id_menu"]?.jsonPrimitive?.intOrNull ?: -1,
-                map["name"]?.jsonPrimitive?.contentOrNull ?: ""
+                map["name"]?.jsonPrimitive?.contentOrNull ?: "",
+                map["role"]?.jsonPrimitive?.contentOrNull ?: "",
+                map["logo"]?.jsonPrimitive?.contentOrNull ?: "",
             )
         }
 

@@ -29,7 +29,10 @@ fun List<BusinessIds>.toBusinessIdsList(): BusinessIdsList {
         this.map {
             BusinessIdsCache(
                 businessId = it.businessId,
-                menuId = it.menuId
+                menuId = it.menuId,
+                name = it.name,
+                role = it.role,
+                logo = it.logo,
             )
         }
     )
@@ -45,6 +48,9 @@ data class BusinessIdsCache(
     val id: Long = 1L,
     var businessId: Int = -1,
     var menuId: Int = -1,
+    var name: String = "",
+    var role: String = "",
+    var logo: String = "",
 )
 
 

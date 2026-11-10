@@ -2,7 +2,12 @@ package com.teco.ventago.utils
 
 class AuthException(val error: ApiError) : Exception()
 
-data class BusinessChoice(val id: Int, val name: String, val role: String = "")
+data class BusinessChoice(
+    val id: Int,
+    val name: String,
+    val role: String = "",
+    val logo: String = "",
+)
 
 class BusinessSelectionRequiredException(
     val businesses: List<BusinessChoice>,

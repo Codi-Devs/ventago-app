@@ -49,8 +49,9 @@ import kotlinx.coroutines.flow.launchIn
 import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
-import kotlinx.coroutines.yield
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
@@ -79,6 +80,7 @@ class AuthService(
 ) : IAuthService {
     val user = MutableStateFlow<User?>(null)
     private val tenantEpoch = MutableStateFlow(0)
+    private val businessSwitch = Mutex()
 
     private enum class LoginBusinessSource { Bound, Explicit, None }
 
@@ -110,6 +112,9 @@ class AuthService(
                             }
                         }
                         user.tryEmit(cachedUser)
+                        if (cachedUser.businessIds.any { it.name.isBlank() || it.logo.isBlank() }) {
+                            runCatching { refreshBusinessProfiles() }
+                        }
                         val business = cache.getCache(Business::class)
                         val products = cache.getCache(Products::class)
                         if (business != null && products != null) {
@@ -139,7 +144,7 @@ class AuthService(
         if (!accessToken.isNullOrBlank() && !isTokenExpired(accessToken)) {
             return accessToken
         }
-        refreshToken(client, accessToken)
+        refreshStoredSession(client)
         return getJwtToken()
     }
 
@@ -160,7 +165,7 @@ class AuthService(
                     } catch (e: Exception) {
                         if (e.message?.contains("AUTH_001") == true) {
                             try {
-                                refreshToken(client)
+                                refreshStoredSession(client)
                                 val res = userRepository.getUserData(getJwtToken() ?: "")
                                 val userData = enrichUserWithCurrentToken(User.fromAuthResponse(res))
                                 cache.saveCache(userData)
@@ -196,6 +201,14 @@ class AuthService(
     }
 
     override suspend fun refreshToken(client: HttpClient, failedAccessToken: String?) {
+        val tokenAtFailure = failedAccessToken ?: getJwtToken()
+        if (!tokenAtFailure.isNullOrBlank() && !isTokenExpired(tokenAtFailure)) {
+            throw StaleTenantRequestException()
+        }
+        refreshStoredSession(client, tokenAtFailure)
+    }
+
+    private suspend fun refreshStoredSession(client: HttpClient, failedAccessToken: String? = null) {
         val tokenAtFailure = failedAccessToken ?: getJwtToken()
         refreshSingleFlight.refresh(
             failedAccessToken = tokenAtFailure,
@@ -281,7 +294,7 @@ class AuthService(
     override suspend fun switchBusiness(businessId: Int) {
         if (businessId <= 0) throw AuthException(ApiError.AUTH_001)
         if (posProvisioningService.isRequired()) throw PosProvisioningException.BusinessMismatch
-        withContext(NonCancellable) {
+        businessSwitch.withLock { withContext(NonCancellable) {
             val access = getJwtToken() ?: throw AuthException(ApiError.AUTH_001)
             val res = client.post(Configs.serverBasePath + "auth/switch-business") {
                 headers {
@@ -303,33 +316,41 @@ class AuthService(
                 throw IllegalStateException("Business switch response is missing tokens")
             }
             val current = user.value
-            val ids = current?.businessIds.orEmpty()
-            val selected = ids.filter { it.businessId == businessId }
-            val rest = ids.filter { it.businessId != businessId }
-            val ordered = if (selected.isEmpty()) {
-                listOf(BusinessIds(businessId, -1)) + rest
-            } else {
-                selected + rest
-            }
             val providerToken = map["token"]?.jsonPrimitive?.contentOrNull
             if (providerToken.isNullOrBlank()) throw AuthException(ApiError.F_AUTH_007)
             val signedIn = firebase.signInWithCustomToken(providerToken)
             if (!signedIn.success) throw AuthException(ApiError.F_AUTH_007)
             changesManager.removeListeners()
             runCatching { cache.clearAllCache() }
-            user.update { null }
-            yield()
             saveJwt(accessToken)
             saveJwt(refreshToken, true)
             store.set(LAST_BUSINESS_KEY, businessId.toString())
             if (current != null) {
+                val ordered = mergeBusinessProfiles(
+                    current.businessIds,
+                    AuthResponse.fromMap(map).businesses,
+                    businessId,
+                )
                 val next = enrichUserWithCurrentToken(current.copy(businessIds = ordered), accessToken)
                 cache.saveCache(next)
                 user.update { next }
                 tenantEpoch.update { it + 1 }
                 listenUserChanges()
             }
+            }
         }
+    }
+
+    override suspend fun refreshBusinessProfiles() {
+        val current = user.value ?: return
+        val token = getJwtToken() ?: return
+        val response = userRepository.getUserData(token)
+        if (response.businesses.isEmpty()) return
+        val next = current.copy(
+            businessIds = mergeBusinessProfiles(current.businessIds, response.businesses, current.businessIds.firstOrNull()?.businessId ?: -1),
+        )
+        cache.saveCache(next)
+        user.update { next }
     }
 
     override suspend fun emailRegister(request: CreateUserRequest): AuthResponse {
@@ -530,6 +551,30 @@ class AuthService(
         )
         if (refresh) {
             refreshSingleFlight.resetFailureState()
+        }
+    }
+
+    private fun mergeBusinessProfiles(
+        current: List<BusinessIds>,
+        incoming: List<BusinessIds>,
+        selectedId: Int,
+    ): List<BusinessIds> {
+        val source = incoming.ifEmpty { current }
+        val merged = source.map { row ->
+            val previous = current.firstOrNull { it.businessId == row.businessId }
+            row.copy(
+                name = row.name.ifBlank { previous?.name.orEmpty() },
+                logo = row.logo.ifBlank { previous?.logo.orEmpty() },
+                role = row.role.ifBlank { previous?.role.orEmpty() },
+                menuId = if (row.menuId > 0) row.menuId else previous?.menuId ?: -1,
+            )
+        }
+        val selected = merged.filter { it.businessId == selectedId }
+        val rest = merged.filter { it.businessId != selectedId }
+        return if (selected.isEmpty() && selectedId > 0) {
+            listOf(BusinessIds(selectedId, -1)) + rest
+        } else {
+            selected + rest
         }
     }
 

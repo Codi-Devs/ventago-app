@@ -8,6 +8,7 @@ import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.intOrNull
 import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
@@ -22,7 +23,10 @@ class RoomTypeConverters{
             JsonObject(mapOf(
                 "id" to JsonPrimitive(it.id),
                 "businesId" to JsonPrimitive(it.businessId),
-                "menuId" to JsonPrimitive(it.menuId)))
+                "menuId" to JsonPrimitive(it.menuId),
+                "name" to JsonPrimitive(it.name),
+                "role" to JsonPrimitive(it.role),
+                "logo" to JsonPrimitive(it.logo)))
         }
         val jsonObject = JsonObject(mapOf("businessIds" to JsonArray(jsonArray)))
         return jsonObject.toString()
@@ -36,9 +40,12 @@ class RoomTypeConverters{
         val businessIds = businessIdsArray.map {
             val obj = it.jsonObject
             BusinessIdsCache(
-                obj["id"]!!.jsonPrimitive.longOrNull?:0,
-                obj["businesId"]!!.jsonPrimitive.intOrNull?:0,
-                obj["menuId"]!!.jsonPrimitive.intOrNull?:0,
+                id = obj["id"]?.jsonPrimitive?.longOrNull ?: 0,
+                businessId = obj["businesId"]?.jsonPrimitive?.intOrNull ?: 0,
+                menuId = obj["menuId"]?.jsonPrimitive?.intOrNull ?: 0,
+                name = obj["name"]?.jsonPrimitive?.contentOrNull ?: "",
+                role = obj["role"]?.jsonPrimitive?.contentOrNull ?: "",
+                logo = obj["logo"]?.jsonPrimitive?.contentOrNull ?: "",
             )
         }
 

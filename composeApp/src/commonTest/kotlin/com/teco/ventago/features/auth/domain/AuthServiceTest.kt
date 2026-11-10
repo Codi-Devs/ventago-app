@@ -224,10 +224,26 @@ class AuthServiceTest {
     }
 
     @Test
-    fun switchBusinessClearsTheUserBeforePublishingTheNextTenant() = runTest {
+    fun refreshOfALiveTokenDoesNotSignOut() = runTest {
+        val f = Fixture(coroutineContext)
+        val http = HttpClient()
+        try {
+            runCurrent()
+            assertFailsWith<StaleTenantRequestException> {
+                f.auth.refreshToken(http)
+            }
+            assertNotNull(f.auth.getUserSync())
+            assertFalse(f.cleanupCalls.contains("session"))
+        } finally {
+            http.close()
+            f.close()
+        }
+    }
+
+    fun switchBusinessKeepsTheSessionAndStoresEachBusinessName() = runTest {
         val client = HttpClient(MockEngine {
             respond(
-                """{"success":true,"data":{"access_token":"header.e30.sig","refresh_token":"r","token":"custom"}}""",
+                """{"success":true,"data":{"access_token":"header.e30.sig","refresh_token":"r","token":"custom","business_id":4,"business":[{"id":1,"id_menu":1,"name":"Uno","logo":"https://cdn.example/1.png","role":"owner"},{"id":4,"id_menu":2,"name":"Dos","logo":"https://cdn.example/4.png","role":"owner"}]}}""",
                 HttpStatusCode.OK,
                 headersOf(HttpHeaders.ContentType, ContentType.Application.Json.toString())
             )
@@ -243,7 +259,12 @@ class AuthServiceTest {
             f.auth.switchBusiness(4)
             runCurrent()
             job.cancel()
-            assertTrue(seen.contains(null))
+            assertFalse(seen.contains(null))
+            val businesses = f.auth.getUserSync()?.businessIds.orEmpty()
+            assertEquals(4, businesses.first().businessId)
+            assertEquals("Dos", businesses.first().name)
+            assertEquals("https://cdn.example/4.png", businesses.first().logo)
+            assertEquals("Uno", businesses.first { it.businessId == 1 }.name)
             assertEquals(1, f.auth.tenantEpoch().first())
             assertTrue(f.cleanupCalls.contains("cache"))
         } finally { f.close() }

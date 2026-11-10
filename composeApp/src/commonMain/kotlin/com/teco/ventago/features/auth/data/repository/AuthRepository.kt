@@ -125,7 +125,8 @@ class AuthRepository(private val provider: IAuthProvider, private val logger: IL
             BusinessChoice(
                 id = id,
                 name = row["name"]?.jsonPrimitive?.contentOrNull ?: "Negocio",
-                role = row["role"]?.jsonPrimitive?.contentOrNull ?: ""
+                role = row["role"]?.jsonPrimitive?.contentOrNull ?: "",
+                logo = row["logo"]?.jsonPrimitive?.contentOrNull ?: "",
             )
         }
     }

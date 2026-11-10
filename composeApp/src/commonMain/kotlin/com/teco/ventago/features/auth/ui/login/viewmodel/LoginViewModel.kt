@@ -254,7 +254,9 @@ class LoginViewModel(
                         businessChoices = response.businesses.map { business ->
                             BusinessChoice(
                                 business.businessId,
-                                business.name.ifBlank { "Negocio" }
+                                business.name.ifBlank { "Negocio" },
+                                business.role,
+                                business.logo,
                             )
                         },
                         sessionBusinessId = response.activeBusinessId
