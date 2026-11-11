@@ -136,6 +136,14 @@ class SessionIdServiceTest {
         assertFalse(SessionIdBackendUrlMatcher.isInvoiceBackendUrl(Configs.ordersBasePath + ".example.com/api/v1/orders/create"))
     }
 
+    @Test
+    fun appUserAgentCarriesThePlatform() {
+        assertEquals("Ventago/1.6.14 (Android)", ClientRequestIdentity.userAgent("1.6.14", android = true, ios = false))
+        assertEquals("Ventago/1.6.14 (iOS)", ClientRequestIdentity.userAgent("1.6.14", android = false, ios = true))
+        assertEquals("ios", ClientRequestIdentity.osHeader(android = false, ios = true))
+        assertEquals("android", ClientRequestIdentity.osHeader(android = true, ios = false))
+    }
+
     private class FakeSessionIdStore : SessionIdStore {
         private val values = mutableMapOf<String, Any>()
 

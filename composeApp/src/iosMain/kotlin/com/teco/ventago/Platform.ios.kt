@@ -33,6 +33,12 @@ actual fun isTablet(): Boolean {
 actual fun isAndroid(): Boolean = false
 actual fun isIOS(): Boolean = true
 
+@OptIn(ExperimentalForeignApi::class)
+actual fun clientDeviceClass(): String {
+    val screenWidth = UIScreen.mainScreen.bounds.useContents { size.width }
+    return if (screenWidth >= 768.0) "tablet" else "phone"
+}
+
 
 @Composable
 actual fun rememberPlatformState(): PlatformState {

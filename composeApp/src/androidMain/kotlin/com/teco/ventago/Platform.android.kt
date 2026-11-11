@@ -29,6 +29,11 @@ actual fun isTablet(): Boolean {
 }
 actual fun isAndroid(): Boolean = true
 actual fun isIOS(): Boolean = false
+actual fun clientDeviceClass(): String {
+    val metrics = android.content.res.Resources.getSystem().displayMetrics
+    val widthDp = metrics.widthPixels / metrics.density
+    return if (widthDp >= 600f) "tablet" else "phone"
+}
 
 @Composable
 actual fun rememberPlatformState(): PlatformState {

@@ -27,6 +27,7 @@ import com.teco.ventago.core.network.FINGERPRINT_HEADER_NAME
 import com.teco.ventago.core.session.ISessionIdService
 import com.teco.ventago.core.session.SecureStorageSessionIdStore
 import com.teco.ventago.core.session.SessionIdBackendUrlMatcher
+import com.teco.ventago.core.session.ClientRequestIdentity
 import com.teco.ventago.core.session.SessionIdConstants
 import com.teco.ventago.core.session.SessionIdService
 import com.teco.ventago.core.session.SessionIdStore
@@ -444,11 +445,25 @@ internal fun appModule() = module {
             request.headers.remove(HttpHeaders.UserAgent)
             request.headers.append(HttpHeaders.UserAgent, "$customUA $originalUA".trim())
             if (SessionIdBackendUrlMatcher.isVentaGoBackendUrl(request.url.toString())) {
+                request.headers.remove(HttpHeaders.UserAgent)
+                request.headers.append(
+                    HttpHeaders.UserAgent,
+                    ClientRequestIdentity.userAgent(AppInfo.VERSION, isAndroid(), isIOS())
+                )
                 request.headers.remove(SessionIdConstants.HEADER_NAME)
                 request.headers.append(
                     SessionIdConstants.HEADER_NAME,
                     sessionIdService.sessionIdForBackendRequest()
                 )
+                request.headers.remove(ClientRequestIdentity.CHANNEL_HEADER)
+                request.headers.append(ClientRequestIdentity.CHANNEL_HEADER, "app")
+                request.headers.remove(ClientRequestIdentity.OS_HEADER)
+                request.headers.append(
+                    ClientRequestIdentity.OS_HEADER,
+                    ClientRequestIdentity.osHeader(isAndroid(), isIOS())
+                )
+                request.headers.remove(ClientRequestIdentity.DEVICE_HEADER)
+                request.headers.append(ClientRequestIdentity.DEVICE_HEADER, clientDeviceClass())
             }
             if (SessionIdBackendUrlMatcher.isInvoiceBackendUrl(request.url.toString())) {
                 request.headers.remove(FINGERPRINT_HEADER_NAME)

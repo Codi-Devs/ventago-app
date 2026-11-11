@@ -115,6 +115,27 @@ object SessionIdBackendUrlMatcher {
     }
 }
 
+object ClientRequestIdentity {
+    const val CHANNEL_HEADER = "X-Ventago-Channel"
+    const val OS_HEADER = "X-Ventago-OS"
+    const val DEVICE_HEADER = "X-Ventago-Device"
+
+    fun userAgent(version: String, android: Boolean, ios: Boolean): String {
+        val os = when {
+            android -> "Android"
+            ios -> "iOS"
+            else -> "Unknown"
+        }
+        return "Ventago/$version ($os)"
+    }
+
+    fun osHeader(android: Boolean, ios: Boolean): String = when {
+        android -> "android"
+        ios -> "ios"
+        else -> "unknown"
+    }
+}
+
 object SessionIdConstants {
     const val HEADER_NAME = "X-SESSION-ID"
     const val SESSION_ID_KEY = "SESSION_ID"
