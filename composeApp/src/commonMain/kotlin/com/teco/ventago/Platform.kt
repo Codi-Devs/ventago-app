@@ -17,6 +17,7 @@ expect fun buildVariant(): BuildVariant
 expect fun isTablet(): Boolean
 expect fun isAndroid(): Boolean
 expect fun isIOS(): Boolean
+expect fun clientDeviceClass(): String
 
 object AppInfo {
     const val APP_NAME = "VentaGo"
