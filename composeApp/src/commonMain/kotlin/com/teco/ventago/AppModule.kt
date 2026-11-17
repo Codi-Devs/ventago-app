@@ -29,6 +29,8 @@ import com.teco.ventago.core.session.SecureStorageSessionIdStore
 import com.teco.ventago.core.session.SessionIdBackendUrlMatcher
 import com.teco.ventago.core.session.ClientRequestIdentity
 import com.teco.ventago.core.session.SessionIdConstants
+import com.teco.ventago.core.presence.PresenceReporter
+import com.teco.ventago.core.presence.PresenceSignals
 import com.teco.ventago.core.session.SessionIdService
 import com.teco.ventago.core.session.SessionIdStore
 import com.teco.ventago.features.auth.data.provider.AuthProvider
@@ -469,9 +471,21 @@ internal fun appModule() = module {
                 request.headers.remove(FINGERPRINT_HEADER_NAME)
                 request.headers.append(FINGERPRINT_HEADER_NAME, fingerPrintService.getFingerPrint())
             }
-            execute(request)
+            val call = execute(request)
+            val path = request.url.toString()
+            if (call.response.status.value in 200..299 && !path.contains("/presence/beat")) {
+                runCatching { PresenceSignals.mark() }
+            }
+            call
         }
         client
+    }
+
+    single {
+        PresenceReporter(
+            authService = get(),
+            sessionIdService = get(),
+        )
     }
 
     single<ILoggerService> {

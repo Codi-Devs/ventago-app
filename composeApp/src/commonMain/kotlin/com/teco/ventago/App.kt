@@ -45,6 +45,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -54,6 +55,8 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.input.pointer.PointerEventPass
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
@@ -64,7 +67,12 @@ import androidx.navigation.compose.rememberNavController
 import coil3.ImageLoader
 import coil3.compose.setSingletonImageLoaderFactory
 import coil3.network.ktor3.KtorNetworkFetcherFactory
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import com.teco.ventago.core.keyboard.KeyboardDismissHost
+import com.teco.ventago.core.presence.PresenceReporter
+import com.teco.ventago.core.presence.PresenceSignals
 import com.teco.ventago.core.SnackbarService
 import com.teco.ventago.core.LocalStorage
 import com.teco.ventago.core.authz.AuthzEvaluator
@@ -166,6 +174,35 @@ private fun AppSessionHost(
     val authService = koinInject<IAuthService>()
     val betaService = koinInject<BetaService>()
     val localStorage: LocalStorage = koinInject()
+    val presenceReporter = koinInject<PresenceReporter>()
+    val lifecycleOwner = LocalLifecycleOwner.current
+    DisposableEffect(lifecycleOwner, mainState.isAuthenticated) {
+        if (!mainState.isAuthenticated) {
+            presenceReporter.onBackground()
+            onDispose { presenceReporter.onBackground() }
+        } else {
+            val observer = LifecycleEventObserver { _, event ->
+                when (event) {
+                    Lifecycle.Event.ON_START -> presenceReporter.onForeground()
+                    Lifecycle.Event.ON_STOP -> presenceReporter.onBackground()
+                    else -> Unit
+                }
+            }
+            lifecycleOwner.lifecycle.addObserver(observer)
+            if (lifecycleOwner.lifecycle.currentState.isAtLeast(Lifecycle.State.STARTED)) {
+                presenceReporter.onForeground()
+            }
+            onDispose {
+                lifecycleOwner.lifecycle.removeObserver(observer)
+                presenceReporter.onBackground()
+            }
+        }
+    }
+    LaunchedEffect(currentRoute, mainState.isAuthenticated) {
+        if (mainState.isAuthenticated) {
+            PresenceSignals.mark()
+        }
+    }
     val flagsState by flagsService.flags().collectAsState()
     val currentUser by authService.getUser().collectAsState(initial = null)
     val betaResponse by betaService.features().collectAsState()
@@ -302,6 +339,19 @@ private fun AppSessionHost(
         LocalNavController provides navController,
     ) {
                 Scaffold(
+                    modifier = Modifier.pointerInput(mainState.isAuthenticated) {
+                        if (!mainState.isAuthenticated) {
+                            return@pointerInput
+                        }
+                        awaitPointerEventScope {
+                            while (true) {
+                                val event = awaitPointerEvent(PointerEventPass.Initial)
+                                if (event.changes.any { it.pressed }) {
+                                    PresenceSignals.mark()
+                                }
+                            }
+                        }
+                    },
                     contentWindowInsets = WindowInsets.safeDrawing.only(WindowInsetsSides.Horizontal),
                     snackbarHost = {
                         SnackbarHost(hostState = snackbarHostState)
