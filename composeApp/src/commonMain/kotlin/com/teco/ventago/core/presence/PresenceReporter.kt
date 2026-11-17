@@ -32,14 +32,7 @@ object PresenceSignals {
         dirty.value = true
     }
 
-    fun consume(): Boolean {
-        val was = dirty.value
-        if (!was) {
-            return false
-        }
-        dirty.value = false
-        return true
-    }
+    fun consume(): Boolean = dirty.compareAndSet(true, false)
 }
 
 fun presenceDelayMillis(randomUnit: Double): Long {
