@@ -106,14 +106,79 @@ class ProductServiceRealtimeTest {
     }
 
     @Test
+    fun addCategoryReplacesACategoryTheMenuRefreshAlreadyLoaded() = runTest {
+        val changes = FakeChangesManager()
+        val existing = Category(
+            id = 4,
+            name = "Bebidas",
+            desc = "",
+            active = true,
+            items = emptyList(),
+            order = 1,
+        )
+        val service = ProductService(
+            productsRepository = FakeProductsRepository(
+                menu = Products(id = 7, active = true, categories = listOf(existing)),
+                addedCategory = existing.copy(desc = "fria"),
+            ),
+            cache = FakeCacheService(),
+            changesManager = changes,
+            authService = FakeAuthService(),
+        )
+        service.getProductsByBusinessId(10)
+
+        val saved = service.addCategory("Bebidas", "fria")
+        changes.awaitProductsChanged()
+
+        assertEquals(4, saved.id)
+        assertEquals(listOf(4), service.state.value!!.categories.map { it.id })
+        assertEquals("fria", service.state.value!!.categories.single().desc)
+        assertEquals(1, changes.productsChangedCalls)
+    }
+
+    @Test
+    fun localEditThatDuplicatesACategoryPublishesTheCleanMenu() = runTest {
+        val changes = FakeChangesManager()
+        val first = Category(
+            id = 4,
+            name = "Bebidas",
+            desc = "",
+            active = true,
+            items = emptyList(),
+            order = 1,
+        )
+        val second = first.copy(id = 5, name = "Comidas", order = 2)
+        val service = ProductService(
+            productsRepository = FakeProductsRepository(
+                menu = Products(id = 7, active = true, categories = listOf(first, second)),
+            ),
+            cache = FakeCacheService(),
+            changesManager = changes,
+            authService = FakeAuthService(),
+        )
+        service.getProductsByBusinessId(10)
+
+        val saved = service.changeCategoryOrder(
+            listOf(first.copy(order = 2), first.copy(name = "Bebidas 2", order = 1)),
+        )
+        changes.awaitProductsChanged()
+
+        assertTrue(saved)
+        assertEquals(listOf(4), service.state.value!!.categories.map { it.id })
+        assertFalse(service.state.value!!.hasDuplicateCatalogIds())
+        assertEquals(1, changes.productsChangedCalls)
+    }
+
+    @Test
     fun duplicateItemCacheIsDeletedAndReplacedFromTheApi() = runTest {
         val item = sampleItem()
         val cache = FakeCacheService(initial = menuWith(item, item))
         val repository = FakeProductsRepository(menuWith(item))
+        val changes = FakeChangesManager()
         val service = ProductService(
             productsRepository = repository,
             cache = cache,
-            changesManager = FakeChangesManager(),
+            changesManager = changes,
             authService = FakeAuthService(user = ownerOfMenu(menuId = 7, businessId = 10)),
         )
 
@@ -125,6 +190,7 @@ class ProductServiceRealtimeTest {
         assertEquals(listOf(99), service.state.value!!.categories.single().items.map { it.itemId })
         assertTrue(cache.savedMenus.isNotEmpty())
         assertTrue(cache.savedMenus.all { !it.hasDuplicateCatalogIds() })
+        assertEquals(0, changes.productsChangedCalls)
     }
 
     @Test
@@ -212,6 +278,7 @@ class ProductServiceRealtimeTest {
     private class FakeProductsRepository(
         private val menu: Products,
         private val failGet: Boolean = false,
+        private val addedCategory: Category? = null,
     ) : IProductsRepository {
         private val fetches = Channel<Unit>(capacity = Channel.UNLIMITED)
 
@@ -226,7 +293,8 @@ class ProductServiceRealtimeTest {
         override suspend fun setCategoryActive(categoryId: Int, active: Boolean): Boolean = true
         override suspend fun changeCategoryOrder(categories: List<Category>): Boolean = true
         override suspend fun editCategory(category: Category): Boolean = true
-        override suspend fun addCategory(category: Category, menuId: Int): Category = category
+        override suspend fun addCategory(category: Category, menuId: Int): Category =
+            addedCategory ?: category
         override suspend fun removeCategory(categoryId: Int): Boolean = true
         override suspend fun addItem(item: Item, categoryId: Int): Item = item
         override suspend fun editItem(item: Item, categoryId: Int): Boolean = true

@@ -50,7 +50,8 @@ class ProductService(
             if (productsData != null && productsData.hasDuplicateCatalogIds()) {
                 // Room won the race that appended a product the server already
                 // had. Publishing it crashes LazyColumn/LazyGrid on the key.
-                discardCorruptMenuCache(productsData)
+                // Startup does not announce changed_menu: nothing new was edited.
+                discardCorruptMenuCache(productsData, publishWhenClean = false)
             } else if (productsData != null) {
                 withContext(Dispatchers.Main) {
                     // A menu already fetched from the network wins. A late Room
@@ -149,8 +150,10 @@ class ProductService(
             category.order = menuObj.getLastCategoryOrder() + 1
             val res = productsRepository.addCategory(category, menuObj.id)
             if (res.id > 0) {
-                state.update {
-                    it?.copy(categories = it.categories + res)
+                state.update { menu ->
+                    if (menu == null) return@update null
+                    val without = menu.categories.filter { it.id != res.id }
+                    menu.copy(categories = without + res).withoutDuplicateCatalogIds()
                 }
                 saveCache()
             }
@@ -319,13 +322,15 @@ class ProductService(
     private fun saveCache() {
         val snapshot = state.value ?: return
         if (snapshot.hasDuplicateCatalogIds()) {
-            serviceScope.launch { discardCorruptMenuCache(snapshot) }
+            // The local edit is already on the server. Announce it once the
+            // menu we keep no longer has repeated ids.
+            serviceScope.launch { discardCorruptMenuCache(snapshot, publishWhenClean = true) }
             return
         }
         persistProducts(snapshot, publishChange = true)
     }
 
-    private suspend fun discardCorruptMenuCache(corrupt: Products) {
+    private suspend fun discardCorruptMenuCache(corrupt: Products, publishWhenClean: Boolean) {
         if (!corrupt.hasDuplicateCatalogIds()) return
         corruptMenuRecovery.withLock {
             if (state.value?.hasDuplicateCatalogIds() == false && corrupt !== state.value) {
@@ -335,7 +340,9 @@ class ProductService(
                 val latest = cache.getCache(Products::class)
                 if (latest == null || latest.hasDuplicateCatalogIds()) {
                     clearProductsCache()
+                    persistCleanInMemoryMenu(publishChange = false)
                 }
+                if (publishWhenClean) announceCleanMenu()
                 return@withLock
             }
             clearProductsCache()
@@ -345,15 +352,16 @@ class ProductService(
             }
             val businessId = businessIdForMenu(state.value?.id)
             if (businessId == null) {
-                persistCleanInMemoryMenu()
+                persistCleanInMemoryMenu(publishChange = publishWhenClean)
                 return@withLock
             }
             try {
                 getProductsByBusinessId(businessId)
+                if (publishWhenClean) announceCleanMenu()
             } catch (error: CancellationException) {
                 throw error
             } catch (_: Exception) {
-                persistCleanInMemoryMenu()
+                persistCleanInMemoryMenu(publishChange = publishWhenClean)
             }
         }
     }
@@ -367,10 +375,20 @@ class ProductService(
         }
     }
 
-    private fun persistCleanInMemoryMenu() {
+    private fun persistCleanInMemoryMenu(publishChange: Boolean) {
         val clean = state.value?.withoutDuplicateCatalogIds() ?: return
         if (clean.hasDuplicateCatalogIds()) return
-        persistProducts(clean, publishChange = false)
+        persistProducts(clean, publishChange = publishChange)
+    }
+
+    private suspend fun announceCleanMenu() {
+        if (state.value?.hasDuplicateCatalogIds() != false) return
+        try {
+            changesManager.productsChanged()
+        } catch (error: CancellationException) {
+            throw error
+        } catch (_: Exception) {
+        }
     }
 
     private fun businessIdForMenu(menuId: Int?): Int? {
