@@ -50,9 +50,14 @@ class CategoriesManageViewModel(
                         println("ASDASD: items: ${json.encodeToString(cat.items)}")
                     }
 
-                    state.categories.value = menu.categories
-                    applyPositiveStock(menu.categories, inventoryAvailabilityStore.snapshot.value)
-                    refreshInventory(menu.categories)
+                    val uniqueCategories = menu.categories
+                        .distinctBy { category -> category.id }
+                        .map { category ->
+                            category.copy(items = category.items.distinctBy { item -> item.itemId })
+                        }
+                    state.categories.value = uniqueCategories
+                    applyPositiveStock(uniqueCategories, inventoryAvailabilityStore.snapshot.value)
+                    refreshInventory(uniqueCategories)
                 }
             }.launchIn(this)
         }

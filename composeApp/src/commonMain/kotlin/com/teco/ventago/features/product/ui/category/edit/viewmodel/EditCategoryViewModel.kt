@@ -61,10 +61,11 @@ class EditCategoryViewModel(
             productService.getMenu().onEach { menu ->
                 menu?.let { _ ->
                     menu.categories.firstOrNull{ it.id == selectedCategoryId }?.let {
-                        state.selectedCategory.value = it
-                        state.items.value = it.items
+                        val uniqueItems = it.items.distinctBy { item -> item.itemId }
+                        state.selectedCategory.value = it.copy(items = uniqueItems)
+                        state.items.value = uniqueItems
                         syncInventoryLabels()
-                        refreshInventoryLabels(it.items)
+                        refreshInventoryLabels(uniqueItems)
                     } ?: run {
                         // TODO Add logs
                         state.goBack.value = true
@@ -115,10 +116,11 @@ class EditCategoryViewModel(
         productService.state.value?.let { products ->
             val category = products.categories.firstOrNull { it.id == state.selectedCategory.value?.id }
             category?.let { cat ->
+                val uniqueItems = cat.items.distinctBy { item -> item.itemId }
                 if (query.isBlank()) {
-                    state.items.value = cat.items
+                    state.items.value = uniqueItems
                 } else {
-                    state.items.value = cat.items.filter {
+                    state.items.value = uniqueItems.filter {
                         it.name.contains(query, true) || it.description.contains(
                             query,
                             true

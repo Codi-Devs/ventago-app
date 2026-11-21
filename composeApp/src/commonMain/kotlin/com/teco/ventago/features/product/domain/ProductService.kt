@@ -1,5 +1,6 @@
 package com.teco.ventago.features.product.domain
 
+import com.teco.ventago.core.cache.CacheUtils
 import com.teco.ventago.core.cache.ICacheService
 import com.teco.ventago.core.changes.IChangesManager
 import com.teco.ventago.features.auth.domain.IAuthService
@@ -21,6 +22,8 @@ import kotlinx.coroutines.flow.launchIn
 import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 
 internal fun preferLoadedMenu(current: Products?, cached: Products): Products = current ?: cached
@@ -39,10 +42,17 @@ class ProductService(
 
     private var listenerJob: Job? = null
     private val serviceScope = CoroutineScope(Dispatchers.IO)
+    private val corruptMenuRecovery = Mutex()
 
     init {
         serviceScope.launch {
-            cache.getCache(Products::class)?.let { productsData ->
+            val productsData = cache.getCache(Products::class)
+            if (productsData != null && productsData.hasDuplicateCatalogIds()) {
+                // Room won the race that appended a product the server already
+                // had. Publishing it crashes LazyColumn/LazyGrid on the key.
+                // Startup does not announce changed_menu: nothing new was edited.
+                discardCorruptMenuCache(productsData, publishWhenClean = false)
+            } else if (productsData != null) {
                 withContext(Dispatchers.Main) {
                     // A menu already fetched from the network wins. A late Room
                     // read must not put back a snapshot that dropped ITBMS.
@@ -77,8 +87,10 @@ class ProductService(
 
 
     fun getAllActiveItems(products: Products): List<Item> {
-        // Filter active items.
-        return products.categories.filter { it.active }.flatMap { it.items.filter { item -> item.active }.toList()}
+        return products.categories
+            .filter { it.active }
+            .flatMap { category -> category.items.filter { item -> item.active } }
+            .distinctBy { it.itemId }
     }
 
     suspend fun setCategoryActive(categoryId: Int, active: Boolean): Boolean {
@@ -138,8 +150,10 @@ class ProductService(
             category.order = menuObj.getLastCategoryOrder() + 1
             val res = productsRepository.addCategory(category, menuObj.id)
             if (res.id > 0) {
-                state.update {
-                    it?.copy(categories = it.categories + res)
+                state.update { menu ->
+                    if (menu == null) return@update null
+                    val without = menu.categories.filter { it.id != res.id }
+                    menu.copy(categories = without + res).withoutDuplicateCatalogIds()
                 }
                 saveCache()
             }
@@ -171,14 +185,24 @@ class ProductService(
             }
         }
         productsRepository.setCategoryActive(categoryId, true)
-        state.update {
-            it?.copy(categories = it.categories.map { cat ->
+        state.update { menu ->
+            if (menu == null) return@update null
+            val updated = menu.copy(categories = menu.categories.map { cat ->
+                val remaining = cat.items.filter { it.itemId != savedItem.itemId }
                 if (cat.id == categoryId) {
-                    cat.copy(items = cat.items + savedItem, active = if (activated) true else cat.active)
+                    cat.copy(
+                        items = remaining + savedItem,
+                        active = if (activated) true else cat.active,
+                    )
+                } else if (remaining.size != cat.items.size) {
+                    cat.copy(items = remaining)
                 } else {
                     cat
                 }
             })
+            // The menu refresh can land while setCategoryActive is still in
+            // flight and already contain savedItem. Replacing by id keeps one row.
+            updated.withoutDuplicateCatalogIds()
         }
         saveCache()
         return savedItem
@@ -188,7 +212,7 @@ class ProductService(
         val success = productsRepository.editItem(item, categoryId)
         if (success) {
             state.update { menuAux ->
-                menuAux?.copy(categories = menuAux.categories.map { cat ->
+                val updated = menuAux?.copy(categories = menuAux.categories.map { cat ->
                     if (cat.id == categoryId) {
                         // Target category: add item if not present, or update if present
                         val existingItemIndex = cat.items.indexOfFirst { it.itemId == item.itemId }
@@ -205,7 +229,8 @@ class ProductService(
                         // Other categories: remove item if present
                         cat.copy(items = cat.items.filter { it.itemId != item.itemId })
                     }
-                })
+                }) ?: return@update null
+                updated.withoutDuplicateCatalogIds()
             }
             saveCache()
         }
@@ -255,13 +280,14 @@ class ProductService(
 
     suspend fun getProductsByBusinessId(businessId: Int): Products {
         val res = productsRepository.getProductsByBusinessId(businessId)
+            .withoutDuplicateCatalogIds()
         state.update {
             res
         }
         if (listenerJob?.isActive != true) {
             startProductsListener()
         }
-        persistProducts(state.value, publishChange = false)
+        persistProducts(res, publishChange = false)
         return res
     }
 
@@ -294,7 +320,83 @@ class ProductService(
     }
 
     private fun saveCache() {
-        persistProducts(state.value, publishChange = true)
+        val snapshot = state.value ?: return
+        if (snapshot.hasDuplicateCatalogIds()) {
+            // The local edit is already on the server. Announce it once the
+            // menu we keep no longer has repeated ids.
+            serviceScope.launch { discardCorruptMenuCache(snapshot, publishWhenClean = true) }
+            return
+        }
+        persistProducts(snapshot, publishChange = true)
+    }
+
+    private suspend fun discardCorruptMenuCache(corrupt: Products, publishWhenClean: Boolean) {
+        if (!corrupt.hasDuplicateCatalogIds()) return
+        corruptMenuRecovery.withLock {
+            if (state.value?.hasDuplicateCatalogIds() == false && corrupt !== state.value) {
+                // A clean menu is already showing. Drop Room only when that
+                // row is still the corrupt snapshot. A refresh may have
+                // replaced it while this recovery waited.
+                val latest = cache.getCache(Products::class)
+                if (latest == null || latest.hasDuplicateCatalogIds()) {
+                    clearProductsCache()
+                    persistCleanInMemoryMenu(publishChange = false)
+                }
+                if (publishWhenClean) announceCleanMenu()
+                return@withLock
+            }
+            clearProductsCache()
+            val preview = corrupt.withoutDuplicateCatalogIds()
+            state.update { current ->
+                if (current != null && !current.hasDuplicateCatalogIds()) current else preview
+            }
+            val businessId = businessIdForMenu(state.value?.id)
+            if (businessId == null) {
+                persistCleanInMemoryMenu(publishChange = publishWhenClean)
+                return@withLock
+            }
+            try {
+                getProductsByBusinessId(businessId)
+                if (publishWhenClean) announceCleanMenu()
+            } catch (error: CancellationException) {
+                throw error
+            } catch (_: Exception) {
+                persistCleanInMemoryMenu(publishChange = publishWhenClean)
+            }
+        }
+    }
+
+    private suspend fun clearProductsCache() {
+        try {
+            cache.clearCache(CacheUtils.PRODUCTS)
+        } catch (error: CancellationException) {
+            throw error
+        } catch (_: Exception) {
+        }
+    }
+
+    private fun persistCleanInMemoryMenu(publishChange: Boolean) {
+        val clean = state.value?.withoutDuplicateCatalogIds() ?: return
+        if (clean.hasDuplicateCatalogIds()) return
+        persistProducts(clean, publishChange = publishChange)
+    }
+
+    private suspend fun announceCleanMenu() {
+        if (state.value?.hasDuplicateCatalogIds() != false) return
+        try {
+            changesManager.productsChanged()
+        } catch (error: CancellationException) {
+            throw error
+        } catch (_: Exception) {
+        }
+    }
+
+    private fun businessIdForMenu(menuId: Int?): Int? {
+        val businesses = authService.getUserSync()?.businessIds ?: return null
+        if (menuId != null) {
+            businesses.firstOrNull { it.menuId == menuId }?.businessId?.let { return it }
+        }
+        return null
     }
 
     private fun persistProducts(snapshot: Products?, publishChange: Boolean) {

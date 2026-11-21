@@ -944,6 +944,8 @@ fun PosListOrganism(
             )
         }
 
+        val catalogItems = uiState.visibleItems.distinctBy { it.itemId }
+
         if (uiState.productViewMode == ProductViewMode.LIST) {
             val lazyListState = rememberLazyListState()
             LazyColumn(
@@ -970,7 +972,7 @@ fun PosListOrganism(
                     }
                 }
 
-                items(uiState.visibleItems, key = { it.itemId }) { item ->
+                items(catalogItems, key = { it.itemId }) { item ->
                     PosItemRow(
                         item = item,
                         currency = uiState.currency,
@@ -1010,7 +1012,7 @@ fun PosListOrganism(
                             )
                         }
                     }
-                    gridItems(uiState.visibleItems, key = { it.itemId }) { item ->
+                    gridItems(catalogItems, key = { it.itemId }) { item ->
                         PosItemGridCard(
                             item = item,
                             currency = uiState.currency,

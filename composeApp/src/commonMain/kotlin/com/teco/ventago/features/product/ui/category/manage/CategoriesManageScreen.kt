@@ -117,7 +117,7 @@ fun CategoriesManageScreen(
                 .padding(top = 8.dp, bottom = 8.dp),
             state = lazyListState,
         ) {
-            items(list, key = { it.id }) { item ->
+            items(list.distinctBy { it.id }, key = { it.id }) { item ->
                 CategoryItem(modifier = Modifier.padding(
                     start = 16.dp, end = 16.dp, top = 8.dp, bottom = 8.dp
                 ), category = item, reordering = false, onClick = {
