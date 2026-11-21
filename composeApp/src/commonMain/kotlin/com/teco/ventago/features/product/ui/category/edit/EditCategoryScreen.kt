@@ -164,7 +164,7 @@ fun EditCategoryScreen(
                 .padding(top = 8.dp, bottom = 8.dp),
             state = lazyListState,
         ) {
-            items(list, key = { it.itemId }) { item ->
+            items(list.distinctBy { it.itemId }, key = { it.itemId }) { item ->
                 ItemRow(item = item,
                     currency = viewModel.state.currency.value,
                     availabilityLabel = inventoryStockByItemId[item.itemId],
