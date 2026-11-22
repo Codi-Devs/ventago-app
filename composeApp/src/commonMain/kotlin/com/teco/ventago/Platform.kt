@@ -21,7 +21,7 @@ expect fun clientDeviceClass(): String
 
 object AppInfo {
     const val APP_NAME = "VentaGo"
-    const val VERSION = "1.7.1"
+    const val VERSION = "1.7.2"
 }
 
 

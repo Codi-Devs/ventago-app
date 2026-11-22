@@ -25,6 +25,10 @@
     <uses-feature
         android:name="android.hardware.bluetooth"
         android:required="false" />
+    <!-- Places pide ACCESS_WIFI_STATE. El chip no es requisito: basta INTERNET. -->
+    <uses-feature
+        android:name="android.hardware.wifi"
+        android:required="false" />
 
     <application
         android:name=".MainApplication"
